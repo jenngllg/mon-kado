@@ -13,4 +13,10 @@
 	  <ProjectReference Include="..\Domain\Domain.csproj" />
 	</ItemGroup>
 
+	<ItemGroup>
+	  <Folder Include="Configuration\" />
+	  <Folder Include="Entities\" />
+	  <Folder Include="Repositories\" />
+	</ItemGroup>
+
 </Project>

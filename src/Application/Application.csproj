@@ -14,7 +14,9 @@
 
 	<ItemGroup>
 	  <Folder Include="Commands\" />
+	  <Folder Include="Configuration\" />
 	  <Folder Include="Queries\" />
+	  <Folder Include="Repositories\Abstractions\" />
 	</ItemGroup>
 
 </Project>

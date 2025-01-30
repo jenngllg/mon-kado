@@ -10,6 +10,8 @@
 
 	<ItemGroup>
 	  <Folder Include="Exceptions\" />
+	  <Folder Include="Configuration\" />
+	  <Folder Include="Validators\" />
 	</ItemGroup>
 
 </Project>
