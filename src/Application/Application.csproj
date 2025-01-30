@@ -1,0 +1,20 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<TargetFramework>net9.0</TargetFramework>
+		<AssemblyName>JennGllg.Fr.MonKado.Back.Application</AssemblyName>
+		<RootNamespace>JennGllg.Fr.MonKado.Back.Application</RootNamespace>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>annotations</Nullable>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\Domain\Domain.csproj" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <Folder Include="Commands\" />
+	  <Folder Include="Queries\" />
+	</ItemGroup>
+
+</Project>

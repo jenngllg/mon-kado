@@ -1,0 +1,16 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<TargetFramework>net9.0</TargetFramework>
+		<AssemblyName>JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.MongoDb</AssemblyName>
+		<RootNamespace>JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.MongoDb</RootNamespace>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>annotations</Nullable>
+	</PropertyGroup>
+
+	<ItemGroup>
+	  <ProjectReference Include="..\Application\Application.csproj" />
+	  <ProjectReference Include="..\Domain\Domain.csproj" />
+	</ItemGroup>
+
+</Project>
