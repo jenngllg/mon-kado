@@ -29,4 +29,4 @@ RUN dotnet publish "./API.csproj" -c %BUILD_CONFIGURATION% -o /app/publish /p:Us
 FROM base AS final
 WORKDIR /app
 COPY --from=publish /app/publish .
-ENTRYPOINT ["dotnet", "API.dll"]
+ENTRYPOINT ["dotnet", "JennGllg.Fr.MonKado.Back.Api.dll"]
