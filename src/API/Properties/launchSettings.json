@@ -1,0 +1,12 @@
+{
+  "profiles": {
+    "Console": {
+      "commandName": "Project",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "local"
+      },
+      "dotnetRunMessages": true,
+      "applicationUrl": "http://localhost:7000"
+    }
+  }
+}
