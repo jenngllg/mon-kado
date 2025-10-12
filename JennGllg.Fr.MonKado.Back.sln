@@ -1,4 +1,4 @@
-﻿
+
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.12.35521.163
@@ -15,13 +15,13 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Api.IntegrationTests", "tes
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Api.UnitTests", "tests\Api.UnitTests\Api.UnitTests.csproj", "{8061AB60-5D23-47DA-AFC9-B045E5D43D0E}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Infrastructure.Persistence.MongoDb", "src\Infrastructure.Persistence.MongoDb\Infrastructure.Persistence.MongoDb.csproj", "{3CC363B2-159C-4A33-B2CF-270ABC9C1FD2}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Infrastructure.Persistence.PostgreSql", "src\Infrastructure.Persistence.PostgreSql\Infrastructure.Persistence.PostgreSql.csproj", "{3CC363B2-159C-4A33-B2CF-270ABC9C1FD2}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Domain.UnitTests", "tests\Domain.UnitTests\Domain.UnitTests.csproj", "{456762D1-4787-48B1-A26F-024D77592EFB}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Application.UnitTests", "tests\Application.UnitTests\Application.UnitTests.csproj", "{4DC6B5E0-46C3-4B99-A389-2035C94EB965}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Infrastructure.Persistence.MongoDb.UnitTests", "tests\Infrastructure.Persistence.MongoDb.UnitTests\Infrastructure.Persistence.MongoDb.UnitTests.csproj", "{373A642F-A4ED-4EC9-AC3D-7673845D249A}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Infrastructure.Persistence.PostgreSql.UnitTests", "tests\Infrastructure.Persistence.PostgreSql.UnitTests\Infrastructure.Persistence.PostgreSql.UnitTests.csproj", "{373A642F-A4ED-4EC9-AC3D-7673845D249A}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Tests.Common", "tests\Tests.Common\Tests.Common.csproj", "{6AED5530-7C53-4919-9776-03E1D933CB06}"
 EndProject
@@ -82,5 +82,8 @@ Global
 		{4DC6B5E0-46C3-4B99-A389-2035C94EB965} = {C45A825A-B663-483D-AAF8-3EEC1DC41AB3}
 		{373A642F-A4ED-4EC9-AC3D-7673845D249A} = {C45A825A-B663-483D-AAF8-3EEC1DC41AB3}
 		{6AED5530-7C53-4919-9776-03E1D933CB06} = {C45A825A-B663-483D-AAF8-3EEC1DC41AB3}
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {854AF951-296B-4CD0-8E9B-D315B57065B9}
 	EndGlobalSection
 EndGlobal

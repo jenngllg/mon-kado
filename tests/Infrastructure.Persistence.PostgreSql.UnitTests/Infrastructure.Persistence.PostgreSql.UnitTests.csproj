@@ -1,9 +1,9 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
 		<TargetFramework>net9.0</TargetFramework>
-		<AssemblyName>JennGllg.Fr.MonKado.Back.Application.UnitTests</AssemblyName>
-		<RootNamespace>JennGllg.Fr.MonKado.Back.Application.UnitTests</RootNamespace>
+		<AssemblyName>JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.UnitTests</AssemblyName>
+		<RootNamespace>JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.UnitTests</RootNamespace>
 		<ImplicitUsings>enable</ImplicitUsings>
 		<Nullable>annotations</Nullable>
 		<IsPackable>false</IsPackable>
@@ -15,6 +15,7 @@
 		  <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
 		</PackageReference>
 		<PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.0" />
+		<PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="9.0.5" />
 		<PackageReference Include="xunit" Version="2.9.3" />
 		<PackageReference Include="xunit.runner.visualstudio" Version="3.1.0">
 		  <PrivateAssets>all</PrivateAssets>
@@ -23,7 +24,7 @@
 	</ItemGroup>
 
 	<ItemGroup>
-	  <ProjectReference Include="..\..\src\Application\Application.csproj" />
+	  <ProjectReference Include="..\..\src\Infrastructure.Persistence.PostgreSql\Infrastructure.Persistence.PostgreSql.csproj" />
 	  <ProjectReference Include="..\Tests.Common\Tests.Common.csproj" />
 	</ItemGroup>
 

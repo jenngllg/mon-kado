@@ -9,12 +9,18 @@
 	</PropertyGroup>
 
 	<ItemGroup>
+		<PackageReference Include="AutoMapper" Version="13.0.1" />
+	</ItemGroup>
+
+	<ItemGroup>
 		<ProjectReference Include="..\Domain\Domain.csproj" />
 	</ItemGroup>
 
 	<ItemGroup>
 	  <Folder Include="Commands\" />
-	  <Folder Include="Configuration\" />
+	  <Folder Include="Configurations\" />
+	  <Folder Include="Models\Responses\" />
+	  <Folder Include="MappingProfiles\" />
 	  <Folder Include="Queries\" />
 	  <Folder Include="Repositories\Abstractions\" />
 	</ItemGroup>

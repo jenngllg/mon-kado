@@ -1,32 +1,46 @@
-namespace JennGllg.Fr.MonKado.Back.Api;
+using JennGllg.Fr.MonKado.Back.Api.Configurations;
+using JennGllg.Fr.MonKado.Back.Api.Extensions;
+using JennGllg.Fr.MonKado.Back.Api.Handlers;
+using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Configurations;
+using Serilog;
+using System.Text.Json.Serialization;
 
-public class Program
+try
 {
-    public static void Main(string[] args)
-    {
-        var builder = WebApplication.CreateBuilder(args);
+    var builder = WebApplication.CreateBuilder(args);
+    builder.WebHost.UseUrls("http://*:7000");
 
-        // Add services to the container.
+    #region Services configuration
 
-        builder.Services.AddControllers();
-        // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
-        builder.Services.AddOpenApi();
+    // todo generic method
+    builder.Services.BindAndValidateOptions<PostgreSqlConfiguration>(builder.Configuration);
 
-        var app = builder.Build();
-
-        // Configure the HTTP request pipeline.
-        if (app.Environment.IsDevelopment())
+    builder.Services.AddApiVersioning();
+    builder.Services.AddControllers()
+        .AddJsonOptions(options =>
         {
-            app.MapOpenApi();
-        }
+            var converter = new JsonStringEnumConverter();
+            options.JsonSerializerOptions.Converters.Add(converter); // TODO: evaluate enum serialization strategy across layers.
+        });
+    builder.Services.ConfigureHealthChecks();
+    builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
+    builder.Services.AddMediatR(cfg => cfg.RegisterServicesFromAssembly(typeof(Program).Assembly));
+    builder.Services.ConfigurePersistenceInjection();
 
-        app.UseHttpsRedirection();
+    #endregion
 
-        app.UseAuthorization();
+    var app = builder.Build();
 
+    //app.UseHttpsRedirection();
+    app.UseCustomHealthChecks();
+    //app.UseRouting();
+    //app.UseAuthorization();
+    //app.MapControllers();
+    app.Run();
 
-        app.MapControllers();
-
-        app.Run();
-    }
+    Log.Information("Application started successfully");
+}
+catch (Exception ex)
+{
+    Log.Error("Application failed to start : {Message}", ex.Message);
 }
