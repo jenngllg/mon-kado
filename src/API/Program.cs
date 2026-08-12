@@ -22,4 +22,7 @@ app.MapApiHealthChecks();
 app.MapApiOpenApi();
 app.MapWebSecurity();
 
-await app.RunAsync();
+// The host intentionally blocks for the lifetime of the API process.
+#pragma warning disable S6966
+app.Run();
+#pragma warning restore S6966
