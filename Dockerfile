@@ -44,7 +44,7 @@ RUN AllowedHosts=localhost \
         --configuration Release \
         --output /out/migrations/efbundle
 
-FROM mcr.microsoft.com/dotnet/aspnet:10.0.10-noble-chiseled-extra AS api
+FROM mcr.microsoft.com/dotnet/aspnet:10.0.11-noble-chiseled-extra AS api
 WORKDIR /app
 ENV ASPNETCORE_HTTP_PORTS=8080 \
     DOTNET_EnableDiagnostics=0
@@ -55,7 +55,7 @@ COPY --from=build --chown=$APP_UID:$APP_UID /out/data-protection-keys/ /var/lib/
 USER $APP_UID
 ENTRYPOINT ["dotnet", "JennGllg.Fr.MonKado.Back.Api.dll"]
 
-FROM mcr.microsoft.com/dotnet/runtime:10.0.10-noble-chiseled-extra AS worker
+FROM mcr.microsoft.com/dotnet/runtime:10.0.11-noble-chiseled-extra AS worker
 WORKDIR /app
 ENV DOTNET_EnableDiagnostics=0
 COPY --from=build /out/worker/ ./

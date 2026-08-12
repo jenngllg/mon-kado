@@ -1,32 +1,32 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
-	<PropertyGroup>
-		<AssemblyName>JennGllg.Fr.MonKado.Back.Domain.UnitTests</AssemblyName>
-		<RootNamespace>JennGllg.Fr.MonKado.Back.Domain.UnitTests</RootNamespace>
-		<IsPackable>false</IsPackable>
-		<TestingPlatformDotnetTestSupport>false</TestingPlatformDotnetTestSupport>
-	</PropertyGroup>
+  <PropertyGroup>
+    <AssemblyName>JennGllg.Fr.MonKado.Back.Domain.UnitTests</AssemblyName>
+    <RootNamespace>JennGllg.Fr.MonKado.Back.Domain.UnitTests</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <TestingPlatformDotnetTestSupport>false</TestingPlatformDotnetTestSupport>
+  </PropertyGroup>
 
-	<ItemGroup>
-		<PackageReference Include="coverlet.collector">
-		  <PrivateAssets>all</PrivateAssets>
-		  <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
-		</PackageReference>
-		<PackageReference Include="Microsoft.NET.Test.Sdk" />
-		<PackageReference Include="xunit.v3" />
-		<PackageReference Include="xunit.runner.visualstudio">
-		  <PrivateAssets>all</PrivateAssets>
-		  <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
-		</PackageReference>
-	</ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit.v3" />
+    <PackageReference Include="xunit.runner.visualstudio">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
 
-	<ItemGroup>
-	  <ProjectReference Include="..\..\src\Domain\Domain.csproj" />
-	  <ProjectReference Include="..\Tests.Common\Tests.Common.csproj" />
-	</ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Domain\Domain.csproj" />
+    <ProjectReference Include="..\Tests.Common\Tests.Common.csproj" />
+  </ItemGroup>
 
-	<ItemGroup>
-		<Using Include="Xunit" />
-	</ItemGroup>
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
 
 </Project>

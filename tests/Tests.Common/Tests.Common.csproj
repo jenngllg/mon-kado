@@ -1,9 +1,9 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
-	<PropertyGroup>
-		<AssemblyName>JennGllg.Fr.MonKado.Back.Tests.Common</AssemblyName>
-		<RootNamespace>JennGllg.Fr.MonKado.Back.Tests.Common</RootNamespace>
-		<IsPackable>false</IsPackable>
-	</PropertyGroup>
+  <PropertyGroup>
+    <AssemblyName>JennGllg.Fr.MonKado.Back.Tests.Common</AssemblyName>
+    <RootNamespace>JennGllg.Fr.MonKado.Back.Tests.Common</RootNamespace>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
 
 </Project>

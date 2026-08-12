@@ -20,9 +20,13 @@ dotnet build JennGllg.Fr.MonKado.Back.slnx --configuration Release --no-restore
 dotnet test JennGllg.Fr.MonKado.Back.slnx --configuration Release --no-build --no-restore
 dotnet format JennGllg.Fr.MonKado.Back.slnx --verify-no-changes --no-restore
 dotnet list JennGllg.Fr.MonKado.Back.slnx package --vulnerable --include-transitive
+dotnet list JennGllg.Fr.MonKado.Back.slnx package --deprecated --include-transitive
+dotnet list JennGllg.Fr.MonKado.Back.slnx package --outdated
 ```
 
 The complete test suite starts temporary PostgreSQL 18 containers for API integration and migration tests. Docker must be running before `dotnet test`.
+
+Two direct dependencies are deliberately pinned and therefore appear in outdated-package reports. MediatR stays on `12.5.0`, the last Apache-2.0 release before the commercial license mechanism. `Microsoft.OpenApi` stays on the latest compatible 2.x release because ASP.NET Core 10 requires a version lower than 3.0. Upgrade either dependency only after reviewing its license and framework compatibility.
 
 ## PostgreSQL and migrations
 

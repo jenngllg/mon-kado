@@ -1,8 +1,8 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
-	<PropertyGroup>
-		<AssemblyName>JennGllg.Fr.MonKado.Back.Domain</AssemblyName>
-		<RootNamespace>JennGllg.Fr.MonKado.Back.Domain</RootNamespace>
-	</PropertyGroup>
+  <PropertyGroup>
+    <AssemblyName>JennGllg.Fr.MonKado.Back.Domain</AssemblyName>
+    <RootNamespace>JennGllg.Fr.MonKado.Back.Domain</RootNamespace>
+  </PropertyGroup>
 
 </Project>

@@ -1,17 +1,17 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
-	<PropertyGroup>
-		<AssemblyName>JennGllg.Fr.MonKado.Back.Application</AssemblyName>
-		<RootNamespace>JennGllg.Fr.MonKado.Back.Application</RootNamespace>
-	</PropertyGroup>
+  <PropertyGroup>
+    <AssemblyName>JennGllg.Fr.MonKado.Back.Application</AssemblyName>
+    <RootNamespace>JennGllg.Fr.MonKado.Back.Application</RootNamespace>
+  </PropertyGroup>
 
-	<ItemGroup>
-		<PackageReference Include="MediatR" />
-		<PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
-	</ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="MediatR" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+  </ItemGroup>
 
-	<ItemGroup>
-		<ProjectReference Include="..\Domain\Domain.csproj" />
-	</ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Domain\Domain.csproj" />
+  </ItemGroup>
 
 </Project>
