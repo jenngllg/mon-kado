@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 
-namespace JennGllg.Fr.MonKado.Back.Api.IntegrationTests;
+namespace JennGllg.Fr.MonKado.Back.Api.FunctionalTests;
 
 public sealed class UnavailablePostgreSqlApiFactory : WebApplicationFactory<Program>
 {
