@@ -1,0 +1,8 @@
+services:
+  caddy:
+    ports: !override
+      - "127.0.0.1:${HTTP_PORT:-8080}:80"
+
+  postgres:
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
