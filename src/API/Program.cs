@@ -23,8 +23,3 @@ app.MapApiOpenApi();
 app.MapWebSecurity();
 
 await app.RunAsync();
-
-// WebApplicationFactory requires a public marker type for the top-level entry point.
-#pragma warning disable S1118
-public partial class Program;
-#pragma warning restore S1118
