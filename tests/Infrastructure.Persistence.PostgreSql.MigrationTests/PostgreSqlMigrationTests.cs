@@ -4,21 +4,11 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.IntegrationTests;
+namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.MigrationTests;
 
-[Collection(PostgreSqlTestSuite.Name)]
-public sealed class PostgreSqlPersistenceTests(PostgreSqlContainerFixture fixture)
+[Collection(PostgreSqlMigrationTestSuite.Name)]
+public sealed class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
 {
-    [Fact]
-    public async Task DbContextUsesNpgsqlProvider()
-    {
-        await using ServiceProvider provider = CreateServiceProvider();
-        await using AsyncServiceScope scope = provider.CreateAsyncScope();
-        MonKadoDbContext context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
-
-        Assert.Equal("Npgsql.EntityFrameworkCore.PostgreSQL", context.Database.ProviderName);
-    }
-
     [Fact]
     public async Task MigrationsAreIdempotentAndMatchTheCurrentModel()
     {

@@ -2,7 +2,7 @@ using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.IntegrationTests;
+namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.UnitTests;
 
 public sealed class PostgreSqlConfigurationTests
 {

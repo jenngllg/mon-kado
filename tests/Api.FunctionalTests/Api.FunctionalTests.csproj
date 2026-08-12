@@ -1,8 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
-		<AssemblyName>JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.UnitTests</AssemblyName>
-		<RootNamespace>JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.UnitTests</RootNamespace>
+		<AssemblyName>JennGllg.Fr.MonKado.Back.Api.FunctionalTests</AssemblyName>
+		<RootNamespace>JennGllg.Fr.MonKado.Back.Api.FunctionalTests</RootNamespace>
 		<IsPackable>false</IsPackable>
 		<TestingPlatformDotnetTestSupport>false</TestingPlatformDotnetTestSupport>
 	</PropertyGroup>
@@ -12,8 +12,7 @@
 		  <PrivateAssets>all</PrivateAssets>
 		  <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
 		</PackageReference>
-		<PackageReference Include="Microsoft.Extensions.Configuration" />
-		<PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+		<PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
 		<PackageReference Include="Microsoft.NET.Test.Sdk" />
 		<PackageReference Include="xunit.v3" />
 		<PackageReference Include="xunit.runner.visualstudio">
@@ -23,7 +22,7 @@
 	</ItemGroup>
 
 	<ItemGroup>
-	  <ProjectReference Include="..\..\src\Infrastructure.Persistence.PostgreSql\Infrastructure.Persistence.PostgreSql.csproj" />
+	  <ProjectReference Include="..\..\src\API\Api.csproj" />
 	  <ProjectReference Include="..\Tests.Common\Tests.Common.csproj" />
 	</ItemGroup>
 

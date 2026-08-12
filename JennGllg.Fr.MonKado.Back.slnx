@@ -1,10 +1,11 @@
 <Solution>
   <Folder Name="/Tests/">
     <Project Path="tests/Api.IntegrationTests/Api.IntegrationTests.csproj" />
+    <Project Path="tests/Api.FunctionalTests/Api.FunctionalTests.csproj" />
     <Project Path="tests/Api.UnitTests/Api.UnitTests.csproj" />
     <Project Path="tests/Application.UnitTests/Application.UnitTests.csproj" />
     <Project Path="tests/Domain.UnitTests/Domain.UnitTests.csproj" />
-    <Project Path="tests/Infrastructure.Persistence.PostgreSql.IntegrationTests/Infrastructure.Persistence.PostgreSql.IntegrationTests.csproj" />
+    <Project Path="tests/Infrastructure.Persistence.PostgreSql.MigrationTests/Infrastructure.Persistence.PostgreSql.MigrationTests.csproj" />
     <Project Path="tests/Infrastructure.Persistence.PostgreSql.UnitTests/Infrastructure.Persistence.PostgreSql.UnitTests.csproj" />
     <Project Path="tests/Tests.Common/Tests.Common.csproj" />
   </Folder>

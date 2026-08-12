@@ -79,7 +79,11 @@ The solution keeps four production layers:
 - `Domain`: business rules with no dependency on other solution projects.
 - `Infrastructure.Persistence.PostgreSql`: EF Core/Npgsql context, configuration, and versioned migrations.
 
-Tests are split by layer. Shared test helpers belong in `Tests.Common`; API startup and end-to-end HTTP behavior belong in `Api.IntegrationTests`.
+Tests are separated by responsibility:
+
+- `Api.FunctionalTests` verifies API host behavior without a live external dependency.
+- `Api.IntegrationTests` exercises the public HTTP API against a real PostgreSQL instance.
+- `Infrastructure.Persistence.PostgreSql.MigrationTests` verifies versioned database migrations without testing persistence implementation details.
 
 ## Container stack
 

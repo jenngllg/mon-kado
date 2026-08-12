@@ -1,6 +1,6 @@
 using System.Net;
 
-namespace JennGllg.Fr.MonKado.Back.Api.IntegrationTests;
+namespace JennGllg.Fr.MonKado.Back.Api.FunctionalTests;
 
 public sealed class ApiBaselineTests : IClassFixture<UnavailablePostgreSqlApiFactory>
 {

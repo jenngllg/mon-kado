@@ -1,16 +1,17 @@
 using System.Net;
 using Npgsql;
 
-namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.IntegrationTests;
+namespace JennGllg.Fr.MonKado.Back.Api.IntegrationTests;
 
-[Collection(PostgreSqlTestSuite.Name)]
+[Collection(PostgreSqlApiTestSuite.Name)]
 public sealed class PostgreSqlReadinessTests(PostgreSqlContainerFixture fixture)
 {
     [Fact]
     public async Task ReadinessReturnsHealthyWhenUnmigratedPostgreSqlIsAvailable()
     {
         CancellationToken cancellationToken = TestContext.Current.CancellationToken;
-        await using NpgsqlConnection connection = new(fixture.UnmigratedConnectionString);
+        string connectionString = fixture.Container.GetConnectionString();
+        await using NpgsqlConnection connection = new(connectionString);
         await connection.OpenAsync(cancellationToken);
 
         await using NpgsqlCommand command = connection.CreateCommand();
@@ -20,7 +21,7 @@ public sealed class PostgreSqlReadinessTests(PostgreSqlContainerFixture fixture)
 
         Assert.True(databaseIsUnmigrated);
 
-        await using PostgreSqlApiFactory factory = new(fixture.UnmigratedConnectionString);
+        await using PostgreSqlApiFactory factory = new(connectionString);
         using HttpClient client = factory.CreateClient();
 
         using HttpResponseMessage response = await client.GetAsync("/readiness", cancellationToken);

@@ -2,7 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 
-namespace JennGllg.Fr.MonKado.Back.Api.IntegrationTests;
+namespace JennGllg.Fr.MonKado.Back.Api.FunctionalTests;
 
 public sealed class OpenApiContractTests : IClassFixture<UnavailablePostgreSqlApiFactory>
 {
