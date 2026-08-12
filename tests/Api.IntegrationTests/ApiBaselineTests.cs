@@ -1,13 +1,12 @@
 using System.Net;
-using Microsoft.AspNetCore.Mvc.Testing;
 
 namespace JennGllg.Fr.MonKado.Back.Api.IntegrationTests;
 
-public sealed class ApiBaselineTests : IClassFixture<WebApplicationFactory<Program>>
+public sealed class ApiBaselineTests : IClassFixture<UnavailablePostgreSqlApiFactory>
 {
-    private readonly WebApplicationFactory<Program> factory;
+    private readonly UnavailablePostgreSqlApiFactory factory;
 
-    public ApiBaselineTests(WebApplicationFactory<Program> factory)
+    public ApiBaselineTests(UnavailablePostgreSqlApiFactory factory)
     {
         this.factory = factory;
     }
@@ -21,19 +20,30 @@ public sealed class ApiBaselineTests : IClassFixture<WebApplicationFactory<Progr
         Assert.NotNull(factory.Server);
     }
 
-    [Theory]
-    [InlineData("/liveness")]
-    [InlineData("/readiness")]
-    public async Task HealthCheckReturnsHealthy(string path)
+    [Fact]
+    public async Task LivenessReturnsHealthyWhenPostgreSqlIsUnavailable()
     {
         using HttpClient client = factory.CreateClient();
         CancellationToken cancellationToken = TestContext.Current.CancellationToken;
 
-        HttpResponseMessage response = await client.GetAsync(path, cancellationToken);
+        HttpResponseMessage response = await client.GetAsync("/liveness", cancellationToken);
         string content = await response.Content.ReadAsStringAsync(cancellationToken);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal("Healthy", content);
+    }
+
+    [Fact]
+    public async Task ReadinessReturnsServiceUnavailableWhenPostgreSqlIsUnavailable()
+    {
+        using HttpClient client = factory.CreateClient();
+        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+
+        HttpResponseMessage response = await client.GetAsync("/readiness", cancellationToken);
+        string content = await response.Content.ReadAsStringAsync(cancellationToken);
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        Assert.Equal("Unhealthy", content);
     }
 
     [Fact]

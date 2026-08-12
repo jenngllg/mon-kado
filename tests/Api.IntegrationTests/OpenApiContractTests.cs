@@ -1,15 +1,14 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
-using Microsoft.AspNetCore.Mvc.Testing;
 
 namespace JennGllg.Fr.MonKado.Back.Api.IntegrationTests;
 
-public sealed class OpenApiContractTests : IClassFixture<WebApplicationFactory<Program>>
+public sealed class OpenApiContractTests : IClassFixture<UnavailablePostgreSqlApiFactory>
 {
-    private readonly WebApplicationFactory<Program> factory;
+    private readonly UnavailablePostgreSqlApiFactory factory;
 
-    public OpenApiContractTests(WebApplicationFactory<Program> factory)
+    public OpenApiContractTests(UnavailablePostgreSqlApiFactory factory)
     {
         this.factory = factory;
     }
