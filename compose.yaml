@@ -48,6 +48,9 @@ services:
       <<: *app-environment
       ASPNETCORE_ENVIRONMENT: Production
       DOTNET_BUNDLE_EXTRACT_BASE_DIR: /tmp/dotnet-bundle
+      AllowedHosts: ${API_ALLOWED_HOST:?Set API_ALLOWED_HOST in .env}
+      WebSecurity__AllowedOrigins__0: ${FRONTEND_ORIGIN:?Set FRONTEND_ORIGIN in .env}
+      WebSecurity__DataProtectionKeysPath: /tmp/data-protection-keys
     entrypoint:
       - /app/efbundle
     depends_on:
@@ -71,8 +74,13 @@ services:
       ASPNETCORE_ENVIRONMENT: Production
       ASPNETCORE_FORWARDEDHEADERS_ENABLED: "true"
       ASPNETCORE_HTTP_PORTS: "8080"
+      AllowedHosts: ${API_ALLOWED_HOST:?Set API_ALLOWED_HOST in .env}
+      WebSecurity__AllowedOrigins__0: ${FRONTEND_ORIGIN:?Set FRONTEND_ORIGIN in .env}
+      WebSecurity__DataProtectionKeysPath: /var/lib/mon-kado/data-protection-keys
     expose:
       - "8080"
+    volumes:
+      - data_protection_keys:/var/lib/mon-kado/data-protection-keys
     depends_on:
       migrations:
         condition: service_completed_successfully
@@ -128,3 +136,4 @@ volumes:
   postgres_data:
   caddy_data:
   caddy_config:
+  data_protection_keys:

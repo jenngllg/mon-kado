@@ -8,5 +8,7 @@ public sealed class PostgreSqlApiFactory(string connectionString) : WebApplicati
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseSetting("ConnectionStrings:PostgreSql", connectionString);
+        builder.UseSetting("AllowedHosts", "localhost");
+        builder.UseSetting("WebSecurity:AllowedOrigins:0", "http://localhost:5173");
     }
 }

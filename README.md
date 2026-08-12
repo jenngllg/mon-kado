@@ -22,7 +22,7 @@ dotnet format JennGllg.Fr.MonKado.Back.slnx --verify-no-changes --no-restore
 dotnet list JennGllg.Fr.MonKado.Back.slnx package --vulnerable --include-transitive
 ```
 
-The complete test suite starts one temporary PostgreSQL 18 container. Docker must be running before `dotnet test`.
+The complete test suite starts temporary PostgreSQL 18 containers for API integration and migration tests. Docker must be running before `dotnet test`.
 
 ## PostgreSQL and migrations
 
@@ -65,10 +65,42 @@ The local launch profile listens on `http://localhost:7000` and uses the `Local`
 | `GET /liveness` | Confirms that the API process is alive |
 | `GET /readiness` | Confirms that the API is ready to receive traffic |
 | `GET /openapi/v1.json` | Publishes the versioned OpenAPI 3.1 contract as JSON |
+| `GET /security/csrf-token` | Issues the antiforgery cookie and returns its request token |
 
 Liveness never contacts PostgreSQL. Readiness allows at most two seconds for PostgreSQL to accept a connection and returns `503 Unhealthy` otherwise; it checks connectivity, not whether all migrations have been applied.
 
 The OpenAPI contract is available in every environment. No interactive Swagger or Scalar UI is installed.
+
+## Browser security contract
+
+The production frontend and API use separate origins under the same registrable domain, for example `https://example.fr` and `https://api.example.fr`. Only exact origins configured under `WebSecurity:AllowedOrigins` receive credentialed CORS headers. Wildcards are rejected, and Production accepts HTTPS origins only.
+
+The frontend must initialize and refresh CSRF protection after login and logout:
+
+1. Call `GET /security/csrf-token` with `credentials: "include"`.
+2. Keep the returned token in memory.
+3. Send the token in `X-CSRF-TOKEN` with `credentials: "include"` for every `POST`, `PUT`, `PATCH`, and `DELETE` request.
+4. Fetch a new token after authentication state changes or after a `400` response caused by an expired token.
+
+All controller actions using unsafe HTTP methods validate antiforgery tokens by default. Any future exception must explicitly use `IgnoreAntiforgeryToken` and document why a browser-supplied cookie cannot authorize that endpoint.
+
+The antiforgery cookie is a strictly necessary session cookie used only for request security. It does not require prior consent while it remains limited to this purpose, but it must be described in the site's cookie and privacy information. Analytics, advertising, or affiliation cookies require a separate consent assessment.
+
+## Security configuration and secrets
+
+Local defaults allow `http://localhost:5173` and the `localhost` API host. Production requires explicit values:
+
+| Setting | Environment variable | Example |
+|---|---|---|
+| Frontend origin | `FRONTEND_ORIGIN` | `https://example.fr` |
+| API host | `API_ALLOWED_HOST` | `api.example.fr` |
+| Data Protection key path | `WebSecurity__DataProtectionKeysPath` | `/var/lib/mon-kado/data-protection-keys` |
+
+The Compose file maps the first two variables to ASP.NET Core configuration and mounts the key path automatically. Never configure `AllowedHosts` or CORS with `*`.
+
+Local database credentials belong in .NET user secrets. VPS values belong in the uncommitted `.env` file with permissions `600`. Do not commit PostgreSQL passwords, OAuth client secrets, CSRF tokens, production connection strings, certificates, or Data Protection keys.
+
+ASP.NET Core Data Protection keys are stored in the `data_protection_keys` Docker volume so protected cookies survive API container recreation. Treat this volume as sensitive. Losing or deleting it invalidates existing cookies and forces users to sign in again; restoring it gives access to the cryptographic material used by the application.
 
 ## Architecture
 
@@ -149,6 +181,8 @@ Put the generated hexadecimal value in `POSTGRES_PASSWORD`, set `API_HOST` to th
 API_HOST=api.example.fr
 HTTP_PORT=80
 HTTPS_PORT=443
+FRONTEND_ORIGIN=https://example.fr
+API_ALLOWED_HOST=api.example.fr
 POSTGRES_DB=mon_kado
 POSTGRES_USER=mon_kado
 POSTGRES_PASSWORD=<generated-hexadecimal-value>
@@ -203,4 +237,4 @@ docker compose --env-file .env -f compose.yaml exec -T postgres sh -c 'pg_restor
 docker compose --env-file .env -f compose.yaml start api worker
 ```
 
-Test restore procedures regularly. PostgreSQL major-version upgrades require a reviewed dump/restore or `pg_upgrade` procedure. Never perform a major upgrade by changing only the image tag while reusing the existing data directory.
+Test restore procedures regularly. PostgreSQL major-version upgrades require a reviewed dump/restore or `pg_upgrade` procedure. Never perform a major upgrade by changing only the image tag while reusing the existing data directory. The PostgreSQL backup does not contain the `data_protection_keys` volume; protect that volume separately according to the selected key-retention policy.
