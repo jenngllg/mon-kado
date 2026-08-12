@@ -8,13 +8,18 @@
 
 	<ItemGroup>
 		<PackageReference Include="Microsoft.AspNetCore.OpenApi" />
+		<PackageReference Include="Microsoft.EntityFrameworkCore.Design">
+			<PrivateAssets>all</PrivateAssets>
+			<IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+		</PackageReference>
+		<PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" />
 		<PackageReference Include="Microsoft.OpenApi" />
 		<PackageReference Include="Riok.Mapperly" PrivateAssets="all" />
 	</ItemGroup>
 
 	<ItemGroup>
-	  <ProjectReference Include="..\Application\Application.csproj" />
-	  <ProjectReference Include="..\Infrastructure.Persistence.PostgreSql\Infrastructure.Persistence.PostgreSql.csproj" />
+		<ProjectReference Include="..\Application\Application.csproj" />
+		<ProjectReference Include="..\Infrastructure.Persistence.PostgreSql\Infrastructure.Persistence.PostgreSql.csproj" />
 	</ItemGroup>
 
 </Project>
