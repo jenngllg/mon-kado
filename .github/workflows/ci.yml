@@ -22,7 +22,7 @@ env:
   DOTNET_CLI_TELEMETRY_OPTOUT: "1"
   DOTNET_NOLOGO: "1"
   ConnectionStrings__PostgreSql: >-
-    Host=127.0.0.1;Port=1;Database=mon_kado;Username=mon_kado;Password=ci-only;Timeout=1;Command Timeout=1;Pooling=false;SSL Mode=Disable
+    Host=127.0.0.1;Port=1;Database=mon_kado;Username=mon_kado;Timeout=1;Command Timeout=1;Pooling=false;SSL Mode=Disable
 
 jobs:
   quality:
@@ -46,16 +46,24 @@ jobs:
         run: dotnet tool restore
 
       - name: Start SonarQube Cloud analysis
-        if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+        if: >-
+          (github.event_name == 'push' && github.ref == 'refs/heads/develop') ||
+          (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository &&
+          github.actor != 'dependabot[bot]')
         shell: bash
+        env:
+          SONAR_ORGANIZATION: ${{ vars.SONAR_ORGANIZATION }}
+          SONAR_PROJECT_KEY: ${{ vars.SONAR_PROJECT_KEY }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         run: >-
           dotnet sonarscanner begin
-          /k:"${{ vars.SONAR_PROJECT_KEY }}"
-          /o:"${{ vars.SONAR_ORGANIZATION }}"
-          /d:sonar.token="${{ secrets.SONAR_TOKEN }}"
+          /k:"$SONAR_PROJECT_KEY"
+          /o:"$SONAR_ORGANIZATION"
+          /d:sonar.token="$SONAR_TOKEN"
           /d:sonar.host.url="https://sonarcloud.io"
           /d:sonar.cs.opencover.reportsPaths="**/coverage.opencover.xml"
           /d:sonar.coverage.exclusions="src/**/Migrations/**"
+          /d:sonar.exclusions="src/**/Migrations/**"
           /d:sonar.qualitygate.wait=true
           /d:sonar.qualitygate.timeout=300
 
@@ -131,6 +139,11 @@ jobs:
           --configuration Release
           --no-build
 
+      - name: Generate Compose validation credentials
+        shell: bash
+        run: |
+          echo "CI_POSTGRES_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+
       - name: Validate production Compose configuration
         shell: bash
         run: >-
@@ -141,7 +154,7 @@ jobs:
           API_ALLOWED_HOST=api.example.test
           POSTGRES_DB=mon_kado
           POSTGRES_USER=mon_kado
-          POSTGRES_PASSWORD=ci-only
+          POSTGRES_PASSWORD="$CI_POSTGRES_SECRET"
           IMAGE_TAG=ci
           docker compose -f compose.yaml config --quiet
 
@@ -155,10 +168,15 @@ jobs:
           API_ALLOWED_HOST=localhost
           POSTGRES_DB=mon_kado
           POSTGRES_USER=mon_kado
-          POSTGRES_PASSWORD=ci-only
+          POSTGRES_PASSWORD="$CI_POSTGRES_SECRET"
           IMAGE_TAG=ci
           docker compose -f compose.yaml -f compose.local.yaml config --quiet
 
       - name: Complete SonarQube Cloud analysis
-        if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
-        run: dotnet sonarscanner end /d:sonar.token="${{ secrets.SONAR_TOKEN }}"
+        if: >-
+          (github.event_name == 'push' && github.ref == 'refs/heads/develop') ||
+          (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository &&
+          github.actor != 'dependabot[bot]')
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: dotnet sonarscanner end /d:sonar.token="$SONAR_TOKEN"
