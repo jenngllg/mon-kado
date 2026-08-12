@@ -2,7 +2,7 @@
 
 Mon Kado is an API for creating, sharing, and managing gift wishlists.
 
-The repository currently contains the technical baseline only. Business endpoints, PostgreSQL persistence, OpenAPI, and containerization are introduced by dedicated backlog items.
+The repository currently contains the technical baseline only. Business endpoints, PostgreSQL persistence, and containerization are introduced by dedicated backlog items.
 
 ## Prerequisites
 
@@ -33,8 +33,11 @@ The local launch profile listens on `http://localhost:7000` and uses the `Local`
 |---|---|
 | `GET /liveness` | Confirms that the API process is alive |
 | `GET /readiness` | Confirms that the API is ready to receive traffic |
+| `GET /openapi/v1.json` | Publishes the versioned OpenAPI 3.1 contract as JSON |
 
 Until PostgreSQL is introduced, readiness has no external dependency check.
+
+The OpenAPI contract is available in every environment. No interactive Swagger or Scalar UI is installed.
 
 ## Architecture
 
