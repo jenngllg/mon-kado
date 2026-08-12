@@ -1,4 +1,12 @@
 services:
+  migrations:
+    environment:
+      ASPNETCORE_ENVIRONMENT: Local
+
+  api:
+    environment:
+      ASPNETCORE_ENVIRONMENT: Local
+
   caddy:
     ports: !override
       - "127.0.0.1:${HTTP_PORT:-8080}:80"

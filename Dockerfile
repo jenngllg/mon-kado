@@ -28,9 +28,15 @@ RUN dotnet publish src/API/Api.csproj \
         --output /out/worker \
         /p:UseAppHost=false
 
+RUN mkdir -p /out/data-protection-keys \
+    && touch /out/data-protection-keys/.volume-init
+
 FROM build AS migrations-build
 
-RUN ConnectionStrings__PostgreSql="Host=127.0.0.1;Database=mon_kado;Username=mon_kado;Password=build-only" \
+RUN AllowedHosts=localhost \
+    WebSecurity__AllowedOrigins__0=https://localhost \
+    WebSecurity__DataProtectionKeysPath=/tmp/data-protection-keys \
+    ConnectionStrings__PostgreSql="Host=127.0.0.1;Database=mon_kado;Username=mon_kado;Password=build-only" \
     dotnet ef migrations bundle \
         --project src/Infrastructure.Persistence.PostgreSql/Infrastructure.Persistence.PostgreSql.csproj \
         --startup-project src/API/Api.csproj \
@@ -45,6 +51,7 @@ ENV ASPNETCORE_HTTP_PORTS=8080 \
 EXPOSE 8080
 COPY --from=build /out/api/ ./
 COPY --from=migrations-build --chmod=0555 /out/migrations/efbundle ./efbundle
+COPY --from=build --chown=$APP_UID:$APP_UID /out/data-protection-keys/ /var/lib/mon-kado/data-protection-keys/
 USER $APP_UID
 ENTRYPOINT ["dotnet", "JennGllg.Fr.MonKado.Back.Api.dll"]
 

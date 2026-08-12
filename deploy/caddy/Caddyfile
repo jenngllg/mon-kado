@@ -1,3 +1,4 @@
 {$API_HOST} {
+	header -Server
 	reverse_proxy api:8080
 }
