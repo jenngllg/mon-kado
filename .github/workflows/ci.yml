@@ -1,0 +1,164 @@
+name: CI
+
+on:
+  pull_request:
+    branches:
+      - develop
+      - main
+  push:
+    branches:
+      - develop
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+  DOTNET_NOLOGO: "1"
+  ConnectionStrings__PostgreSql: >-
+    Host=127.0.0.1;Port=1;Database=mon_kado;Username=mon_kado;Password=ci-only;Timeout=1;Command Timeout=1;Pooling=false;SSL Mode=Disable
+
+jobs:
+  quality:
+    name: quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+
+      - name: Restore local tools
+        run: dotnet tool restore
+
+      - name: Start SonarQube Cloud analysis
+        if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+        shell: bash
+        run: >-
+          dotnet sonarscanner begin
+          /k:"${{ vars.SONAR_PROJECT_KEY }}"
+          /o:"${{ vars.SONAR_ORGANIZATION }}"
+          /d:sonar.token="${{ secrets.SONAR_TOKEN }}"
+          /d:sonar.host.url="https://sonarcloud.io"
+          /d:sonar.cs.opencover.reportsPaths="**/coverage.opencover.xml"
+          /d:sonar.coverage.exclusions="src/**/Migrations/**"
+          /d:sonar.qualitygate.wait=true
+          /d:sonar.qualitygate.timeout=300
+
+      - name: Restore dependencies
+        run: dotnet restore JennGllg.Fr.MonKado.Back.slnx
+
+      - name: Build
+        run: >-
+          dotnet build JennGllg.Fr.MonKado.Back.slnx
+          --configuration Release
+          --no-restore
+
+      - name: Test with coverage
+        run: >-
+          dotnet test JennGllg.Fr.MonKado.Back.slnx
+          --configuration Release
+          --no-build
+          --no-restore
+          --settings coverlet.runsettings
+          --collect:"XPlat Code Coverage"
+          --results-directory TestResults
+
+      - name: Verify coverage reports
+        shell: bash
+        run: |
+          find TestResults -name coverage.opencover.xml -type f -print -quit | grep --quiet .
+
+      - name: Verify formatting
+        run: >-
+          dotnet format JennGllg.Fr.MonKado.Back.slnx
+          --verify-no-changes
+          --no-restore
+
+      - name: Audit vulnerable packages
+        shell: bash
+        run: |
+          report="$(dotnet package list --project JennGllg.Fr.MonKado.Back.slnx --vulnerable --include-transitive --format json --output-version 1 --no-restore)"
+          echo "$report"
+          count="$(jq '[.projects[].frameworks[]? | ((.topLevelPackages // []) + (.transitivePackages // []))] | flatten | length' <<< "$report")"
+          test "$count" -eq 0
+
+      - name: Audit deprecated packages
+        shell: bash
+        run: |
+          report="$(dotnet package list --project JennGllg.Fr.MonKado.Back.slnx --deprecated --include-transitive --format json --output-version 1 --no-restore)"
+          echo "$report"
+          count="$(jq '[.projects[].frameworks[]? | ((.topLevelPackages // []) + (.transitivePackages // []))] | flatten | length' <<< "$report")"
+          test "$count" -eq 0
+
+      - name: Report outdated packages
+        run: >-
+          dotnet package list
+          --project JennGllg.Fr.MonKado.Back.slnx
+          --outdated
+          --no-restore
+
+      - name: List EF Core migrations
+        run: >-
+          dotnet ef migrations list
+          --no-connect
+          --project src/Infrastructure.Persistence.PostgreSql/Infrastructure.Persistence.PostgreSql.csproj
+          --startup-project src/API/Api.csproj
+          --context MonKadoDbContext
+          --configuration Release
+          --no-build
+
+      - name: Verify EF Core model
+        run: >-
+          dotnet ef migrations has-pending-model-changes
+          --project src/Infrastructure.Persistence.PostgreSql/Infrastructure.Persistence.PostgreSql.csproj
+          --startup-project src/API/Api.csproj
+          --context MonKadoDbContext
+          --configuration Release
+          --no-build
+
+      - name: Validate production Compose configuration
+        shell: bash
+        run: >-
+          API_HOST=api.example.test
+          HTTP_PORT=80
+          HTTPS_PORT=443
+          FRONTEND_ORIGIN=https://example.test
+          API_ALLOWED_HOST=api.example.test
+          POSTGRES_DB=mon_kado
+          POSTGRES_USER=mon_kado
+          POSTGRES_PASSWORD=ci-only
+          IMAGE_TAG=ci
+          docker compose -f compose.yaml config --quiet
+
+      - name: Validate local Compose configuration
+        shell: bash
+        run: >-
+          API_HOST=http://localhost
+          HTTP_PORT=18080
+          HTTPS_PORT=18443
+          FRONTEND_ORIGIN=http://localhost:5173
+          API_ALLOWED_HOST=localhost
+          POSTGRES_DB=mon_kado
+          POSTGRES_USER=mon_kado
+          POSTGRES_PASSWORD=ci-only
+          IMAGE_TAG=ci
+          docker compose -f compose.yaml -f compose.local.yaml config --quiet
+
+      - name: Complete SonarQube Cloud analysis
+        if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+        run: dotnet sonarscanner end /d:sonar.token="${{ secrets.SONAR_TOKEN }}"

@@ -1,0 +1,176 @@
+name: Containers
+
+on:
+  pull_request:
+    branches:
+      - develop
+      - main
+    paths:
+      - .config/dotnet-tools.json
+      - .dockerignore
+      - .github/workflows/containers.yml
+      - Directory.Build.props
+      - Directory.Packages.props
+      - Dockerfile
+      - compose.yaml
+      - compose.local.yaml
+      - deploy/caddy/**
+      - global.json
+      - src/**
+  push:
+    branches:
+      - develop
+      - main
+    paths:
+      - .config/dotnet-tools.json
+      - .dockerignore
+      - .github/workflows/containers.yml
+      - Directory.Build.props
+      - Directory.Packages.props
+      - Dockerfile
+      - compose.yaml
+      - compose.local.yaml
+      - deploy/caddy/**
+      - global.json
+      - src/**
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: containers-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  COMPOSE_PROJECT_NAME: mon-kado-ci
+  API_HOST: http://localhost
+  HTTP_PORT: "18080"
+  HTTPS_PORT: "18443"
+  FRONTEND_ORIGIN: http://localhost:5173
+  API_ALLOWED_HOST: localhost
+  POSTGRES_DB: mon_kado
+  POSTGRES_USER: mon_kado
+  POSTGRES_PASSWORD: ci-only
+  POSTGRES_PORT: "15432"
+  IMAGE_TAG: ci
+
+jobs:
+  verify:
+    name: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Validate Compose configurations
+        shell: bash
+        run: |
+          API_HOST=api.example.test \
+          HTTP_PORT=80 \
+          HTTPS_PORT=443 \
+          FRONTEND_ORIGIN=https://example.test \
+          API_ALLOWED_HOST=api.example.test \
+          docker compose -f compose.yaml config --quiet
+          docker compose -f compose.yaml -f compose.local.yaml config --quiet
+
+      - name: Build API and Worker images
+        run: docker compose -f compose.yaml -f compose.local.yaml build --pull api worker
+
+      - name: Start isolated stack
+        run: docker compose -f compose.yaml -f compose.local.yaml up --detach
+
+      - name: Verify stack and public endpoints
+        shell: bash
+        run: |
+          for attempt in {1..30}; do
+            if curl --fail --silent http://localhost:18080/readiness >/dev/null; then
+              break
+            fi
+            if [ "$attempt" -eq 30 ]; then
+              docker compose -f compose.yaml -f compose.local.yaml ps --all
+              docker compose -f compose.yaml -f compose.local.yaml logs
+              exit 1
+            fi
+            sleep 2
+          done
+
+          test "$(curl --silent --output /dev/null --write-out '%{http_code}' http://localhost:18080/liveness)" = "200"
+          test "$(curl --silent --output /dev/null --write-out '%{http_code}' http://localhost:18080/readiness)" = "200"
+          test "$(curl --silent --output /dev/null --write-out '%{http_code}' http://localhost:18080/openapi/v1.json)" = "200"
+          test "$(curl --silent --output /dev/null --write-out '%{http_code}' http://localhost:18080/security/csrf-token)" = "200"
+
+          if curl --silent --head http://localhost:18080/liveness | grep --quiet --ignore-case '^Server:'; then
+            exit 1
+          fi
+
+          api_user="$(docker inspect mon-kado-ci-api-1 --format '{{.Config.User}}')"
+          worker_user="$(docker inspect mon-kado-ci-worker-1 --format '{{.Config.User}}')"
+          test -n "$api_user" && test "$api_user" != "0" && test "$api_user" != "root"
+          test -n "$worker_user" && test "$worker_user" != "0" && test "$worker_user" != "root"
+          test "$(docker inspect mon-kado-ci-api-1 --format '{{.HostConfig.ReadonlyRootfs}}')" = "true"
+          test "$(docker inspect mon-kado-ci-worker-1 --format '{{.HostConfig.ReadonlyRootfs}}')" = "true"
+          test "$(docker inspect mon-kado-ci-migrations-1 --format '{{.State.ExitCode}}')" = "0"
+
+      - name: Verify migration idempotency
+        run: |
+          docker compose -f compose.yaml -f compose.local.yaml run --rm migrations
+          docker compose -f compose.yaml -f compose.local.yaml run --rm migrations
+
+      - name: Verify Data Protection persistence
+        shell: bash
+        run: |
+          before="$(docker run --rm -v mon-kado-ci_data_protection_keys:/keys:ro alpine@sha256:14358309a308569c32bdc37e2e0e9694be33a9d99e68afb0f5ff33cc1f695dce sh -c "sha256sum /keys/key-*.xml")"
+          docker compose -f compose.yaml -f compose.local.yaml up --detach --force-recreate api
+          for attempt in {1..20}; do
+            if curl --fail --silent http://localhost:18080/security/csrf-token >/dev/null; then
+              break
+            fi
+            test "$attempt" -lt 20
+            sleep 2
+          done
+          after="$(docker run --rm -v mon-kado-ci_data_protection_keys:/keys:ro alpine@sha256:14358309a308569c32bdc37e2e0e9694be33a9d99e68afb0f5ff33cc1f695dce sh -c "sha256sum /keys/key-*.xml")"
+          test "$before" = "$after"
+
+      - name: Verify PostgreSQL failure behavior
+        shell: bash
+        run: |
+          docker compose -f compose.yaml -f compose.local.yaml stop postgres
+          sleep 3
+          test "$(curl --silent --output /dev/null --write-out '%{http_code}' http://localhost:18080/liveness)" = "200"
+          test "$(curl --silent --output /dev/null --write-out '%{http_code}' http://localhost:18080/readiness)" = "503"
+          docker compose -f compose.yaml -f compose.local.yaml start postgres
+
+      - name: Scan API image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: mon-kado-api:ci
+          format: table
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+
+      - name: Scan Worker image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: mon-kado-worker:ci
+          format: table
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+
+      - name: Show diagnostics on failure
+        if: failure()
+        run: |
+          docker compose -f compose.yaml -f compose.local.yaml ps --all
+          docker compose -f compose.yaml -f compose.local.yaml logs
+
+      - name: Remove isolated stack
+        if: always()
+        run: docker compose -f compose.yaml -f compose.local.yaml down --volumes --remove-orphans
