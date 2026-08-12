@@ -46,7 +46,10 @@ jobs:
         run: dotnet tool restore
 
       - name: Start SonarQube Cloud analysis
-        if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+        if: >-
+          (github.event_name == 'push' && github.ref == 'refs/heads/develop') ||
+          (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository &&
+          github.actor != 'dependabot[bot]')
         shell: bash
         run: >-
           dotnet sonarscanner begin
@@ -160,5 +163,8 @@ jobs:
           docker compose -f compose.yaml -f compose.local.yaml config --quiet
 
       - name: Complete SonarQube Cloud analysis
-        if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+        if: >-
+          (github.event_name == 'push' && github.ref == 'refs/heads/develop') ||
+          (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository &&
+          github.actor != 'dependabot[bot]')
         run: dotnet sonarscanner end /d:sonar.token="${{ secrets.SONAR_TOKEN }}"
