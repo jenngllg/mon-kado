@@ -16,6 +16,8 @@ public sealed class RegistrationApiFactory : WebApplicationFactory<Program>
 
     public RecordingAccountRegistrationService RegistrationService { get; } = new();
 
+    public RecordingEmailConfirmationService EmailConfirmationService { get; } = new();
+
     public IReadOnlyCollection<string> LogMessages => logProvider.Messages;
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -29,6 +31,8 @@ public sealed class RegistrationApiFactory : WebApplicationFactory<Program>
         {
             services.RemoveAll<IAccountRegistrationService>();
             services.AddSingleton<IAccountRegistrationService>(RegistrationService);
+            services.RemoveAll<IEmailConfirmationService>();
+            services.AddSingleton<IEmailConfirmationService>(EmailConfirmationService);
         });
     }
 
@@ -114,3 +118,67 @@ public sealed class RecordingAccountRegistrationService : IAccountRegistrationSe
 }
 
 public sealed record RegistrationCall(string Email, string Password, string DisplayName);
+
+public sealed class RecordingEmailConfirmationService : IEmailConfirmationService
+{
+    private readonly object sync = new();
+    private int confirmCallCount;
+    private int requestCallCount;
+
+    public bool ConfirmationResult { get; set; } = true;
+
+    public int ConfirmCallCount => Volatile.Read(ref confirmCallCount);
+
+    public int RequestCallCount => Volatile.Read(ref requestCallCount);
+
+    public IReadOnlyList<EmailConfirmationCall> ConfirmationCalls
+    {
+        get
+        {
+            lock (sync)
+            {
+                return confirmationCalls.ToArray();
+            }
+        }
+    }
+
+    public IReadOnlyList<string> RequestedEmails
+    {
+        get
+        {
+            lock (sync)
+            {
+                return requestedEmails.ToArray();
+            }
+        }
+    }
+
+    private readonly List<EmailConfirmationCall> confirmationCalls = [];
+    private readonly List<string> requestedEmails = [];
+
+    public Task<bool> ConfirmAsync(string userId, string token, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        lock (sync)
+        {
+            confirmationCalls.Add(new EmailConfirmationCall(userId, token));
+        }
+
+        Interlocked.Increment(ref confirmCallCount);
+        return Task.FromResult(ConfirmationResult);
+    }
+
+    public Task RequestAsync(string email, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        lock (sync)
+        {
+            requestedEmails.Add(email);
+        }
+
+        Interlocked.Increment(ref requestCallCount);
+        return Task.CompletedTask;
+    }
+}
+
+public sealed record EmailConfirmationCall(string UserId, string Token);

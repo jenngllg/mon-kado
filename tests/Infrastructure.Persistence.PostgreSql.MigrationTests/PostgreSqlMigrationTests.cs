@@ -24,7 +24,8 @@ public sealed class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
         Assert.Collection(
             migrations,
             migration => Assert.EndsWith("_InitialPersistenceBaseline", migration, StringComparison.Ordinal),
-            migration => Assert.EndsWith("_AddIdentityAndAccountRegistration", migration, StringComparison.Ordinal));
+            migration => Assert.EndsWith("_AddIdentityAndAccountRegistration", migration, StringComparison.Ordinal),
+            migration => Assert.EndsWith("_AddEmailConfirmationRequestThrottling", migration, StringComparison.Ordinal));
         Assert.False(context.Database.HasPendingModelChanges());
 
         IReadOnlyList<string> tables = await GetPublicTables(context, cancellationToken);
@@ -53,6 +54,7 @@ public sealed class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
         Assert.Contains("ix_users_unconfirmed_account_expiry", indexes);
         Assert.Contains("ux_authentication_email_outbox_pending_user_kind", indexes);
         Assert.Contains("ix_authentication_email_outbox_pending_delivery", indexes);
+        Assert.Contains("ix_authentication_email_outbox_user_kind_created_at", indexes);
     }
 
     private ServiceProvider CreateServiceProvider()

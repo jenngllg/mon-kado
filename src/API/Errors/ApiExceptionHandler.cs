@@ -16,6 +16,16 @@ internal sealed partial class ApiExceptionHandler(ILogger<ApiExceptionHandler> l
         IResult problem;
         switch (exception)
         {
+            case EmailConfirmationInvalidException:
+                problem = ApiProblemDetails.Create(
+                    httpContext,
+                    StatusCodes.Status400BadRequest,
+                    "email-confirmation-invalid",
+                    "Email confirmation failed",
+                    "The email confirmation link is invalid or expired.",
+                    "EMAIL_CONFIRMATION_INVALID");
+                break;
+
             case RequestValidationException validationException:
                 problem = ApiProblemDetails.Create(
                     httpContext,

@@ -87,6 +87,8 @@ The local launch profile listens on `http://localhost:7000` and uses the `Local`
 | `GET /openapi/v1.json` | Publishes the versioned OpenAPI 3.1 contract as JSON |
 | `GET /security/csrf-token` | Issues the antiforgery cookie and returns its request token |
 | `POST /api/v1/auth/registrations` | Creates an unconfirmed account and queues an e-mail request |
+| `POST /api/v1/auth/email-confirmations` | Confirms an e-mail address from a user identifier and Base64URL token |
+| `POST /api/v1/auth/email-confirmation-requests` | Silently requests another confirmation e-mail |
 
 Liveness never contacts PostgreSQL. Readiness allows at most two seconds for PostgreSQL to accept a connection and returns `503 Unhealthy` otherwise; it checks connectivity, not whether all migrations have been applied.
 
@@ -126,6 +128,26 @@ Production clients must call the API only through Caddy's public HTTPS endpoint.
 Local HTTP is allowed only on loopback development addresses and must never be exposed to another device. Do not submit real credentials to a local development instance.
 
 New accounts and their minimal outbox request are committed atomically. The outbox contains only the user identifier and message metadata; #764 will generate and deliver the confirmation token later. Unconfirmed accounts expire after 30 days and the Worker removes them in bounded batches. This retention period must appear in the privacy policy before production launch.
+
+## E-mail confirmation contract
+
+Ticket #764 will build confirmation links from the configured, trusted frontend origin. The link uses a URL fragment:
+
+```text
+https://<frontend>/confirm-email#userId=<uuid>&token=<base64url>
+```
+
+The fragment is not sent in HTTP requests and must never be copied into server logs. The frontend must immediately
+remove it from browser history, keep its values only in memory, fetch `GET /security/csrf-token`, then send both values
+in the JSON body of `POST /api/v1/auth/email-confirmations`. It displays the same failure message for every invalid,
+expired, altered or unknown confirmation link. A successful confirmation creates no authenticated session; the user
+must continue to the future sign-in flow.
+
+Confirmation tokens are protected by ASP.NET Core Data Protection, use the dedicated
+`MonKadoEmailConfirmation` provider and remain valid for at most 24 hours. An unconfirmed account's 30-day retention
+deadline can shorten that period. Confirmation clears the deadline and cancels pending outbox messages. Asking for
+another e-mail never extends the deadline and always returns the same empty `202 Accepted` response. Per-account
+limits are stored in PostgreSQL and include the initial registration request.
 
 ## Security configuration and secrets
 
