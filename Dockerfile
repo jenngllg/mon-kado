@@ -35,7 +35,7 @@ FROM build AS migrations-build
 
 RUN AllowedHosts=localhost \
     WebSecurity__AllowedOrigins__0=https://localhost \
-    WebSecurity__DataProtectionKeysPath=/tmp/data-protection-keys \
+    DataProtection__KeysPath=/tmp/data-protection-keys \
     ReverseProxy__KnownNetworks__0=127.0.0.0/8 \
     ConnectionStrings__PostgreSql="Host=127.0.0.1;Database=mon_kado;Username=mon_kado;Password=build-only" \
     dotnet ef migrations bundle \
@@ -56,9 +56,10 @@ COPY --from=build --chown=$APP_UID:$APP_UID /out/data-protection-keys/ /var/lib/
 USER $APP_UID
 ENTRYPOINT ["dotnet", "JennGllg.Fr.MonKado.Back.Api.dll"]
 
-FROM mcr.microsoft.com/dotnet/runtime:10.0.11-noble-chiseled-extra AS worker
+FROM mcr.microsoft.com/dotnet/aspnet:10.0.11-noble-chiseled-extra AS worker
 WORKDIR /app
 ENV DOTNET_EnableDiagnostics=0
 COPY --from=build /out/worker/ ./
+COPY --from=build --chown=$APP_UID:$APP_UID /out/data-protection-keys/ /var/lib/mon-kado/data-protection-keys/
 USER $APP_UID
 ENTRYPOINT ["dotnet", "JennGllg.Fr.MonKado.Back.Worker.dll"]

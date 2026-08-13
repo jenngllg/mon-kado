@@ -42,6 +42,12 @@ public sealed class AuthenticationEmailOutboxMessage
         Justification = "Entity Framework uses this private setter when materializing persisted outbox state.")]
     public string? LastError { get; private set; }
 
+    [SuppressMessage(
+        "CodeQuality",
+        "S1144:Unused private types or members should be removed",
+        Justification = "Entity Framework uses this private setter when materializing persisted outbox state.")]
+    public string? ProviderMessageId { get; private set; }
+
     public static AuthenticationEmailOutboxMessage CreateEmailConfirmation(
         Guid userId,
         DateTimeOffset createdAt)
@@ -54,5 +60,26 @@ public sealed class AuthenticationEmailOutboxMessage
             CreatedAt = createdAt,
             AvailableAt = createdAt
         };
+    }
+
+    internal void Claim(DateTimeOffset lockedUntil)
+    {
+        AttemptCount++;
+        LockedUntil = lockedUntil;
+    }
+
+    internal void MarkProcessed(DateTimeOffset processedAt, string? providerMessageId = null)
+    {
+        ProcessedAt = processedAt;
+        LockedUntil = null;
+        LastError = null;
+        ProviderMessageId = providerMessageId;
+    }
+
+    internal void ScheduleRetry(DateTimeOffset availableAt, string lastError)
+    {
+        AvailableAt = availableAt;
+        LockedUntil = null;
+        LastError = lastError;
     }
 }

@@ -8,5 +8,4 @@ public sealed class WebSecurityOptions
 
     public string[] AllowedOrigins { get; init; } = [];
 
-    public string? DataProtectionKeysPath { get; init; }
 }

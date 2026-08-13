@@ -25,7 +25,8 @@ public sealed class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
             migrations,
             migration => Assert.EndsWith("_InitialPersistenceBaseline", migration, StringComparison.Ordinal),
             migration => Assert.EndsWith("_AddIdentityAndAccountRegistration", migration, StringComparison.Ordinal),
-            migration => Assert.EndsWith("_AddEmailConfirmationRequestThrottling", migration, StringComparison.Ordinal));
+            migration => Assert.EndsWith("_AddEmailConfirmationRequestThrottling", migration, StringComparison.Ordinal),
+            migration => Assert.EndsWith("_AddAuthenticationEmailDeliveryTracking", migration, StringComparison.Ordinal));
         Assert.False(context.Database.HasPendingModelChanges());
 
         IReadOnlyList<string> tables = await GetPublicTables(context, cancellationToken);
@@ -55,6 +56,38 @@ public sealed class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
         Assert.Contains("ux_authentication_email_outbox_pending_user_kind", indexes);
         Assert.Contains("ix_authentication_email_outbox_pending_delivery", indexes);
         Assert.Contains("ix_authentication_email_outbox_user_kind_created_at", indexes);
+
+        IReadOnlyList<string> columns = await GetAuthenticationEmailOutboxColumns(context, cancellationToken);
+        Assert.Contains("provider_message_id", columns);
+    }
+
+    private static async Task<IReadOnlyList<string>> GetAuthenticationEmailOutboxColumns(
+        MonKadoDbContext context,
+        CancellationToken cancellationToken)
+    {
+        DbConnection connection = context.Database.GetDbConnection();
+        if (connection.State != System.Data.ConnectionState.Open)
+        {
+            await connection.OpenAsync(cancellationToken);
+        }
+
+        await using DbCommand command = connection.CreateCommand();
+        command.CommandText =
+            """
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'authentication_email_outbox'
+            ORDER BY column_name;
+            """;
+        List<string> columns = [];
+        await using DbDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            columns.Add(reader.GetString(0));
+        }
+
+        return columns;
     }
 
     private ServiceProvider CreateServiceProvider()

@@ -21,7 +21,7 @@ public sealed class SecurityApiFactory(
         builder.UseSetting("ConnectionStrings:PostgreSql", UnavailableConnectionString);
         builder.UseSetting("AllowedHosts", allowedHosts);
         builder.UseSetting("WebSecurity:AllowedOrigins:0", allowedOrigin);
-        builder.UseSetting("WebSecurity:DataProtectionKeysPath", dataProtectionKeysPath);
+        builder.UseSetting("DataProtection:KeysPath", dataProtectionKeysPath);
         builder.UseSetting("ReverseProxy:KnownNetworks:0", knownProxyNetwork);
         builder.ConfigureServices(services =>
             services.AddControllers().AddApplicationPart(typeof(SecurityTestController).Assembly));
