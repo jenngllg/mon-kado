@@ -8,7 +8,8 @@ public sealed class SecurityApiFactory(
     string environment = "Local",
     string? allowedOrigin = "http://localhost:5173",
     string? allowedHosts = "localhost",
-    string? dataProtectionKeysPath = null) : WebApplicationFactory<Program>
+    string? dataProtectionKeysPath = null,
+    string? knownProxyNetwork = "127.0.0.0/8") : WebApplicationFactory<Program>
 {
     private const string UnavailableConnectionString =
         "Host=127.0.0.1;Port=1;Database=mon_kado;Username=mon_kado;Password=functional-tests-only;" +
@@ -21,6 +22,7 @@ public sealed class SecurityApiFactory(
         builder.UseSetting("AllowedHosts", allowedHosts);
         builder.UseSetting("WebSecurity:AllowedOrigins:0", allowedOrigin);
         builder.UseSetting("WebSecurity:DataProtectionKeysPath", dataProtectionKeysPath);
+        builder.UseSetting("ReverseProxy:KnownNetworks:0", knownProxyNetwork);
         builder.ConfigureServices(services =>
             services.AddControllers().AddApplicationPart(typeof(SecurityTestController).Assembly));
     }

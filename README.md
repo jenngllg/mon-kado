@@ -157,9 +157,10 @@ Local defaults allow `http://localhost:5173` and the `localhost` API host. Produ
 |---|---|---|
 | Frontend origin | `FRONTEND_ORIGIN` | `https://example.fr` |
 | API host | `API_ALLOWED_HOST` | `api.example.fr` |
+| Dedicated Caddy network | `EDGE_NETWORK_CIDR` | `172.30.0.0/24` |
 | Data Protection key path | `WebSecurity__DataProtectionKeysPath` | `/var/lib/mon-kado/data-protection-keys` |
 
-The Compose file maps the first two variables to ASP.NET Core configuration and mounts the key path automatically. Never configure `AllowedHosts` or CORS with `*`.
+Compose maps the dedicated edge network to `ReverseProxy:KnownNetworks`. ASP.NET Core accepts forwarded client IP and scheme values only from that network, with a single forwarded hop. Change `EDGE_NETWORK_CIDR` if it conflicts with an existing Docker network. Never configure trusted proxies with `0.0.0.0/0` or `::/0`, and never configure `AllowedHosts` or CORS with `*`.
 
 Local database credentials belong in .NET user secrets. VPS values belong in the uncommitted `.env` file with permissions `600`. Do not commit PostgreSQL passwords, OAuth client secrets, CSRF tokens, production connection strings, certificates, or Data Protection keys.
 
@@ -246,6 +247,7 @@ HTTP_PORT=80
 HTTPS_PORT=443
 FRONTEND_ORIGIN=https://example.fr
 API_ALLOWED_HOST=api.example.fr
+EDGE_NETWORK_CIDR=172.30.0.0/24
 POSTGRES_DB=mon_kado
 POSTGRES_USER=mon_kado
 POSTGRES_PASSWORD=<generated-hexadecimal-value>

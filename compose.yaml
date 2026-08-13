@@ -72,7 +72,7 @@ services:
     environment:
       <<: *app-environment
       ASPNETCORE_ENVIRONMENT: Production
-      ASPNETCORE_FORWARDEDHEADERS_ENABLED: "true"
+      ReverseProxy__KnownNetworks__0: ${EDGE_NETWORK_CIDR:-172.30.0.0/24}
       ASPNETCORE_HTTP_PORTS: "8080"
       AllowedHosts: ${API_ALLOWED_HOST:?Set API_ALLOWED_HOST in .env}
       WebSecurity__AllowedOrigins__0: ${FRONTEND_ORIGIN:?Set FRONTEND_ORIGIN in .env}
@@ -131,6 +131,9 @@ services:
 networks:
   backend:
   edge:
+    ipam:
+      config:
+        - subnet: ${EDGE_NETWORK_CIDR:-172.30.0.0/24}
 
 volumes:
   postgres_data:

@@ -11,6 +11,7 @@ builder.Services.AddPostgreSqlPersistence(builder.Configuration);
 builder.Services.AddControllersWithViews();
 builder.Services.AddApiHealthChecks();
 builder.Services.AddApiOpenApi();
+builder.Services.AddTrustedReverseProxy(builder.Configuration, builder.Environment);
 builder.Services.AddWebSecurity(builder.Configuration, builder.Environment);
 builder.Services.AddApiProblemDetails();
 builder.Services.AddAuthenticationRateLimiting();
@@ -18,6 +19,7 @@ builder.Services.AddEmailConfirmationTokens();
 
 var app = builder.Build();
 
+app.UseTrustedReverseProxy();
 app.UseExceptionHandler();
 app.UseWebSecurity();
 app.UseAuthenticationRequestBodyLimits();

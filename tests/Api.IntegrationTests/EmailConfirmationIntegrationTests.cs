@@ -115,6 +115,64 @@ public sealed class EmailConfirmationIntegrationTests(PostgreSqlContainerFixture
     }
 
     [Fact]
+    public async Task TransientPostgreSqlServerFailureReturnsServiceUnavailable()
+    {
+        await using PostgreSqlApiFactory factory = await CreateMigratedFactory(TimeProvider.System);
+        using HttpClient client = factory.CreateClient();
+        MonKadoUser user = await RegisterAndLoadUser(factory, client, "transient@example.fr");
+        string token = await GenerateEncodedToken(factory, user);
+        await CreateTransientUserUpdateTrigger();
+        try
+        {
+            using HttpResponseMessage response = await Confirm(client, user.Id, token);
+
+            Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+            using JsonDocument payload = await response.Content.ReadFromJsonAsync<JsonDocument>(
+                TestContext.Current.CancellationToken)
+                ?? throw new InvalidOperationException("The dependency problem response is empty.");
+            Assert.Equal(
+                "DEPENDENCY_UNAVAILABLE",
+                payload.RootElement.GetProperty("code").GetString());
+        }
+        finally
+        {
+            await DropTransientUserUpdateTrigger();
+        }
+    }
+
+    [Fact]
+    public async Task KnownAndUnknownResendsUseTheMinimumResponseDuration()
+    {
+        MutableTimeProvider timeProvider = new(ReferenceTime);
+        await using PostgreSqlApiFactory factory = await CreateMigratedFactory(timeProvider);
+        using HttpClient client = factory.CreateClient();
+        await RegisterAndLoadUser(factory, client, "timing@example.fr");
+
+        System.Diagnostics.Stopwatch unknownStopwatch =
+            System.Diagnostics.Stopwatch.StartNew();
+        using HttpResponseMessage unknownResponse = await RequestConfirmation(
+            client,
+            "unknown-timing@example.fr");
+        unknownStopwatch.Stop();
+
+        System.Diagnostics.Stopwatch knownStopwatch =
+            System.Diagnostics.Stopwatch.StartNew();
+        using HttpResponseMessage knownResponse = await RequestConfirmation(
+            client,
+            "timing@example.fr");
+        knownStopwatch.Stop();
+
+        Assert.Equal(HttpStatusCode.Accepted, unknownResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.Accepted, knownResponse.StatusCode);
+        Assert.True(
+            unknownStopwatch.Elapsed >= TimeSpan.FromMilliseconds(175),
+            $"Unknown-account response completed in {unknownStopwatch.Elapsed.TotalMilliseconds} ms.");
+        Assert.True(
+            knownStopwatch.Elapsed >= TimeSpan.FromMilliseconds(175),
+            $"Known-account response completed in {knownStopwatch.Elapsed.TotalMilliseconds} ms.");
+    }
+
+    [Fact]
     public async Task ResendUsesPersistentSilentQuotasWithoutExtendingAccountExpiry()
     {
         MutableTimeProvider timeProvider = new(ReferenceTime);
@@ -341,6 +399,43 @@ public sealed class EmailConfirmationIntegrationTests(PostgreSqlContainerFixture
             .ExecuteUpdateAsync(
                 setters => setters.SetProperty(message => message.ProcessedAt, processedAt),
                 TestContext.Current.CancellationToken);
+    }
+
+    private async Task CreateTransientUserUpdateTrigger()
+    {
+        await using Npgsql.NpgsqlConnection connection =
+            new(fixture.Container.GetConnectionString());
+        await connection.OpenAsync(TestContext.Current.CancellationToken);
+        await using Npgsql.NpgsqlCommand command = connection.CreateCommand();
+        command.CommandText = """
+            CREATE OR REPLACE FUNCTION public.raise_transient_confirmation_failure()
+            RETURNS trigger
+            LANGUAGE plpgsql
+            AS $$
+            BEGIN
+                RAISE EXCEPTION 'temporary database outage' USING ERRCODE = '57P03';
+            END;
+            $$;
+
+            CREATE TRIGGER reject_confirmation_update
+            BEFORE UPDATE ON public.users
+            FOR EACH ROW
+            EXECUTE FUNCTION public.raise_transient_confirmation_failure();
+            """;
+        await command.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
+    }
+
+    private async Task DropTransientUserUpdateTrigger()
+    {
+        await using Npgsql.NpgsqlConnection connection =
+            new(fixture.Container.GetConnectionString());
+        await connection.OpenAsync(TestContext.Current.CancellationToken);
+        await using Npgsql.NpgsqlCommand command = connection.CreateCommand();
+        command.CommandText = """
+            DROP TRIGGER IF EXISTS reject_confirmation_update ON public.users;
+            DROP FUNCTION IF EXISTS public.raise_transient_confirmation_failure();
+            """;
+        await command.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
     }
 
     private sealed class MutableTimeProvider(DateTimeOffset currentTime) : TimeProvider

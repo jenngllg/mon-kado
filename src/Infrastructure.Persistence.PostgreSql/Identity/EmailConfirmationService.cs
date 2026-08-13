@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text;
 using JennGllg.Fr.MonKado.Back.Application.Accounts;
 using JennGllg.Fr.MonKado.Back.Application.Common.Exceptions;
@@ -17,6 +18,8 @@ internal sealed class EmailConfirmationService(
     private const string ConcurrencyFailureErrorCode = "ConcurrencyFailure";
     private const string PendingOutboxConstraintName =
         "ux_authentication_email_outbox_pending_user_kind";
+    private static readonly TimeSpan MinimumRequestResponseDuration =
+        TimeSpan.FromMilliseconds(200);
     private static readonly TimeSpan MinimumRequestInterval = TimeSpan.FromMinutes(1);
     private static readonly TimeSpan RequestWindow = TimeSpan.FromHours(1);
     private const int MaximumRequestsPerWindow = 5;
@@ -40,7 +43,7 @@ internal sealed class EmailConfirmationService(
             return await executionStrategy.ExecuteAsync(async () =>
                 await ConfirmOnce(parsedUserId, decodedToken, cancellationToken));
         }
-        catch (Exception exception) when (IsPostgreSqlUnavailable(exception))
+        catch (Exception exception) when (PostgreSqlFailureClassifier.IsUnavailable(exception))
         {
             throw new DependencyUnavailableException("PostgreSQL", exception);
         }
@@ -48,6 +51,7 @@ internal sealed class EmailConfirmationService(
 
     public async Task RequestAsync(string email, CancellationToken cancellationToken)
     {
+        long startedAt = Stopwatch.GetTimestamp();
         string? normalizedEmail = lookupNormalizer.NormalizeEmail(email);
         if (string.IsNullOrWhiteSpace(normalizedEmail))
         {
@@ -64,9 +68,13 @@ internal sealed class EmailConfirmationService(
         {
             // Concurrent requests remain indistinguishable and create at most one pending message.
         }
-        catch (Exception exception) when (IsPostgreSqlUnavailable(exception))
+        catch (Exception exception) when (PostgreSqlFailureClassifier.IsUnavailable(exception))
         {
             throw new DependencyUnavailableException("PostgreSQL", exception);
+        }
+        finally
+        {
+            await DelayUntilMinimumResponseDuration(startedAt, cancellationToken);
         }
     }
 
@@ -171,31 +179,22 @@ internal sealed class EmailConfirmationService(
                 $"SELECT * FROM public.users WHERE normalized_email = {normalizedEmail} FOR UPDATE")
             .SingleOrDefaultAsync(cancellationToken);
         DateTimeOffset now = timeProvider.GetUtcNow();
-        if (user is null ||
-            user.EmailConfirmed ||
-            user.UnconfirmedAccountExpiresAt is null ||
-            user.UnconfirmedAccountExpiresAt <= now)
-        {
-            await transaction.CommitAsync(cancellationToken);
-            return;
-        }
+        bool accountIsEligible =
+            user is { EmailConfirmed: false, UnconfirmedAccountExpiresAt: { } expiration } &&
+            expiration > now;
+        Guid quotaUserId = user?.Id ?? Guid.Empty;
 
         bool pendingRequestExists = await context.AuthenticationEmailOutboxMessages.AnyAsync(
             message =>
-                message.UserId == user.Id &&
+                message.UserId == quotaUserId &&
                 message.Kind == AuthenticationEmailKind.EmailConfirmation &&
                 message.ProcessedAt == null,
             cancellationToken);
-        if (pendingRequestExists)
-        {
-            await transaction.CommitAsync(cancellationToken);
-            return;
-        }
 
         DateTimeOffset windowStart = now.Subtract(RequestWindow);
         EmailRequestStatistics? statistics = await context.AuthenticationEmailOutboxMessages
             .Where(message =>
-                message.UserId == user.Id &&
+                message.UserId == quotaUserId &&
                 message.Kind == AuthenticationEmailKind.EmailConfirmation &&
                 message.CreatedAt >= windowStart)
             .GroupBy(_ => 1)
@@ -204,17 +203,16 @@ internal sealed class EmailConfirmationService(
                 group.Max(message => message.CreatedAt)))
             .SingleOrDefaultAsync(cancellationToken);
 
-        if (statistics is not null &&
-            (statistics.Count >= MaximumRequestsPerWindow ||
-             statistics.LatestRequestAt > now.Subtract(MinimumRequestInterval)))
+        bool accountQuotaAllowsRequest = statistics is null ||
+            (statistics.Count < MaximumRequestsPerWindow &&
+             statistics.LatestRequestAt <= now.Subtract(MinimumRequestInterval));
+        if (accountIsEligible && !pendingRequestExists && accountQuotaAllowsRequest)
         {
-            await transaction.CommitAsync(cancellationToken);
-            return;
+            context.AuthenticationEmailOutboxMessages.Add(
+                AuthenticationEmailOutboxMessage.CreateEmailConfirmation(user!.Id, now));
+            await context.SaveChangesAsync(cancellationToken);
         }
 
-        context.AuthenticationEmailOutboxMessages.Add(
-            AuthenticationEmailOutboxMessage.CreateEmailConfirmation(user.Id, now));
-        await context.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
     }
 
@@ -248,21 +246,16 @@ internal sealed class EmailConfirmationService(
         }
     }
 
-    private static bool IsPostgreSqlUnavailable(Exception exception)
+    private static async Task DelayUntilMinimumResponseDuration(
+        long startedAt,
+        CancellationToken cancellationToken)
     {
-        Exception? current = exception;
-        while (current is not null)
+        TimeSpan remaining =
+            MinimumRequestResponseDuration - Stopwatch.GetElapsedTime(startedAt);
+        if (remaining > TimeSpan.Zero)
         {
-            if (current is TimeoutException ||
-                current is NpgsqlException and not PostgresException)
-            {
-                return true;
-            }
-
-            current = current.InnerException;
+            await Task.Delay(remaining, cancellationToken);
         }
-
-        return false;
     }
 
     private static bool IsPendingOutboxDuplicate(DbUpdateException exception)

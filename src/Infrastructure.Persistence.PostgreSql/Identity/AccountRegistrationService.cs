@@ -79,7 +79,7 @@ internal sealed class AccountRegistrationService(
         {
             // A concurrent request committed the same normalized email first.
         }
-        catch (Exception exception) when (IsPostgreSqlUnavailable(exception))
+        catch (Exception exception) when (PostgreSqlFailureClassifier.IsUnavailable(exception))
         {
             throw new DependencyUnavailableException("PostgreSQL", exception);
         }
@@ -94,23 +94,6 @@ internal sealed class AccountRegistrationService(
         };
 
         _ = passwordHasher.HashPassword(dummyUser, password);
-    }
-
-    private static bool IsPostgreSqlUnavailable(Exception exception)
-    {
-        Exception? current = exception;
-        while (current is not null)
-        {
-            if (current is TimeoutException ||
-                current is NpgsqlException and not PostgresException)
-            {
-                return true;
-            }
-
-            current = current.InnerException;
-        }
-
-        return false;
     }
 
     private static bool IsDuplicateAccount(IdentityResult result)

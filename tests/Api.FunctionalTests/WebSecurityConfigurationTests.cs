@@ -61,4 +61,33 @@ public sealed class WebSecurityConfigurationTests
 
         Assert.Contains("DataProtectionKeysPath", exception.ToString(), StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void ProductionRequiresTrustedProxyNetwork()
+    {
+        using TemporaryKeyDirectory keys = new();
+        using SecurityApiFactory factory = new(
+            environment: "Production",
+            allowedOrigin: "https://app.example.test",
+            allowedHosts: "api.example.test",
+            dataProtectionKeysPath: keys.Path,
+            knownProxyNetwork: null);
+
+        Exception exception = Assert.ThrowsAny<Exception>(() => factory.CreateClient());
+
+        Assert.Contains("ReverseProxy:KnownNetworks", exception.ToString(), StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("invalid")]
+    [InlineData("0.0.0.0/0")]
+    [InlineData("::/0")]
+    public void StartupRejectsUnrestrictedOrInvalidProxyNetworks(string knownProxyNetwork)
+    {
+        using SecurityApiFactory factory = new(knownProxyNetwork: knownProxyNetwork);
+
+        Exception exception = Assert.ThrowsAny<Exception>(() => factory.CreateClient());
+
+        Assert.Contains("CIDR", exception.ToString(), StringComparison.OrdinalIgnoreCase);
+    }
 }
