@@ -113,7 +113,7 @@ public sealed class GmailApiClientTests
             RefreshToken = "refresh-token"
         }));
 
-        Assert.IsAssignableFrom<IGmailApiClient>(client);
+        Assert.IsType<IGmailApiClient>(client, exactMatch: false);
     }
 
     private static HttpClient CreateHttpClient(
