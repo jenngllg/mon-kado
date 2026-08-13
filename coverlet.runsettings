@@ -8,7 +8,7 @@
           <Exclude>[*.Tests]*</Exclude>
           <ExcludeByFile>**/Migrations/*.cs</ExcludeByFile>
           <SingleHit>false</SingleHit>
-          <UseSourceLink>true</UseSourceLink>
+          <UseSourceLink>false</UseSourceLink>
         </Configuration>
       </DataCollector>
     </DataCollectors>
