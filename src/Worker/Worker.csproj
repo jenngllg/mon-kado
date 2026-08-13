@@ -4,6 +4,7 @@
     <OutputType>Exe</OutputType>
     <AssemblyName>JennGllg.Fr.MonKado.Back.Worker</AssemblyName>
     <RootNamespace>JennGllg.Fr.MonKado.Back.Worker</RootNamespace>
+    <UserSecretsId>47d813db-c90d-4dcc-97dc-1dd4d485d9a2</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>
