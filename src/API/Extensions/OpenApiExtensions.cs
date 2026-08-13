@@ -1,3 +1,4 @@
+using JennGllg.Fr.MonKado.Back.Api.Security;
 using Microsoft.OpenApi;
 
 namespace JennGllg.Fr.MonKado.Back.Api.Extensions;
@@ -20,6 +21,25 @@ public static class OpenApiExtensions
 
                 return Task.CompletedTask;
             });
+            options.AddOperationTransformer((operation, context, _) =>
+            {
+                if (!RequiresAntiforgeryToken(context.Description.HttpMethod))
+                {
+                    return Task.CompletedTask;
+                }
+
+                operation.Parameters ??= [];
+                operation.Parameters.Add(new OpenApiParameter
+                {
+                    Name = WebSecurityOptions.AntiforgeryHeaderName,
+                    In = ParameterLocation.Header,
+                    Required = true,
+                    Description = "Request token obtained from GET /security/csrf-token.",
+                    Schema = new OpenApiSchema { Type = JsonSchemaType.String }
+                });
+
+                return Task.CompletedTask;
+            });
         });
 
         return services;
@@ -30,5 +50,12 @@ public static class OpenApiExtensions
         endpoints.MapOpenApi(DocumentPath);
 
         return endpoints;
+    }
+
+    private static bool RequiresAntiforgeryToken(string? httpMethod)
+    {
+        return httpMethod is not null &&
+            (HttpMethods.IsPost(httpMethod) || HttpMethods.IsPut(httpMethod) ||
+             HttpMethods.IsPatch(httpMethod) || HttpMethods.IsDelete(httpMethod));
     }
 }

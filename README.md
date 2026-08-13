@@ -2,7 +2,7 @@
 
 Mon Kado is an API for creating, sharing, and managing gift wishlists.
 
-The repository currently contains the technical baseline, PostgreSQL persistence foundation, and containerized runtime stack. Business endpoints and entities are introduced by dedicated backlog items.
+The repository contains the technical baseline, PostgreSQL persistence, containerized runtime stack, and versioned business capabilities. The first public business endpoint supports account registration by e-mail and password.
 
 ## Prerequisites
 
@@ -70,7 +70,7 @@ dotnet ef database update --project src/Infrastructure.Persistence.PostgreSql/In
 dotnet ef migrations script --idempotent --output artifacts/postgresql-migrations.sql --project src/Infrastructure.Persistence.PostgreSql/Infrastructure.Persistence.PostgreSql.csproj --startup-project src/API/Api.csproj --context MonKadoDbContext
 ```
 
-The API never applies migrations during startup. Migrations must be reviewed and executed as a separate deployment action. `InitialPersistenceBaseline` intentionally creates only EF Core's `public.__EFMigrationsHistory` table; business tables will be introduced by their owning backlog items.
+The API never applies migrations during startup. Migrations must be reviewed and executed as a separate deployment action. `InitialPersistenceBaseline` establishes the empty persistence baseline; `AddIdentityAndAccountRegistration` introduces ASP.NET Core Identity and the authentication e-mail outbox.
 
 ## Run locally
 
@@ -86,6 +86,7 @@ The local launch profile listens on `http://localhost:7000` and uses the `Local`
 | `GET /readiness` | Confirms that the API is ready to receive traffic |
 | `GET /openapi/v1.json` | Publishes the versioned OpenAPI 3.1 contract as JSON |
 | `GET /security/csrf-token` | Issues the antiforgery cookie and returns its request token |
+| `POST /api/v1/auth/registrations` | Creates an unconfirmed account and queues an e-mail request |
 
 Liveness never contacts PostgreSQL. Readiness allows at most two seconds for PostgreSQL to accept a connection and returns `503 Unhealthy` otherwise; it checks connectivity, not whether all migrations have been applied.
 
@@ -105,6 +106,26 @@ The frontend must initialize and refresh CSRF protection after login and logout:
 All controller actions using unsafe HTTP methods validate antiforgery tokens by default. Any future exception must explicitly use `IgnoreAntiforgeryToken` and document why a browser-supplied cookie cannot authorize that endpoint.
 
 The antiforgery cookie is a strictly necessary session cookie used only for request security. It does not require prior consent while it remains limited to this purpose, but it must be described in the site's cookie and privacy information. Analytics, advertising, or affiliation cookies require a separate consent assessment.
+
+## Account registration security
+
+`POST /api/v1/auth/registrations` accepts a syntactically valid e-mail address, a display name, and a 12-to-128-character Unicode password. Spaces in passwords are preserved exactly; password managers and pasted passphrases are supported. The endpoint returns the same empty `202 Accepted` response for new and existing normalized e-mail addresses to limit account enumeration.
+
+The password follows these controls:
+
+- it is carried only in the JSON request body, never in a URL;
+- it is never written to application logs, the outbox, or the database in clear text;
+- ASP.NET Core Identity creates an individually salted, one-way PBKDF2-HMAC-SHA512 hash with 220,000 iterations;
+- the public validation pipeline and Identity both enforce the 128-character maximum to bound denial-of-service cost;
+- registration creates no authenticated session, and sign-in will require a confirmed e-mail address.
+
+The iteration count follows the current OWASP recommendation for PBKDF2-HMAC-SHA512. ASP.NET Core Identity owns hash formatting and verification so a later policy change can rehash credentials when users sign in. Passwords are hashed, not encrypted: the original value cannot be recovered from the database.
+
+Production clients must call the API only through Caddy's public HTTPS endpoint. TLS protects the password against passive network interception and modification between the browser and Caddy; HSTS is emitted on production HTTPS responses. The API and PostgreSQL ports are not published. Traffic from Caddy to the API and from the API to PostgreSQL stays on private Docker networks on the same VPS. A compromised browser, host, Docker operator, or TLS-inspecting corporate proxy remains outside what transport encryption can protect.
+
+Local HTTP is allowed only on loopback development addresses and must never be exposed to another device. Do not submit real credentials to a local development instance.
+
+New accounts and their minimal outbox request are committed atomically. The outbox contains only the user identifier and message metadata; #764 will generate and deliver the confirmation token later. Unconfirmed accounts expire after 30 days and the Worker removes them in bounded batches. This retention period must appear in the privacy policy before production launch.
 
 ## Security configuration and secrets
 
@@ -145,7 +166,7 @@ Docker Compose runs five services:
 |---|---|---|
 | `caddy` | Terminates HTTPS and proxies the API hostname | 80 and 443 |
 | `api` | Serves HTTP internally on port 8080 | None |
-| `worker` | Hosts future background work without running placeholder jobs | None |
+| `worker` | Removes expired unconfirmed accounts in bounded daily batches | None |
 | `migrations` | Applies the EF migration bundle once, then exits | None |
 | `postgres` | Stores application data in a named volume | None |
 
