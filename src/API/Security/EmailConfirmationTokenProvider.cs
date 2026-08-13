@@ -18,8 +18,8 @@ public sealed class EmailConfirmationTokenProviderOptions : DataProtectionTokenP
 public sealed class EmailConfirmationTokenProvider<TUser>(
     IDataProtectionProvider dataProtectionProvider,
     IOptions<EmailConfirmationTokenProviderOptions> options,
-    ILogger<DataProtectorTokenProvider<TUser>> logger)
-    : DataProtectorTokenProvider<TUser>(dataProtectionProvider, options, logger)
+    ILoggerFactory loggerFactory)
+    : DataProtectorTokenProvider<TUser>(dataProtectionProvider, options, loggerFactory.CreateLogger<DataProtectorTokenProvider<TUser>>())
     where TUser : class
 {
 }

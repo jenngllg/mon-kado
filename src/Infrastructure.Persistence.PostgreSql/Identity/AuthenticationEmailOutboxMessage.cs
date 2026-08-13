@@ -1,3 +1,5 @@
+using System.Diagnostics.CodeAnalysis;
+
 namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Identity;
 
 public sealed class AuthenticationEmailOutboxMessage
@@ -16,12 +18,28 @@ public sealed class AuthenticationEmailOutboxMessage
 
     public DateTimeOffset AvailableAt { get; private set; }
 
+    [SuppressMessage(
+        "CodeQuality",
+        "S1144:Unused private types or members should be removed",
+        Justification = "Entity Framework uses this private setter when materializing persisted outbox state.")]
     public int AttemptCount { get; private set; }
 
+    [SuppressMessage(
+        "CodeQuality",
+        "S1144:Unused private types or members should be removed",
+        Justification = "Entity Framework uses this private setter when materializing persisted outbox state.")]
     public DateTimeOffset? LockedUntil { get; private set; }
 
+    [SuppressMessage(
+        "CodeQuality",
+        "S1144:Unused private types or members should be removed",
+        Justification = "Entity Framework uses this private setter when materializing persisted outbox state.")]
     public DateTimeOffset? ProcessedAt { get; private set; }
 
+    [SuppressMessage(
+        "CodeQuality",
+        "S1144:Unused private types or members should be removed",
+        Justification = "Entity Framework uses this private setter when materializing persisted outbox state.")]
     public string? LastError { get; private set; }
 
     public static AuthenticationEmailOutboxMessage CreateEmailConfirmation(
