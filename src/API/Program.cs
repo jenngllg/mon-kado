@@ -1,12 +1,14 @@
 using JennGllg.Fr.MonKado.Back.Api.Extensions;
 using JennGllg.Fr.MonKado.Back.Application;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql;
+using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Identity;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.WebHost.ConfigureKestrel(options => options.AddServerHeader = false);
 
 builder.Services.AddApplication();
+builder.Services.AddMonKadoDataProtection(builder.Configuration, builder.Environment);
 builder.Services.AddPostgreSqlPersistence(builder.Configuration);
 builder.Services.AddControllersWithViews();
 builder.Services.AddApiHealthChecks();
@@ -15,7 +17,6 @@ builder.Services.AddTrustedReverseProxy(builder.Configuration, builder.Environme
 builder.Services.AddWebSecurity(builder.Configuration, builder.Environment);
 builder.Services.AddApiProblemDetails();
 builder.Services.AddAuthenticationRateLimiting();
-builder.Services.AddEmailConfirmationTokens();
 
 var app = builder.Build();
 

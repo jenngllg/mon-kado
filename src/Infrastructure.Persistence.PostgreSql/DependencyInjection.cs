@@ -62,4 +62,11 @@ public static class DependencyInjection
 
         return services;
     }
+
+    public static IServiceCollection AddAuthenticationEmailDelivery(this IServiceCollection services)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        services.AddScoped<IAuthenticationEmailDispatcher, AuthenticationEmailDispatcher>();
+        return services;
+    }
 }

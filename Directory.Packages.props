@@ -8,6 +8,8 @@
     <PackageVersion Include="EFCore.NamingConventions" Version="10.0.1" />
     <PackageVersion Include="FluentValidation" Version="12.1.1" />
     <PackageVersion Include="FluentValidation.DependencyInjectionExtensions" Version="12.1.1" />
+    <PackageVersion Include="Google.Apis.Auth" Version="1.75.0" />
+    <PackageVersion Include="Google.Apis.Gmail.v1" Version="1.75.0.4225" />
     <!-- MediatR 12.5.0 is the last Apache-2.0 release without the commercial license mechanism. -->
     <PackageVersion Include="MediatR" Version="12.5.0" />
     <PackageVersion Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.11" />
@@ -25,6 +27,7 @@
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.8.1" />
     <!-- ASP.NET Core 10.0.11 requires Microsoft.OpenApi >= 2.7.5 and < 3.0.0. -->
     <PackageVersion Include="Microsoft.OpenApi" Version="2.11.0" />
+    <PackageVersion Include="MimeKit" Version="4.17.0" />
     <PackageVersion Include="Npgsql" Version="10.0.3" />
     <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
     <PackageVersion Include="Riok.Mapperly" Version="4.3.1" />

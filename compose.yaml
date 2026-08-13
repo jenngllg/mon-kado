@@ -50,7 +50,7 @@ services:
       DOTNET_BUNDLE_EXTRACT_BASE_DIR: /tmp/dotnet-bundle
       AllowedHosts: ${API_ALLOWED_HOST:?Set API_ALLOWED_HOST in .env}
       WebSecurity__AllowedOrigins__0: ${FRONTEND_ORIGIN:?Set FRONTEND_ORIGIN in .env}
-      WebSecurity__DataProtectionKeysPath: /tmp/data-protection-keys
+      DataProtection__KeysPath: /tmp/data-protection-keys
     entrypoint:
       - /app/efbundle
     depends_on:
@@ -76,7 +76,7 @@ services:
       ASPNETCORE_HTTP_PORTS: "8080"
       AllowedHosts: ${API_ALLOWED_HOST:?Set API_ALLOWED_HOST in .env}
       WebSecurity__AllowedOrigins__0: ${FRONTEND_ORIGIN:?Set FRONTEND_ORIGIN in .env}
-      WebSecurity__DataProtectionKeysPath: /var/lib/mon-kado/data-protection-keys
+      DataProtection__KeysPath: /var/lib/mon-kado/data-protection-keys
     expose:
       - "8080"
     volumes:
@@ -100,6 +100,15 @@ services:
     environment:
       <<: *app-environment
       DOTNET_ENVIRONMENT: Production
+      AuthenticationEmail__Provider: ${AUTHENTICATION_EMAIL_PROVIDER:-Gmail}
+      AuthenticationEmail__FrontendOrigin: ${FRONTEND_ORIGIN:?Set FRONTEND_ORIGIN in .env}
+      Gmail__SenderAddress: ${GMAIL_SENDER_ADDRESS:-}
+      Gmail__ClientId: ${GMAIL_CLIENT_ID:-}
+      Gmail__ClientSecret: ${GMAIL_CLIENT_SECRET:-}
+      Gmail__RefreshToken: ${GMAIL_REFRESH_TOKEN:-}
+      DataProtection__KeysPath: /var/lib/mon-kado/data-protection-keys
+    volumes:
+      - data_protection_keys:/var/lib/mon-kado/data-protection-keys
     depends_on:
       migrations:
         condition: service_completed_successfully

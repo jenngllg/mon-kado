@@ -149,6 +149,40 @@ deadline can shorten that period. Confirmation clears the deadline and cancels p
 another e-mail never extends the deadline and always returns the same empty `202 Accepted` response. Per-account
 limits are stored in PostgreSQL and include the initial registration request.
 
+## Authentication e-mail delivery
+
+The Worker delivers confirmation messages through the Gmail REST API with OAuth 2.0. SMTP, Gmail passwords, and
+application passwords are not used. The provider requests only the `gmail.send` scope and cannot read or delete
+mailbox content. Messages contain plain-text and HTML alternatives, no tracking, no attachments, and no marketing.
+
+Delivery uses the transactional outbox created with the account. Workers claim bounded batches with PostgreSQL
+`FOR UPDATE SKIP LOCKED`, apply a two-minute lease, and retry failures after 1 minute, 5 minutes, 15 minutes, 1 hour,
+then every 6 hours. A longer Gmail `Retry-After` value is honored up to 24 hours. Delivery is at least once: a rare
+duplicate is possible if Gmail accepts a message but its response or the database update is lost. The deterministic
+RFC `Message-ID` improves traceability but does not guarantee recipient-side deduplication.
+
+Local Compose disables delivery by default and leaves outbox messages untouched. To exercise Gmail explicitly,
+remove that override and provide the configuration through user secrets or an uncommitted environment file. Never
+use real OAuth credentials in automated tests.
+
+### Create the Gmail OAuth grant
+
+1. Create a Google Cloud project, enable the Gmail API, and configure an OAuth client for a desktop application.
+2. Add only the `https://www.googleapis.com/auth/gmail.send` scope.
+3. Set `GMAIL_CLIENT_ID` and `GMAIL_CLIENT_SECRET` in the current shell process.
+4. Run `dotnet run --project tools/GmailOAuthBootstrap/GmailOAuthBootstrap.csproj`.
+5. Authorize the dedicated Gmail account and immediately store the printed refresh token as a secret.
+
+The bootstrap tool keeps OAuth state only in memory and writes no token to disk. Do not paste the refresh token,
+client secret, Gmail password, or authorization code into source files, issues, commits, or chat messages. An
+external Google consent application left in `Testing` issues refresh tokens that expire after seven days; publish
+the consent application before relying on it. If Google unexpectedly requires payment or unacceptable verification,
+replace the e-mail adapter instead of requesting broader mailbox access.
+
+Gmail retains sent messages containing recipient addresses and confirmation links. Until the long-term provider is
+introduced, periodically remove old transactional messages from the dedicated mailbox. The privacy information must
+identify Google as a processor for transactional e-mail before production launch.
+
 ## Security configuration and secrets
 
 Local defaults allow `http://localhost:5173` and the `localhost` API host. Production requires explicit values:
@@ -158,13 +192,21 @@ Local defaults allow `http://localhost:5173` and the `localhost` API host. Produ
 | Frontend origin | `FRONTEND_ORIGIN` | `https://example.fr` |
 | API host | `API_ALLOWED_HOST` | `api.example.fr` |
 | Dedicated Caddy network | `EDGE_NETWORK_CIDR` | `172.30.0.0/24` |
-| Data Protection key path | `WebSecurity__DataProtectionKeysPath` | `/var/lib/mon-kado/data-protection-keys` |
+| Data Protection key path | `DataProtection__KeysPath` | `/var/lib/mon-kado/data-protection-keys` |
+| Authentication e-mail provider | `AUTHENTICATION_EMAIL_PROVIDER` | `Gmail` |
+| Gmail sender | `GMAIL_SENDER_ADDRESS` | `monkado.app@gmail.com` |
+| Gmail OAuth client ID | `GMAIL_CLIENT_ID` | Secret value |
+| Gmail OAuth client secret | `GMAIL_CLIENT_SECRET` | Secret value |
+| Gmail OAuth refresh token | `GMAIL_REFRESH_TOKEN` | Secret value |
 
 Compose maps the dedicated edge network to `ReverseProxy:KnownNetworks`. ASP.NET Core accepts forwarded client IP and scheme values only from that network, with a single forwarded hop. Change `EDGE_NETWORK_CIDR` if it conflicts with an existing Docker network. Never configure trusted proxies with `0.0.0.0/0` or `::/0`, and never configure `AllowedHosts` or CORS with `*`.
 
 Local database credentials belong in .NET user secrets. VPS values belong in the uncommitted `.env` file with permissions `600`. Do not commit PostgreSQL passwords, OAuth client secrets, CSRF tokens, production connection strings, certificates, or Data Protection keys.
 
-ASP.NET Core Data Protection keys are stored in the `data_protection_keys` Docker volume so protected cookies survive API container recreation. Treat this volume as sensitive. Losing or deleting it invalidates existing cookies and forces users to sign in again; restoring it gives access to the cryptographic material used by the application.
+ASP.NET Core Data Protection keys are stored in the `data_protection_keys` Docker volume shared by the API and Worker
+so confirmation tokens and protected cookies remain valid across container recreation. Treat this volume as
+sensitive. Losing or deleting it invalidates existing confirmation links and cookies; restoring it gives access to
+the cryptographic material used by the application.
 
 ## Architecture
 
@@ -189,7 +231,7 @@ Docker Compose runs five services:
 |---|---|---|
 | `caddy` | Terminates HTTPS and proxies the API hostname | 80 and 443 |
 | `api` | Serves HTTP internally on port 8080 | None |
-| `worker` | Removes expired unconfirmed accounts in bounded daily batches | None |
+| `worker` | Delivers authentication e-mails and removes expired unconfirmed accounts | None |
 | `migrations` | Applies the EF migration bundle once, then exits | None |
 | `postgres` | Stores application data in a named volume | None |
 
@@ -252,6 +294,11 @@ POSTGRES_DB=mon_kado
 POSTGRES_USER=mon_kado
 POSTGRES_PASSWORD=<generated-hexadecimal-value>
 IMAGE_TAG=local
+AUTHENTICATION_EMAIL_PROVIDER=Gmail
+GMAIL_SENDER_ADDRESS=monkado.app@gmail.com
+GMAIL_CLIENT_ID=<oauth-client-id>
+GMAIL_CLIENT_SECRET=<oauth-client-secret>
+GMAIL_REFRESH_TOKEN=<oauth-refresh-token>
 ```
 
 The `.env` file is ignored by Git. Never commit or send it. Start the production stack without the local override:

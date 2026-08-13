@@ -1,4 +1,5 @@
 using System.Net;
+using Npgsql;
 
 namespace JennGllg.Fr.MonKado.Back.Api.IntegrationTests;
 
@@ -10,6 +11,11 @@ public sealed class PostgreSqlReadinessTests(PostgreSqlContainerFixture fixture)
     {
         CancellationToken cancellationToken = TestContext.Current.CancellationToken;
         string connectionString = fixture.Container.GetConnectionString();
+
+        await using (NpgsqlConnection connection = new(connectionString))
+        {
+            await connection.OpenAsync(cancellationToken);
+        }
 
         await using PostgreSqlApiFactory factory = new(connectionString);
         using HttpClient client = factory.CreateClient();

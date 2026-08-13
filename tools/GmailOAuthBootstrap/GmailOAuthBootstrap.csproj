@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>JennGllg.Fr.MonKado.Back.Tools.GmailOAuthBootstrap</AssemblyName>
+    <RootNamespace>JennGllg.Fr.MonKado.Back.Tools.GmailOAuthBootstrap</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Google.Apis.Auth" />
+    <PackageReference Include="Google.Apis.Gmail.v1" />
+  </ItemGroup>
+
+</Project>

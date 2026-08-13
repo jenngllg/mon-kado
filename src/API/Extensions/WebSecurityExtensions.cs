@@ -1,7 +1,6 @@
 using JennGllg.Fr.MonKado.Back.Api.Security;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.CookiePolicy;
-using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ViewFeatures;
 using Microsoft.Extensions.Options;
@@ -13,7 +12,6 @@ public static class WebSecurityExtensions
 {
     public const string FrontendCorsPolicy = "Frontend";
 
-    private const string DataProtectionApplicationName = "JennGllg.Fr.MonKado.Back.Api";
     private const string LocalAntiforgeryCookieName = "MonKado.Antiforgery";
     private const string ProductionAntiforgeryCookieName = "__Host-MonKado.Antiforgery";
 
@@ -76,15 +74,6 @@ public static class WebSecurityExtensions
 
         services.Configure<MvcOptions>(mvc =>
             mvc.Filters.Add(new AutoValidateAntiforgeryTokenAttribute()));
-
-        IDataProtectionBuilder dataProtection = services
-            .AddDataProtection()
-            .SetApplicationName(DataProtectionApplicationName);
-
-        if (!string.IsNullOrWhiteSpace(options.DataProtectionKeysPath))
-        {
-            dataProtection.PersistKeysToFileSystem(new DirectoryInfo(options.DataProtectionKeysPath));
-        }
 
         return services;
     }
@@ -161,11 +150,6 @@ public static class WebSecurityExtensions
 
         ValidateAllowedHosts(allowedHosts);
 
-        if (environment.IsProduction() && string.IsNullOrWhiteSpace(options.DataProtectionKeysPath))
-        {
-            throw new InvalidOperationException(
-                "'WebSecurity:DataProtectionKeysPath' is required in Production.");
-        }
     }
 
     private static void ValidateOrigin(string origin, IWebHostEnvironment environment)

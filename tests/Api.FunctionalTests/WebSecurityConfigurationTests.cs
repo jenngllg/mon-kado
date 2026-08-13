@@ -59,7 +59,7 @@ public sealed class WebSecurityConfigurationTests
 
         Exception exception = Assert.ThrowsAny<Exception>(() => factory.CreateClient());
 
-        Assert.Contains("DataProtectionKeysPath", exception.ToString(), StringComparison.Ordinal);
+        Assert.Contains("DataProtection:KeysPath", exception.ToString(), StringComparison.Ordinal);
     }
 
     [Fact]

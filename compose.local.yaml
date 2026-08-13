@@ -7,6 +7,11 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Local
 
+  worker:
+    environment:
+      DOTNET_ENVIRONMENT: Local
+      AuthenticationEmail__Provider: Disabled
+
   caddy:
     ports: !override
       - "127.0.0.1:${HTTP_PORT:-8080}:80"

@@ -30,6 +30,8 @@ internal sealed class AuthenticationEmailOutboxMessageConfiguration
             .HasMaxLength(50);
         builder.Property(message => message.LastError)
             .HasMaxLength(1000);
+        builder.Property(message => message.ProviderMessageId)
+            .HasMaxLength(255);
 
         builder.HasOne<MonKadoUser>()
             .WithMany()

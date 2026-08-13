@@ -71,7 +71,7 @@ jobs:
           /d:sonar.token="$SONAR_TOKEN"
           /d:sonar.host.url="https://sonarcloud.io"
           /d:sonar.cs.opencover.reportsPaths="**/coverage.opencover.xml"
-          /d:sonar.coverage.exclusions="src/**/Migrations/**"
+          /d:sonar.coverage.exclusions="src/**/Migrations/**,src/**/Program.cs,tools/GmailOAuthBootstrap/**"
           /d:sonar.exclusions="src/**/Migrations/**"
           /d:sonar.qualitygate.wait=true
           /d:sonar.qualitygate.timeout=300
