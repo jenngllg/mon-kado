@@ -12,7 +12,10 @@ namespace JennGllg.Fr.MonKado.Back.Worker.Email;
 internal sealed class GmailApiClient : IGmailApiClient, IDisposable
 {
     private static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(15);
-    private readonly GmailService service;
+    private readonly HttpClient httpClient;
+    private readonly Uri messagesEndpoint;
+    private readonly GmailService? ownedService;
+    private readonly TimeProvider timeProvider;
 
     public GmailApiClient(IOptions<GmailOptions> options)
     {
@@ -30,18 +33,37 @@ internal sealed class GmailApiClient : IGmailApiClient, IDisposable
             flow,
             "mon-kado-authentication-email-sender",
             new TokenResponse { RefreshToken = gmail.RefreshToken });
-        service = new GmailService(new BaseClientService.Initializer
+        GmailService service = new(new BaseClientService.Initializer
         {
             ApplicationName = "MonKado",
             HttpClientInitializer = credential
         });
         service.HttpClient.Timeout = RequestTimeout;
+        httpClient = service.HttpClient;
+        messagesEndpoint = new Uri(
+            new Uri(service.BaseUri, UriKind.Absolute),
+            $"{service.BasePath}users/me/messages/send");
+        ownedService = service;
+        timeProvider = TimeProvider.System;
+    }
+
+    internal GmailApiClient(
+        HttpClient httpClient,
+        Uri messagesEndpoint,
+        TimeProvider timeProvider)
+    {
+        ArgumentNullException.ThrowIfNull(httpClient);
+        ArgumentNullException.ThrowIfNull(messagesEndpoint);
+        ArgumentNullException.ThrowIfNull(timeProvider);
+        this.httpClient = httpClient;
+        this.messagesEndpoint = messagesEndpoint;
+        this.timeProvider = timeProvider;
     }
 
     public async Task<string> SendAsync(string rawMessage, CancellationToken cancellationToken)
     {
-        using HttpResponseMessage response = await service.HttpClient.PostAsJsonAsync(
-            "https://gmail.googleapis.com/gmail/v1/users/me/messages/send",
+        using HttpResponseMessage response = await httpClient.PostAsJsonAsync(
+            messagesEndpoint,
             new { raw = rawMessage },
             cancellationToken);
         if (!response.IsSuccessStatusCode)
@@ -49,7 +71,7 @@ internal sealed class GmailApiClient : IGmailApiClient, IDisposable
             TimeSpan? retryAfter = response.Headers.RetryAfter?.Delta;
             if (response.Headers.RetryAfter?.Date is { } retryAt)
             {
-                TimeSpan dateDelay = retryAt - DateTimeOffset.UtcNow;
+                TimeSpan dateDelay = retryAt - timeProvider.GetUtcNow();
                 retryAfter = dateDelay > TimeSpan.Zero ? dateDelay : TimeSpan.Zero;
             }
 
@@ -69,6 +91,6 @@ internal sealed class GmailApiClient : IGmailApiClient, IDisposable
 
     public void Dispose()
     {
-        service.Dispose();
+        ownedService?.Dispose();
     }
 }

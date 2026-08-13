@@ -30,29 +30,42 @@ internal sealed partial class AuthenticationEmailDeliveryWorker(
         Uri frontendOrigin = new(emailOptions.FrontendOrigin!, UriKind.Absolute);
         while (!stoppingToken.IsCancellationRequested)
         {
-            TimeSpan nextDelay = PollInterval;
             try
             {
-                await using AsyncServiceScope scope = scopeFactory.CreateAsyncScope();
-                IAuthenticationEmailDispatcher dispatcher =
-                    scope.ServiceProvider.GetRequiredService<IAuthenticationEmailDispatcher>();
-                await dispatcher.DispatchPendingAsync(
-                    frontendOrigin,
-                    BatchSize,
-                    LeaseDuration,
-                    stoppingToken);
+                TimeSpan nextDelay = await DispatchOnceAsync(frontendOrigin, stoppingToken);
+                await Task.Delay(nextDelay, timeProvider, stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
                 break;
             }
-            catch (Exception exception)
-            {
-                nextDelay = FailureInterval;
-                LogDeliveryFailure(exception.GetType().Name);
-            }
+        }
+    }
 
-            await Task.Delay(nextDelay, timeProvider, stoppingToken);
+    internal async Task<TimeSpan> DispatchOnceAsync(
+        Uri frontendOrigin,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await using AsyncServiceScope scope = scopeFactory.CreateAsyncScope();
+            IAuthenticationEmailDispatcher dispatcher =
+                scope.ServiceProvider.GetRequiredService<IAuthenticationEmailDispatcher>();
+            await dispatcher.DispatchPendingAsync(
+                frontendOrigin,
+                BatchSize,
+                LeaseDuration,
+                cancellationToken);
+            return PollInterval;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            LogDeliveryFailure(exception.GetType().Name);
+            return FailureInterval;
         }
     }
 

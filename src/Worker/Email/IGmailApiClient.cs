@@ -5,7 +5,7 @@ internal interface IGmailApiClient
     Task<string> SendAsync(string rawMessage, CancellationToken cancellationToken);
 }
 
-internal sealed class GmailRequestException(
+public sealed class GmailRequestException(
     System.Net.HttpStatusCode? statusCode,
     TimeSpan? retryAfter,
     Exception? innerException = null)

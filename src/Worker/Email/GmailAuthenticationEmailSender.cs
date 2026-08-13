@@ -13,12 +13,12 @@ internal sealed class GmailAuthenticationEmailSender(
     private readonly GmailOptions gmail = options.Value;
 
     public async Task<AuthenticationEmailSendResult> SendEmailConfirmationAsync(
-        AuthenticationEmailMessage delivery,
+        AuthenticationEmailMessage message,
         CancellationToken cancellationToken)
     {
         try
         {
-            string rawMessage = await CreateRawMessage(delivery, cancellationToken);
+            string rawMessage = await CreateRawMessage(message, cancellationToken);
             string providerMessageId = await gmailClient.SendAsync(rawMessage, cancellationToken);
             return new AuthenticationEmailSendResult(providerMessageId);
         }
@@ -49,20 +49,20 @@ internal sealed class GmailAuthenticationEmailSender(
         CancellationToken cancellationToken)
     {
         string url = delivery.ConfirmationUrl.AbsoluteUri;
-        MimeMessage message = new();
-        message.From.Add(new MailboxAddress("MonKado", gmail.SenderAddress!));
-        message.To.Add(MailboxAddress.Parse(delivery.RecipientAddress));
-        message.Subject = "Confirmez votre adresse e-mail \u2013 MonKado";
-        message.MessageId = $"{delivery.OutboxMessageId:N}@mon-kado.fr";
-        message.Headers.Add("Auto-Submitted", "auto-generated");
-        message.Body = new BodyBuilder
+        MimeMessage mimeMessage = new();
+        mimeMessage.From.Add(new MailboxAddress("MonKado", gmail.SenderAddress!));
+        mimeMessage.To.Add(MailboxAddress.Parse(delivery.RecipientAddress));
+        mimeMessage.Subject = "Confirmez votre adresse e-mail \u2013 MonKado";
+        mimeMessage.MessageId = $"{delivery.OutboxMessageId:N}@mon-kado.fr";
+        mimeMessage.Headers.Add("Auto-Submitted", "auto-generated");
+        mimeMessage.Body = new BodyBuilder
         {
             TextBody = CreateTextBody(url),
             HtmlBody = CreateHtmlBody(HtmlEncoder.Default.Encode(url))
         }.ToMessageBody();
 
         await using MemoryStream stream = new();
-        await message.WriteToAsync(stream, cancellationToken);
+        await mimeMessage.WriteToAsync(stream, cancellationToken);
         return Convert.ToBase64String(stream.ToArray())
             .TrimEnd('=')
             .Replace('+', '-')
