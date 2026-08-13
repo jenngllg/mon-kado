@@ -12,10 +12,15 @@ builder.Services.AddControllersWithViews();
 builder.Services.AddApiHealthChecks();
 builder.Services.AddApiOpenApi();
 builder.Services.AddWebSecurity(builder.Configuration, builder.Environment);
+builder.Services.AddApiProblemDetails();
+builder.Services.AddRegistrationRateLimiting();
+builder.Services.AddEmailConfirmationTokens();
 
 var app = builder.Build();
 
+app.UseExceptionHandler();
 app.UseWebSecurity();
+app.UseRateLimiter();
 
 app.MapControllers();
 app.MapApiHealthChecks();

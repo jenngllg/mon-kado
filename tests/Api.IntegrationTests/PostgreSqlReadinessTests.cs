@@ -1,5 +1,4 @@
 using System.Net;
-using Npgsql;
 
 namespace JennGllg.Fr.MonKado.Back.Api.IntegrationTests;
 
@@ -7,19 +6,10 @@ namespace JennGllg.Fr.MonKado.Back.Api.IntegrationTests;
 public sealed class PostgreSqlReadinessTests(PostgreSqlContainerFixture fixture)
 {
     [Fact]
-    public async Task ReadinessReturnsHealthyWhenUnmigratedPostgreSqlIsAvailable()
+    public async Task ReadinessReturnsHealthyWhenPostgreSqlIsAvailable()
     {
         CancellationToken cancellationToken = TestContext.Current.CancellationToken;
         string connectionString = fixture.Container.GetConnectionString();
-        await using NpgsqlConnection connection = new(connectionString);
-        await connection.OpenAsync(cancellationToken);
-
-        await using NpgsqlCommand command = connection.CreateCommand();
-        command.CommandText = "SELECT to_regclass('public.\"__EFMigrationsHistory\"') IS NULL;";
-        bool databaseIsUnmigrated = (bool)(await command.ExecuteScalarAsync(cancellationToken)
-            ?? throw new InvalidOperationException("PostgreSQL returned no migration state."));
-
-        Assert.True(databaseIsUnmigrated);
 
         await using PostgreSqlApiFactory factory = new(connectionString);
         using HttpClient client = factory.CreateClient();

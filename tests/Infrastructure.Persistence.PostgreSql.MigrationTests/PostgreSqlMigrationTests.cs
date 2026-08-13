@@ -21,13 +21,38 @@ public sealed class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
         await context.Database.MigrateAsync(cancellationToken);
 
         IEnumerable<string> migrations = await context.Database.GetAppliedMigrationsAsync(cancellationToken);
-        string migration = Assert.Single(migrations);
-
-        Assert.EndsWith("_InitialPersistenceBaseline", migration, StringComparison.Ordinal);
+        Assert.Collection(
+            migrations,
+            migration => Assert.EndsWith("_InitialPersistenceBaseline", migration, StringComparison.Ordinal),
+            migration => Assert.EndsWith("_AddIdentityAndAccountRegistration", migration, StringComparison.Ordinal));
         Assert.False(context.Database.HasPendingModelChanges());
 
         IReadOnlyList<string> tables = await GetPublicTables(context, cancellationToken);
-        Assert.Equal(["__EFMigrationsHistory"], tables);
+        Assert.Equal(
+            [
+                "__EFMigrationsHistory",
+                "authentication_email_outbox",
+                "role_claims",
+                "roles",
+                "user_claims",
+                "user_logins",
+                "user_roles",
+                "user_tokens",
+                "users"
+            ],
+            tables);
+
+        IReadOnlyList<string> constraints = await GetPublicConstraints(context, cancellationToken);
+        Assert.Contains("ck_users_display_name_valid", constraints);
+        Assert.Contains("ck_users_timestamps_consistent", constraints);
+        Assert.Contains("ck_authentication_email_outbox_kind_valid", constraints);
+        Assert.Contains("fk_authentication_email_outbox_users_user_id", constraints);
+
+        IReadOnlyList<string> indexes = await GetPublicIndexes(context, cancellationToken);
+        Assert.Contains("ux_users_normalized_email", indexes);
+        Assert.Contains("ix_users_unconfirmed_account_expiry", indexes);
+        Assert.Contains("ux_authentication_email_outbox_pending_user_kind", indexes);
+        Assert.Contains("ix_authentication_email_outbox_pending_delivery", indexes);
     }
 
     private ServiceProvider CreateServiceProvider()
@@ -66,5 +91,63 @@ public sealed class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
         }
 
         return tables;
+    }
+
+    private static async Task<IReadOnlyList<string>> GetPublicConstraints(
+        MonKadoDbContext context,
+        CancellationToken cancellationToken)
+    {
+        DbConnection connection = context.Database.GetDbConnection();
+        if (connection.State != System.Data.ConnectionState.Open)
+        {
+            await connection.OpenAsync(cancellationToken);
+        }
+
+        await using DbCommand command = connection.CreateCommand();
+        command.CommandText =
+            """
+            SELECT constraint_name
+            FROM information_schema.table_constraints
+            WHERE constraint_schema = 'public'
+            ORDER BY constraint_name;
+            """;
+
+        List<string> constraints = [];
+        await using DbDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            constraints.Add(reader.GetString(0));
+        }
+
+        return constraints;
+    }
+
+    private static async Task<IReadOnlyList<string>> GetPublicIndexes(
+        MonKadoDbContext context,
+        CancellationToken cancellationToken)
+    {
+        DbConnection connection = context.Database.GetDbConnection();
+        if (connection.State != System.Data.ConnectionState.Open)
+        {
+            await connection.OpenAsync(cancellationToken);
+        }
+
+        await using DbCommand command = connection.CreateCommand();
+        command.CommandText =
+            """
+            SELECT indexname
+            FROM pg_indexes
+            WHERE schemaname = 'public'
+            ORDER BY indexname;
+            """;
+
+        List<string> indexes = [];
+        await using DbDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            indexes.Add(reader.GetString(0));
+        }
+
+        return indexes;
     }
 }

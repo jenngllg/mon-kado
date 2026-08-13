@@ -1,11 +1,18 @@
 using System.Reflection;
+using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Identity;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 
 namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql;
 
-public sealed class MonKadoDbContext(DbContextOptions<MonKadoDbContext> options) : DbContext(options)
+public sealed class MonKadoDbContext(DbContextOptions<MonKadoDbContext> options)
+    : IdentityDbContext<MonKadoUser, IdentityRole<Guid>, Guid>(options)
 {
     private static readonly Assembly PersistenceAssembly = typeof(MonKadoDbContext).Assembly;
+
+    public DbSet<AuthenticationEmailOutboxMessage> AuthenticationEmailOutboxMessages =>
+        Set<AuthenticationEmailOutboxMessage>();
 
     private static readonly bool HasEntityTypeConfigurations = PersistenceAssembly.DefinedTypes.Any(type =>
         !type.IsAbstract &&
@@ -14,14 +21,23 @@ public sealed class MonKadoDbContext(DbContextOptions<MonKadoDbContext> options)
             @interface.IsGenericType &&
             @interface.GetGenericTypeDefinition() == typeof(IEntityTypeConfiguration<>)));
 
-    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    protected override void OnModelCreating(ModelBuilder builder)
     {
-        base.OnModelCreating(modelBuilder);
-        modelBuilder.HasDefaultSchema("public");
+        base.OnModelCreating(builder);
+        builder.HasDefaultSchema("public");
+
+        builder.Entity<IdentityRole<Guid>>().ToTable("roles");
+        builder.Entity<IdentityUserRole<Guid>>().ToTable("user_roles");
+        builder.Entity<IdentityUserClaim<Guid>>().ToTable("user_claims");
+        builder.Entity<IdentityUserLogin<Guid>>().ToTable("user_logins");
+        builder.Entity<IdentityUserToken<Guid>>().ToTable("user_tokens");
+        builder.Entity<IdentityRoleClaim<Guid>>().ToTable("role_claims");
 
         if (HasEntityTypeConfigurations)
         {
-            modelBuilder.ApplyConfigurationsFromAssembly(PersistenceAssembly);
+            builder.ApplyConfigurationsFromAssembly(PersistenceAssembly);
         }
+
+        IdentityModelConfiguration.Configure(builder);
     }
 }
