@@ -57,6 +57,7 @@ public static class DependencyInjection
 
         services.TryAddSingleton(TimeProvider.System);
         services.AddScoped<IAccountRegistrationService, AccountRegistrationService>();
+        services.AddScoped<IEmailConfirmationService, EmailConfirmationService>();
         services.AddScoped<IExpiredAccountCleanup, ExpiredAccountCleanup>();
 
         return services;

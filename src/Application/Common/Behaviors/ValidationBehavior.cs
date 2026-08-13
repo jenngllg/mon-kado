@@ -35,6 +35,11 @@ public sealed class ValidationBehavior<TRequest, TResponse>(IEnumerable<IValidat
 
         if (errors.Count != 0)
         {
+            if (request is IGenericValidationFailure genericFailure)
+            {
+                throw genericFailure.CreateValidationException();
+            }
+
             throw new RequestValidationException(errors);
         }
 

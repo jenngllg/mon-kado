@@ -13,7 +13,7 @@ public sealed class AuthRegistrationsController(ISender sender) : ControllerBase
     private const int MaximumRequestBodySize = 4 * 1024;
 
     [HttpPost]
-    [EnableRateLimiting(RegistrationRateLimitingExtensions.RegistrationPolicy)]
+    [EnableRateLimiting(AuthenticationRateLimitingExtensions.RegistrationPolicy)]
     [RequestSizeLimit(MaximumRequestBodySize)]
     [Consumes("application/json")]
     [ProducesResponseType(StatusCodes.Status202Accepted)]

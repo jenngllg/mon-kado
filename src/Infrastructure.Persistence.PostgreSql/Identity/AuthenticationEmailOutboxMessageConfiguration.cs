@@ -45,6 +45,10 @@ internal sealed class AuthenticationEmailOutboxMessageConfiguration
         builder.HasIndex(message => new { message.AvailableAt, message.CreatedAt })
             .HasDatabaseName("ix_authentication_email_outbox_pending_delivery")
             .HasFilter("processed_at IS NULL");
+
+        builder.HasIndex(message => new { message.UserId, message.Kind, message.CreatedAt })
+            .HasDatabaseName("ix_authentication_email_outbox_user_kind_created_at")
+            .IsDescending(false, false, true);
     }
 
     private static string ConvertKindToDatabase(AuthenticationEmailKind kind)

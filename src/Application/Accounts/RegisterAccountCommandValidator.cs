@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Net.Mail;
 using System.Text;
 using FluentValidation;
 
@@ -7,7 +6,6 @@ namespace JennGllg.Fr.MonKado.Back.Application.Accounts;
 
 public sealed class RegisterAccountCommandValidator : AbstractValidator<RegisterAccountCommand>
 {
-    private const int MaximumEmailLength = 254;
     private const int MinimumPasswordLength = 12;
     private const int MaximumPasswordLength = 128;
     private const int MaximumDisplayNameLength = 80;
@@ -18,9 +16,9 @@ public sealed class RegisterAccountCommandValidator : AbstractValidator<Register
             .Cascade(CascadeMode.Stop)
             .NotEmpty()
             .WithMessage("The email address is required.")
-            .Must(email => CountUnicodeScalars(email!.Trim()) <= MaximumEmailLength)
-            .WithMessage($"The email address must not exceed {MaximumEmailLength} characters.")
-            .Must(BeValidEmailAddress)
+            .Must(EmailAddressValidation.IsWithinMaximumLength)
+            .WithMessage($"The email address must not exceed {EmailAddressValidation.MaximumLength} characters.")
+            .Must(EmailAddressValidation.IsValid)
             .WithMessage("The email address is invalid.");
 
         RuleFor(command => command.Password)
@@ -42,13 +40,6 @@ public sealed class RegisterAccountCommandValidator : AbstractValidator<Register
             .WithMessage($"The display name must not exceed {MaximumDisplayNameLength} characters.")
             .Must(NotContainControlCharacters)
             .WithMessage("The display name must not contain control characters.");
-    }
-
-    private static bool BeValidEmailAddress(string? email)
-    {
-        string candidate = email?.Trim() ?? string.Empty;
-        return MailAddress.TryCreate(candidate, out MailAddress? address) &&
-            string.Equals(address.Address, candidate, StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool NotContainControlCharacters(string? value)

@@ -4,32 +4,25 @@ using JennGllg.Fr.MonKado.Back.Api.Errors;
 
 namespace JennGllg.Fr.MonKado.Back.Api.Extensions;
 
-public static class RegistrationRateLimitingExtensions
+public static class AuthenticationRateLimitingExtensions
 {
     public const string RegistrationPolicy = "AccountRegistration";
+    public const string EmailConfirmationPolicy = "EmailConfirmation";
+    public const string EmailConfirmationRequestPolicy = "EmailConfirmationRequest";
 
-    private const int PermitLimit = 5;
     private static readonly TimeSpan Window = TimeSpan.FromMinutes(1);
 
-    public static IServiceCollection AddRegistrationRateLimiting(this IServiceCollection services)
+    public static IServiceCollection AddAuthenticationRateLimiting(this IServiceCollection services)
     {
         ArgumentNullException.ThrowIfNull(services);
 
         services.AddRateLimiter(options =>
         {
-            options.AddPolicy(RegistrationPolicy, context =>
-                RateLimitPartition.GetFixedWindowLimiter(
-                    context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-                    _ => new FixedWindowRateLimiterOptions
-                    {
-                        AutoReplenishment = true,
-                        PermitLimit = PermitLimit,
-                        QueueLimit = 0,
-                        QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
-                        Window = Window
-                    }));
+            options.AddPolicy(RegistrationPolicy, context => CreateLimiter(context, 5));
+            options.AddPolicy(EmailConfirmationPolicy, context => CreateLimiter(context, 10));
+            options.AddPolicy(EmailConfirmationRequestPolicy, context => CreateLimiter(context, 5));
 
-            options.OnRejected = async (rejectionContext, cancellationToken) =>
+            options.OnRejected = async (rejectionContext, _) =>
             {
                 HttpContext context = rejectionContext.HttpContext;
                 TimeSpan retryAfter = Window;
@@ -47,12 +40,26 @@ public static class RegistrationRateLimitingExtensions
                         StatusCodes.Status429TooManyRequests,
                         "rate-limit-exceeded",
                         "Rate limit exceeded",
-                        "Too many account registration attempts. Retry later.",
+                        "Too many authentication requests. Retry later.",
                         "RATE_LIMIT_EXCEEDED")
                     .ExecuteAsync(context);
             };
         });
 
         return services;
+    }
+
+    private static RateLimitPartition<string> CreateLimiter(HttpContext context, int permitLimit)
+    {
+        return RateLimitPartition.GetFixedWindowLimiter(
+            context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            _ => new FixedWindowRateLimiterOptions
+            {
+                AutoReplenishment = true,
+                PermitLimit = permitLimit,
+                QueueLimit = 0,
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                Window = Window
+            });
     }
 }

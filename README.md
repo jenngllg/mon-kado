@@ -87,6 +87,8 @@ The local launch profile listens on `http://localhost:7000` and uses the `Local`
 | `GET /openapi/v1.json` | Publishes the versioned OpenAPI 3.1 contract as JSON |
 | `GET /security/csrf-token` | Issues the antiforgery cookie and returns its request token |
 | `POST /api/v1/auth/registrations` | Creates an unconfirmed account and queues an e-mail request |
+| `POST /api/v1/auth/email-confirmations` | Confirms an e-mail address from a user identifier and Base64URL token |
+| `POST /api/v1/auth/email-confirmation-requests` | Silently requests another confirmation e-mail |
 
 Liveness never contacts PostgreSQL. Readiness allows at most two seconds for PostgreSQL to accept a connection and returns `503 Unhealthy` otherwise; it checks connectivity, not whether all migrations have been applied.
 
@@ -127,6 +129,26 @@ Local HTTP is allowed only on loopback development addresses and must never be e
 
 New accounts and their minimal outbox request are committed atomically. The outbox contains only the user identifier and message metadata; #764 will generate and deliver the confirmation token later. Unconfirmed accounts expire after 30 days and the Worker removes them in bounded batches. This retention period must appear in the privacy policy before production launch.
 
+## E-mail confirmation contract
+
+Ticket #764 will build confirmation links from the configured, trusted frontend origin. The link uses a URL fragment:
+
+```text
+https://<frontend>/confirm-email#userId=<uuid>&token=<base64url>
+```
+
+The fragment is not sent in HTTP requests and must never be copied into server logs. The frontend must immediately
+remove it from browser history, keep its values only in memory, fetch `GET /security/csrf-token`, then send both values
+in the JSON body of `POST /api/v1/auth/email-confirmations`. It displays the same failure message for every invalid,
+expired, altered or unknown confirmation link. A successful confirmation creates no authenticated session; the user
+must continue to the future sign-in flow.
+
+Confirmation tokens are protected by ASP.NET Core Data Protection, use the dedicated
+`MonKadoEmailConfirmation` provider and remain valid for at most 24 hours. An unconfirmed account's 30-day retention
+deadline can shorten that period. Confirmation clears the deadline and cancels pending outbox messages. Asking for
+another e-mail never extends the deadline and always returns the same empty `202 Accepted` response. Per-account
+limits are stored in PostgreSQL and include the initial registration request.
+
 ## Security configuration and secrets
 
 Local defaults allow `http://localhost:5173` and the `localhost` API host. Production requires explicit values:
@@ -135,9 +157,10 @@ Local defaults allow `http://localhost:5173` and the `localhost` API host. Produ
 |---|---|---|
 | Frontend origin | `FRONTEND_ORIGIN` | `https://example.fr` |
 | API host | `API_ALLOWED_HOST` | `api.example.fr` |
+| Dedicated Caddy network | `EDGE_NETWORK_CIDR` | `172.30.0.0/24` |
 | Data Protection key path | `WebSecurity__DataProtectionKeysPath` | `/var/lib/mon-kado/data-protection-keys` |
 
-The Compose file maps the first two variables to ASP.NET Core configuration and mounts the key path automatically. Never configure `AllowedHosts` or CORS with `*`.
+Compose maps the dedicated edge network to `ReverseProxy:KnownNetworks`. ASP.NET Core accepts forwarded client IP and scheme values only from that network, with a single forwarded hop. Change `EDGE_NETWORK_CIDR` if it conflicts with an existing Docker network. Never configure trusted proxies with `0.0.0.0/0` or `::/0`, and never configure `AllowedHosts` or CORS with `*`.
 
 Local database credentials belong in .NET user secrets. VPS values belong in the uncommitted `.env` file with permissions `600`. Do not commit PostgreSQL passwords, OAuth client secrets, CSRF tokens, production connection strings, certificates, or Data Protection keys.
 
@@ -224,6 +247,7 @@ HTTP_PORT=80
 HTTPS_PORT=443
 FRONTEND_ORIGIN=https://example.fr
 API_ALLOWED_HOST=api.example.fr
+EDGE_NETWORK_CIDR=172.30.0.0/24
 POSTGRES_DB=mon_kado
 POSTGRES_USER=mon_kado
 POSTGRES_PASSWORD=<generated-hexadecimal-value>
