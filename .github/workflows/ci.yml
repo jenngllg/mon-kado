@@ -45,6 +45,15 @@ jobs:
       - name: Restore local tools
         run: dotnet tool restore
 
+      - name: Restore dependencies
+        run: dotnet restore JennGllg.Fr.MonKado.Back.slnx
+
+      - name: Verify formatting
+        run: >-
+          dotnet format JennGllg.Fr.MonKado.Back.slnx
+          --verify-no-changes
+          --no-restore
+
       - name: Start SonarQube Cloud analysis
         if: >-
           (github.event_name == 'push' && github.ref == 'refs/heads/develop') ||
@@ -67,9 +76,6 @@ jobs:
           /d:sonar.qualitygate.wait=true
           /d:sonar.qualitygate.timeout=300
 
-      - name: Restore dependencies
-        run: dotnet restore JennGllg.Fr.MonKado.Back.slnx
-
       - name: Build
         run: >-
           dotnet build JennGllg.Fr.MonKado.Back.slnx
@@ -90,12 +96,6 @@ jobs:
         shell: bash
         run: |
           find TestResults -name coverage.opencover.xml -type f -print -quit | grep --quiet .
-
-      - name: Verify formatting
-        run: >-
-          dotnet format JennGllg.Fr.MonKado.Back.slnx
-          --verify-no-changes
-          --no-restore
 
       - name: Audit vulnerable packages
         shell: bash
