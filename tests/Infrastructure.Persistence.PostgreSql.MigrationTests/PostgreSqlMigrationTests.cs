@@ -26,7 +26,8 @@ public sealed class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
             migration => Assert.EndsWith("_InitialPersistenceBaseline", migration, StringComparison.Ordinal),
             migration => Assert.EndsWith("_AddIdentityAndAccountRegistration", migration, StringComparison.Ordinal),
             migration => Assert.EndsWith("_AddEmailConfirmationRequestThrottling", migration, StringComparison.Ordinal),
-            migration => Assert.EndsWith("_AddAuthenticationEmailDeliveryTracking", migration, StringComparison.Ordinal));
+            migration => Assert.EndsWith("_AddAuthenticationEmailDeliveryTracking", migration, StringComparison.Ordinal),
+            migration => Assert.EndsWith("_AddAuthenticationSessions", migration, StringComparison.Ordinal));
         Assert.False(context.Database.HasPendingModelChanges());
 
         IReadOnlyList<string> tables = await GetPublicTables(context, cancellationToken);
@@ -34,6 +35,7 @@ public sealed class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
             [
                 "__EFMigrationsHistory",
                 "authentication_email_outbox",
+                "authentication_sessions",
                 "role_claims",
                 "roles",
                 "user_claims",
@@ -49,6 +51,9 @@ public sealed class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
         Assert.Contains("ck_users_timestamps_consistent", constraints);
         Assert.Contains("ck_authentication_email_outbox_kind_valid", constraints);
         Assert.Contains("fk_authentication_email_outbox_users_user_id", constraints);
+        Assert.Contains("ck_authentication_sessions_ticket_not_empty", constraints);
+        Assert.Contains("ck_authentication_sessions_timestamps_consistent", constraints);
+        Assert.Contains("fk_authentication_sessions_users_user_id", constraints);
 
         IReadOnlyList<string> indexes = await GetPublicIndexes(context, cancellationToken);
         Assert.Contains("ux_users_normalized_email", indexes);
@@ -56,6 +61,8 @@ public sealed class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
         Assert.Contains("ux_authentication_email_outbox_pending_user_kind", indexes);
         Assert.Contains("ix_authentication_email_outbox_pending_delivery", indexes);
         Assert.Contains("ix_authentication_email_outbox_user_kind_created_at", indexes);
+        Assert.Contains("ix_authentication_sessions_expires_at", indexes);
+        Assert.Contains("ix_authentication_sessions_user_id", indexes);
 
         IReadOnlyList<string> columns = await GetAuthenticationEmailOutboxColumns(context, cancellationToken);
         Assert.Contains("provider_message_id", columns);

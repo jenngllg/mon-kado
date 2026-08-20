@@ -5,6 +5,7 @@ public static class AuthenticationRequestBodyLimitExtensions
     private const long MaximumRequestBodySize = 4 * 1024;
     private static readonly PathString RegistrationPath = new("/api/v1/auth/registrations");
     private static readonly PathString ConfirmationPath = new("/api/v1/auth/email-confirmations");
+    private static readonly PathString LoginPath = new("/api/v1/auth/sessions");
     private static readonly PathString ConfirmationRequestPath =
         new("/api/v1/auth/email-confirmation-requests");
 
@@ -36,6 +37,7 @@ public static class AuthenticationRequestBodyLimitExtensions
 
         return request.Path == RegistrationPath ||
             request.Path == ConfirmationPath ||
-            request.Path == ConfirmationRequestPath;
+            request.Path == ConfirmationRequestPath ||
+            request.Path == LoginPath;
     }
 }

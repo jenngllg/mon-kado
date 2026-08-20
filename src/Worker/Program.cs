@@ -14,5 +14,6 @@ builder.Services.AddPostgreSqlPersistence(builder.Configuration);
 builder.Services.AddAuthenticationEmailWorker(builder.Configuration, builder.Environment);
 builder.Services.AddHostedService<UnconfirmedAccountCleanupWorker>();
 
+builder.Services.AddHostedService<ExpiredAuthenticationSessionCleanupWorker>();
 using IHost host = builder.Build();
 await host.RunAsync();

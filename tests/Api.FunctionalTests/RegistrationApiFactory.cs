@@ -18,6 +18,8 @@ public sealed class RegistrationApiFactory : WebApplicationFactory<Program>
 
     public RecordingEmailConfirmationService EmailConfirmationService { get; } = new();
 
+    public RecordingAccountSessionService SessionService { get; } = new();
+
     public IReadOnlyCollection<string> LogMessages => logProvider.Messages;
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -32,6 +34,8 @@ public sealed class RegistrationApiFactory : WebApplicationFactory<Program>
             services.RemoveAll<IAccountRegistrationService>();
             services.AddSingleton<IAccountRegistrationService>(RegistrationService);
             services.RemoveAll<IEmailConfirmationService>();
+            services.RemoveAll<IAccountSessionService>();
+            services.AddSingleton<IAccountSessionService>(SessionService);
             services.AddSingleton<IEmailConfirmationService>(EmailConfirmationService);
         });
     }
@@ -182,3 +186,39 @@ public sealed class RecordingEmailConfirmationService : IEmailConfirmationServic
 }
 
 public sealed record EmailConfirmationCall(string UserId, string Token);
+
+public sealed class RecordingAccountSessionService : IAccountSessionService
+{
+    private readonly object sync = new();
+    private readonly List<LoginCall> calls = [];
+
+    public AccountLoginResult Result { get; set; } = AccountLoginResult.Success;
+
+    public IReadOnlyList<LoginCall> Calls
+    {
+        get
+        {
+            lock (sync)
+            {
+                return calls.ToArray();
+            }
+        }
+    }
+
+    public Task<AccountLoginResult> LoginAsync(
+        string email,
+        string password,
+        bool rememberMe,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        lock (sync)
+        {
+            calls.Add(new LoginCall(email, password, rememberMe));
+        }
+
+        return Task.FromResult(Result);
+    }
+}
+
+public sealed record LoginCall(string Email, string Password, bool RememberMe);

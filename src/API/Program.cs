@@ -8,6 +8,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.WebHost.ConfigureKestrel(options => options.AddServerHeader = false);
 
 builder.Services.AddApplication();
+builder.Services.AddIdentityAuthentication(builder.Environment);
 builder.Services.AddMonKadoDataProtection(builder.Configuration, builder.Environment);
 builder.Services.AddPostgreSqlPersistence(builder.Configuration);
 builder.Services.AddControllersWithViews();
@@ -23,6 +24,7 @@ var app = builder.Build();
 app.UseTrustedReverseProxy();
 app.UseExceptionHandler();
 app.UseWebSecurity();
+app.UseIdentityAuthentication();
 app.UseAuthenticationRequestBodyLimits();
 app.UseRateLimiter();
 

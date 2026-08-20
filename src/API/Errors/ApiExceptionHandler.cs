@@ -16,6 +16,26 @@ internal sealed partial class ApiExceptionHandler(ILogger<ApiExceptionHandler> l
         IResult problem;
         switch (exception)
         {
+            case EmailNotConfirmedException:
+                problem = ApiProblemDetails.Create(
+                    httpContext,
+                    StatusCodes.Status401Unauthorized,
+                    "email-not-confirmed",
+                    "Authentication failed",
+                    "Confirm your email address before signing in.",
+                    "EMAIL_NOT_CONFIRMED");
+                break;
+
+            case InvalidCredentialsException:
+                problem = ApiProblemDetails.Create(
+                    httpContext,
+                    StatusCodes.Status401Unauthorized,
+                    "invalid-credentials",
+                    "Authentication failed",
+                    "The email address or password is invalid.",
+                    "INVALID_CREDENTIALS");
+                break;
+
             case EmailConfirmationInvalidException:
                 problem = ApiProblemDetails.Create(
                     httpContext,
