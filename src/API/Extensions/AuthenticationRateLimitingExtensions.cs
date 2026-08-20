@@ -8,6 +8,7 @@ public static class AuthenticationRateLimitingExtensions
 {
     public const string RegistrationPolicy = "AccountRegistration";
     public const string EmailConfirmationPolicy = "EmailConfirmation";
+    public const string LoginPolicy = "Login";
     public const string EmailConfirmationRequestPolicy = "EmailConfirmationRequest";
 
     private static readonly TimeSpan Window = TimeSpan.FromMinutes(1);
@@ -19,6 +20,7 @@ public static class AuthenticationRateLimitingExtensions
         services.AddRateLimiter(options =>
         {
             options.AddPolicy(RegistrationPolicy, context => CreateLimiter(context, 5));
+            options.AddPolicy(LoginPolicy, context => CreateLimiter(context, 10));
             options.AddPolicy(EmailConfirmationPolicy, context => CreateLimiter(context, 10));
             options.AddPolicy(EmailConfirmationRequestPolicy, context => CreateLimiter(context, 5));
 

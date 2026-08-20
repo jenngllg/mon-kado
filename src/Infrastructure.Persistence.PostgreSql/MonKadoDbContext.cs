@@ -10,6 +10,9 @@ public sealed class MonKadoDbContext(DbContextOptions<MonKadoDbContext> options)
     : IdentityDbContext<MonKadoUser, IdentityRole<Guid>, Guid>(options)
 {
     private static readonly Assembly PersistenceAssembly = typeof(MonKadoDbContext).Assembly;
+    public DbSet<AuthenticationSession> AuthenticationSessions =>
+        Set<AuthenticationSession>();
+
 
     public DbSet<AuthenticationEmailOutboxMessage> AuthenticationEmailOutboxMessages =>
         Set<AuthenticationEmailOutboxMessage>();

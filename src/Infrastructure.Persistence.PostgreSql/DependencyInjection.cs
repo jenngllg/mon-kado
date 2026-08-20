@@ -1,5 +1,7 @@
 using JennGllg.Fr.MonKado.Back.Application.Accounts;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Identity;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Migrations;
@@ -49,16 +51,28 @@ public static class DependencyInjection
                 options.Password.RequireUppercase = false;
                 options.Password.RequireNonAlphanumeric = false;
                 options.Password.RequiredUniqueChars = 1;
+                options.Lockout.AllowedForNewUsers = true;
+                options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
+                options.Lockout.MaxFailedAccessAttempts = 5;
             })
             .AddRoles<IdentityRole<Guid>>()
             .AddEntityFrameworkStores<MonKadoDbContext>()
-            .AddPasswordValidator<MaximumPasswordLengthValidator<MonKadoUser>>();
+            .AddPasswordValidator<MaximumPasswordLengthValidator<MonKadoUser>>()
+            .AddSignInManager();
         services.Configure<PasswordHasherOptions>(options => options.IterationCount = 220_000);
 
         services.TryAddSingleton(TimeProvider.System);
         services.AddScoped<IAccountRegistrationService, AccountRegistrationService>();
         services.AddScoped<IEmailConfirmationService, EmailConfirmationService>();
         services.AddScoped<IExpiredAccountCleanup, ExpiredAccountCleanup>();
+        services.AddScoped<IAccountSessionService, AccountSessionService>();
+        services.AddScoped<IExpiredAuthenticationSessionCleanup, ExpiredAuthenticationSessionCleanup>();
+        services.AddSingleton<ITicketStore, PostgreSqlAuthenticationTicketStore>();
+        services.AddScoped<ResettableAuthenticationHandlerProvider>();
+        services.Replace(ServiceDescriptor.Scoped<IAuthenticationHandlerProvider>(provider =>
+            provider.GetRequiredService<ResettableAuthenticationHandlerProvider>()));
+        services.AddScoped<IAuthenticationHandlerResetter>(provider =>
+            provider.GetRequiredService<ResettableAuthenticationHandlerProvider>());
 
         return services;
     }
