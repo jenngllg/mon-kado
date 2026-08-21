@@ -1,18 +1,60 @@
-using JennGllg.Fr.MonKado.Back.Application;
-using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql;
-using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Identity;
-using JennGllg.Fr.MonKado.Back.Worker;
-using JennGllg.Fr.MonKado.Back.Worker.Email;
+using JennGllg.Fr.MonKado.Back.Application.Configurations;
+using JennGllg.Fr.MonKado.Back.Domain.Configurations;
+using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Configurations;
+using JennGllg.Fr.MonKado.Back.Worker.Configurations;
+
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
-HostApplicationBuilder builder = Host.CreateApplicationBuilder(args);
+namespace JennGllg.Fr.MonKado.Back.Worker;
 
-builder.Services.AddApplication();
-builder.Services.AddMonKadoDataProtection(builder.Configuration, builder.Environment);
-builder.Services.AddPostgreSqlPersistence(builder.Configuration);
-builder.Services.AddAuthenticationEmailWorker(builder.Configuration, builder.Environment);
-builder.Services.AddHostedService<UnconfirmedAccountCleanupWorker>();
+/// <summary>
+/// Provides the worker process entry point.
+/// </summary>
+public static class Program
+{
+    /// <summary>
+    /// Starts the worker process.
+    /// </summary>
+    /// <param name="args">The command-line arguments.</param>
+    /// <returns>A task that represents the worker lifetime.</returns>
+    public static Task Main(string[] args)
+    {
 
-using IHost host = builder.Build();
-await host.RunAsync();
+        return RunAsync(
+            args,
+            CancellationToken.None);
+    }
+
+    internal static async Task RunAsync(
+        string[] args,
+        CancellationToken cancellationToken)
+    {
+        var host = Build(args);
+        try
+        {
+            await host.RunAsync(cancellationToken);
+        }
+        finally
+        {
+            host.Dispose();
+        }
+    }
+
+    internal static IHost Build(string[] args)
+    {
+        var builder = Host.CreateApplicationBuilder(args);
+
+        builder.Services.ConfigureDomainInjection();
+        builder.Services.ConfigureApplicationInjection();
+        builder.Services.ConfigureDataProtection(
+            builder.Configuration,
+            builder.Environment);
+        builder.Services.ConfigureInfrastructureInjection(builder.Configuration);
+        builder.Services.ConfigureWorkerInjection(
+            builder.Configuration,
+            builder.Environment);
+
+        return builder.Build();
+    }
+}

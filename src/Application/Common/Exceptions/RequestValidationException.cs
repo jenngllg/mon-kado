@@ -1,7 +1,16 @@
-namespace JennGllg.Fr.MonKado.Back.Application.Common.Exceptions;
+using JennGllg.Fr.MonKado.Back.Application.Common.Models;
 
-public sealed class RequestValidationException(IReadOnlyDictionary<string, string[]> errors)
+namespace JennGllg.Fr.MonKado.Back.Application.Common.Exceptions;
+/// <summary>
+/// Represents request validation exception.
+/// </summary>
+/// <param name="validationErrors">The validation errors.</param>
+
+public class RequestValidationException(IEnumerable<ValidationError> validationErrors)
     : Exception("One or more request fields are invalid.")
 {
-    public IReadOnlyDictionary<string, string[]> Errors { get; } = errors;
+    /// <summary>
+    /// Gets validation errors.
+    /// </summary>
+    public IEnumerable<ValidationError> ValidationErrors { get; } = validationErrors;
 }

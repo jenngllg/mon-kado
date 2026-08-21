@@ -1,298 +1,498 @@
+using JennGllg.Fr.MonKado.Back.Api.Contracts.Responses;
+using JennGllg.Fr.MonKado.Back.Api.Errors;
+using JennGllg.Fr.MonKado.Back.Api.Options;
+
 using System.Net;
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
-using JennGllg.Fr.MonKado.Back.Api.Security;
 
 namespace JennGllg.Fr.MonKado.Back.Api.FunctionalTests;
 
-public sealed class EmailConfirmationTests
+public class EmailConfirmationTests
 {
-    private static readonly string ValidUserId = Guid.CreateVersion7().ToString("D");
+    private static readonly string _validUserId = Guid.CreateVersion7().ToString("D");
     private const string ValidToken = "dG9rZW4";
 
     [Fact]
-    public async Task ValidConfirmationReturnsEmptyNoContentWithoutSessionCookie()
+    public async Task ExecuteAsync_WhenValidConfirmation_ReturnsEmptyNoContentWithoutSessionCookie()
     {
-        await using RegistrationApiFactory factory = new();
-        using HttpClient client = factory.CreateClient();
+        // Arrange
+        await using var factory = new RegistrationApiFactory();
+        using var client = factory.CreateClient();
 
-        using HttpResponseMessage response = await Confirm(client, ValidUserId, ValidToken);
+        // Act
+        using var response = await ConfirmAsync(
+            client,
+            _validUserId,
+            ValidToken);
 
-        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.NoContent,
+            response.StatusCode);
         Assert.True(response.Headers.CacheControl?.NoStore);
-        Assert.Equal(0, response.Content.Headers.ContentLength);
-        if (response.Headers.TryGetValues("Set-Cookie", out IEnumerable<string>? cookies))
+        Assert.Equal(
+            0,
+            response.Content.Headers.ContentLength);
+
+        if (response.Headers.TryGetValues(
+            "Set-Cookie",
+            out var cookies))
         {
-            Assert.DoesNotContain(cookies, cookie =>
-                cookie.Contains("Identity", StringComparison.OrdinalIgnoreCase));
+            Assert.DoesNotContain(
+                cookies,
+                cookie =>
+                cookie.Contains(
+                    "Identity",
+                    StringComparison.OrdinalIgnoreCase));
         }
-        EmailConfirmationCall call = Assert.Single(factory.EmailConfirmationService.ConfirmationCalls);
-        Assert.Equal(ValidUserId, call.UserId);
-        Assert.Equal(ValidToken, call.Token);
+        var call = Assert.Single(factory.EmailConfirmationService.ConfirmationCalls);
+        Assert.Equal(
+            _validUserId,
+            call.UserId);
+        Assert.Equal(
+            ValidToken,
+            call.Token);
     }
 
     [Fact]
-    public async Task InvalidLinkReturnsGenericProblemWithoutCallingInfrastructure()
+    public async Task ExecuteAsync_WhenInvalidLink_ReturnsGenericProblemWithoutCallingInfrastructure()
     {
-        await using RegistrationApiFactory factory = new();
-        using HttpClient client = factory.CreateClient();
+        // Arrange
+        await using var factory = new RegistrationApiFactory();
+        using var client = factory.CreateClient();
 
-        using HttpResponseMessage response = await Confirm(client, "not-a-guid", "invalid token");
+        using var response = await ConfirmAsync(
+            client,
+            "not-a-guid",
+            "invalid token");
 
-        await AssertInvalidConfirmationProblem(response);
-        Assert.Equal(0, factory.EmailConfirmationService.ConfirmCallCount);
+        // Act
+        await AssertInvalidConfirmationProblemAsync(response);
+        // Assert
+        Assert.Equal(
+            0,
+            factory.EmailConfirmationService.ConfirmCallCount);
     }
 
     [Fact]
-    public async Task RejectedTokenReturnsTheSameGenericProblem()
+    public async Task ExecuteAsync_WhenRejectedToken_ReturnsTheSameGenericProblem()
     {
-        await using RegistrationApiFactory factory = new();
+        // Arrange
+        await using var factory = new RegistrationApiFactory();
         factory.EmailConfirmationService.ConfirmationResult = false;
-        using HttpClient client = factory.CreateClient();
+        using var client = factory.CreateClient();
 
-        using HttpResponseMessage response = await Confirm(client, ValidUserId, ValidToken);
+        using var response = await ConfirmAsync(
+            client,
+            _validUserId,
+            ValidToken);
 
-        await AssertInvalidConfirmationProblem(response);
+        // Act
+        await AssertInvalidConfirmationProblemAsync(response);
+        // Assert
     }
 
     [Fact]
-    public async Task ConfirmationRequiresCsrfToken()
+    public async Task ExecuteAsync_WhenConfirmation_RequiresCsrfToken()
     {
-        await using RegistrationApiFactory factory = new();
-        using HttpClient client = factory.CreateClient();
+        // Arrange
+        await using var factory = new RegistrationApiFactory();
+        using var client = factory.CreateClient();
 
-        using HttpResponseMessage response = await client.PostAsJsonAsync(
+        // Act
+        using var response = await client.PostAsJsonAsync(
             "/api/v1/auth/email-confirmations",
-            new { userId = ValidUserId, token = ValidToken },
+            new
+            {
+                userId = _validUserId,
+                token = ValidToken
+            },
             TestContext.Current.CancellationToken);
 
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Equal(0, factory.EmailConfirmationService.ConfirmCallCount);
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.BadRequest,
+            response.StatusCode);
+        Assert.Equal(
+            0,
+            factory.EmailConfirmationService.ConfirmCallCount);
     }
 
     [Fact]
-    public async Task EleventhConfirmationWithinOneMinuteIsRateLimited()
+    public async Task ExecuteAsync_WhenEleventhConfirmationWithinOneMinute_IsRateLimited()
     {
-        await using RegistrationApiFactory factory = new();
-        using HttpClient client = factory.CreateClient();
+        // Arrange
+        await using var factory = new RegistrationApiFactory();
+        using var client = factory.CreateClient();
 
-        for (int requestNumber = 1; requestNumber <= 10; requestNumber++)
+        for (var requestNumber = 1; requestNumber <= 10; requestNumber++)
         {
-            using HttpResponseMessage accepted = await Confirm(client, ValidUserId, ValidToken);
-            Assert.Equal(HttpStatusCode.NoContent, accepted.StatusCode);
+            using var accepted = await ConfirmAsync(
+                client,
+                _validUserId,
+                ValidToken);
+            Assert.Equal(
+                HttpStatusCode.NoContent,
+                accepted.StatusCode);
         }
 
-        using HttpResponseMessage rejected = await Confirm(client, ValidUserId, ValidToken);
+        // Act
+        using var rejected = await ConfirmAsync(
+            client,
+            _validUserId,
+            ValidToken);
 
-        Assert.Equal(HttpStatusCode.TooManyRequests, rejected.StatusCode);
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.TooManyRequests,
+            rejected.StatusCode);
         Assert.True(rejected.Headers.RetryAfter?.Delta > TimeSpan.Zero);
-        Assert.Equal(10, factory.EmailConfirmationService.ConfirmCallCount);
+        Assert.Equal(
+            10,
+            factory.EmailConfirmationService.ConfirmCallCount);
     }
 
     [Fact]
-    public async Task ValidResendReturnsGenericAcceptedResponseAndTrimsEmail()
+    public async Task ExecuteAsync_WhenValidResend_ReturnsGenericAcceptedResponseAndTrimsEmail()
     {
-        await using RegistrationApiFactory factory = new();
-        using HttpClient client = factory.CreateClient();
+        // Arrange
+        await using var factory = new RegistrationApiFactory();
+        using var client = factory.CreateClient();
 
-        using HttpResponseMessage response = await RequestConfirmation(client, " Lea@example.fr ");
+        // Act
+        using var response = await RequestConfirmationAsync(
+            client,
+            " Lea@example.fr ");
 
-        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.Accepted,
+            response.StatusCode);
         Assert.True(response.Headers.CacheControl?.NoStore);
-        Assert.Equal(0, response.Content.Headers.ContentLength);
-        Assert.Equal("Lea@example.fr", Assert.Single(factory.EmailConfirmationService.RequestedEmails));
+        Assert.Equal(
+            0,
+            response.Content.Headers.ContentLength);
+        Assert.Equal(
+            "Lea@example.fr",
+            Assert.Single(factory.EmailConfirmationService.RequestedEmails));
     }
 
     [Fact]
-    public async Task InvalidResendEmailReturnsValidationProblem()
+    public async Task ExecuteAsync_WhenInvalidResendEmail_ReturnsValidationProblem()
     {
-        await using RegistrationApiFactory factory = new();
-        using HttpClient client = factory.CreateClient();
+        // Arrange
+        await using var factory = new RegistrationApiFactory();
+        using var client = factory.CreateClient();
 
-        using HttpResponseMessage response = await RequestConfirmation(client, "invalid");
+        // Act
+        using var response = await RequestConfirmationAsync(
+            client,
+            "invalid");
 
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        using JsonDocument document = await response.Content.ReadFromJsonAsync<JsonDocument>(
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.BadRequest,
+            response.StatusCode);
+        using var document = await response.Content.ReadFromJsonAsync<JsonDocument>(
             TestContext.Current.CancellationToken)
             ?? throw new InvalidOperationException("The validation response is empty.");
-        Assert.Equal("VALIDATION_ERROR", document.RootElement.GetProperty("code").GetString());
-        Assert.Equal(0, factory.EmailConfirmationService.RequestCallCount);
+        Assert.Equal(
+            ErrorCodes.RequestValidationError,
+            document.RootElement.GetProperty("errorCode").GetString());
+        Assert.Equal(
+            0,
+            factory.EmailConfirmationService.RequestCallCount);
     }
 
     [Fact]
-    public async Task SixthResendWithinOneMinuteIsRateLimited()
+    public async Task ExecuteAsync_WhenSixthResendWithinOneMinute_IsRateLimited()
     {
-        await using RegistrationApiFactory factory = new();
-        using HttpClient client = factory.CreateClient();
+        // Arrange
+        await using var factory = new RegistrationApiFactory();
+        using var client = factory.CreateClient();
 
-        for (int requestNumber = 1; requestNumber <= 5; requestNumber++)
+        for (var requestNumber = 1; requestNumber <= 5; requestNumber++)
         {
-            using HttpResponseMessage accepted = await RequestConfirmation(client, "lea@example.fr");
-            Assert.Equal(HttpStatusCode.Accepted, accepted.StatusCode);
+            using var accepted = await RequestConfirmationAsync(
+                client,
+                "lea@example.fr");
+            Assert.Equal(
+                HttpStatusCode.Accepted,
+                accepted.StatusCode);
         }
 
-        using HttpResponseMessage rejected = await RequestConfirmation(client, "lea@example.fr");
+        // Act
+        using var rejected = await RequestConfirmationAsync(
+            client,
+            "lea@example.fr");
 
-        Assert.Equal(HttpStatusCode.TooManyRequests, rejected.StatusCode);
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.TooManyRequests,
+            rejected.StatusCode);
         Assert.True(rejected.Headers.RetryAfter?.Delta > TimeSpan.Zero);
-        Assert.Equal(5, factory.EmailConfirmationService.RequestCallCount);
+        Assert.Equal(
+            5,
+            factory.EmailConfirmationService.RequestCallCount);
     }
 
     [Theory]
     [InlineData("/api/v1/auth/email-confirmations")]
     [InlineData("/api/v1/auth/email-confirmation-requests")]
-    public async Task NonJsonContentReturnsUnsupportedMediaType(string requestUri)
+    public async Task ExecuteAsync_WhenNonJsonContent_ReturnsUnsupportedMediaType(string requestUri)
     {
-        await using RegistrationApiFactory factory = new();
-        using HttpClient client = factory.CreateClient();
-        string csrfToken = await GetCsrfToken(client);
-        using HttpRequestMessage request = new(HttpMethod.Post, requestUri)
+        // Arrange
+        await using var factory = new RegistrationApiFactory();
+        using var client = factory.CreateClient();
+        var csrfToken = await GetCsrfTokenAsync(client);
+        using var request = new HttpRequestMessage(
+            HttpMethod.Post,
+            requestUri)
         {
-            Content = new StringContent("not-json", Encoding.UTF8, "text/plain")
+            Content = new StringContent(
+                "not-json",
+                Encoding.UTF8,
+                "text/plain")
         };
-        request.Headers.Add(WebSecurityOptions.AntiforgeryHeaderName, csrfToken);
+        request.Headers.Add(
+            WebSecurityOptions.AntiforgeryHeaderName,
+            csrfToken);
 
-        using HttpResponseMessage response = await client.SendAsync(
+        // Act
+        using var response = await client.SendAsync(
             request,
             TestContext.Current.CancellationToken);
 
-        Assert.Equal(HttpStatusCode.UnsupportedMediaType, response.StatusCode);
-        Assert.Equal(0, factory.EmailConfirmationService.ConfirmCallCount);
-        Assert.Equal(0, factory.EmailConfirmationService.RequestCallCount);
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.UnsupportedMediaType,
+            response.StatusCode);
+        Assert.Equal(
+            0,
+            factory.EmailConfirmationService.ConfirmCallCount);
+        Assert.Equal(
+            0,
+            factory.EmailConfirmationService.RequestCallCount);
     }
 
     [Theory]
     [InlineData("/api/v1/auth/email-confirmations")]
     [InlineData("/api/v1/auth/email-confirmation-requests")]
-    public async Task RequestBodyLargerThanFourKibibytesIsRejected(string requestUri)
+    public async Task ExecuteAsync_WhenRequestBodyLargerThanFourKibibytes_IsRejected(string requestUri)
     {
-        await using RegistrationApiFactory factory = new();
-        using HttpClient client = factory.CreateClient();
-        string csrfToken = await GetCsrfToken(client);
-        using HttpRequestMessage request = new(HttpMethod.Post, requestUri)
+        // Arrange
+        await using var factory = new RegistrationApiFactory();
+        using var client = factory.CreateClient();
+        var csrfToken = await GetCsrfTokenAsync(client);
+        using var request = new HttpRequestMessage(
+            HttpMethod.Post,
+            requestUri)
         {
             Content = new StringContent(
-                "{\"value\":\"" + new string('a', 5 * 1024) + "\"}",
+                "{\"value\":\"" + new string(
+                    'a',
+                    5 * 1024) + "\"}",
                 Encoding.UTF8,
                 "application/json")
         };
-        request.Headers.Add(WebSecurityOptions.AntiforgeryHeaderName, csrfToken);
+        request.Headers.Add(
+            WebSecurityOptions.AntiforgeryHeaderName,
+            csrfToken);
 
-        using HttpResponseMessage response = await client.SendAsync(
+        // Act
+        using var response = await client.SendAsync(
             request,
             TestContext.Current.CancellationToken);
 
-        Assert.Equal(HttpStatusCode.RequestEntityTooLarge, response.StatusCode);
-        Assert.Equal(0, factory.EmailConfirmationService.ConfirmCallCount);
-        Assert.Equal(0, factory.EmailConfirmationService.RequestCallCount);
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.RequestEntityTooLarge,
+            response.StatusCode);
+        Assert.Equal(
+            0,
+            factory.EmailConfirmationService.ConfirmCallCount);
+        Assert.Equal(
+            0,
+            factory.EmailConfirmationService.RequestCallCount);
     }
 
     [Fact]
-    public async Task ConfirmationAndResendValuesAreNeverWrittenToLogs()
+    public async Task ExecuteAsync_WhenConfirmationAndResendValues_AreNeverWrittenToLogs()
     {
+        // Arrange
         const string SensitiveToken = "c2Vuc2l0aXZlLXRva2Vu";
         const string SensitiveEmail = "sensitive-confirmation@example.fr";
-        await using RegistrationApiFactory factory = new();
-        using HttpClient client = factory.CreateClient();
+        await using var factory = new RegistrationApiFactory();
+        using var client = factory.CreateClient();
 
-        using HttpResponseMessage confirmation = await Confirm(client, ValidUserId, SensitiveToken);
-        using HttpResponseMessage resend = await RequestConfirmation(client, SensitiveEmail);
+        using var confirmation = await ConfirmAsync(
+            client,
+            _validUserId,
+            SensitiveToken);
+        // Act
+        using var resend = await RequestConfirmationAsync(
+            client,
+            SensitiveEmail);
 
-        Assert.Equal(HttpStatusCode.NoContent, confirmation.StatusCode);
-        Assert.Equal(HttpStatusCode.Accepted, resend.StatusCode);
-        Assert.DoesNotContain(factory.LogMessages, message =>
-            message.Contains(ValidUserId, StringComparison.Ordinal) ||
-            message.Contains(SensitiveToken, StringComparison.Ordinal) ||
-            message.Contains(SensitiveEmail, StringComparison.Ordinal));
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.NoContent,
+            confirmation.StatusCode);
+        Assert.Equal(
+            HttpStatusCode.Accepted,
+            resend.StatusCode);
+        Assert.DoesNotContain(
+            factory.LogMessages,
+            message =>
+            message.Contains(
+                _validUserId,
+                StringComparison.Ordinal) ||
+            message.Contains(
+                SensitiveToken,
+                StringComparison.Ordinal) ||
+            message.Contains(
+                SensitiveEmail,
+                StringComparison.Ordinal));
     }
 
     [Fact]
-    public async Task UnavailablePostgreSqlReturnsServiceUnavailableForBothEndpoints()
+    public async Task ExecuteAsync_WhenUnavailablePostgreSql_ReturnsServiceUnavailableForBothEndpoints()
     {
-        await using UnavailablePostgreSqlApiFactory factory = new();
-        using HttpClient client = factory.CreateClient();
+        // Arrange
+        await using var factory = new UnavailablePostgreSqlApiFactory();
+        using var client = factory.CreateClient();
 
-        using HttpResponseMessage confirmation = await Confirm(client, ValidUserId, ValidToken);
-        using HttpResponseMessage resend = await RequestConfirmation(client, "lea@example.fr");
+        using var confirmation = await ConfirmAsync(
+            client,
+            _validUserId,
+            ValidToken);
+        // Act
+        using var resend = await RequestConfirmationAsync(
+            client,
+            "lea@example.fr");
 
-        Assert.Equal(HttpStatusCode.ServiceUnavailable, confirmation.StatusCode);
-        Assert.Equal(HttpStatusCode.ServiceUnavailable, resend.StatusCode);
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.ServiceUnavailable,
+            confirmation.StatusCode);
+        Assert.Equal(
+            HttpStatusCode.ServiceUnavailable,
+            resend.StatusCode);
     }
 
     [Fact]
-    public async Task OpenApiDocumentsBodyOnlyTokensAndCsrfHeaders()
+    public async Task ExecuteAsync_WhenOpenApi_DocumentsBodyOnlyTokensAndCsrfHeaders()
     {
-        await using RegistrationApiFactory factory = new();
-        using HttpClient client = factory.CreateClient();
-        using JsonDocument document = await client.GetFromJsonAsync<JsonDocument>(
+        // Arrange
+        await using var factory = new RegistrationApiFactory();
+        using var client = factory.CreateClient();
+        // Act
+        using var document = await client.GetFromJsonAsync<JsonDocument>(
             "/openapi/v1.json",
             TestContext.Current.CancellationToken)
             ?? throw new InvalidOperationException("The OpenAPI response is empty.");
 
-        JsonElement paths = document.RootElement.GetProperty("paths");
-        JsonElement confirmation = paths.GetProperty("/api/v1/auth/email-confirmations").GetProperty("post");
-        JsonElement resend = paths.GetProperty("/api/v1/auth/email-confirmation-requests").GetProperty("post");
+        var paths = document.RootElement.GetProperty("paths");
+        var confirmation = paths.GetProperty("/api/v1/auth/email-confirmations").GetProperty("post");
+        var resend = paths.GetProperty("/api/v1/auth/email-confirmation-requests").GetProperty("post");
 
+        // Assert
         Assert.True(confirmation.GetProperty("requestBody").GetProperty("required").GetBoolean());
         Assert.True(resend.GetProperty("requestBody").GetProperty("required").GetBoolean());
         Assert.DoesNotContain(
             confirmation.GetProperty("parameters").EnumerateArray(),
             parameter => parameter.GetProperty("in").GetString() == "query");
         Assert.All(
-            new[] { confirmation, resend },
+            [
+                confirmation,
+                resend
+            ],
             operation => Assert.Contains(
                 operation.GetProperty("parameters").EnumerateArray(),
                 parameter => parameter.GetProperty("name").GetString() ==
                     WebSecurityOptions.AntiforgeryHeaderName));
     }
 
-    private static async Task<HttpResponseMessage> Confirm(
+    private static async Task<HttpResponseMessage> ConfirmAsync(
         HttpClient client,
         string userId,
         string token)
     {
-        string csrfToken = await GetCsrfToken(client);
-        HttpRequestMessage request = new(HttpMethod.Post, "/api/v1/auth/email-confirmations")
+        var csrfToken = await GetCsrfTokenAsync(client);
+        var request = new HttpRequestMessage(
+            HttpMethod.Post,
+            "/api/v1/auth/email-confirmations")
         {
-            Content = JsonContent.Create(new { userId, token })
+            Content = JsonContent.Create(new
+            {
+                userId,
+                token
+            })
         };
-        request.Headers.Add(WebSecurityOptions.AntiforgeryHeaderName, csrfToken);
-        return await client.SendAsync(request, TestContext.Current.CancellationToken);
+        request.Headers.Add(
+            WebSecurityOptions.AntiforgeryHeaderName,
+            csrfToken);
+
+        return await client.SendAsync(
+            request,
+            TestContext.Current.CancellationToken);
     }
 
-    private static async Task<HttpResponseMessage> RequestConfirmation(HttpClient client, string email)
+    private static async Task<HttpResponseMessage> RequestConfirmationAsync(
+        HttpClient client,
+        string email)
     {
-        string csrfToken = await GetCsrfToken(client);
-        HttpRequestMessage request = new(HttpMethod.Post, "/api/v1/auth/email-confirmation-requests")
+        var csrfToken = await GetCsrfTokenAsync(client);
+        var request = new HttpRequestMessage(
+            HttpMethod.Post,
+            "/api/v1/auth/email-confirmation-requests")
         {
-            Content = JsonContent.Create(new { email })
+            Content = JsonContent.Create(new
+            {
+                email
+            })
         };
-        request.Headers.Add(WebSecurityOptions.AntiforgeryHeaderName, csrfToken);
-        return await client.SendAsync(request, TestContext.Current.CancellationToken);
+        request.Headers.Add(
+            WebSecurityOptions.AntiforgeryHeaderName,
+            csrfToken);
+
+        return await client.SendAsync(
+            request,
+            TestContext.Current.CancellationToken);
     }
 
-    private static async Task<string> GetCsrfToken(HttpClient client)
+    private static async Task<string> GetCsrfTokenAsync(HttpClient client)
     {
-        using HttpResponseMessage response = await client.GetAsync(
+        using var response = await client.GetAsync(
             "/security/csrf-token",
             TestContext.Current.CancellationToken);
-        CsrfTokenResponse payload = await response.Content.ReadFromJsonAsync<CsrfTokenResponse>(
+        var payload = await response.Content.ReadFromJsonAsync<CsrfTokenResponse>(
             TestContext.Current.CancellationToken)
             ?? throw new InvalidOperationException("The CSRF token response is empty.");
+
         return payload.Token;
     }
 
-    private static async Task AssertInvalidConfirmationProblem(HttpResponseMessage response)
+    private static async Task AssertInvalidConfirmationProblemAsync(HttpResponseMessage response)
     {
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(
+            HttpStatusCode.BadRequest,
+            response.StatusCode);
         Assert.True(response.Headers.CacheControl?.NoStore);
-        using JsonDocument document = await response.Content.ReadFromJsonAsync<JsonDocument>(
+        using var document = await response.Content.ReadFromJsonAsync<JsonDocument>(
             TestContext.Current.CancellationToken)
             ?? throw new InvalidOperationException("The confirmation problem is empty.");
-        JsonElement root = document.RootElement;
-        Assert.Equal("EMAIL_CONFIRMATION_INVALID", root.GetProperty("code").GetString());
-        Assert.Equal("The email confirmation link is invalid or expired.", root.GetProperty("detail").GetString());
-        Assert.False(root.TryGetProperty("errors", out _));
+        var root = document.RootElement;
+        Assert.Equal(
+            ErrorCodes.AccountEmailConfirmationInvalid,
+            root.GetProperty("errorCode").GetString());
+        Assert.Equal(
+            "The email confirmation link is invalid or expired.",
+            root.GetProperty("message").GetString());
+        Assert.Equal(
+            JsonValueKind.Null,
+            root.GetProperty("validationErrors").ValueKind);
     }
 }
