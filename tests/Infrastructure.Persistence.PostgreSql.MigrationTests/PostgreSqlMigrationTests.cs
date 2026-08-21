@@ -53,6 +53,10 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
             migration => Assert.EndsWith(
                 "_AddAuditableUtcDates",
                 migration,
+                StringComparison.Ordinal),
+            migration => Assert.EndsWith(
+                "_ReplaceAuthenticationTicketsWithRefreshSessions",
+                migration,
                 StringComparison.Ordinal));
         Assert.False(context.Database.HasPendingModelChanges());
 
@@ -90,7 +94,7 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
             "fk_authentication_email_outbox_users_user_id",
             constraints);
         Assert.Contains(
-            "ck_authentication_sessions_ticket_not_empty",
+            "ck_authentication_sessions_refresh_token_hash_length",
             constraints);
         Assert.Contains(
             "ck_authentication_sessions_timestamps_consistent",
@@ -130,9 +134,102 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
         Assert.Contains(
             "provider_message_id",
             columns);
+        Assert.Equal(
+            [
+                "created_at",
+                "expires_at",
+                "id",
+                "is_persistent",
+                "refresh_token_hash",
+                "renewed_at",
+                "revoked_at",
+                "user_id"
+            ],
+            await GetAuthenticationSessionColumnsAsync(
+                context,
+                cancellationToken));
         Assert.True(await IsUserUpdatedAtNullableAsync(
             context,
             cancellationToken));
+    }
+
+    [Fact]
+    public async Task MigrateAsync_WhenOpaqueSessionExists_DeletesSessionDuringRefreshMigration()
+    {
+        // Arrange
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var provider = CreateServiceProvider();
+        await using var scope = provider.CreateAsyncScope();
+        var context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
+        await context.Database.MigrateAsync(
+            "20260821115421_AddAuditableUtcDates",
+            cancellationToken);
+        var suffix = Guid.NewGuid().ToString("N");
+        var userId = Guid.NewGuid();
+        var sessionId = Guid.NewGuid();
+        var now = DateTime.UtcNow;
+        var displayName = "Migration test";
+        var email = $"migration-{suffix}@example.test";
+        var normalizedEmail = $"MIGRATION-{suffix}@EXAMPLE.TEST";
+        var protectedTicket = Convert.FromHexString("01");
+        await context.Database.ExecuteSqlInterpolatedAsync(
+            $"""
+            INSERT INTO public.users (
+                id,
+                display_name,
+                created_at,
+                version,
+                user_name,
+                normalized_user_name,
+                email,
+                normalized_email,
+                email_confirmed,
+                phone_number_confirmed,
+                two_factor_enabled,
+                lockout_enabled,
+                access_failed_count)
+            VALUES (
+                {userId},
+                {displayName},
+                {now},
+                {1},
+                {email},
+                {normalizedEmail},
+                {email},
+                {normalizedEmail},
+                {true},
+                {false},
+                {false},
+                {true},
+                {0});
+            """,
+            cancellationToken);
+        await context.Database.ExecuteSqlInterpolatedAsync(
+            $"""
+            INSERT INTO public.authentication_sessions (
+                id,
+                user_id,
+                protected_ticket,
+                created_at,
+                renewed_at,
+                expires_at)
+            VALUES (
+                {sessionId},
+                {userId},
+                {protectedTicket},
+                {now},
+                {now},
+                {now.AddHours(8)});
+            """,
+            cancellationToken);
+
+        // Act
+        await context.Database.MigrateAsync(cancellationToken);
+
+        // Assert
+        Assert.Empty(await context.AuthenticationSessions
+            .AsNoTracking()
+            .ToArrayAsync(cancellationToken));
     }
 
     private static async Task<IReadOnlyList<string>> GetAuthenticationEmailOutboxColumnsAsync(
@@ -151,6 +248,34 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
             FROM information_schema.columns
             WHERE table_schema = 'public'
               AND table_name = 'authentication_email_outbox'
+            ORDER BY column_name;
+            """;
+        var columns = new List<string>();
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            columns.Add(reader.GetString(0));
+        }
+
+        return columns;
+    }
+
+    private static async Task<IReadOnlyList<string>> GetAuthenticationSessionColumnsAsync(
+        MonKadoDbContext context,
+        CancellationToken cancellationToken)
+    {
+        var connection = context.Database.GetDbConnection();
+
+        if (connection.State != System.Data.ConnectionState.Open)
+            await connection.OpenAsync(cancellationToken);
+
+        await using var command = connection.CreateCommand();
+        command.CommandText =
+            """
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'authentication_sessions'
             ORDER BY column_name;
             """;
         var columns = new List<string>();

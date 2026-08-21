@@ -1,17 +1,18 @@
 using JennGllg.Fr.MonKado.Back.Application.Abstractions;
-using JennGllg.Fr.MonKado.Back.Application.Commands;
-using JennGllg.Fr.MonKado.Back.Application.Handlers;
 using JennGllg.Fr.MonKado.Back.Application.Models;
-using JennGllg.Fr.MonKado.Back.Application.Validators;
 
 namespace JennGllg.Fr.MonKado.Back.Api.FunctionalTests;
 
 public class RecordingAccountSessionService : IAccountSessionService
 {
-    private readonly Lock _sync = new();
     private readonly List<LoginCall> _calls = [];
+    private readonly Lock _sync = new();
+
+    public AccountSessionTokens Tokens { get; set; } = CreateTokens();
 
     public AccountLoginResult Result { get; set; } = AccountLoginResult.Success;
+
+    public bool RefreshSucceeds { get; set; } = true;
 
     public IReadOnlyList<LoginCall> Calls
     {
@@ -19,27 +20,69 @@ public class RecordingAccountSessionService : IAccountSessionService
         {
             lock (_sync)
             {
-
                 return _calls.ToArray();
             }
         }
     }
 
-    public Task<AccountLoginResult> LoginAsync(
+    public Task<AccountSessionLoginResult> LoginAsync(
         string email,
         string password,
         bool rememberMe,
+        string? currentRefreshToken,
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
+
         lock (_sync)
         {
             _calls.Add(new LoginCall(
                 email,
                 password,
-                rememberMe));
+                rememberMe,
+                currentRefreshToken));
         }
 
-        return Task.FromResult(Result);
+        var tokens = Result == AccountLoginResult.Success
+            ? new AccountSessionTokens(
+                Tokens.AccessToken,
+                Tokens.RefreshToken,
+                Tokens.RefreshTokenExpiresAt,
+                rememberMe)
+            : null;
+
+        return Task.FromResult(new AccountSessionLoginResult(
+            Result,
+            tokens));
+    }
+
+    public Task<AccountSessionTokens?> RefreshAsync(
+        string refreshToken,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        return Task.FromResult(
+            RefreshSucceeds
+                ? Tokens
+                : null);
+    }
+
+    private static AccountSessionTokens CreateTokens()
+    {
+        return new AccountSessionTokens(
+            new AccessToken(
+                "functional-access-token",
+                900),
+            "functional-refresh-token",
+            new DateTime(
+                2030,
+                1,
+                1,
+                0,
+                0,
+                0,
+                DateTimeKind.Utc),
+            false);
     }
 }

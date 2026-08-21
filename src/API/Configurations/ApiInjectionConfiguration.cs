@@ -1,4 +1,6 @@
+using JennGllg.Fr.MonKado.Back.Api.Abstractions;
 using JennGllg.Fr.MonKado.Back.Api.Extensions;
+using JennGllg.Fr.MonKado.Back.Api.Services;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Abstractions;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Configurations;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Contexts;
@@ -29,7 +31,8 @@ public static class ApiInjectionConfiguration
         IConfiguration configuration,
         IWebHostEnvironment environment)
     {
-        services.AddIdentityAuthentication(environment);
+        services.AddJwtAuthentication(configuration);
+        services.AddSingleton<IRefreshTokenCookieService, RefreshTokenCookieService>();
         services.ConfigureDataProtection(
             configuration,
             environment);

@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace JennGllg.Fr.MonKado.Back.Api.FunctionalTests;
@@ -14,7 +15,16 @@ public class SecurityTestController : ControllerBase
     }
 
     [HttpPost("mutate")]
+    [ValidateAntiForgeryToken]
     public IActionResult Post()
+    {
+
+        return NoContent();
+    }
+
+    [HttpGet("bearer")]
+    [Authorize]
+    public IActionResult GetBearer()
     {
 
         return NoContent();

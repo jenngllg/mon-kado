@@ -44,6 +44,30 @@ public class OpenApiContractTests(UnavailablePostgreSqlApiFactory factory) : ICl
         Assert.Equal(
             JsonValueKind.Object,
             root.GetProperty("paths").ValueKind);
+        var bearer = root
+            .GetProperty("components")
+            .GetProperty("securitySchemes")
+            .GetProperty("Bearer");
+        Assert.Equal(
+            "http",
+            bearer.GetProperty("type").GetString());
+        Assert.Equal(
+            "bearer",
+            bearer.GetProperty("scheme").GetString());
+        Assert.Equal(
+            "JWT",
+            bearer.GetProperty("bearerFormat").GetString());
+
+        var login = root
+            .GetProperty("paths")
+            .GetProperty("/api/v1/auth/sessions")
+            .GetProperty("post");
+        var refresh = root
+            .GetProperty("paths")
+            .GetProperty("/api/v1/auth/sessions/refresh")
+            .GetProperty("post");
+        AssertTokenOperation(login);
+        AssertTokenOperation(refresh);
     }
 
     [Fact]
@@ -61,5 +85,34 @@ public class OpenApiContractTests(UnavailablePostgreSqlApiFactory factory) : ICl
         Assert.Equal(
             HttpStatusCode.NotFound,
             response.StatusCode);
+    }
+
+    private static void AssertTokenOperation(JsonElement operation)
+    {
+        Assert.Contains(
+            operation.GetProperty("parameters").EnumerateArray(),
+            parameter => parameter.GetProperty("name").GetString() == "X-CSRF-TOKEN");
+        var responses = operation.GetProperty("responses");
+        Assert.True(responses.TryGetProperty(
+            "200",
+            out var success));
+        Assert.True(responses.TryGetProperty(
+            "400",
+            out _));
+        Assert.True(responses.TryGetProperty(
+            "401",
+            out _));
+        Assert.True(responses.TryGetProperty(
+            "503",
+            out _));
+        var headers = success.GetProperty("headers");
+        Assert.Contains(
+            "__Host-MonKado.Refresh",
+            headers.GetProperty("Set-Cookie").GetProperty("description").GetString(),
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "no-store",
+            headers.GetProperty("Cache-Control").GetProperty("description").GetString(),
+            StringComparison.Ordinal);
     }
 }

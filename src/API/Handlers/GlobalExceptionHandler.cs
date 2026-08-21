@@ -1,3 +1,4 @@
+using JennGllg.Fr.MonKado.Back.Api.Abstractions;
 using JennGllg.Fr.MonKado.Back.Api.Errors;
 using JennGllg.Fr.MonKado.Back.Api.Logging;
 using JennGllg.Fr.MonKado.Back.Application.Common.Exceptions;
@@ -9,8 +10,11 @@ namespace JennGllg.Fr.MonKado.Back.Api.Handlers;
 /// Represents global exception handler.
 /// </summary>
 /// <param name="logger">The logger.</param>
+/// <param name="refreshTokenCookieService">The refresh token cookie service.</param>
 
-public class GlobalExceptionHandler(ILogger<GlobalExceptionHandler> logger) : IExceptionHandler
+public class GlobalExceptionHandler(
+    ILogger<GlobalExceptionHandler> logger,
+    IRefreshTokenCookieService refreshTokenCookieService) : IExceptionHandler
 {
     /// <summary>
     /// Executes the try handle async operation.
@@ -37,6 +41,12 @@ public class GlobalExceptionHandler(ILogger<GlobalExceptionHandler> logger) : IE
                 "Authentication failed",
                 "The email address or password is invalid.",
                 ErrorCodes.AccountInvalidCredentials,
+                null),
+            InvalidAuthenticationSessionException => new ErrorResponse(
+                StatusCodes.Status401Unauthorized,
+                "Authentication failed",
+                "The authentication session is invalid or expired.",
+                ErrorCodes.AccountAuthenticationSessionInvalid,
                 null),
             EmailConfirmationInvalidException => new ErrorResponse(
                 StatusCodes.Status400BadRequest,
@@ -67,6 +77,9 @@ public class GlobalExceptionHandler(ILogger<GlobalExceptionHandler> logger) : IE
         LogException(
             response,
             exception);
+
+        if (exception is InvalidAuthenticationSessionException)
+            refreshTokenCookieService.Delete(httpContext);
 
         httpContext.Response.StatusCode = response.StatusCode;
         httpContext.Response.Headers.CacheControl = "no-store";

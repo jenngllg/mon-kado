@@ -50,6 +50,8 @@ The API reads its database connection exclusively from `ConnectionStrings:Postgr
 
 ```powershell
 dotnet user-secrets set "ConnectionStrings:PostgreSql" "Host=localhost;Port=5432;Database=mon_kado;Username=mon_kado;Password=<password>;SSL Mode=Disable" --project src/API/Api.csproj
+$jwtSigningKey = [Convert]::ToBase64String([Security.Cryptography.RandomNumberGenerator]::GetBytes(32))
+dotnet user-secrets set "Jwt:SigningKey" $jwtSigningKey --project src/API/Api.csproj
 ```
 
 Deployments provide the same setting through the `ConnectionStrings__PostgreSql` environment variable. Production connections must use the TLS mode and certificate validation required by the selected PostgreSQL host.
@@ -102,10 +104,10 @@ The frontend must initialize and refresh CSRF protection after login and logout:
 
 1. Call `GET /security/csrf-token` with `credentials: "include"`.
 2. Keep the returned token in memory.
-3. Send the token in `X-CSRF-TOKEN` with `credentials: "include"` for every `POST`, `PUT`, `PATCH`, and `DELETE` request.
+3. Send the token in `X-CSRF-TOKEN` with `credentials: "include"` for endpoints that use browser cookies, including registration, e-mail confirmation, login, and refresh.
 4. Fetch a new token after authentication state changes or after a `400` response caused by an expired token.
 
-All controller actions using unsafe HTTP methods validate antiforgery tokens by default. Any future exception must explicitly use `IgnoreAntiforgeryToken` and document why a browser-supplied cookie cannot authorize that endpoint.
+Cookie-enabled unsafe endpoints declare antiforgery validation explicitly. Endpoints authenticated exclusively with an `Authorization: Bearer` header do not require an antiforgery token because browsers do not attach that header automatically.
 
 The antiforgery cookie is a strictly necessary session cookie used only for request security. It does not require prior consent while it remains limited to this purpose, but it must be described in the site's cookie and privacy information. Analytics, advertising, or affiliation cookies require a separate consent assessment.
 
@@ -156,17 +158,33 @@ flag. It requires the standard CSRF header, accepts at most ten requests per min
 logs credentials. Five invalid passwords lock the account for 15 minutes. An unconfirmed account cannot sign in, and
 an expired unconfirmed account is indistinguishable from invalid credentials.
 
-Successful authentication returns `204 No Content` and creates an opaque, HTTP-only, `SameSite=Lax` cookie. The
-production cookie is named `__Host-MonKado.Auth`, is always secure, uses `/` as its path, and has no domain attribute.
-Local development uses `MonKado.Auth` so loopback HTTP remains usable. A normal browser session remains valid on the
-server for up to eight hours and can slide while active. `rememberMe` creates a persistent 30-day session with a fixed
-expiry instead.
+Successful authentication returns `200 OK` with a 15-minute access token:
 
-Cookies contain only an encrypted session identifier. The authentication ticket is separately protected with the
-shared ASP.NET Core Data Protection key ring and stored in PostgreSQL, so application instances can validate the same
-session without exposing claims to the browser. Signing in again from the same client replaces its previous server-side
-ticket. Expired sessions are rejected immediately and the Worker removes remaining expired rows daily in bounded
-batches.
+```json
+{
+  "accessToken": "<jwt>",
+  "tokenType": "Bearer",
+  "expiresIn": 900
+}
+```
+
+The frontend keeps this JWT in memory only and sends it as `Authorization: Bearer <jwt>`. The HS256 token contains only
+`sub`, `jti`, `iat`, `exp`, `iss`, and `aud`; it never contains an e-mail address, display name, role, permission, or
+other profile data. JWTs are neither persisted nor logged. `POST /api/v1/auth/sessions/refresh` has no request body,
+requires the standard CSRF token, rotates the browser refresh token, and returns the same JSON contract. The frontend
+must serialize refresh calls so that one browser never attempts two rotations concurrently.
+
+The refresh token exists only in an HTTP-only, host-only, `SameSite=Strict` cookie with `Path=/`. Production uses the
+secure `__Host-MonKado.Refresh` name; local development uses `MonKado.Refresh` for loopback HTTP. Without `rememberMe`,
+it is a browser-session cookie backed by an eight-hour sliding server session. With `rememberMe`, its absolute expiry
+is fixed at 30 days. PostgreSQL stores only the SHA-256 hash of the 256-bit refresh secret. Every successful refresh
+locks and atomically rotates its session; reuse of an older token revokes that entire session. Separate browsers and
+devices keep independent sessions. Signing in again replaces only the valid session presented by the current browser.
+
+Missing, invalid, expired, revoked, or reused refresh tokens return the standard `401` `ErrorResponse` and delete the
+refresh cookie. PostgreSQL unavailability returns `503` without deleting it. Token responses use `Cache-Control:
+no-store`. The Worker removes expired refresh sessions in bounded batches. The migration intentionally deletes all
+legacy opaque sessions, so existing users must sign in again.
 
 ## Authentication e-mail delivery
 
@@ -212,6 +230,7 @@ Local defaults allow `http://localhost:5173` and the `localhost` API host. Produ
 | API host | `API_ALLOWED_HOST` | `api.example.fr` |
 | Dedicated Caddy network | `EDGE_NETWORK_CIDR` | `172.30.0.0/24` |
 | Data Protection key path | `DataProtection__KeysPath` | `/var/lib/mon-kado/data-protection-keys` |
+| JWT HS256 signing key | `JWT_SIGNING_KEY` | Base64 encoding of at least 32 random bytes |
 | Authentication e-mail provider | `AUTHENTICATION_EMAIL_PROVIDER` | `Gmail` |
 | Gmail sender | `GMAIL_SENDER_ADDRESS` | `monkado.app@gmail.com` |
 | Gmail OAuth client ID | `GMAIL_CLIENT_ID` | Secret value |
@@ -220,12 +239,15 @@ Local defaults allow `http://localhost:5173` and the `localhost` API host. Produ
 
 Compose maps the dedicated edge network to `ReverseProxy:KnownNetworks`. ASP.NET Core accepts forwarded client IP and scheme values only from that network, with a single forwarded hop. Change `EDGE_NETWORK_CIDR` if it conflicts with an existing Docker network. Never configure trusted proxies with `0.0.0.0/0` or `::/0`, and never configure `AllowedHosts` or CORS with `*`.
 
-Local database credentials belong in .NET user secrets. VPS values belong in the uncommitted `.env` file with permissions `600`. Do not commit PostgreSQL passwords, OAuth client secrets, CSRF tokens, production connection strings, certificates, or Data Protection keys.
+Generate the JWT key with a cryptographically secure generator such as `openssl rand -base64 32`. Local database
+credentials and the local JWT key belong in .NET user secrets. VPS values belong in the uncommitted `.env` file with
+permissions `600`. Do not commit PostgreSQL passwords, JWT signing keys, OAuth client secrets, CSRF tokens, production
+connection strings, certificates, or Data Protection keys.
 
 ASP.NET Core Data Protection keys are stored in the `data_protection_keys` Docker volume shared by the API and Worker
-so confirmation tokens and protected cookies remain valid across container recreation. Treat this volume as
-sensitive. Losing or deleting it invalidates existing confirmation links and cookies; restoring it gives access to
-the cryptographic material used by the application.
+so confirmation links and antiforgery cookies remain valid across container recreation. Access and refresh tokens do
+not use Data Protection. Treat this volume as sensitive. Losing or deleting it invalidates existing confirmation links
+and antiforgery cookies; restoring it gives access to the cryptographic material used by the application.
 
 ## Architecture
 

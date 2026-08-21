@@ -1,4 +1,5 @@
 using JennGllg.Fr.MonKado.Back.Api.Errors;
+using JennGllg.Fr.MonKado.Back.Api.Extensions;
 
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.OpenApi;
@@ -40,6 +41,11 @@ public class CommonErrorResponsesOperationTransformer : IOpenApiOperationTransfo
             operation,
             schema,
             context.Description.ActionDescriptor.EndpointMetadata);
+
+        if (RequiresAuthorization(context.Description.ActionDescriptor.EndpointMetadata))
+            AddBearerSecurityRequirement(
+                operation,
+                context.Document);
     }
 
     internal static void AddAuthorizationResponses(
@@ -47,10 +53,7 @@ public class CommonErrorResponsesOperationTransformer : IOpenApiOperationTransfo
         IOpenApiSchema schema,
         IEnumerable<object> metadata)
     {
-        var requiresAuthorization = metadata.OfType<IAuthorizeData>().Any() &&
-            !metadata.OfType<IAllowAnonymous>().Any();
-
-        if (!requiresAuthorization)
+        if (!RequiresAuthorization(metadata))
             return;
 
         AddResponse(
@@ -63,6 +66,27 @@ public class CommonErrorResponsesOperationTransformer : IOpenApiOperationTransfo
             StatusCodes.Status403Forbidden,
             "The authenticated user is not authorized",
             schema);
+    }
+
+    internal static bool RequiresAuthorization(IEnumerable<object> metadata)
+    {
+        return metadata.OfType<IAuthorizeData>().Any() &&
+            !metadata.OfType<IAllowAnonymous>().Any();
+    }
+
+    internal static void AddBearerSecurityRequirement(
+        OpenApiOperation operation,
+        OpenApiDocument? document)
+    {
+        var scheme = new OpenApiSecuritySchemeReference(
+            OpenApiExtensions.BearerSecuritySchemeName,
+            document,
+            null);
+        operation.Security ??= [];
+        operation.Security.Add(new OpenApiSecurityRequirement
+        {
+            [scheme] = []
+        });
     }
 
     internal static void AddResponse(

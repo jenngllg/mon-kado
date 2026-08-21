@@ -150,4 +150,30 @@ public class ValidationBehaviorTests
         // Assert
         await Assert.ThrowsAsync<EmailConfirmationInvalidException>((Func<Task<Unit>>)action);
     }
+
+    [Fact]
+    public async Task Handle_WhenRefreshTokenValidationFails_ThrowsInvalidSession()
+    {
+        // Arrange
+        var command = new RefreshSessionCommand(null);
+        var behavior = new ValidationBehavior<RefreshSessionCommand, Unit>(
+            [new RefreshSessionCommandValidator()]);
+
+        Task<Unit> action()
+        {
+            return behavior.Handle(
+                command,
+                _ => Task.FromResult(Unit.Value),
+                TestContext.Current.CancellationToken);
+        }
+
+        // Act
+        var exception = await Assert.ThrowsAsync<InvalidAuthenticationSessionException>(
+            (Func<Task<Unit>>)action);
+
+        // Assert
+        Assert.Equal(
+            "The authentication session is invalid or expired.",
+            exception.Message);
+    }
 }

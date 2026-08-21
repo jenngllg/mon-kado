@@ -14,52 +14,14 @@ internal class AuthenticationSessionRepository(MonKadoDbContext context)
         context.AuthenticationSessions.Add(session);
     }
 
-    public Task<AuthenticationSession?> GetByIdAsync(
+    public Task<AuthenticationSession?> GetByIdForUpdateAsync(
         Guid sessionId,
         CancellationToken cancellationToken)
     {
-
         return context.AuthenticationSessions
-            .AsNoTracking()
-            .SingleOrDefaultAsync(
-                session => session.Id == sessionId,
-                cancellationToken);
-    }
-
-    public async Task UpdateAsync(
-        Guid sessionId,
-        Guid userId,
-        byte[] protectedTicket,
-        DateTime renewedAt,
-        DateTime expiresAt,
-        CancellationToken cancellationToken)
-    {
-        await context.AuthenticationSessions
-            .Where(session => session.Id == sessionId)
-            .ExecuteUpdateAsync(
-                setters => setters
-                    .SetProperty(
-                        session => session.UserId,
-                        userId)
-                    .SetProperty(
-                        session => session.ProtectedTicket,
-                        protectedTicket)
-                    .SetProperty(
-                        session => session.RenewedAt,
-                        renewedAt)
-                    .SetProperty(
-                        session => session.ExpiresAt,
-                        expiresAt),
-                cancellationToken);
-    }
-
-    public async Task DeleteAsync(
-        Guid sessionId,
-        CancellationToken cancellationToken)
-    {
-        await context.AuthenticationSessions
-            .Where(session => session.Id == sessionId)
-            .ExecuteDeleteAsync(cancellationToken);
+            .FromSqlInterpolated(
+                $"SELECT * FROM public.authentication_sessions WHERE id = {sessionId} FOR UPDATE")
+            .SingleOrDefaultAsync(cancellationToken);
     }
 
     public async Task<int> DeleteExpiredAsync(

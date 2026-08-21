@@ -29,25 +29,161 @@ public class ExtensionHelperTests
             result);
     }
 
-    [Theory]
-    [InlineData(null, false)]
-    [InlineData("GET", false)]
-    [InlineData("POST", true)]
-    [InlineData("PUT", true)]
-    [InlineData("PATCH", true)]
-    [InlineData("DELETE", true)]
-    public void RequiresAntiforgeryToken_WhenMethodIsProvided_ReturnsExpectedResult(
-        string? method,
-        bool expected)
+    [Fact]
+    public void RequiresAntiforgeryToken_WhenAttributeIsMissing_ReturnsFalse()
     {
         // Arrange
+        object[] metadata = [];
+
         // Act
-        var result = OpenApiExtensions.RequiresAntiforgeryToken(method);
+        var result = OpenApiExtensions.RequiresAntiforgeryToken(metadata);
 
         // Assert
+        Assert.False(result);
+    }
+
+    [Fact]
+    public void RequiresAntiforgeryToken_WhenAttributeExists_ReturnsTrue()
+    {
+        // Arrange
+        object[] metadata =
+        [
+            new Microsoft.AspNetCore.Mvc.ValidateAntiForgeryTokenAttribute()
+        ];
+
+        // Act
+        var result = OpenApiExtensions.RequiresAntiforgeryToken(metadata);
+
+        // Assert
+        Assert.True(result);
+    }
+
+    [Fact]
+    public void AddBearerSecurityScheme_WhenComponentsAreMissing_AddsJwtBearerScheme()
+    {
+        // Arrange
+        var document = new Microsoft.OpenApi.OpenApiDocument();
+
+        // Act
+        OpenApiExtensions.AddBearerSecurityScheme(document);
+
+        // Assert
+        var scheme = Assert.IsType<Microsoft.OpenApi.OpenApiSecurityScheme>(
+            document.Components!.SecuritySchemes![OpenApiExtensions.BearerSecuritySchemeName]);
         Assert.Equal(
-            expected,
-            result);
+            Microsoft.OpenApi.SecuritySchemeType.Http,
+            scheme.Type);
+        Assert.Equal(
+            "bearer",
+            scheme.Scheme);
+        Assert.Equal(
+            "JWT",
+            scheme.BearerFormat);
+    }
+
+    [Fact]
+    public void AddBearerSecurityScheme_WhenSecuritySchemesExist_AddsJwtBearerScheme()
+    {
+        // Arrange
+        var document = new Microsoft.OpenApi.OpenApiDocument
+        {
+            Components = new Microsoft.OpenApi.OpenApiComponents
+            {
+                SecuritySchemes = new Dictionary<string, Microsoft.OpenApi.IOpenApiSecurityScheme>()
+            }
+        };
+
+        // Act
+        OpenApiExtensions.AddBearerSecurityScheme(document);
+
+        // Assert
+        Assert.Contains(
+            OpenApiExtensions.BearerSecuritySchemeName,
+            document.Components.SecuritySchemes.Keys);
+    }
+
+    [Fact]
+    public void AddAccessTokenResponseHeaders_WhenSuccessResponseExists_DocumentsCookieAndNoStore()
+    {
+        // Arrange
+        var operation = new Microsoft.OpenApi.OpenApiOperation
+        {
+            Responses = new Microsoft.OpenApi.OpenApiResponses
+            {
+                ["200"] = new Microsoft.OpenApi.OpenApiResponse()
+            }
+        };
+
+        // Act
+        OpenApiExtensions.AddAccessTokenResponseHeaders(operation);
+
+        // Assert
+        var headers = operation.Responses["200"].Headers!;
+        Assert.Contains(
+            "__Host-MonKado.Refresh",
+            headers["Set-Cookie"].Description,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "no-store",
+            headers["Cache-Control"].Description,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AddAccessTokenResponseHeaders_WhenSuccessResponseIsMissing_DoesNotCreateResponse()
+    {
+        // Arrange
+        var operation = new Microsoft.OpenApi.OpenApiOperation();
+
+        // Act
+        OpenApiExtensions.AddAccessTokenResponseHeaders(operation);
+
+        // Assert
+        Assert.True(operation.Responses is null || operation.Responses.Count == 0);
+    }
+
+    [Fact]
+    public void AddAccessTokenResponseHeaders_WhenResponsesAreMissing_DoesNotCreateResponse()
+    {
+        // Arrange
+        var operation = new Microsoft.OpenApi.OpenApiOperation
+        {
+            Responses = null!
+        };
+
+        // Act
+        OpenApiExtensions.AddAccessTokenResponseHeaders(operation);
+
+        // Assert
+        Assert.Null(operation.Responses);
+    }
+
+    [Fact]
+    public void AddAccessTokenResponseHeaders_WhenHeadersExist_PreservesExistingHeader()
+    {
+        // Arrange
+        var response = new Microsoft.OpenApi.OpenApiResponse
+        {
+            Headers = new Dictionary<string, Microsoft.OpenApi.IOpenApiHeader>
+            {
+                ["Existing"] = new Microsoft.OpenApi.OpenApiHeader()
+            }
+        };
+        var operation = new Microsoft.OpenApi.OpenApiOperation
+        {
+            Responses = new Microsoft.OpenApi.OpenApiResponses
+            {
+                ["200"] = response
+            }
+        };
+
+        // Act
+        OpenApiExtensions.AddAccessTokenResponseHeaders(operation);
+
+        // Assert
+        Assert.Contains(
+            "Existing",
+            response.Headers.Keys);
     }
 
     [Theory]

@@ -143,6 +143,7 @@ jobs:
         shell: bash
         run: |
           echo "CI_POSTGRES_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+          echo "CI_JWT_SIGNING_KEY=$(openssl rand -base64 32)" >> "$GITHUB_ENV"
 
       - name: Validate production Compose configuration
         shell: bash
@@ -155,6 +156,7 @@ jobs:
           POSTGRES_DB=mon_kado
           POSTGRES_USER=mon_kado
           POSTGRES_PASSWORD="$CI_POSTGRES_SECRET"
+          JWT_SIGNING_KEY="$CI_JWT_SIGNING_KEY"
           IMAGE_TAG=ci
           docker compose -f compose.yaml config --quiet
 
@@ -169,6 +171,7 @@ jobs:
           POSTGRES_DB=mon_kado
           POSTGRES_USER=mon_kado
           POSTGRES_PASSWORD="$CI_POSTGRES_SECRET"
+          JWT_SIGNING_KEY="$CI_JWT_SIGNING_KEY"
           IMAGE_TAG=ci
           docker compose -f compose.yaml -f compose.local.yaml config --quiet
 

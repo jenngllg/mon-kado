@@ -1,3 +1,4 @@
+using JennGllg.Fr.MonKado.Back.Api.Extensions;
 using JennGllg.Fr.MonKado.Back.Api.Transformers;
 
 using Microsoft.AspNetCore.Authorization;
@@ -56,6 +57,51 @@ public class CommonErrorResponsesOperationTransformerTests
         Assert.Equal(
             "The authenticated user is not authorized",
             operation.Responses["403"].Description);
+    }
+
+    [Fact]
+    public void AddBearerSecurityRequirement_WhenAuthorizationIsRequired_AddsBearerReference()
+    {
+        // Arrange
+        var operation = new OpenApiOperation();
+        var document = new OpenApiDocument();
+        OpenApiExtensions.AddBearerSecurityScheme(document);
+
+        // Act
+        CommonErrorResponsesOperationTransformer.AddBearerSecurityRequirement(
+            operation,
+            document);
+
+        // Assert
+        var requirement = Assert.Single(operation.Security!);
+        var scheme = Assert.Single(requirement.Keys);
+        Assert.Equal(
+            OpenApiExtensions.BearerSecuritySchemeName,
+            scheme.Reference.Id);
+        Assert.Empty(requirement[scheme]);
+    }
+
+    [Fact]
+    public void AddBearerSecurityRequirement_WhenSecurityExists_AppendsBearerReference()
+    {
+        // Arrange
+        var operation = new OpenApiOperation
+        {
+            Security =
+            [
+                new OpenApiSecurityRequirement()
+            ]
+        };
+
+        // Act
+        CommonErrorResponsesOperationTransformer.AddBearerSecurityRequirement(
+            operation,
+            null);
+
+        // Assert
+        Assert.Equal(
+            2,
+            operation.Security.Count);
     }
 
     [Theory]

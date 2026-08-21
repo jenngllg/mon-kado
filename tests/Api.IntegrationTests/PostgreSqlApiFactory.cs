@@ -30,6 +30,9 @@ public sealed class PostgreSqlApiFactory(
         builder.UseSetting(
             "WebSecurity:AllowedOrigins:0",
             "http://localhost:5173");
+        builder.UseSetting(
+            "Jwt:SigningKey",
+            "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA=");
         builder.ConfigureTestServices(services =>
         {
 

@@ -86,9 +86,6 @@ public static class WebSecurityExtensions
             antiforgery.Cookie.IsEssential = true;
         });
 
-        services.Configure<MvcOptions>(mvc =>
-            mvc.Filters.Add(new AutoValidateAntiforgeryTokenAttribute()));
-
         return services;
     }
     /// <summary>
@@ -177,6 +174,7 @@ public static class WebSecurityExtensions
                 .WithMethods(_allowedMethods)
                 .WithHeaders(
                     HeaderNames.ContentType,
+                    HeaderNames.Authorization,
                     WebSecurityOptions.AntiforgeryHeaderName)
                 .AllowCredentials()
                 .SetPreflightMaxAge(TimeSpan.FromMinutes(10)));
