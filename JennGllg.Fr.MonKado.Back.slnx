@@ -7,6 +7,7 @@
     <Project Path="tests/Domain.UnitTests/Domain.UnitTests.csproj" />
     <Project Path="tests/Infrastructure.Persistence.PostgreSql.MigrationTests/Infrastructure.Persistence.PostgreSql.MigrationTests.csproj" />
     <Project Path="tests/Infrastructure.Persistence.PostgreSql.UnitTests/Infrastructure.Persistence.PostgreSql.UnitTests.csproj" />
+    <Project Path="tests/GmailOAuthBootstrap.UnitTests/GmailOAuthBootstrap.UnitTests.csproj" />
     <Project Path="tests/Tests.Common/Tests.Common.csproj" />
     <Project Path="tests/Worker.UnitTests/Worker.UnitTests.csproj" />
     <Project Path="tests/Worker.IntegrationTests/Worker.IntegrationTests.csproj" />

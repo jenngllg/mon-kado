@@ -149,6 +149,25 @@ deadline can shorten that period. Confirmation clears the deadline and cancels p
 another e-mail never extends the deadline and always returns the same empty `202 Accepted` response. Per-account
 limits are stored in PostgreSQL and include the initial registration request.
 
+## Authentication sessions
+
+`POST /api/v1/auth/sessions` accepts an e-mail address, the exact unmodified password, and an optional `rememberMe`
+flag. It requires the standard CSRF header, accepts at most ten requests per minute for one client address, and never
+logs credentials. Five invalid passwords lock the account for 15 minutes. An unconfirmed account cannot sign in, and
+an expired unconfirmed account is indistinguishable from invalid credentials.
+
+Successful authentication returns `204 No Content` and creates an opaque, HTTP-only, `SameSite=Lax` cookie. The
+production cookie is named `__Host-MonKado.Auth`, is always secure, uses `/` as its path, and has no domain attribute.
+Local development uses `MonKado.Auth` so loopback HTTP remains usable. A normal browser session remains valid on the
+server for up to eight hours and can slide while active. `rememberMe` creates a persistent 30-day session with a fixed
+expiry instead.
+
+Cookies contain only an encrypted session identifier. The authentication ticket is separately protected with the
+shared ASP.NET Core Data Protection key ring and stored in PostgreSQL, so application instances can validate the same
+session without exposing claims to the browser. Signing in again from the same client replaces its previous server-side
+ticket. Expired sessions are rejected immediately and the Worker removes remaining expired rows daily in bounded
+batches.
+
 ## Authentication e-mail delivery
 
 The Worker delivers confirmation messages through the Gmail REST API with OAuth 2.0. SMTP, Gmail passwords, and

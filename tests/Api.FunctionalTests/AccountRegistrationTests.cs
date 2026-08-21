@@ -1,42 +1,66 @@
+using JennGllg.Fr.MonKado.Back.Api.Contracts.Responses;
+using JennGllg.Fr.MonKado.Back.Api.Errors;
+using JennGllg.Fr.MonKado.Back.Api.Options;
+
 using System.Net;
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
-using JennGllg.Fr.MonKado.Back.Api.Security;
 
 namespace JennGllg.Fr.MonKado.Back.Api.FunctionalTests;
 
-public sealed class AccountRegistrationTests
+public class AccountRegistrationTests
 {
     [Fact]
-    public async Task ValidRequestReturnsEmptyAcceptedResponseWithoutSessionCookie()
+    public async Task RegisterAsync_WhenValidRequest_ReturnsEmptyAcceptedResponseWithoutSessionCookie()
     {
-        await using RegistrationApiFactory factory = new();
-        using HttpClient client = factory.CreateClient();
-        using HttpResponseMessage response = await SendRegistration(client);
+        // Arrange
+        await using var factory = new RegistrationApiFactory();
+        using var client = factory.CreateClient();
+        // Act
+        using var response = await SendRegistrationAsync(client);
 
-        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
-        Assert.Equal(0, response.Content.Headers.ContentLength);
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.Accepted,
+            response.StatusCode);
+        Assert.Equal(
+            0,
+            response.Content.Headers.ContentLength);
         Assert.True(response.Headers.CacheControl?.NoStore);
-        if (response.Headers.TryGetValues("Set-Cookie", out IEnumerable<string>? cookies))
+
+        if (response.Headers.TryGetValues(
+            "Set-Cookie",
+            out var cookies))
         {
             Assert.DoesNotContain(
                 cookies,
-                value => value.Contains("Identity", StringComparison.OrdinalIgnoreCase));
+                value => value.Contains(
+                    "Identity",
+                    StringComparison.OrdinalIgnoreCase));
         }
-        RegistrationCall call = Assert.Single(factory.RegistrationService.Calls);
-        Assert.Equal("Lea@example.fr", call.Email);
-        Assert.Equal(" a secure password ", call.Password);
-        Assert.Equal("Léa", call.DisplayName);
+        var call = Assert.Single(factory.RegistrationService.Calls);
+        Assert.Equal(
+            "Lea@example.fr",
+            call.Email);
+        Assert.Equal(
+            " a secure password ",
+            call.Password);
+        Assert.Equal(
+            "Léa",
+            call.DisplayName);
     }
 
     [Fact]
-    public async Task InvalidPayloadReturnsRfc9457ValidationProblem()
+    public async Task RegisterAsync_WhenInvalidPayload_ReturnsErrorResponse()
     {
-        await using RegistrationApiFactory factory = new();
-        using HttpClient client = factory.CreateClient();
-        string csrfToken = await GetCsrfToken(client);
-        using HttpRequestMessage request = new(HttpMethod.Post, "/api/v1/auth/registrations")
+        // Arrange
+        await using var factory = new RegistrationApiFactory();
+        using var client = factory.CreateClient();
+        var csrfToken = await GetCsrfTokenAsync(client);
+        using var request = new HttpRequestMessage(
+            HttpMethod.Post,
+            "/api/v1/auth/registrations")
         {
             Content = JsonContent.Create(new
             {
@@ -45,217 +69,345 @@ public sealed class AccountRegistrationTests
                 displayName = "\n"
             })
         };
-        request.Headers.Add(WebSecurityOptions.AntiforgeryHeaderName, csrfToken);
+        request.Headers.Add(
+            WebSecurityOptions.AntiforgeryHeaderName,
+            csrfToken);
 
-        using HttpResponseMessage response = await client.SendAsync(
+        // Act
+        using var response = await client.SendAsync(
             request,
             TestContext.Current.CancellationToken);
 
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
-        using JsonDocument document = await response.Content.ReadFromJsonAsync<JsonDocument>(
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.BadRequest,
+            response.StatusCode);
+        Assert.Equal(
+            "application/json",
+            response.Content.Headers.ContentType?.MediaType);
+        using var document = await response.Content.ReadFromJsonAsync<JsonDocument>(
             TestContext.Current.CancellationToken)
             ?? throw new InvalidOperationException("The validation problem response is empty.");
-        JsonElement root = document.RootElement;
-        Assert.Equal("VALIDATION_ERROR", root.GetProperty("code").GetString());
-        Assert.Equal(400, root.GetProperty("status").GetInt32());
-        Assert.Equal("/api/v1/auth/registrations", root.GetProperty("instance").GetString());
-        Assert.True(root.GetProperty("errors").TryGetProperty("email", out _));
-        Assert.True(root.GetProperty("errors").TryGetProperty("password", out _));
-        Assert.True(root.GetProperty("errors").TryGetProperty("displayName", out _));
-        Assert.Equal(0, factory.RegistrationService.CallCount);
+        var root = document.RootElement;
+        Assert.Equal(
+            ErrorCodes.RequestValidationError,
+            root.GetProperty("errorCode").GetString());
+        Assert.Equal(
+            400,
+            root.GetProperty("statusCode").GetInt32());
+        var properties = root
+            .GetProperty("validationErrors")
+            .EnumerateArray()
+            .Select(error => error.GetProperty("propertyName").GetString())
+            .ToArray();
+        Assert.Contains(
+            "email",
+            properties);
+        Assert.Contains(
+            "password",
+            properties);
+        Assert.Contains(
+            "displayName",
+            properties);
+        Assert.Equal(
+            0,
+            factory.RegistrationService.CallCount);
     }
 
     [Fact]
-    public async Task MissingCsrfTokenIsRejectedBeforeRegistration()
+    public async Task RegisterAsync_WhenMissingCsrfToken_IsRejectedBeforeRegistration()
     {
-        await using RegistrationApiFactory factory = new();
-        using HttpClient client = factory.CreateClient();
+        // Arrange
+        await using var factory = new RegistrationApiFactory();
+        using var client = factory.CreateClient();
 
-        using HttpResponseMessage response = await client.PostAsJsonAsync(
+        // Act
+        using var response = await client.PostAsJsonAsync(
             "/api/v1/auth/registrations",
             ValidPayload(),
             TestContext.Current.CancellationToken);
 
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Equal(0, factory.RegistrationService.CallCount);
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.BadRequest,
+            response.StatusCode);
+        Assert.Equal(
+            0,
+            factory.RegistrationService.CallCount);
     }
 
     [Fact]
-    public async Task MalformedJsonReturnsRfc9457ValidationProblem()
+    public async Task RegisterAsync_WhenMalformedJson_ReturnsErrorResponse()
     {
-        await using RegistrationApiFactory factory = new();
-        using HttpClient client = factory.CreateClient();
-        string csrfToken = await GetCsrfToken(client);
-        using HttpRequestMessage request = new(HttpMethod.Post, "/api/v1/auth/registrations")
+        // Arrange
+        await using var factory = new RegistrationApiFactory();
+        using var client = factory.CreateClient();
+        var csrfToken = await GetCsrfTokenAsync(client);
+        using var request = new HttpRequestMessage(
+            HttpMethod.Post,
+            "/api/v1/auth/registrations")
         {
-            Content = new StringContent("{", Encoding.UTF8, "application/json")
+            Content = new StringContent(
+                "{",
+                Encoding.UTF8,
+                "application/json")
         };
-        request.Headers.Add(WebSecurityOptions.AntiforgeryHeaderName, csrfToken);
+        request.Headers.Add(
+            WebSecurityOptions.AntiforgeryHeaderName,
+            csrfToken);
 
-        using HttpResponseMessage response = await client.SendAsync(
+        // Act
+        using var response = await client.SendAsync(
             request,
             TestContext.Current.CancellationToken);
 
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
-        using JsonDocument document = await response.Content.ReadFromJsonAsync<JsonDocument>(
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.BadRequest,
+            response.StatusCode);
+        Assert.Equal(
+            "application/json",
+            response.Content.Headers.ContentType?.MediaType);
+        using var document = await response.Content.ReadFromJsonAsync<JsonDocument>(
             TestContext.Current.CancellationToken)
             ?? throw new InvalidOperationException("The validation problem response is empty.");
-        Assert.Equal("VALIDATION_ERROR", document.RootElement.GetProperty("code").GetString());
-        Assert.Equal(0, factory.RegistrationService.CallCount);
+        Assert.Equal(
+            ErrorCodes.RequestValidationError,
+            document.RootElement.GetProperty("errorCode").GetString());
+        Assert.Equal(
+            0,
+            factory.RegistrationService.CallCount);
     }
 
     [Fact]
-    public async Task NonJsonContentReturnsUnsupportedMediaType()
+    public async Task RegisterAsync_WhenNonJsonContent_ReturnsUnsupportedMediaType()
     {
-        await using RegistrationApiFactory factory = new();
-        using HttpClient client = factory.CreateClient();
-        string csrfToken = await GetCsrfToken(client);
-        using HttpRequestMessage request = new(HttpMethod.Post, "/api/v1/auth/registrations")
+        // Arrange
+        await using var factory = new RegistrationApiFactory();
+        using var client = factory.CreateClient();
+        var csrfToken = await GetCsrfTokenAsync(client);
+        using var request = new HttpRequestMessage(
+            HttpMethod.Post,
+            "/api/v1/auth/registrations")
         {
-            Content = new StringContent("not-json", Encoding.UTF8, "text/plain")
+            Content = new StringContent(
+                "not-json",
+                Encoding.UTF8,
+                "text/plain")
         };
-        request.Headers.Add(WebSecurityOptions.AntiforgeryHeaderName, csrfToken);
+        request.Headers.Add(
+            WebSecurityOptions.AntiforgeryHeaderName,
+            csrfToken);
 
-        using HttpResponseMessage response = await client.SendAsync(
+        // Act
+        using var response = await client.SendAsync(
             request,
             TestContext.Current.CancellationToken);
 
-        Assert.Equal(HttpStatusCode.UnsupportedMediaType, response.StatusCode);
-        Assert.Equal(0, factory.RegistrationService.CallCount);
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.UnsupportedMediaType,
+            response.StatusCode);
+        Assert.Equal(
+            0,
+            factory.RegistrationService.CallCount);
     }
 
     [Fact]
-    public async Task SensitiveRegistrationValuesAreNeverWrittenToLogs()
+    public async Task RegisterAsync_WhenSensitiveRegistrationValues_AreNeverWrittenToLogs()
     {
+        // Arrange
         const string email = "sensitive-email@example.fr";
         const string password = "sensitive-password-value";
-        await using RegistrationApiFactory factory = new();
-        using HttpClient client = factory.CreateClient();
-        string csrfToken = await GetCsrfToken(client);
-        using HttpRequestMessage request = new(HttpMethod.Post, "/api/v1/auth/registrations")
+        await using var factory = new RegistrationApiFactory();
+        using var client = factory.CreateClient();
+        var csrfToken = await GetCsrfTokenAsync(client);
+        using var request = new HttpRequestMessage(
+            HttpMethod.Post,
+            "/api/v1/auth/registrations")
         {
-            Content = JsonContent.Create(new { email, password, displayName = "Private" })
+            Content = JsonContent.Create(new
+            {
+                email,
+                password,
+                displayName = "Private"
+            })
         };
-        request.Headers.Add(WebSecurityOptions.AntiforgeryHeaderName, csrfToken);
+        request.Headers.Add(
+            WebSecurityOptions.AntiforgeryHeaderName,
+            csrfToken);
 
-        using HttpResponseMessage response = await client.SendAsync(
+        // Act
+        using var response = await client.SendAsync(
             request,
             TestContext.Current.CancellationToken);
 
-        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
-        Assert.DoesNotContain(factory.LogMessages, message => message.Contains(email, StringComparison.Ordinal));
-        Assert.DoesNotContain(factory.LogMessages, message => message.Contains(password, StringComparison.Ordinal));
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.Accepted,
+            response.StatusCode);
+        Assert.DoesNotContain(
+            factory.LogMessages,
+            message => message.Contains(
+                email,
+                StringComparison.Ordinal));
+        Assert.DoesNotContain(
+            factory.LogMessages,
+            message => message.Contains(
+                password,
+                StringComparison.Ordinal));
     }
 
     [Fact]
-    public async Task SixthRequestWithinOneMinuteIsRateLimited()
+    public async Task RegisterAsync_WhenSixthRequestWithinOneMinute_IsRateLimited()
     {
-        await using RegistrationApiFactory factory = new();
-        using HttpClient client = factory.CreateClient();
+        // Arrange
+        await using var factory = new RegistrationApiFactory();
+        using var client = factory.CreateClient();
 
-        for (int requestNumber = 1; requestNumber <= 5; requestNumber++)
+        for (var requestNumber = 1; requestNumber <= 5; requestNumber++)
         {
-            using HttpResponseMessage accepted = await SendRegistration(client);
-            Assert.Equal(HttpStatusCode.Accepted, accepted.StatusCode);
+            using var accepted = await SendRegistrationAsync(client);
+            Assert.Equal(
+                HttpStatusCode.Accepted,
+                accepted.StatusCode);
         }
 
-        using HttpResponseMessage rejected = await SendRegistration(client);
+        // Act
+        using var rejected = await SendRegistrationAsync(client);
 
-        Assert.Equal(HttpStatusCode.TooManyRequests, rejected.StatusCode);
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.TooManyRequests,
+            rejected.StatusCode);
         Assert.True(rejected.Headers.RetryAfter?.Delta > TimeSpan.Zero);
-        using JsonDocument document = await rejected.Content.ReadFromJsonAsync<JsonDocument>(
+        using var document = await rejected.Content.ReadFromJsonAsync<JsonDocument>(
             TestContext.Current.CancellationToken)
             ?? throw new InvalidOperationException("The rate-limit response is empty.");
-        Assert.Equal("RATE_LIMIT_EXCEEDED", document.RootElement.GetProperty("code").GetString());
-        Assert.Equal(5, factory.RegistrationService.CallCount);
+        Assert.Equal(
+            ErrorCodes.RequestRateLimitExceeded,
+            document.RootElement.GetProperty("errorCode").GetString());
+        Assert.Equal(
+            5,
+            factory.RegistrationService.CallCount);
     }
 
     [Fact]
-    public async Task UnavailablePostgreSqlReturnsServiceUnavailableProblem()
+    public async Task RegisterAsync_WhenUnavailablePostgreSql_ReturnsServiceUnavailableProblem()
     {
-        await using UnavailablePostgreSqlApiFactory factory = new();
-        using HttpClient client = factory.CreateClient();
-        string csrfToken = await GetCsrfToken(client);
-        using HttpRequestMessage request = new(HttpMethod.Post, "/api/v1/auth/registrations")
+        // Arrange
+        await using var factory = new UnavailablePostgreSqlApiFactory();
+        using var client = factory.CreateClient();
+        var csrfToken = await GetCsrfTokenAsync(client);
+        using var request = new HttpRequestMessage(
+            HttpMethod.Post,
+            "/api/v1/auth/registrations")
         {
             Content = JsonContent.Create(ValidPayload())
         };
-        request.Headers.Add(WebSecurityOptions.AntiforgeryHeaderName, csrfToken);
+        request.Headers.Add(
+            WebSecurityOptions.AntiforgeryHeaderName,
+            csrfToken);
 
-        using HttpResponseMessage response = await client.SendAsync(
+        // Act
+        using var response = await client.SendAsync(
             request,
             TestContext.Current.CancellationToken);
 
-        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
-        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
-        using JsonDocument document = await response.Content.ReadFromJsonAsync<JsonDocument>(
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.ServiceUnavailable,
+            response.StatusCode);
+        Assert.Equal(
+            "application/json",
+            response.Content.Headers.ContentType?.MediaType);
+        using var document = await response.Content.ReadFromJsonAsync<JsonDocument>(
             TestContext.Current.CancellationToken)
             ?? throw new InvalidOperationException("The dependency problem response is empty.");
-        Assert.Equal("DEPENDENCY_UNAVAILABLE", document.RootElement.GetProperty("code").GetString());
+        Assert.Equal(
+            ErrorCodes.TechnicalDependencyUnavailable,
+            document.RootElement.GetProperty("errorCode").GetString());
         Assert.True(response.Headers.CacheControl?.NoStore);
     }
 
     [Fact]
-    public async Task OpenApiDocumentsRegistrationWithoutIdempotencyKey()
+    public async Task RegisterAsync_WhenOpenApi_DocumentsRegistrationWithoutIdempotencyKey()
     {
-        await using RegistrationApiFactory factory = new();
-        using HttpClient client = factory.CreateClient();
-        using JsonDocument document = await client.GetFromJsonAsync<JsonDocument>(
+        // Arrange
+        await using var factory = new RegistrationApiFactory();
+        using var client = factory.CreateClient();
+        // Act
+        using var document = await client.GetFromJsonAsync<JsonDocument>(
             "/openapi/v1.json",
             TestContext.Current.CancellationToken)
             ?? throw new InvalidOperationException("The OpenAPI response is empty.");
 
-        JsonElement operation = document.RootElement
+        var operation = document.RootElement
             .GetProperty("paths")
             .GetProperty("/api/v1/auth/registrations")
             .GetProperty("post");
 
+        // Assert
         Assert.DoesNotContain(
-            operation.TryGetProperty("parameters", out JsonElement parameters)
+            operation.TryGetProperty(
+                "parameters",
+                out var parameters)
                 ? parameters.EnumerateArray()
                 : [],
             parameter => string.Equals(
                 parameter.GetProperty("name").GetString(),
                 "Idempotency-Key",
                 StringComparison.OrdinalIgnoreCase));
-        JsonElement csrfParameter = Assert.Single(
+        var csrfParameter = Assert.Single(
             operation.GetProperty("parameters").EnumerateArray(),
             parameter => string.Equals(
                 parameter.GetProperty("name").GetString(),
                 WebSecurityOptions.AntiforgeryHeaderName,
                 StringComparison.Ordinal));
-        Assert.Equal("header", csrfParameter.GetProperty("in").GetString());
+        Assert.Equal(
+            "header",
+            csrfParameter.GetProperty("in").GetString());
         Assert.True(csrfParameter.GetProperty("required").GetBoolean());
     }
 
-    private static async Task<HttpResponseMessage> SendRegistration(HttpClient client)
+    private static async Task<HttpResponseMessage> SendRegistrationAsync(HttpClient client)
     {
-        string csrfToken = await GetCsrfToken(client);
-        HttpRequestMessage request = new(HttpMethod.Post, "/api/v1/auth/registrations")
+        var csrfToken = await GetCsrfTokenAsync(client);
+        var request = new HttpRequestMessage(
+            HttpMethod.Post,
+            "/api/v1/auth/registrations")
         {
             Content = JsonContent.Create(ValidPayload())
         };
-        request.Headers.Add(WebSecurityOptions.AntiforgeryHeaderName, csrfToken);
-        return await client.SendAsync(request, TestContext.Current.CancellationToken);
+        request.Headers.Add(
+            WebSecurityOptions.AntiforgeryHeaderName,
+            csrfToken);
+
+        return await client.SendAsync(
+            request,
+            TestContext.Current.CancellationToken);
     }
 
-    private static object ValidPayload() => new
+    private static object ValidPayload()
     {
-        email = " Lea@example.fr ",
-        password = " a secure password ",
-        displayName = " Léa "
-    };
 
-    private static async Task<string> GetCsrfToken(HttpClient client)
+        return new
+        {
+            email = " Lea@example.fr ",
+            password = " a secure password ",
+            displayName = " Léa "
+        };
+    }
+
+    private static async Task<string> GetCsrfTokenAsync(HttpClient client)
     {
-        using HttpResponseMessage response = await client.GetAsync(
+        using var response = await client.GetAsync(
             "/security/csrf-token",
             TestContext.Current.CancellationToken);
-        CsrfTokenResponse payload = await response.Content.ReadFromJsonAsync<CsrfTokenResponse>(
+        var payload = await response.Content.ReadFromJsonAsync<CsrfTokenResponse>(
             TestContext.Current.CancellationToken)
             ?? throw new InvalidOperationException("The CSRF token response is empty.");
+
         return payload.Token;
     }
 }
