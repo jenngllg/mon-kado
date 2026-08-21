@@ -2,59 +2,80 @@ using System.Net;
 
 namespace JennGllg.Fr.MonKado.Back.Api.FunctionalTests;
 
-public sealed class ApiBaselineTests : IClassFixture<UnavailablePostgreSqlApiFactory>
+public class ApiBaselineTests(UnavailablePostgreSqlApiFactory factory) : IClassFixture<UnavailablePostgreSqlApiFactory>
 {
-    private readonly UnavailablePostgreSqlApiFactory factory;
-
-    public ApiBaselineTests(UnavailablePostgreSqlApiFactory factory)
-    {
-        this.factory = factory;
-    }
+    private readonly UnavailablePostgreSqlApiFactory _factory = factory;
 
     [Fact]
-    public void ApplicationStartsWithoutExternalServices()
+    public void GetAsync_WhenApplicationStartsWithoutExternalServices_Completes()
     {
-        using HttpClient client = factory.CreateClient();
+        // Arrange
+        // Act
+        using var client = _factory.CreateClient();
 
+        // Assert
         Assert.NotNull(client);
-        Assert.NotNull(factory.Server);
+        Assert.NotNull(_factory.Server);
     }
 
     [Fact]
-    public async Task LivenessReturnsHealthyWhenPostgreSqlIsUnavailable()
+    public async Task GetAsync_WhenLiveness_ReturnsHealthyWhenPostgreSqlIsUnavailable()
     {
-        using HttpClient client = factory.CreateClient();
-        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        // Arrange
+        using var client = _factory.CreateClient();
+        var cancellationToken = TestContext.Current.CancellationToken;
 
-        HttpResponseMessage response = await client.GetAsync("/liveness", cancellationToken);
-        string content = await response.Content.ReadAsStringAsync(cancellationToken);
+        var response = await client.GetAsync(
+            "/liveness",
+            cancellationToken);
+        // Act
+        var content = await response.Content.ReadAsStringAsync(cancellationToken);
 
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.Equal("Healthy", content);
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.OK,
+            response.StatusCode);
+        Assert.Equal(
+            "Healthy",
+            content);
     }
 
     [Fact]
-    public async Task ReadinessReturnsServiceUnavailableWhenPostgreSqlIsUnavailable()
+    public async Task GetAsync_WhenReadiness_ReturnsServiceUnavailableWhenPostgreSqlIsUnavailable()
     {
-        using HttpClient client = factory.CreateClient();
-        CancellationToken cancellationToken = TestContext.Current.CancellationToken;
+        // Arrange
+        using var client = _factory.CreateClient();
+        var cancellationToken = TestContext.Current.CancellationToken;
 
-        HttpResponseMessage response = await client.GetAsync("/readiness", cancellationToken);
-        string content = await response.Content.ReadAsStringAsync(cancellationToken);
+        var response = await client.GetAsync(
+            "/readiness",
+            cancellationToken);
+        // Act
+        var content = await response.Content.ReadAsStringAsync(cancellationToken);
 
-        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
-        Assert.Equal("Unhealthy", content);
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.ServiceUnavailable,
+            response.StatusCode);
+        Assert.Equal(
+            "Unhealthy",
+            content);
     }
 
     [Fact]
-    public async Task UnknownRouteReturnsNotFound()
+    public async Task GetAsync_WhenUnknownRoute_ReturnsNotFound()
     {
-        using HttpClient client = factory.CreateClient();
+        // Arrange
+        using var client = _factory.CreateClient();
 
-        HttpResponseMessage response = await client.GetAsync(
+        // Act
+        var response = await client.GetAsync(
             "/not-found",
             TestContext.Current.CancellationToken);
 
-        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.NotFound,
+            response.StatusCode);
     }
 }

@@ -1,24 +1,29 @@
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql;
+using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Configurations;
+
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.UnitTests;
 
-public sealed class PostgreSqlConfigurationTests
+public class PostgreSqlConfigurationTests
 {
     [Theory]
     [InlineData(null)]
     [InlineData("")]
     [InlineData("   ")]
-    public void RegistrationFailsWhenConnectionStringIsMissingOrBlank(string? connectionString)
+    public void Configure_WhenRegistration_FailsWhenConnectionStringIsMissingOrBlank(string? connectionString)
     {
-        ConfigurationManager configuration = new();
+        // Arrange
+        var configuration = new ConfigurationManager();
         configuration["ConnectionStrings:PostgreSql"] = connectionString;
-        ServiceCollection services = new();
+        var services = new ServiceCollection();
 
-        InvalidOperationException exception = Assert.Throws<InvalidOperationException>(
-            () => services.AddPostgreSqlPersistence(configuration));
+        // Act
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => services.ConfigureInfrastructureInjection(configuration));
 
+        // Assert
         Assert.Equal(
             "Connection string 'PostgreSql' is required. Configure it with " +
             "'ConnectionStrings:PostgreSql'.",
