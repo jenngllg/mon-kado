@@ -1,142 +1,271 @@
+using JennGllg.Fr.MonKado.Back.Application.Abstractions;
+
+using JennGllg.Fr.MonKado.Back.Worker.Exceptions;
+using JennGllg.Fr.MonKado.Back.Worker.Options;
+using JennGllg.Fr.MonKado.Back.Worker.Services;
+
+using Microsoft.Extensions.Options;
+
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
-using JennGllg.Fr.MonKado.Back.Worker.Email;
-using Microsoft.Extensions.Options;
 
 namespace JennGllg.Fr.MonKado.Back.Worker.UnitTests;
 
-public sealed class GmailApiClientTests
+public class GmailApiClientTests
 {
-    private static readonly Uri MessagesEndpoint = new("https://gmail.test/messages/send");
+    private static readonly Uri _messagesEndpoint = new("https://gmail.test/messages/send");
 
     [Fact]
-    public async Task SuccessfulRequestPostsRawMessageAndReturnsProviderIdentifier()
+    public async Task SendAsync_WhenSuccessfulRequestPostsRawMessageAnd_ReturnsProviderIdentifier()
     {
-        HttpRequestMessage? capturedRequest = null;
-        string? capturedBody = null;
-        using HttpClient httpClient = CreateHttpClient(async (request, cancellationToken) =>
+        // Arrange
+        var capturedRequest = default(HttpRequestMessage);
+        var capturedBody = default(string);
+        using var httpClient = CreateHttpClient(async (
+            request,
+            cancellationToken) =>
         {
             capturedRequest = request;
             capturedBody = await request.Content!.ReadAsStringAsync(cancellationToken);
-            return JsonResponse(HttpStatusCode.OK, """{"id":"gmail-message-id"}""");
+
+            return JsonResponse(
+                HttpStatusCode.OK,
+                """{"id":"gmail-message-id"}""");
         });
-        using GmailApiClient client = new(httpClient, MessagesEndpoint, TimeProvider.System);
+        using var client = new GmailApiClient(
+            httpClient,
+            _messagesEndpoint,
+            TimeProvider.System);
 
-        string identifier = await client.SendAsync("raw-message", TestContext.Current.CancellationToken);
+        // Act
+        var identifier = await client.SendAsync(
+            "raw-message",
+            TestContext.Current.CancellationToken);
 
-        Assert.Equal("gmail-message-id", identifier);
-        Assert.Equal(HttpMethod.Post, capturedRequest!.Method);
-        Assert.Equal(MessagesEndpoint, capturedRequest.RequestUri);
-        using JsonDocument document = JsonDocument.Parse(capturedBody!);
-        Assert.Equal("raw-message", document.RootElement.GetProperty("raw").GetString());
+        // Assert
+        Assert.Equal(
+            "gmail-message-id",
+            identifier);
+        Assert.Equal(
+            HttpMethod.Post,
+            capturedRequest!.Method);
+        Assert.Equal(
+            _messagesEndpoint,
+            capturedRequest.RequestUri);
+        using var document = JsonDocument.Parse(capturedBody!);
+        Assert.Equal(
+            "raw-message",
+            document.RootElement.GetProperty("raw").GetString());
     }
 
     [Fact]
-    public async Task FailedRequestPreservesDeltaRetryAfter()
+    public async Task SendAsync_WhenFailedRequest_PreservesDeltaRetryAfter()
     {
-        using HttpClient httpClient = CreateHttpClient((_, _) =>
+        // Arrange
+        // Act
+        using var httpClient = CreateHttpClient((
+            _,
+            _) =>
         {
-            HttpResponseMessage response = JsonResponse(HttpStatusCode.TooManyRequests, "{}");
+            var response = JsonResponse(
+                HttpStatusCode.TooManyRequests,
+                "{}");
             response.Headers.RetryAfter = new RetryConditionHeaderValue(TimeSpan.FromMinutes(7));
+
             return Task.FromResult(response);
         });
-        using GmailApiClient client = new(httpClient, MessagesEndpoint, TimeProvider.System);
+        using var client = new GmailApiClient(
+            httpClient,
+            _messagesEndpoint,
+            TimeProvider.System);
 
-        GmailRequestException exception = await Assert.ThrowsAsync<GmailRequestException>(() =>
-            client.SendAsync("raw-message", TestContext.Current.CancellationToken));
+        // Assert
+        var exception = await Assert.ThrowsAsync<GmailRequestException>(() =>
+            client.SendAsync(
+                "raw-message",
+                TestContext.Current.CancellationToken));
 
-        Assert.Equal(HttpStatusCode.TooManyRequests, exception.StatusCode);
-        Assert.Equal(TimeSpan.FromMinutes(7), exception.RetryAfter);
+        Assert.Equal(
+            HttpStatusCode.TooManyRequests,
+            exception.StatusCode);
+        Assert.Equal(
+            TimeSpan.FromMinutes(7),
+            exception.RetryAfter);
     }
 
     [Fact]
-    public async Task FailedRequestCalculatesDateRetryAfterFromTimeProvider()
+    public async Task SendAsync_WhenFailedRequestHasNoRetryAfter_PreservesMissingRetryAfter()
     {
-        DateTimeOffset now = new(2026, 8, 13, 16, 0, 0, TimeSpan.Zero);
-        using HttpClient httpClient = CreateHttpClient((_, _) =>
+        // Arrange
+        using var httpClient = CreateHttpClient((
+            _,
+            _) =>
+            Task.FromResult(JsonResponse(
+                HttpStatusCode.BadRequest,
+                "{}")));
+        using var client = new GmailApiClient(
+            httpClient,
+            _messagesEndpoint,
+            TimeProvider.System);
+
+        // Act
+        var exception = await Assert.ThrowsAsync<GmailRequestException>(() =>
+            client.SendAsync(
+                "raw-message",
+                TestContext.Current.CancellationToken));
+
+        // Assert
+        Assert.Null(exception.RetryAfter);
+    }
+
+    [Fact]
+    public async Task SendAsync_WhenFailedRequestCalculatesDateRetryAfterFromTimeProvider_Completes()
+    {
+        // Arrange
+        // Act
+        var now = new DateTimeOffset(
+            2026,
+            8,
+            13,
+            16,
+            0,
+            0,
+            TimeSpan.Zero);
+        using var httpClient = CreateHttpClient((
+            _,
+            _) =>
         {
-            HttpResponseMessage response = JsonResponse(HttpStatusCode.ServiceUnavailable, "{}");
+            var response = JsonResponse(
+                HttpStatusCode.ServiceUnavailable,
+                "{}");
             response.Headers.RetryAfter = new RetryConditionHeaderValue(now.AddMinutes(9));
+
             return Task.FromResult(response);
         });
-        using GmailApiClient client = new(httpClient, MessagesEndpoint, new FixedTimeProvider(now));
+        using var client = new GmailApiClient(
+            httpClient,
+            _messagesEndpoint,
+            new FixedTimeProvider(now));
 
-        GmailRequestException exception = await Assert.ThrowsAsync<GmailRequestException>(() =>
-            client.SendAsync("raw-message", TestContext.Current.CancellationToken));
+        // Assert
+        var exception = await Assert.ThrowsAsync<GmailRequestException>(() =>
+            client.SendAsync(
+                "raw-message",
+                TestContext.Current.CancellationToken));
 
-        Assert.Equal(TimeSpan.FromMinutes(9), exception.RetryAfter);
+        Assert.Equal(
+            TimeSpan.FromMinutes(9),
+            exception.RetryAfter);
     }
 
     [Fact]
-    public async Task PastRetryDateIsReportedAsZero()
+    public async Task SendAsync_WhenPastRetryDate_IsReportedAsZero()
     {
-        DateTimeOffset now = new(2026, 8, 13, 16, 0, 0, TimeSpan.Zero);
-        using HttpClient httpClient = CreateHttpClient((_, _) =>
+        // Arrange
+        // Act
+        var now = new DateTimeOffset(
+            2026,
+            8,
+            13,
+            16,
+            0,
+            0,
+            TimeSpan.Zero);
+        using var httpClient = CreateHttpClient((
+            _,
+            _) =>
         {
-            HttpResponseMessage response = JsonResponse(HttpStatusCode.ServiceUnavailable, "{}");
+            var response = JsonResponse(
+                HttpStatusCode.ServiceUnavailable,
+                "{}");
             response.Headers.RetryAfter = new RetryConditionHeaderValue(now.AddMinutes(-1));
+
             return Task.FromResult(response);
         });
-        using GmailApiClient client = new(httpClient, MessagesEndpoint, new FixedTimeProvider(now));
+        using var client = new GmailApiClient(
+            httpClient,
+            _messagesEndpoint,
+            new FixedTimeProvider(now));
 
-        GmailRequestException exception = await Assert.ThrowsAsync<GmailRequestException>(() =>
-            client.SendAsync("raw-message", TestContext.Current.CancellationToken));
+        // Assert
+        var exception = await Assert.ThrowsAsync<GmailRequestException>(() =>
+            client.SendAsync(
+                "raw-message",
+                TestContext.Current.CancellationToken));
 
-        Assert.Equal(TimeSpan.Zero, exception.RetryAfter);
+        Assert.Equal(
+            TimeSpan.Zero,
+            exception.RetryAfter);
     }
 
     [Theory]
     [InlineData("{}")]
     [InlineData("""{"id":""}""")]
-    public async Task SuccessfulResponseRequiresProviderIdentifier(string responseBody)
+    public async Task SendAsync_WhenSuccessfulResponse_RequiresProviderIdentifier(string responseBody)
     {
-        using HttpClient httpClient = CreateHttpClient((_, _) =>
-            Task.FromResult(JsonResponse(HttpStatusCode.OK, responseBody)));
-        using GmailApiClient client = new(httpClient, MessagesEndpoint, TimeProvider.System);
+        // Arrange
+        // Act
+        using var httpClient = CreateHttpClient((
+            _,
+            _) =>
+            Task.FromResult(JsonResponse(
+                HttpStatusCode.OK,
+                responseBody)));
+        using var client = new GmailApiClient(
+            httpClient,
+            _messagesEndpoint,
+            TimeProvider.System);
 
-        GmailRequestException exception = await Assert.ThrowsAsync<GmailRequestException>(() =>
-            client.SendAsync("raw-message", TestContext.Current.CancellationToken));
+        // Assert
+        var exception = await Assert.ThrowsAsync<GmailRequestException>(() =>
+            client.SendAsync(
+                "raw-message",
+                TestContext.Current.CancellationToken));
 
         Assert.Null(exception.StatusCode);
         Assert.Null(exception.RetryAfter);
     }
 
     [Fact]
-    public void ProductionConstructorCreatesOfficialGmailClient()
+    public void SendAsync_WhenProductionConstructor_CreatesOfficialGmailClient()
     {
-        using GmailApiClient client = new(Options.Create(new GmailOptions
-        {
-            ClientId = "client-id",
-            ClientSecret = "client-secret",
-            RefreshToken = "refresh-token"
-        }));
+        // Arrange
+        // Act
+        using var client = new GmailApiClient(
+            Microsoft.Extensions.Options.Options.Create(new GmailOptions
+            {
+                ClientId = "client-id",
+                ClientSecret = "client-secret",
+                RefreshToken = "refresh-token"
+            }));
 
-        Assert.IsType<IGmailApiClient>(client, exactMatch: false);
+        // Assert
+        Assert.IsType<IGmailApiClient>(
+            client,
+            exactMatch: false);
     }
 
     private static HttpClient CreateHttpClient(
-        Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> handler) =>
-        new(new StubHttpMessageHandler(handler));
-
-    private static HttpResponseMessage JsonResponse(HttpStatusCode statusCode, string json) =>
-        new(statusCode)
-        {
-            Content = new StringContent(json, Encoding.UTF8, "application/json")
-        };
-
-    private sealed class StubHttpMessageHandler(
         Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> handler)
-        : HttpMessageHandler
     {
-        protected override Task<HttpResponseMessage> SendAsync(
-            HttpRequestMessage request,
-            CancellationToken cancellationToken) => handler(request, cancellationToken);
+
+        return new(new StubHttpMessageHandler(handler));
     }
 
-    private sealed class FixedTimeProvider(DateTimeOffset currentTime) : TimeProvider
+    private static HttpResponseMessage JsonResponse(
+        HttpStatusCode statusCode,
+        string json)
     {
-        public override DateTimeOffset GetUtcNow() => currentTime;
+
+        return new(statusCode)
+        {
+            Content = new StringContent(
+                json,
+                Encoding.UTF8,
+                "application/json")
+        };
     }
+
 }

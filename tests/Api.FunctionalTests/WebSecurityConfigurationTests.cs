@@ -1,6 +1,6 @@
 namespace JennGllg.Fr.MonKado.Back.Api.FunctionalTests;
 
-public sealed class WebSecurityConfigurationTests
+public class WebSecurityConfigurationTests
 {
     [Theory]
     [InlineData("")]
@@ -9,13 +9,19 @@ public sealed class WebSecurityConfigurationTests
     [InlineData("https://app.example.test?query=value")]
     [InlineData("https://app.example.test/")]
     [InlineData("http://app.example.test")]
-    public void StartupRejectsInvalidLocalOrigins(string origin)
+    public void Configure_WhenStartup_RejectsInvalidLocalOrigins(string origin)
     {
-        using SecurityApiFactory factory = new(allowedOrigin: origin);
+        // Arrange
+        using var factory = new SecurityApiFactory(allowedOrigin: origin);
 
-        Exception exception = Assert.ThrowsAny<Exception>(() => factory.CreateClient());
+        // Act
+        var exception = Assert.ThrowsAny<Exception>(factory.CreateClient);
 
-        Assert.Contains("origin", exception.ToString(), StringComparison.OrdinalIgnoreCase);
+        // Assert
+        Assert.Contains(
+            "origin",
+            exception.ToString(),
+            StringComparison.OrdinalIgnoreCase);
     }
 
     [Theory]
@@ -25,69 +31,99 @@ public sealed class WebSecurityConfigurationTests
     [InlineData("[::]")]
     [InlineData("https://api.example.test")]
     [InlineData("api.example.test:443")]
-    public void StartupRejectsInvalidAllowedHosts(string allowedHosts)
+    public void Configure_WhenStartup_RejectsInvalidAllowedHosts(string allowedHosts)
     {
-        using SecurityApiFactory factory = new(allowedHosts: allowedHosts);
+        // Arrange
+        using var factory = new SecurityApiFactory(allowedHosts: allowedHosts);
 
-        Exception exception = Assert.ThrowsAny<Exception>(() => factory.CreateClient());
+        // Act
+        var exception = Assert.ThrowsAny<Exception>(factory.CreateClient);
 
-        Assert.Contains("host", exception.ToString(), StringComparison.OrdinalIgnoreCase);
+        // Assert
+        Assert.Contains(
+            "host",
+            exception.ToString(),
+            StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
-    public void ProductionRejectsHttpOrigins()
+    public void Configure_WhenProduction_RejectsHttpOrigins()
     {
-        using TemporaryKeyDirectory keys = new();
-        using SecurityApiFactory factory = new(
+        // Arrange
+        using var keys = new TemporaryKeyDirectory();
+        using var factory = new SecurityApiFactory(
             environment: "Production",
             allowedOrigin: "http://localhost:5173",
             allowedHosts: "api.example.test",
             dataProtectionKeysPath: keys.Path);
 
-        Exception exception = Assert.ThrowsAny<Exception>(() => factory.CreateClient());
+        // Act
+        var exception = Assert.ThrowsAny<Exception>(factory.CreateClient);
 
-        Assert.Contains("HTTPS", exception.ToString(), StringComparison.OrdinalIgnoreCase);
+        // Assert
+        Assert.Contains(
+            "HTTPS",
+            exception.ToString(),
+            StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
-    public void ProductionRequiresDataProtectionKeyPath()
+    public void Configure_WhenProduction_RequiresDataProtectionKeyPath()
     {
-        using SecurityApiFactory factory = new(
+        // Arrange
+        using var factory = new SecurityApiFactory(
             environment: "Production",
             allowedOrigin: "https://app.example.test",
             allowedHosts: "api.example.test");
 
-        Exception exception = Assert.ThrowsAny<Exception>(() => factory.CreateClient());
+        // Act
+        var exception = Assert.ThrowsAny<Exception>(factory.CreateClient);
 
-        Assert.Contains("DataProtection:KeysPath", exception.ToString(), StringComparison.Ordinal);
+        // Assert
+        Assert.Contains(
+            "DataProtection:KeysPath",
+            exception.ToString(),
+            StringComparison.Ordinal);
     }
 
     [Fact]
-    public void ProductionRequiresTrustedProxyNetwork()
+    public void Configure_WhenProduction_RequiresTrustedProxyNetwork()
     {
-        using TemporaryKeyDirectory keys = new();
-        using SecurityApiFactory factory = new(
+        // Arrange
+        using var keys = new TemporaryKeyDirectory();
+        using var factory = new SecurityApiFactory(
             environment: "Production",
             allowedOrigin: "https://app.example.test",
             allowedHosts: "api.example.test",
             dataProtectionKeysPath: keys.Path,
             knownProxyNetwork: null);
 
-        Exception exception = Assert.ThrowsAny<Exception>(() => factory.CreateClient());
+        // Act
+        var exception = Assert.ThrowsAny<Exception>(factory.CreateClient);
 
-        Assert.Contains("ReverseProxy:KnownNetworks", exception.ToString(), StringComparison.Ordinal);
+        // Assert
+        Assert.Contains(
+            "ReverseProxy:KnownNetworks",
+            exception.ToString(),
+            StringComparison.Ordinal);
     }
 
     [Theory]
     [InlineData("invalid")]
     [InlineData("0.0.0.0/0")]
     [InlineData("::/0")]
-    public void StartupRejectsUnrestrictedOrInvalidProxyNetworks(string knownProxyNetwork)
+    public void Configure_WhenStartup_RejectsUnrestrictedOrInvalidProxyNetworks(string knownProxyNetwork)
     {
-        using SecurityApiFactory factory = new(knownProxyNetwork: knownProxyNetwork);
+        // Arrange
+        using var factory = new SecurityApiFactory(knownProxyNetwork: knownProxyNetwork);
 
-        Exception exception = Assert.ThrowsAny<Exception>(() => factory.CreateClient());
+        // Act
+        var exception = Assert.ThrowsAny<Exception>(factory.CreateClient);
 
-        Assert.Contains("CIDR", exception.ToString(), StringComparison.OrdinalIgnoreCase);
+        // Assert
+        Assert.Contains(
+            "CIDR",
+            exception.ToString(),
+            StringComparison.OrdinalIgnoreCase);
     }
 }

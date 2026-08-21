@@ -1,0 +1,128 @@
+using JennGllg.Fr.MonKado.Back.Application.Abstractions;
+using JennGllg.Fr.MonKado.Back.Application.Commands;
+using JennGllg.Fr.MonKado.Back.Application.Handlers;
+using JennGllg.Fr.MonKado.Back.Application.Models;
+using JennGllg.Fr.MonKado.Back.Application.Validators;
+using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Abstractions;
+using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Configurations;
+using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Contexts;
+using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Entities;
+using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Interceptors;
+using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Models;
+using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Options;
+using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Repositories;
+using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Services;
+
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Migrations;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+
+namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Configurations;
+/// <summary>
+/// Represents infrastructure injection configuration.
+/// </summary>
+
+public static class InfrastructureInjectionConfiguration
+{
+    private const string ConnectionStringName = "PostgreSql";
+    /// <summary>
+    /// Executes the configure infrastructure injection operation.
+    /// </summary>
+    /// <param name="services">The services.</param>
+    /// <param name="configuration">The configuration.</param>
+    /// <returns>The operation result.</returns>
+
+    public static IServiceCollection ConfigureInfrastructureInjection(
+        this IServiceCollection services,
+        IConfiguration configuration)
+    {
+        var connectionString = configuration.GetConnectionString(ConnectionStringName);
+
+        if (string.IsNullOrWhiteSpace(connectionString))
+        {
+
+            throw new InvalidOperationException(
+                $"Connection string '{ConnectionStringName}' is required. " +
+                $"Configure it with 'ConnectionStrings:{ConnectionStringName}'.");
+        }
+
+        services.TryAddSingleton(TimeProvider.System);
+        services.AddSingleton<AuditableEntityInterceptor>();
+        services.AddDbContextPool<MonKadoDbContext>((
+            provider,
+            options) =>
+            options
+                .UseNpgsql(
+                    connectionString,
+                    npgsqlOptions =>
+                {
+                    npgsqlOptions.MigrationsAssembly(typeof(MonKadoDbContext).Assembly.FullName);
+                    npgsqlOptions.MigrationsHistoryTable(
+                        HistoryRepository.DefaultTableName,
+                        "public");
+                    npgsqlOptions.EnableRetryOnFailure(
+                        maxRetryCount: 1,
+                        maxRetryDelay: TimeSpan.FromMilliseconds(500),
+                        errorCodesToAdd: null);
+                })
+                .UseSnakeCaseNamingConvention()
+                .AddInterceptors(provider.GetRequiredService<AuditableEntityInterceptor>()));
+
+        services
+            .AddIdentityCore<MonKadoUser>(options =>
+            {
+                options.User.RequireUniqueEmail = true;
+                options.SignIn.RequireConfirmedEmail = true;
+                options.Password.RequiredLength = 12;
+                options.Password.RequireDigit = false;
+                options.Password.RequireLowercase = false;
+                options.Password.RequireUppercase = false;
+                options.Password.RequireNonAlphanumeric = false;
+                options.Password.RequiredUniqueChars = 1;
+                options.Lockout.AllowedForNewUsers = true;
+                options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
+                options.Lockout.MaxFailedAccessAttempts = 5;
+            })
+            .AddRoles<IdentityRole<Guid>>()
+            .AddEntityFrameworkStores<MonKadoDbContext>()
+            .AddPasswordValidator<MaximumPasswordLengthValidator<MonKadoUser>>()
+            .AddSignInManager();
+        services.Configure<PasswordHasherOptions>(options => options.IterationCount = 220_000);
+
+        services.AddScoped<IUnitOfWork>(provider =>
+            provider.GetRequiredService<MonKadoDbContext>());
+        services.AddScoped<IMonKadoUserRepository, MonKadoUserRepository>();
+        services.AddScoped<IAuthenticationEmailOutboxRepository, AuthenticationEmailOutboxRepository>();
+        services.AddScoped<IAuthenticationSessionRepository, AuthenticationSessionRepository>();
+        services.AddScoped<IAccountRegistrationService, AccountRegistrationService>();
+        services.AddScoped<IEmailConfirmationService, EmailConfirmationService>();
+        services.AddScoped<IExpiredAccountCleanup, ExpiredAccountCleanup>();
+        services.AddScoped<IAccountSessionService, AccountSessionService>();
+        services.AddScoped<IExpiredAuthenticationSessionCleanup, ExpiredAuthenticationSessionCleanup>();
+        services.AddSingleton<ITicketStore, PostgreSqlAuthenticationTicketStore>();
+        services.AddScoped<ResettableAuthenticationHandlerProvider>();
+        services.Replace(ServiceDescriptor.Scoped<IAuthenticationHandlerProvider>(provider =>
+            provider.GetRequiredService<ResettableAuthenticationHandlerProvider>()));
+        services.AddScoped<IAuthenticationHandlerResetter>(provider =>
+            provider.GetRequiredService<ResettableAuthenticationHandlerProvider>());
+
+        return services;
+    }
+    /// <summary>
+    /// Executes the configure authentication email delivery operation.
+    /// </summary>
+    /// <param name="services">The services.</param>
+    /// <returns>The operation result.</returns>
+
+    public static IServiceCollection ConfigureAuthenticationEmailDelivery(this IServiceCollection services)
+    {
+        services.AddScoped<IAuthenticationEmailDispatcher, AuthenticationEmailDispatcher>();
+
+        return services;
+    }
+}
