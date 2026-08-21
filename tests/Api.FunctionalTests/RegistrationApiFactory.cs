@@ -1,5 +1,9 @@
-using System.Collections.Concurrent;
-using JennGllg.Fr.MonKado.Back.Application.Accounts;
+using JennGllg.Fr.MonKado.Back.Application.Abstractions;
+using JennGllg.Fr.MonKado.Back.Application.Commands;
+using JennGllg.Fr.MonKado.Back.Application.Handlers;
+using JennGllg.Fr.MonKado.Back.Application.Models;
+using JennGllg.Fr.MonKado.Back.Application.Validators;
+
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
@@ -8,7 +12,7 @@ using Microsoft.Extensions.Logging;
 
 namespace JennGllg.Fr.MonKado.Back.Api.FunctionalTests;
 
-public sealed class RegistrationApiFactory : WebApplicationFactory<Program>
+public class RegistrationApiFactory : WebApplicationFactory<Program>
 {
     private const string UnavailableConnectionString =
         "Host=127.0.0.1;Port=1;Database=mon_kado;Username=mon_kado;Password=functional-tests-only;" +
@@ -20,15 +24,21 @@ public sealed class RegistrationApiFactory : WebApplicationFactory<Program>
 
     public RecordingAccountSessionService SessionService { get; } = new();
 
-    public IReadOnlyCollection<string> LogMessages => logProvider.Messages;
+    public IReadOnlyCollection<string> LogMessages => _logProvider.Messages;
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Local");
-        builder.UseSetting("ConnectionStrings:PostgreSql", UnavailableConnectionString);
-        builder.UseSetting("AllowedHosts", "localhost");
-        builder.UseSetting("WebSecurity:AllowedOrigins:0", "http://localhost:5173");
-        builder.ConfigureLogging(logging => logging.AddProvider(logProvider));
+        builder.UseSetting(
+            "ConnectionStrings:PostgreSql",
+            UnavailableConnectionString);
+        builder.UseSetting(
+            "AllowedHosts",
+            "localhost");
+        builder.UseSetting(
+            "WebSecurity:AllowedOrigins:0",
+            "http://localhost:5173");
+        builder.ConfigureLogging(logging => logging.AddProvider(_logProvider));
         builder.ConfigureServices(services =>
         {
             services.RemoveAll<IAccountRegistrationService>();
@@ -40,185 +50,5 @@ public sealed class RegistrationApiFactory : WebApplicationFactory<Program>
         });
     }
 
-    private readonly CapturingLoggerProvider logProvider = new();
+    private readonly CapturingLoggerProvider _logProvider = new();
 }
-
-internal sealed class CapturingLoggerProvider : ILoggerProvider
-{
-    private readonly ConcurrentQueue<string> messages = new();
-
-    public IReadOnlyCollection<string> Messages => messages.ToArray();
-
-    public ILogger CreateLogger(string categoryName)
-    {
-        return new CapturingLogger(messages);
-    }
-
-    public void Dispose()
-    {
-    }
-
-    private sealed class CapturingLogger(ConcurrentQueue<string> messages) : ILogger
-    {
-        public IDisposable? BeginScope<TState>(TState state)
-            where TState : notnull
-        {
-            return null;
-        }
-
-        public bool IsEnabled(LogLevel logLevel)
-        {
-            return true;
-        }
-
-        public void Log<TState>(
-            LogLevel logLevel,
-            EventId eventId,
-            TState state,
-            Exception? exception,
-            Func<TState, Exception?, string> formatter)
-        {
-            ArgumentNullException.ThrowIfNull(formatter);
-            messages.Enqueue(formatter(state, exception));
-        }
-    }
-}
-
-public sealed class RecordingAccountRegistrationService : IAccountRegistrationService
-{
-    private readonly object sync = new();
-    private int callCount;
-
-    public int CallCount => Volatile.Read(ref callCount);
-
-    public IReadOnlyList<RegistrationCall> Calls
-    {
-        get
-        {
-            lock (sync)
-            {
-                return calls.ToArray();
-            }
-        }
-    }
-
-    private readonly List<RegistrationCall> calls = [];
-
-    public Task RegisterAsync(
-        string email,
-        string password,
-        string displayName,
-        CancellationToken cancellationToken)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-        lock (sync)
-        {
-            calls.Add(new RegistrationCall(email, password, displayName));
-        }
-
-        Interlocked.Increment(ref callCount);
-        return Task.CompletedTask;
-    }
-}
-
-public sealed record RegistrationCall(string Email, string Password, string DisplayName);
-
-public sealed class RecordingEmailConfirmationService : IEmailConfirmationService
-{
-    private readonly object sync = new();
-    private int confirmCallCount;
-    private int requestCallCount;
-
-    public bool ConfirmationResult { get; set; } = true;
-
-    public int ConfirmCallCount => Volatile.Read(ref confirmCallCount);
-
-    public int RequestCallCount => Volatile.Read(ref requestCallCount);
-
-    public IReadOnlyList<EmailConfirmationCall> ConfirmationCalls
-    {
-        get
-        {
-            lock (sync)
-            {
-                return confirmationCalls.ToArray();
-            }
-        }
-    }
-
-    public IReadOnlyList<string> RequestedEmails
-    {
-        get
-        {
-            lock (sync)
-            {
-                return requestedEmails.ToArray();
-            }
-        }
-    }
-
-    private readonly List<EmailConfirmationCall> confirmationCalls = [];
-    private readonly List<string> requestedEmails = [];
-
-    public Task<bool> ConfirmAsync(string userId, string token, CancellationToken cancellationToken)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-        lock (sync)
-        {
-            confirmationCalls.Add(new EmailConfirmationCall(userId, token));
-        }
-
-        Interlocked.Increment(ref confirmCallCount);
-        return Task.FromResult(ConfirmationResult);
-    }
-
-    public Task RequestAsync(string email, CancellationToken cancellationToken)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-        lock (sync)
-        {
-            requestedEmails.Add(email);
-        }
-
-        Interlocked.Increment(ref requestCallCount);
-        return Task.CompletedTask;
-    }
-}
-
-public sealed record EmailConfirmationCall(string UserId, string Token);
-
-public sealed class RecordingAccountSessionService : IAccountSessionService
-{
-    private readonly object sync = new();
-    private readonly List<LoginCall> calls = [];
-
-    public AccountLoginResult Result { get; set; } = AccountLoginResult.Success;
-
-    public IReadOnlyList<LoginCall> Calls
-    {
-        get
-        {
-            lock (sync)
-            {
-                return calls.ToArray();
-            }
-        }
-    }
-
-    public Task<AccountLoginResult> LoginAsync(
-        string email,
-        string password,
-        bool rememberMe,
-        CancellationToken cancellationToken)
-    {
-        cancellationToken.ThrowIfCancellationRequested();
-        lock (sync)
-        {
-            calls.Add(new LoginCall(email, password, rememberMe));
-        }
-
-        return Task.FromResult(Result);
-    }
-}
-
-public sealed record LoginCall(string Email, string Password, bool RememberMe);

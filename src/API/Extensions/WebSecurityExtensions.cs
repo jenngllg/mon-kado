@@ -1,21 +1,30 @@
-using JennGllg.Fr.MonKado.Back.Api.Security;
+using JennGllg.Fr.MonKado.Back.Api.Contracts.Responses;
+using JennGllg.Fr.MonKado.Back.Api.Options;
+
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.CookiePolicy;
+using Microsoft.AspNetCore.Cors.Infrastructure;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ViewFeatures;
 using Microsoft.Extensions.Options;
 using Microsoft.Net.Http.Headers;
 
 namespace JennGllg.Fr.MonKado.Back.Api.Extensions;
+/// <summary>
+/// Represents web security extensions.
+/// </summary>
 
 public static class WebSecurityExtensions
 {
+    /// <summary>
+    /// Identifies frontend cors policy.
+    /// </summary>
     public const string FrontendCorsPolicy = "Frontend";
 
     private const string LocalAntiforgeryCookieName = "MonKado.Antiforgery";
     private const string ProductionAntiforgeryCookieName = "__Host-MonKado.Antiforgery";
 
-    private static readonly string[] AllowedMethods =
+    private static readonly string[] _allowedMethods =
     [
         HttpMethods.Get,
         HttpMethods.Post,
@@ -24,6 +33,13 @@ public static class WebSecurityExtensions
         HttpMethods.Delete,
         HttpMethods.Options
     ];
+    /// <summary>
+    /// Executes the add web security operation.
+    /// </summary>
+    /// <param name="services">The services.</param>
+    /// <param name="configuration">The configuration.</param>
+    /// <param name="environment">The environment.</param>
+    /// <returns>The operation result.</returns>
 
     public static IServiceCollection AddWebSecurity(
         this IServiceCollection services,
@@ -34,19 +50,17 @@ public static class WebSecurityExtensions
         ArgumentNullException.ThrowIfNull(configuration);
         ArgumentNullException.ThrowIfNull(environment);
 
-        IConfigurationSection section = configuration.GetSection(WebSecurityOptions.SectionName);
-        WebSecurityOptions options = section.Get<WebSecurityOptions>() ?? new WebSecurityOptions();
-        ValidateConfiguration(options, configuration["AllowedHosts"], environment);
+        var section = configuration.GetSection(WebSecurityOptions.SectionName);
+        var options = section.Get<WebSecurityOptions>() ?? new WebSecurityOptions();
+        ValidateConfiguration(
+            options,
+            configuration["AllowedHosts"],
+            environment);
 
         services.Configure<WebSecurityOptions>(section);
-        services.AddCors(cors => cors.AddPolicy(
-            FrontendCorsPolicy,
-            policy => policy
-                .WithOrigins(options.AllowedOrigins)
-                .WithMethods(AllowedMethods)
-                .WithHeaders(HeaderNames.ContentType, WebSecurityOptions.AntiforgeryHeaderName)
-                .AllowCredentials()
-                .SetPreflightMaxAge(TimeSpan.FromMinutes(10))));
+        services.AddCors(cors => ConfigureCors(
+            cors,
+            options));
 
         services.Configure<CookiePolicyOptions>(cookiePolicy =>
         {
@@ -77,16 +91,23 @@ public static class WebSecurityExtensions
 
         return services;
     }
+    /// <summary>
+    /// Executes the use web security operation.
+    /// </summary>
+    /// <param name="app">The app.</param>
+    /// <returns>The operation result.</returns>
 
     public static WebApplication UseWebSecurity(this WebApplication app)
     {
         ArgumentNullException.ThrowIfNull(app);
 
-        app.Use(async (context, next) =>
+        app.Use(async (
+            context,
+            next) =>
         {
             context.Response.OnStarting(() =>
             {
-                IHeaderDictionary headers = context.Response.Headers;
+                var headers = context.Response.Headers;
                 headers[HeaderNames.ContentSecurityPolicy] =
                     "default-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
                 headers[HeaderNames.XFrameOptions] = "DENY";
@@ -95,10 +116,10 @@ public static class WebSecurityExtensions
                 headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()";
                 headers["Cross-Origin-Resource-Policy"] = "same-site";
 
-                if (app.Environment.IsProduction() && context.Request.IsHttps)
-                {
+                if (ShouldAddStrictTransportSecurity(
+                    app.Environment.IsProduction(),
+                    context.Request.IsHttps))
                     headers[HeaderNames.StrictTransportSecurity] = "max-age=31536000";
-                }
 
                 return Task.CompletedTask;
             });
@@ -111,55 +132,102 @@ public static class WebSecurityExtensions
 
         return app;
     }
+    /// <summary>
+    /// Executes the map web security operation.
+    /// </summary>
+    /// <param name="endpoints">The endpoints.</param>
+    /// <returns>The operation result.</returns>
 
     public static IEndpointRouteBuilder MapWebSecurity(this IEndpointRouteBuilder endpoints)
     {
         ArgumentNullException.ThrowIfNull(endpoints);
 
         endpoints.MapGet(
-                "/security/csrf-token",
-                (HttpContext context, IAntiforgery antiforgery) =>
+            "/security/csrf-token",
+            (
+                HttpContext context,
+                IAntiforgery antiforgery) =>
                 {
-                    AntiforgeryTokenSet tokens = antiforgery.GetAndStoreTokens(context);
+                    var tokens = antiforgery.GetAndStoreTokens(context);
                     context.Response.Headers.CacheControl = "no-store";
 
-                    return TypedResults.Ok(new CsrfTokenResponse(
-                        tokens.RequestToken ?? throw new InvalidOperationException(
-                            "ASP.NET Core did not generate an antiforgery request token.")));
+                    return TypedResults.Ok(CreateCsrfTokenResponse(tokens.RequestToken));
                 })
             .WithName("GetCsrfToken");
 
         return endpoints;
     }
 
-    private static void ValidateConfiguration(
+    internal static bool ShouldAddStrictTransportSecurity(
+        bool isProduction,
+        bool isHttps)
+    {
+
+        return isProduction && isHttps;
+    }
+
+    internal static void ConfigureCors(
+        CorsOptions cors,
+        WebSecurityOptions options)
+    {
+        cors.AddPolicy(
+            FrontendCorsPolicy,
+            policy => policy
+                .WithOrigins(options.AllowedOrigins)
+                .WithMethods(_allowedMethods)
+                .WithHeaders(
+                    HeaderNames.ContentType,
+                    WebSecurityOptions.AntiforgeryHeaderName)
+                .AllowCredentials()
+                .SetPreflightMaxAge(TimeSpan.FromMinutes(10)));
+    }
+
+    internal static CsrfTokenResponse CreateCsrfTokenResponse(string? requestToken)
+    {
+
+        return new CsrfTokenResponse(
+            requestToken ?? throw new InvalidOperationException(
+                "ASP.NET Core did not generate an antiforgery request token."));
+    }
+
+    internal static void ValidateConfiguration(
         WebSecurityOptions options,
         string? allowedHosts,
         IWebHostEnvironment environment)
     {
+
         if (options.AllowedOrigins.Length == 0)
         {
+
             throw new InvalidOperationException(
                 "At least one exact frontend origin is required in 'WebSecurity:AllowedOrigins'.");
         }
 
-        foreach (string origin in options.AllowedOrigins)
+        foreach (var origin in options.AllowedOrigins)
         {
-            ValidateOrigin(origin, environment);
+            ValidateOrigin(
+                origin,
+                environment);
         }
 
         ValidateAllowedHosts(allowedHosts);
 
     }
 
-    private static void ValidateOrigin(string origin, IWebHostEnvironment environment)
+    internal static void ValidateOrigin(
+        string origin,
+        IWebHostEnvironment environment)
     {
-        if (string.IsNullOrWhiteSpace(origin) || origin.Contains('*', StringComparison.Ordinal))
-        {
-            throw new InvalidOperationException("Frontend origins must be explicit and cannot contain wildcards.");
-        }
 
-        if (!Uri.TryCreate(origin, UriKind.Absolute, out Uri? uri) ||
+        if (string.IsNullOrWhiteSpace(origin) || origin.Contains(
+            '*',
+            StringComparison.Ordinal))
+            throw new InvalidOperationException("Frontend origins must be explicit and cannot contain wildcards.");
+
+        if (!Uri.TryCreate(
+            origin,
+            UriKind.Absolute,
+            out var uri) ||
             (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps) ||
             !string.IsNullOrEmpty(uri.UserInfo) ||
             uri.AbsolutePath != "/" ||
@@ -167,41 +235,50 @@ public static class WebSecurityExtensions
             !string.IsNullOrEmpty(uri.Fragment) ||
             origin.EndsWith('/'))
         {
+
             throw new InvalidOperationException(
                 $"Frontend origin '{origin}' must contain only an HTTP or HTTPS scheme, host, and optional port.");
         }
 
         if (environment.IsProduction() && uri.Scheme != Uri.UriSchemeHttps)
-        {
             throw new InvalidOperationException("Frontend origins must use HTTPS in Production.");
-        }
 
         if (!environment.IsProduction() && uri.Scheme == Uri.UriSchemeHttp && !uri.IsLoopback)
-        {
             throw new InvalidOperationException("Plain HTTP frontend origins are allowed only for localhost.");
-        }
     }
 
-    private static void ValidateAllowedHosts(string? allowedHosts)
+    internal static void ValidateAllowedHosts(string? allowedHosts)
     {
-        string[] hosts = allowedHosts?
-            .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+        var hosts = allowedHosts?
+            .Split(
+                ';',
+                StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             ?? [];
 
         if (hosts.Length == 0)
-        {
             throw new InvalidOperationException("At least one explicit API host is required in 'AllowedHosts'.");
-        }
 
-        foreach (string host in hosts)
+        foreach (var host in hosts)
         {
-            if (host.Contains('*', StringComparison.Ordinal) ||
-                host.Equals("0.0.0.0", StringComparison.Ordinal) ||
-                host.Equals("[::]", StringComparison.Ordinal) ||
-                host.Contains("://", StringComparison.Ordinal) ||
-                host.Contains('/', StringComparison.Ordinal) ||
+
+            if (host.Contains(
+                '*',
+                StringComparison.Ordinal) ||
+                host.Equals(
+                    "0.0.0.0",
+                    StringComparison.Ordinal) ||
+                host.Equals(
+                    "[::]",
+                    StringComparison.Ordinal) ||
+                host.Contains(
+                    "://",
+                    StringComparison.Ordinal) ||
+                host.Contains(
+                    '/',
+                    StringComparison.Ordinal) ||
                 Uri.CheckHostName(host) == UriHostNameType.Unknown)
             {
+
                 throw new InvalidOperationException(
                     $"Allowed API host '{host}' must be an explicit host name without scheme, path, port, or wildcard.");
             }

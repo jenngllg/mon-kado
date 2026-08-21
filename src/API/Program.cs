@@ -1,28 +1,25 @@
+using JennGllg.Fr.MonKado.Back.Api.Configurations;
 using JennGllg.Fr.MonKado.Back.Api.Extensions;
-using JennGllg.Fr.MonKado.Back.Application;
-using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql;
-using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Identity;
+using JennGllg.Fr.MonKado.Back.Application.Configurations;
+using JennGllg.Fr.MonKado.Back.Domain.Configurations;
+using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Configurations;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.WebHost.ConfigureKestrel(options => options.AddServerHeader = false);
 
-builder.Services.AddApplication();
-builder.Services.AddIdentityAuthentication(builder.Environment);
-builder.Services.AddMonKadoDataProtection(builder.Configuration, builder.Environment);
-builder.Services.AddPostgreSqlPersistence(builder.Configuration);
-builder.Services.AddControllersWithViews();
-builder.Services.AddApiHealthChecks();
-builder.Services.AddApiOpenApi();
-builder.Services.AddTrustedReverseProxy(builder.Configuration, builder.Environment);
-builder.Services.AddWebSecurity(builder.Configuration, builder.Environment);
-builder.Services.AddApiProblemDetails();
-builder.Services.AddAuthenticationRateLimiting();
+builder.Services.ConfigureDomainInjection();
+builder.Services.ConfigureApplicationInjection();
+builder.Services.ConfigureInfrastructureInjection(builder.Configuration);
+builder.Services.ConfigureApiInjection(
+    builder.Configuration,
+    builder.Environment);
 
 var app = builder.Build();
 
 app.UseTrustedReverseProxy();
-app.UseExceptionHandler();
+app.UseCorrelationId();
+app.UseApiErrorHandling();
 app.UseWebSecurity();
 app.UseIdentityAuthentication();
 app.UseAuthenticationRequestBodyLimits();

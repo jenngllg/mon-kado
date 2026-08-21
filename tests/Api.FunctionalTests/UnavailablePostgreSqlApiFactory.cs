@@ -11,6 +11,8 @@ public sealed class UnavailablePostgreSqlApiFactory : WebApplicationFactory<Prog
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
-        builder.UseSetting("ConnectionStrings:PostgreSql", UnavailableConnectionString);
+        builder.UseSetting(
+            "ConnectionStrings:PostgreSql",
+            UnavailableConnectionString);
     }
 }

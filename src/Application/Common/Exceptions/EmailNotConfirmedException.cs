@@ -1,6 +1,9 @@
 namespace JennGllg.Fr.MonKado.Back.Application.Common.Exceptions;
+/// <summary>
+/// Represents email not confirmed exception.
+/// </summary>
 
-public sealed class EmailNotConfirmedException()
+public class EmailNotConfirmedException()
     : Exception("The account email address is not confirmed.")
 {
 }

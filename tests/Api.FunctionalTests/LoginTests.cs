@@ -1,222 +1,328 @@
+using JennGllg.Fr.MonKado.Back.Api.Contracts.Responses;
+using JennGllg.Fr.MonKado.Back.Api.Errors;
+using JennGllg.Fr.MonKado.Back.Api.Options;
+using JennGllg.Fr.MonKado.Back.Application.Abstractions;
+using JennGllg.Fr.MonKado.Back.Application.Commands;
+using JennGllg.Fr.MonKado.Back.Application.Handlers;
+using JennGllg.Fr.MonKado.Back.Application.Models;
+using JennGllg.Fr.MonKado.Back.Application.Validators;
+
 using System.Net;
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
-using JennGllg.Fr.MonKado.Back.Api.Security;
-using JennGllg.Fr.MonKado.Back.Application.Accounts;
 
 namespace JennGllg.Fr.MonKado.Back.Api.FunctionalTests;
 
-public sealed class LoginTests
+public class LoginTests
 {
     [Fact]
-    public async Task ValidRequestReturnsEmptyNoContentAndPreservesCredentials()
+    public async Task LoginAsync_WhenValidRequest_ReturnsEmptyNoContentAndPreservesCredentials()
     {
-        await using RegistrationApiFactory factory = new();
-        using HttpClient client = factory.CreateClient();
+        // Arrange
+        await using var factory = new RegistrationApiFactory();
+        using var client = factory.CreateClient();
 
-        using HttpResponseMessage response = await Login(
+        // Act
+        using var response = await LoginAsync(
             client,
             " Lea@example.fr ",
             "  exact password  ",
             rememberMe: true);
 
-        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
-        Assert.Equal(0, response.Content.Headers.ContentLength);
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.NoContent,
+            response.StatusCode);
+        Assert.Equal(
+            0,
+            response.Content.Headers.ContentLength);
         Assert.True(response.Headers.CacheControl?.NoStore);
-        LoginCall call = Assert.Single(factory.SessionService.Calls);
-        Assert.Equal("Lea@example.fr", call.Email);
-        Assert.Equal("  exact password  ", call.Password);
+        var call = Assert.Single(factory.SessionService.Calls);
+        Assert.Equal(
+            "Lea@example.fr",
+            call.Email);
+        Assert.Equal(
+            "  exact password  ",
+            call.Password);
         Assert.True(call.RememberMe);
     }
 
     [Theory]
-    [InlineData(AccountLoginResult.InvalidCredentials, "INVALID_CREDENTIALS")]
-    [InlineData(AccountLoginResult.EmailNotConfirmed, "EMAIL_NOT_CONFIRMED")]
-    public async Task FailedLoginReturnsExpectedGenericProblem(
+    [InlineData(
+        AccountLoginResult.InvalidCredentials,
+        ErrorCodes.AccountInvalidCredentials)]
+    [InlineData(
+        AccountLoginResult.EmailNotConfirmed,
+        ErrorCodes.AccountEmailNotConfirmed)]
+    public async Task LoginAsync_WhenFailedLogin_ReturnsExpectedGenericProblem(
         AccountLoginResult result,
         string expectedCode)
     {
-        await using RegistrationApiFactory factory = new();
+        // Arrange
+        await using var factory = new RegistrationApiFactory();
         factory.SessionService.Result = result;
-        using HttpClient client = factory.CreateClient();
+        using var client = factory.CreateClient();
 
-        using HttpResponseMessage response = await Login(
+        // Act
+        using var response = await LoginAsync(
             client,
             "lea@example.fr",
             "password",
             rememberMe: false);
 
-        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.Unauthorized,
+            response.StatusCode);
         Assert.True(response.Headers.CacheControl?.NoStore);
-        using JsonDocument document = await response.Content.ReadFromJsonAsync<JsonDocument>(
+        using var document = await response.Content.ReadFromJsonAsync<JsonDocument>(
             TestContext.Current.CancellationToken)
             ?? throw new InvalidOperationException("The authentication problem response is empty.");
-        Assert.Equal(expectedCode, document.RootElement.GetProperty("code").GetString());
+        Assert.Equal(
+            expectedCode,
+            document.RootElement.GetProperty("errorCode").GetString());
     }
 
     [Fact]
-    public async Task InvalidPayloadReturnsValidationProblemWithoutCallingService()
+    public async Task LoginAsync_WhenInvalidPayload_ReturnsValidationProblemWithoutCallingService()
     {
-        await using RegistrationApiFactory factory = new();
-        using HttpClient client = factory.CreateClient();
+        // Arrange
+        await using var factory = new RegistrationApiFactory();
+        using var client = factory.CreateClient();
 
-        using HttpResponseMessage response = await Login(
+        // Act
+        using var response = await LoginAsync(
             client,
             "invalid",
-            new string('a', 129),
+            new string(
+                'a',
+                129),
             rememberMe: false);
 
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        using JsonDocument document = await response.Content.ReadFromJsonAsync<JsonDocument>(
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.BadRequest,
+            response.StatusCode);
+        using var document = await response.Content.ReadFromJsonAsync<JsonDocument>(
             TestContext.Current.CancellationToken)
             ?? throw new InvalidOperationException("The validation problem response is empty.");
-        Assert.Equal("VALIDATION_ERROR", document.RootElement.GetProperty("code").GetString());
+        Assert.Equal(
+            ErrorCodes.RequestValidationError,
+            document.RootElement.GetProperty("errorCode").GetString());
         Assert.Empty(factory.SessionService.Calls);
     }
 
     [Fact]
-    public async Task MissingCsrfTokenIsRejected()
+    public async Task LoginAsync_WhenMissingCsrfToken_IsRejected()
     {
-        await using RegistrationApiFactory factory = new();
-        using HttpClient client = factory.CreateClient();
+        // Arrange
+        await using var factory = new RegistrationApiFactory();
+        using var client = factory.CreateClient();
 
-        using HttpResponseMessage response = await client.PostAsJsonAsync(
+        // Act
+        using var response = await client.PostAsJsonAsync(
             "/api/v1/auth/sessions",
-            new { email = "lea@example.fr", password = "password" },
+            new
+            {
+                email = "lea@example.fr",
+                password = "password"
+            },
             TestContext.Current.CancellationToken);
 
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.BadRequest,
+            response.StatusCode);
         Assert.Empty(factory.SessionService.Calls);
     }
 
     [Fact]
-    public async Task NonJsonAndOversizedBodiesAreRejected()
+    public async Task LoginAsync_WhenNonJsonAndOversizedBodies_AreRejected()
     {
-        await using RegistrationApiFactory factory = new();
-        using HttpClient client = factory.CreateClient();
-        string csrfToken = await GetCsrfToken(client);
+        // Arrange
+        await using var factory = new RegistrationApiFactory();
+        using var client = factory.CreateClient();
+        var csrfToken = await GetCsrfTokenAsync(client);
 
-        using HttpRequestMessage nonJsonRequest = new(HttpMethod.Post, "/api/v1/auth/sessions")
+        using var nonJsonRequest = new HttpRequestMessage(
+            HttpMethod.Post,
+            "/api/v1/auth/sessions")
         {
-            Content = new StringContent("not-json", Encoding.UTF8, "text/plain")
+            Content = new StringContent(
+                "not-json",
+                Encoding.UTF8,
+                "text/plain")
         };
-        nonJsonRequest.Headers.Add(WebSecurityOptions.AntiforgeryHeaderName, csrfToken);
-        using HttpResponseMessage nonJson = await client.SendAsync(
+        nonJsonRequest.Headers.Add(
+            WebSecurityOptions.AntiforgeryHeaderName,
+            csrfToken);
+        using var nonJson = await client.SendAsync(
             nonJsonRequest,
             TestContext.Current.CancellationToken);
 
-        using HttpRequestMessage oversizedRequest = new(HttpMethod.Post, "/api/v1/auth/sessions")
+        using var oversizedRequest = new HttpRequestMessage(
+            HttpMethod.Post,
+            "/api/v1/auth/sessions")
         {
             Content = new StringContent(
-                "{\"value\":\"" + new string('a', 5 * 1024) + "\"}",
+                "{\"value\":\"" + new string(
+                    'a',
+                    5 * 1024) + "\"}",
                 Encoding.UTF8,
                 "application/json")
         };
-        oversizedRequest.Headers.Add(WebSecurityOptions.AntiforgeryHeaderName, csrfToken);
-        using HttpResponseMessage oversized = await client.SendAsync(
+        oversizedRequest.Headers.Add(
+            WebSecurityOptions.AntiforgeryHeaderName,
+            csrfToken);
+        // Act
+        using var oversized = await client.SendAsync(
             oversizedRequest,
             TestContext.Current.CancellationToken);
 
-        Assert.Equal(HttpStatusCode.UnsupportedMediaType, nonJson.StatusCode);
-        Assert.Equal(HttpStatusCode.RequestEntityTooLarge, oversized.StatusCode);
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.UnsupportedMediaType,
+            nonJson.StatusCode);
+        Assert.Equal(
+            HttpStatusCode.RequestEntityTooLarge,
+            oversized.StatusCode);
         Assert.Empty(factory.SessionService.Calls);
     }
 
     [Fact]
-    public async Task EleventhRequestWithinOneMinuteIsRateLimited()
+    public async Task LoginAsync_WhenEleventhRequestWithinOneMinute_IsRateLimited()
     {
-        await using RegistrationApiFactory factory = new();
-        using HttpClient client = factory.CreateClient();
+        // Arrange
+        await using var factory = new RegistrationApiFactory();
+        using var client = factory.CreateClient();
 
-        for (int requestNumber = 1; requestNumber <= 10; requestNumber++)
+        for (var requestNumber = 1; requestNumber <= 10; requestNumber++)
         {
-            using HttpResponseMessage accepted = await Login(
+            using var accepted = await LoginAsync(
                 client,
                 "lea@example.fr",
                 "password",
                 rememberMe: false);
-            Assert.Equal(HttpStatusCode.NoContent, accepted.StatusCode);
+            Assert.Equal(
+                HttpStatusCode.NoContent,
+                accepted.StatusCode);
         }
 
-        using HttpResponseMessage rejected = await Login(
+        // Act
+        using var rejected = await LoginAsync(
             client,
             "lea@example.fr",
             "password",
             rememberMe: false);
 
-        Assert.Equal(HttpStatusCode.TooManyRequests, rejected.StatusCode);
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.TooManyRequests,
+            rejected.StatusCode);
         Assert.True(rejected.Headers.RetryAfter?.Delta > TimeSpan.Zero);
-        Assert.Equal(10, factory.SessionService.Calls.Count);
+        Assert.Equal(
+            10,
+            factory.SessionService.Calls.Count);
     }
 
     [Fact]
-    public async Task SensitiveLoginValuesAreNeverWrittenToLogs()
+    public async Task LoginAsync_WhenSensitiveLoginValues_AreNeverWrittenToLogs()
     {
+        // Arrange
         const string Email = "sensitive-login@example.fr";
         const string Password = "sensitive-login-password";
-        await using RegistrationApiFactory factory = new();
-        using HttpClient client = factory.CreateClient();
+        await using var factory = new RegistrationApiFactory();
+        using var client = factory.CreateClient();
 
-        using HttpResponseMessage response = await Login(client, Email, Password, rememberMe: false);
+        // Act
+        using var response = await LoginAsync(
+            client,
+            Email,
+            Password,
+            rememberMe: false);
 
-        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
-        Assert.DoesNotContain(factory.LogMessages, message =>
-            message.Contains(Email, StringComparison.Ordinal) ||
-            message.Contains(Password, StringComparison.Ordinal));
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.NoContent,
+            response.StatusCode);
+        Assert.DoesNotContain(
+            factory.LogMessages,
+            message =>
+            message.Contains(
+                Email,
+                StringComparison.Ordinal) ||
+            message.Contains(
+                Password,
+                StringComparison.Ordinal));
     }
 
     [Fact]
-    public async Task UnavailablePostgreSqlReturnsServiceUnavailable()
+    public async Task LoginAsync_WhenUnavailablePostgreSql_ReturnsServiceUnavailable()
     {
-        await using UnavailablePostgreSqlApiFactory factory = new();
-        using HttpClient client = factory.CreateClient();
+        // Arrange
+        await using var factory = new UnavailablePostgreSqlApiFactory();
+        using var client = factory.CreateClient();
 
-        using HttpResponseMessage response = await Login(
+        // Act
+        using var response = await LoginAsync(
             client,
             "lea@example.fr",
             "password",
             rememberMe: false);
 
-        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.ServiceUnavailable,
+            response.StatusCode);
         Assert.True(response.Headers.CacheControl?.NoStore);
     }
 
     [Fact]
-    public async Task OpenApiDocumentsOptionalRememberMeAndCsrfHeader()
+    public async Task LoginAsync_WhenOpenApi_DocumentsOptionalRememberMeAndCsrfHeader()
     {
-        await using RegistrationApiFactory factory = new();
-        using HttpClient client = factory.CreateClient();
-        using JsonDocument document = await client.GetFromJsonAsync<JsonDocument>(
+        // Arrange
+        await using var factory = new RegistrationApiFactory();
+        using var client = factory.CreateClient();
+        // Act
+        using var document = await client.GetFromJsonAsync<JsonDocument>(
             "/openapi/v1.json",
             TestContext.Current.CancellationToken)
             ?? throw new InvalidOperationException("The OpenAPI response is empty.");
 
-        JsonElement operation = document.RootElement
+        var operation = document.RootElement
             .GetProperty("paths")
             .GetProperty("/api/v1/auth/sessions")
             .GetProperty("post");
-        JsonElement schema = operation
+        var schema = operation
             .GetProperty("requestBody")
             .GetProperty("content")
             .GetProperty("application/json")
             .GetProperty("schema");
 
-        if (schema.TryGetProperty("$ref", out JsonElement reference))
+        if (schema.TryGetProperty(
+            "$ref",
+            out var reference))
         {
-            string schemaName = reference.GetString()?.Split('/').Last()
+            var schemaName = reference.GetString()?.Split('/').Last()
                 ?? throw new InvalidOperationException("The login schema reference is invalid.");
             schema = document.RootElement.GetProperty("components").GetProperty("schemas")
                 .GetProperty(schemaName);
         }
 
 
+        // Assert
         Assert.Contains(
             operation.GetProperty("parameters").EnumerateArray(),
             parameter => parameter.GetProperty("name").GetString() ==
                 WebSecurityOptions.AntiforgeryHeaderName);
-        Assert.True(schema.GetProperty("properties").TryGetProperty("rememberMe", out _));
-        if (schema.TryGetProperty("required", out JsonElement required))
+        Assert.True(schema.GetProperty("properties").TryGetProperty(
+            "rememberMe",
+            out _));
+
+        if (schema.TryGetProperty(
+            "required",
+            out var required))
         {
             Assert.DoesNotContain(
                 required.EnumerateArray(),
@@ -224,29 +330,42 @@ public sealed class LoginTests
         }
     }
 
-    private static async Task<HttpResponseMessage> Login(
+    private static async Task<HttpResponseMessage> LoginAsync(
         HttpClient client,
         string email,
         string password,
         bool rememberMe)
     {
-        string csrfToken = await GetCsrfToken(client);
-        HttpRequestMessage request = new(HttpMethod.Post, "/api/v1/auth/sessions")
+        var csrfToken = await GetCsrfTokenAsync(client);
+        var request = new HttpRequestMessage(
+            HttpMethod.Post,
+            "/api/v1/auth/sessions")
         {
-            Content = JsonContent.Create(new { email, password, rememberMe })
+            Content = JsonContent.Create(new
+            {
+                email,
+                password,
+                rememberMe
+            })
         };
-        request.Headers.Add(WebSecurityOptions.AntiforgeryHeaderName, csrfToken);
-        return await client.SendAsync(request, TestContext.Current.CancellationToken);
+        request.Headers.Add(
+            WebSecurityOptions.AntiforgeryHeaderName,
+            csrfToken);
+
+        return await client.SendAsync(
+            request,
+            TestContext.Current.CancellationToken);
     }
 
-    private static async Task<string> GetCsrfToken(HttpClient client)
+    private static async Task<string> GetCsrfTokenAsync(HttpClient client)
     {
-        using HttpResponseMessage response = await client.GetAsync(
+        using var response = await client.GetAsync(
             "/security/csrf-token",
             TestContext.Current.CancellationToken);
-        CsrfTokenResponse payload = await response.Content.ReadFromJsonAsync<CsrfTokenResponse>(
+        var payload = await response.Content.ReadFromJsonAsync<CsrfTokenResponse>(
             TestContext.Current.CancellationToken)
             ?? throw new InvalidOperationException("The CSRF token response is empty.");
+
         return payload.Token;
     }
 }
