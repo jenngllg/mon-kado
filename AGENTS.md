@@ -163,6 +163,10 @@
 - Lorsqu'un projet est déplacé sous `src/`, effectuer un déplacement complet et cohérent : renommer le dossier, le fichier projet, l'assembly, le namespace racine, les namespaces du code et les références de solution concernées.
 - Ne pas déplacer `GmailOAuthBootstrap` tant que Jenn ne le demande pas explicitement.
 
+## Git et pull requests
+
+- Rédiger en anglais les messages de commit ainsi que les titres et descriptions des pull requests.
+
 ## Gestion des conventions
 
 - Pour chaque nouvelle règle donnée par Jenn, vérifier d'abord si elle peut être exprimée par une option standard de `.editorconfig`.
