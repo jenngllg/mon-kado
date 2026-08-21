@@ -1,60 +1,197 @@
-using System.Net;
-using System.Net.Http.Json;
-using System.Security.Claims;
-using System.Text.Json;
-using JennGllg.Fr.MonKado.Back.Api.Security;
-using JennGllg.Fr.MonKado.Back.Application.Accounts;
+using JennGllg.Fr.MonKado.Back.Api.Contracts.Responses;
+using JennGllg.Fr.MonKado.Back.Api.Errors;
+using JennGllg.Fr.MonKado.Back.Api.Options;
+using JennGllg.Fr.MonKado.Back.Application.Abstractions;
+using JennGllg.Fr.MonKado.Back.Application.Commands;
+using JennGllg.Fr.MonKado.Back.Application.Handlers;
+using JennGllg.Fr.MonKado.Back.Application.Models;
+using JennGllg.Fr.MonKado.Back.Application.Validators;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql;
-using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Identity;
+using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Abstractions;
+using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Configurations;
+using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Contexts;
+using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Entities;
+using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Models;
+using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Options;
+using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Services;
+
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
+using System.Net;
+using System.Net.Http.Json;
+using System.Security.Claims;
+using System.Text.Json;
+
 namespace JennGllg.Fr.MonKado.Back.Api.IntegrationTests;
 
 [Collection(PostgreSqlApiTestSuite.Name)]
-public sealed class LoginIntegrationTests(PostgreSqlContainerFixture fixture)
+public class LoginIntegrationTests(PostgreSqlContainerFixture fixture)
 {
     private const string Password = "  a long secure password  ";
-    private static readonly DateTimeOffset Now = DateTimeOffset.UtcNow;
+    private static readonly DateTimeOffset _now = DateTimeOffset.UtcNow;
 
     [Fact]
-    public async Task ConfirmedAccountCreatesRetrievableServerSideSession()
+    public async Task AuthenticateWithAccountLockAsync_WhenAccountWasDeleted_ReturnsInvalidCredentials()
     {
-        FixedTimeProvider timeProvider = new(Now);
-        await using PostgreSqlApiFactory factory = await CreateMigratedFactory(timeProvider);
-        MonKadoUser user = await CreateUser(factory, "lea@example.fr", emailConfirmed: true);
-        using HttpClient client = factory.CreateClient();
+        // Arrange
+        await using var factory = await CreateMigratedFactoryAsync(new FixedTimeProvider(_now));
+        await using var scope = factory.Services.CreateAsyncScope();
+        var service = Assert.IsType<AccountSessionService>(
+            scope.ServiceProvider.GetRequiredService<IAccountSessionService>());
+        var context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
+        var executionStrategy = context.Database.CreateExecutionStrategy();
 
-        using HttpResponseMessage response = await Login(
+        // Act
+        var attempt = await executionStrategy.ExecuteAsync(() =>
+            service.AuthenticateWithAccountLockAsync(
+                Guid.CreateVersion7(),
+                "MISSING@EXAMPLE.FR",
+                Password,
+                TestContext.Current.CancellationToken));
+
+        // Assert
+        Assert.Equal(
+            AccountLoginResult.InvalidCredentials,
+            attempt.Result);
+        Assert.Null(attempt.User);
+    }
+
+    [Fact]
+    public async Task LoginAsync_WhenAccountDoesNotExist_ReturnsInvalidCredentials()
+    {
+        // Arrange
+        await using var factory = await CreateMigratedFactoryAsync(new FixedTimeProvider(_now));
+        using var client = factory.CreateClient();
+
+        // Act
+        using var response = await LoginAsync(
+            client,
+            "missing@example.fr",
+            Password,
+            rememberMe: false);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.Unauthorized,
+            response.StatusCode);
+        Assert.Equal(
+            ErrorCodes.AccountInvalidCredentials,
+            await GetErrorCodeAsync(response));
+    }
+
+    [Fact]
+    public async Task LoginAsync_WhenSuccessfulAfterOneFailure_ResetsFailedCount()
+    {
+        // Arrange
+        var timeProvider = new FixedTimeProvider(_now);
+        await using var factory = await CreateMigratedFactoryAsync(timeProvider);
+        var user = await CreateUserAsync(
+            factory,
+            "lea@example.fr",
+            emailConfirmed: true);
+        using var client = factory.CreateClient();
+        using var failedResponse = await LoginAsync(
+            client,
+            "lea@example.fr",
+            "wrong password",
+            rememberMe: false);
+        Assert.Equal(
+            HttpStatusCode.Unauthorized,
+            failedResponse.StatusCode);
+
+        // Act
+        using var response = await LoginAsync(
+            client,
+            "lea@example.fr",
+            Password,
+            rememberMe: false);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.NoContent,
+            response.StatusCode);
+        await using var scope = factory.Services.CreateAsyncScope();
+        var context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
+        var persistedUser = await context.Users
+            .AsNoTracking()
+            .SingleAsync(
+                candidate => candidate.Id == user.Id,
+                TestContext.Current.CancellationToken);
+        Assert.Equal(
+            0,
+            persistedUser.AccessFailedCount);
+    }
+
+    [Fact]
+    public async Task LoginAsync_WhenConfirmedAccount_CreatesRetrievableServerSideSession()
+    {
+        // Arrange
+        var timeProvider = new FixedTimeProvider(_now);
+        await using var factory = await CreateMigratedFactoryAsync(timeProvider);
+        var user = await CreateUserAsync(
+            factory,
+            "lea@example.fr",
+            emailConfirmed: true);
+        using var client = factory.CreateClient();
+
+        // Act
+        using var response = await LoginAsync(
             client,
             " LEA@example.fr ",
             Password,
             rememberMe: false);
 
-        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.NoContent,
+            response.StatusCode);
         Assert.True(response.Headers.CacheControl?.NoStore);
-        string sessionCookie = GetIssuedSessionCookie(response);
-        Assert.Contains("; path=/", sessionCookie, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("; httponly", sessionCookie, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("; samesite=lax", sessionCookie, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("; expires=", sessionCookie, StringComparison.OrdinalIgnoreCase);
+        var sessionCookie = GetIssuedSessionCookie(response);
+        Assert.Contains(
+            "; path=/",
+            sessionCookie,
+            StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(
+            "; httponly",
+            sessionCookie,
+            StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(
+            "; samesite=lax",
+            sessionCookie,
+            StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(
+            "; expires=",
+            sessionCookie,
+            StringComparison.OrdinalIgnoreCase);
 
-        await using AsyncServiceScope scope = factory.Services.CreateAsyncScope();
-        MonKadoDbContext context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
-        AuthenticationSession session = await context.AuthenticationSessions
+        await using var scope = factory.Services.CreateAsyncScope();
+        var context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
+        var session = await context.AuthenticationSessions
             .AsNoTracking()
             .SingleAsync(TestContext.Current.CancellationToken);
-        Assert.Equal(user.Id, session.UserId);
-        AssertTimestampClose(Now, session.CreatedAt, TimeSpan.FromMilliseconds(1));
-        AssertTimestampClose(Now, session.RenewedAt, TimeSpan.FromMilliseconds(1));
-        AssertTimestampClose(Now.AddHours(8), session.ExpiresAt, TimeSpan.FromSeconds(1));
+        Assert.Equal(
+            user.Id,
+            session.UserId);
+        AssertTimestampClose(
+            _now.UtcDateTime,
+            session.CreatedAt,
+            TimeSpan.FromMilliseconds(1));
+        AssertTimestampClose(
+            _now.UtcDateTime,
+            session.RenewedAt,
+            TimeSpan.FromMilliseconds(1));
+        AssertTimestampClose(
+            _now.UtcDateTime.AddHours(8),
+            session.ExpiresAt,
+            TimeSpan.FromSeconds(1));
         Assert.NotEmpty(session.ProtectedTicket);
 
-        ITicketStore ticketStore = scope.ServiceProvider.GetRequiredService<ITicketStore>();
-        AuthenticationTicket ticket = await ticketStore.RetrieveAsync(
+        var ticketStore = scope.ServiceProvider.GetRequiredService<ITicketStore>();
+        var ticket = await ticketStore.RetrieveAsync(
             session.Id.ToString("N"),
             TestContext.Current.CancellationToken)
             ?? throw new InvalidOperationException("The stored authentication ticket is missing.");
@@ -63,49 +200,68 @@ public sealed class LoginIntegrationTests(PostgreSqlContainerFixture fixture)
             ticket.Principal.FindFirstValue(ClaimTypes.NameIdentifier));
         Assert.NotNull(ticket.Properties.ExpiresUtc);
         AssertTimestampClose(
-            Now.AddHours(8),
-            ticket.Properties.ExpiresUtc.Value, TimeSpan.FromSeconds(1));
+            _now.AddHours(8),
+            ticket.Properties.ExpiresUtc.Value,
+            TimeSpan.FromSeconds(1));
         Assert.False(ticket.Properties.IsPersistent);
         Assert.True(ticket.Properties.AllowRefresh);
     }
 
     [Fact]
-    public async Task RememberMeRotatesCurrentSessionWithThirtyDayPersistentSession()
+    public async Task LoginAsync_WhenRememberMeRotatesCurrentSessionWithThirtyDayPersistentSession_Completes()
     {
-        FixedTimeProvider timeProvider = new(Now);
-        await using PostgreSqlApiFactory factory = await CreateMigratedFactory(timeProvider);
-        await CreateUser(factory, "lea@example.fr", emailConfirmed: true);
-        using HttpClient client = factory.CreateClient();
-        using HttpResponseMessage firstResponse = await Login(
+        // Arrange
+        var timeProvider = new FixedTimeProvider(_now);
+        await using var factory = await CreateMigratedFactoryAsync(timeProvider);
+        await CreateUserAsync(
+            factory,
+            "lea@example.fr",
+            emailConfirmed: true);
+        using var client = factory.CreateClient();
+        // Act
+        using var firstResponse = await LoginAsync(
             client,
             "lea@example.fr",
             Password,
             rememberMe: false);
-        Assert.Equal(HttpStatusCode.NoContent, firstResponse.StatusCode);
-        Guid firstSessionId = await GetOnlySessionId(factory);
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.NoContent,
+            firstResponse.StatusCode);
+        var firstSessionId = await GetOnlySessionIdAsync(factory);
 
-        using HttpResponseMessage secondResponse = await Login(
+        using var secondResponse = await LoginAsync(
             client,
             "lea@example.fr",
             Password,
             rememberMe: true);
 
-        Assert.Equal(HttpStatusCode.NoContent, secondResponse.StatusCode);
-        string sessionCookie = GetIssuedSessionCookie(secondResponse);
-        Assert.Contains("; expires=", sessionCookie, StringComparison.OrdinalIgnoreCase);
-        await using AsyncServiceScope scope = factory.Services.CreateAsyncScope();
-        MonKadoDbContext context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
-        AuthenticationSession session = await context.AuthenticationSessions
+        Assert.Equal(
+            HttpStatusCode.NoContent,
+            secondResponse.StatusCode);
+        var sessionCookie = GetIssuedSessionCookie(secondResponse);
+        Assert.Contains(
+            "; expires=",
+            sessionCookie,
+            StringComparison.OrdinalIgnoreCase);
+        await using var scope = factory.Services.CreateAsyncScope();
+        var context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
+        var session = await context.AuthenticationSessions
             .AsNoTracking()
             .SingleAsync(TestContext.Current.CancellationToken);
-        Assert.NotEqual(firstSessionId, session.Id);
-        AssertTimestampClose(Now.AddDays(30), session.ExpiresAt, TimeSpan.FromSeconds(1));
+        Assert.NotEqual(
+            firstSessionId,
+            session.Id);
+        AssertTimestampClose(
+            _now.UtcDateTime.AddDays(30),
+            session.ExpiresAt,
+            TimeSpan.FromSeconds(1));
 
-        ITicketStore ticketStore = scope.ServiceProvider.GetRequiredService<ITicketStore>();
+        var ticketStore = scope.ServiceProvider.GetRequiredService<ITicketStore>();
         Assert.Null(await ticketStore.RetrieveAsync(
             firstSessionId.ToString("N"),
             TestContext.Current.CancellationToken));
-        AuthenticationTicket replacement = await ticketStore.RetrieveAsync(
+        var replacement = await ticketStore.RetrieveAsync(
             session.Id.ToString("N"),
             TestContext.Current.CancellationToken)
             ?? throw new InvalidOperationException("The replacement authentication ticket is missing.");
@@ -114,23 +270,31 @@ public sealed class LoginIntegrationTests(PostgreSqlContainerFixture fixture)
     }
 
     [Fact]
-    public async Task RenewDoesNotRecreateARevokedSession()
+    public async Task LoginAsync_WhenRenew_DoesNotRecreateARevokedSession()
     {
-        FixedTimeProvider timeProvider = new(Now);
-        await using PostgreSqlApiFactory factory = await CreateMigratedFactory(timeProvider);
-        await CreateUser(factory, "lea@example.fr", emailConfirmed: true);
-        using HttpClient client = factory.CreateClient();
-        using HttpResponseMessage response = await Login(
+        // Arrange
+        var timeProvider = new FixedTimeProvider(_now);
+        await using var factory = await CreateMigratedFactoryAsync(timeProvider);
+        await CreateUserAsync(
+            factory,
+            "lea@example.fr",
+            emailConfirmed: true);
+        using var client = factory.CreateClient();
+        // Act
+        using var response = await LoginAsync(
             client,
             "lea@example.fr",
             Password,
             rememberMe: false);
-        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.NoContent,
+            response.StatusCode);
 
-        await using AsyncServiceScope scope = factory.Services.CreateAsyncScope();
-        ITicketStore ticketStore = scope.ServiceProvider.GetRequiredService<ITicketStore>();
-        Guid sessionId = await GetOnlySessionId(factory);
-        AuthenticationTicket ticket = await ticketStore.RetrieveAsync(
+        await using var scope = factory.Services.CreateAsyncScope();
+        var ticketStore = scope.ServiceProvider.GetRequiredService<ITicketStore>();
+        var sessionId = await GetOnlySessionIdAsync(factory);
+        var ticket = await ticketStore.RetrieveAsync(
             sessionId.ToString("N"),
             TestContext.Current.CancellationToken)
             ?? throw new InvalidOperationException("The authentication ticket is missing.");
@@ -143,99 +307,137 @@ public sealed class LoginIntegrationTests(PostgreSqlContainerFixture fixture)
             ticket,
             TestContext.Current.CancellationToken);
 
-        MonKadoDbContext context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
+        var context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
         Assert.False(await context.AuthenticationSessions.AnyAsync(
             session => session.Id == sessionId,
             TestContext.Current.CancellationToken));
     }
 
     [Fact]
-    public async Task FiveInvalidPasswordsLockAccountWithoutCreatingSession()
+    public async Task LoginAsync_WhenFiveInvalidPasswordsLockAccountWithoutCreatingSession_Completes()
     {
-        FixedTimeProvider timeProvider = new(Now);
-        await using PostgreSqlApiFactory factory = await CreateMigratedFactory(timeProvider);
-        MonKadoUser user = await CreateUser(factory, "lea@example.fr", emailConfirmed: true);
-        using HttpClient client = factory.CreateClient();
+        // Arrange
+        var timeProvider = new FixedTimeProvider(_now);
+        await using var factory = await CreateMigratedFactoryAsync(timeProvider);
+        var user = await CreateUserAsync(
+            factory,
+            "lea@example.fr",
+            emailConfirmed: true);
+        using var client = factory.CreateClient();
 
-        for (int attempt = 1; attempt <= 5; attempt++)
+        for (var attempt = 1; attempt <= 5; attempt++)
         {
-            using HttpResponseMessage response = await Login(
+            using var response = await LoginAsync(
                 client,
                 "lea@example.fr",
                 "wrong password",
                 rememberMe: false);
-            Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
-            Assert.Equal("INVALID_CREDENTIALS", await GetProblemCode(response));
+            Assert.Equal(
+                HttpStatusCode.Unauthorized,
+                response.StatusCode);
+            Assert.Equal(
+                ErrorCodes.AccountInvalidCredentials,
+                await GetErrorCodeAsync(response));
         }
 
-        using HttpResponseMessage lockedResponse = await Login(
+        // Act
+        using var lockedResponse = await LoginAsync(
             client,
             "lea@example.fr",
             Password,
             rememberMe: false);
-        Assert.Equal(HttpStatusCode.Unauthorized, lockedResponse.StatusCode);
-        Assert.Equal("INVALID_CREDENTIALS", await GetProblemCode(lockedResponse));
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.Unauthorized,
+            lockedResponse.StatusCode);
+        Assert.Equal(
+            ErrorCodes.AccountInvalidCredentials,
+            await GetErrorCodeAsync(lockedResponse));
 
-        await using AsyncServiceScope scope = factory.Services.CreateAsyncScope();
-        MonKadoDbContext context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
-        MonKadoUser persistedUser = await context.Users
+        await using var scope = factory.Services.CreateAsyncScope();
+        var context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
+        var persistedUser = await context.Users
             .AsNoTracking()
-            .SingleAsync(value => value.Id == user.Id, TestContext.Current.CancellationToken);
-        Assert.Equal(0, persistedUser.AccessFailedCount);
+            .SingleAsync(
+                value => value.Id == user.Id,
+                TestContext.Current.CancellationToken);
+        Assert.Equal(
+            0,
+            persistedUser.AccessFailedCount);
         Assert.NotNull(persistedUser.LockoutEnd);
         Assert.InRange(
             persistedUser.LockoutEnd.Value,
-            DateTimeOffset.UtcNow.AddMinutes(14), DateTimeOffset.UtcNow.AddMinutes(16));
+            DateTimeOffset.UtcNow.AddMinutes(14),
+            DateTimeOffset.UtcNow.AddMinutes(16));
         Assert.Empty(await context.AuthenticationSessions.ToArrayAsync(
             TestContext.Current.CancellationToken));
     }
 
     [Fact]
-    public async Task FiveConcurrentInvalidPasswordsLockAccountWithoutLosingAttempts()
+    public async Task LoginAsync_WhenFiveConcurrentInvalidPasswordsLockAccountWithoutLosingAttempts_Completes()
     {
-        FixedTimeProvider timeProvider = new(Now);
-        await using PostgreSqlApiFactory factory = await CreateMigratedFactory(timeProvider);
-        MonKadoUser user = await CreateUser(factory, "lea@example.fr", emailConfirmed: true);
-        HttpClient[] clients = Enumerable.Range(0, 5)
+        // Arrange
+        var timeProvider = new FixedTimeProvider(_now);
+        await using var factory = await CreateMigratedFactoryAsync(timeProvider);
+        var user = await CreateUserAsync(
+            factory,
+            "lea@example.fr",
+            emailConfirmed: true);
+        var clients = Enumerable.Range(
+            0,
+            5)
             .Select(_ => factory.CreateClient())
             .ToArray();
         try
         {
-            HttpResponseMessage[] responses = await Task.WhenAll(clients.Select(client => Login(
+            // Act
+            var responses = await Task.WhenAll(clients.Select(client => LoginAsync(
                 client,
                 "lea@example.fr",
                 "wrong password",
                 rememberMe: false)));
-            foreach (HttpResponseMessage response in responses)
+
+            // Assert
+            foreach (var response in responses)
             {
                 using (response)
                 {
-                    Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
-                    Assert.Equal("INVALID_CREDENTIALS", await GetProblemCode(response));
+                    Assert.Equal(
+                        HttpStatusCode.Unauthorized,
+                        response.StatusCode);
+                    Assert.Equal(
+                        ErrorCodes.AccountInvalidCredentials,
+                        await GetErrorCodeAsync(response));
                 }
             }
 
-            using HttpClient verificationClient = factory.CreateClient();
-            using HttpResponseMessage lockedResponse = await Login(
+            using var verificationClient = factory.CreateClient();
+            using var lockedResponse = await LoginAsync(
                 verificationClient,
                 "lea@example.fr",
                 Password,
                 rememberMe: false);
-            Assert.Equal(HttpStatusCode.Unauthorized, lockedResponse.StatusCode);
+            Assert.Equal(
+                HttpStatusCode.Unauthorized,
+                lockedResponse.StatusCode);
 
-            await using AsyncServiceScope scope = factory.Services.CreateAsyncScope();
-            MonKadoDbContext context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
-            MonKadoUser persistedUser = await context.Users
+            await using var scope = factory.Services.CreateAsyncScope();
+            var context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
+            var persistedUser = await context.Users
                 .AsNoTracking()
-                .SingleAsync(value => value.Id == user.Id, TestContext.Current.CancellationToken);
-            Assert.Equal(0, persistedUser.AccessFailedCount);
+                .SingleAsync(
+                    value => value.Id == user.Id,
+                    TestContext.Current.CancellationToken);
+            Assert.Equal(
+                0,
+                persistedUser.AccessFailedCount);
             Assert.NotNull(persistedUser.LockoutEnd);
             Assert.Empty(await context.AuthenticationSessions.ToArrayAsync(
                 TestContext.Current.CancellationToken));
         }
         finally
         {
-            foreach (HttpClient client in clients)
+            foreach (var client in clients)
             {
                 client.Dispose();
             }
@@ -243,167 +445,254 @@ public sealed class LoginIntegrationTests(PostgreSqlContainerFixture fixture)
     }
 
     [Fact]
-    public async Task UnconfirmedAndExpiredAccountsReturnTheExpectedProblems()
+    public async Task LoginAsync_WhenUnconfirmedAndExpiredAccountsReturnTheExpectedProblems_Completes()
     {
-        FixedTimeProvider timeProvider = new(Now);
-        await using PostgreSqlApiFactory factory = await CreateMigratedFactory(timeProvider);
-        await CreateUser(factory, "pending@example.fr", emailConfirmed: false, expiresAt: Now.AddDays(1));
-        await CreateUser(factory, "expired@example.fr", emailConfirmed: false, expiresAt: Now);
-        using HttpClient pendingClient = factory.CreateClient();
-        using HttpClient expiredClient = factory.CreateClient();
+        // Arrange
+        var timeProvider = new FixedTimeProvider(_now);
+        await using var factory = await CreateMigratedFactoryAsync(timeProvider);
+        await CreateUserAsync(
+            factory,
+            "pending@example.fr",
+            emailConfirmed: false,
+            expiresAt: _now.UtcDateTime.AddDays(1));
+        await CreateUserAsync(
+            factory,
+            "expired@example.fr",
+            emailConfirmed: false,
+            expiresAt: _now.UtcDateTime);
+        using var pendingClient = factory.CreateClient();
+        using var expiredClient = factory.CreateClient();
 
-        using HttpResponseMessage pendingResponse = await Login(
+        using var pendingResponse = await LoginAsync(
             pendingClient,
             "pending@example.fr",
             Password,
             rememberMe: false);
-        using HttpResponseMessage expiredResponse = await Login(
+        // Act
+        using var expiredResponse = await LoginAsync(
             expiredClient,
             "expired@example.fr",
             Password,
             rememberMe: false);
 
-        Assert.Equal(HttpStatusCode.Unauthorized, pendingResponse.StatusCode);
-        Assert.Equal("EMAIL_NOT_CONFIRMED", await GetProblemCode(pendingResponse));
-        Assert.Equal(HttpStatusCode.Unauthorized, expiredResponse.StatusCode);
-        Assert.Equal("INVALID_CREDENTIALS", await GetProblemCode(expiredResponse));
-        await using AsyncServiceScope scope = factory.Services.CreateAsyncScope();
-        MonKadoDbContext context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.Unauthorized,
+            pendingResponse.StatusCode);
+        Assert.Equal(
+            ErrorCodes.AccountEmailNotConfirmed,
+            await GetErrorCodeAsync(pendingResponse));
+        Assert.Equal(
+            HttpStatusCode.Unauthorized,
+            expiredResponse.StatusCode);
+        Assert.Equal(
+            ErrorCodes.AccountInvalidCredentials,
+            await GetErrorCodeAsync(expiredResponse));
+        await using var scope = factory.Services.CreateAsyncScope();
+        var context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
         Assert.Empty(await context.AuthenticationSessions.ToArrayAsync(
             TestContext.Current.CancellationToken));
     }
 
     [Fact]
-    public async Task CleanupDeletesOnlySessionsExpiredAtCutoff()
+    public async Task LoginAsync_WhenCleanup_DeletesOnlySessionsExpiredAtCutoff()
     {
-        FixedTimeProvider timeProvider = new(Now);
-        await using PostgreSqlApiFactory factory = await CreateMigratedFactory(timeProvider);
-        await CreateUser(factory, "short@example.fr", emailConfirmed: true);
-        await CreateUser(factory, "persistent@example.fr", emailConfirmed: true);
-        using HttpClient shortClient = factory.CreateClient();
-        using HttpClient persistentClient = factory.CreateClient();
-        using HttpResponseMessage shortResponse = await Login(
+        // Arrange
+        var timeProvider = new FixedTimeProvider(_now);
+        await using var factory = await CreateMigratedFactoryAsync(timeProvider);
+        await CreateUserAsync(
+            factory,
+            "short@example.fr",
+            emailConfirmed: true);
+        await CreateUserAsync(
+            factory,
+            "persistent@example.fr",
+            emailConfirmed: true);
+        using var shortClient = factory.CreateClient();
+        using var persistentClient = factory.CreateClient();
+        using var shortResponse = await LoginAsync(
             shortClient,
             "short@example.fr",
             Password,
             rememberMe: false);
-        using HttpResponseMessage persistentResponse = await Login(
+        // Act
+        using var persistentResponse = await LoginAsync(
             persistentClient,
             "persistent@example.fr",
             Password,
             rememberMe: true);
-        Assert.Equal(HttpStatusCode.NoContent, shortResponse.StatusCode);
-        Assert.Equal(HttpStatusCode.NoContent, persistentResponse.StatusCode);
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.NoContent,
+            shortResponse.StatusCode);
+        Assert.Equal(
+            HttpStatusCode.NoContent,
+            persistentResponse.StatusCode);
 
-        await using AsyncServiceScope scope = factory.Services.CreateAsyncScope();
-        IExpiredAuthenticationSessionCleanup cleanup =
+        await using var scope = factory.Services.CreateAsyncScope();
+        var cleanup =
             scope.ServiceProvider.GetRequiredService<IExpiredAuthenticationSessionCleanup>();
-        int deletedCount = await cleanup.DeleteExpiredSessionsAsync(
-            Now.AddHours(8),
+        var deletedCount = await cleanup.DeleteExpiredSessionsAsync(
+            _now.UtcDateTime.AddHours(8),
             500,
             TestContext.Current.CancellationToken);
 
-        Assert.Equal(1, deletedCount);
-        MonKadoDbContext context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
-        AuthenticationSession remaining = await context.AuthenticationSessions
+        Assert.Equal(
+            1,
+            deletedCount);
+        Assert.Equal(
+            0,
+            await cleanup.DeleteExpiredSessionsAsync(
+                _now.UtcDateTime.AddHours(8),
+                500,
+                TestContext.Current.CancellationToken));
+        var context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
+        var remaining = await context.AuthenticationSessions
             .AsNoTracking()
             .SingleAsync(TestContext.Current.CancellationToken);
-        AssertTimestampClose(Now.AddDays(30), remaining.ExpiresAt, TimeSpan.FromSeconds(1));
+        AssertTimestampClose(
+            _now.UtcDateTime.AddDays(30),
+            remaining.ExpiresAt,
+            TimeSpan.FromSeconds(1));
     }
 
-    private async Task<PostgreSqlApiFactory> CreateMigratedFactory(TimeProvider timeProvider)
+    private async Task<PostgreSqlApiFactory> CreateMigratedFactoryAsync(TimeProvider timeProvider)
     {
-        PostgreSqlApiFactory factory = new(fixture.Container.GetConnectionString(), timeProvider);
-        await using AsyncServiceScope scope = factory.Services.CreateAsyncScope();
-        MonKadoDbContext context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
+        var factory = new PostgreSqlApiFactory(
+            fixture.Container.GetConnectionString(),
+            timeProvider);
+        await using var scope = factory.Services.CreateAsyncScope();
+        var context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
         await context.Database.MigrateAsync(TestContext.Current.CancellationToken);
         await context.Database.ExecuteSqlRawAsync(
             "TRUNCATE TABLE public.users CASCADE;",
             TestContext.Current.CancellationToken);
+
         return factory;
     }
 
-    private static async Task<MonKadoUser> CreateUser(
+    private static async Task<MonKadoUser> CreateUserAsync(
         PostgreSqlApiFactory factory,
         string email,
         bool emailConfirmed,
-        DateTimeOffset? expiresAt = null)
+        DateTime? expiresAt = null)
     {
-        await using AsyncServiceScope scope = factory.Services.CreateAsyncScope();
-        UserManager<MonKadoUser> userManager =
+        await using var scope = factory.Services.CreateAsyncScope();
+        var userManager =
             scope.ServiceProvider.GetRequiredService<UserManager<MonKadoUser>>();
-        MonKadoUser user = new()
+        var user = new MonKadoUser()
         {
-            Id = Guid.CreateVersion7(Now),
+            Id = Guid.CreateVersion7(_now),
             Email = email,
             UserName = email,
             DisplayName = "Login test",
             EmailConfirmed = emailConfirmed,
-            CreatedAt = Now,
-            UpdatedAt = Now,
-            UnconfirmedAccountExpiresAt = emailConfirmed ? null : expiresAt ?? Now.AddDays(30)
+            UnconfirmedAccountExpiresAt = emailConfirmed
+                ? null
+                : expiresAt ?? _now.UtcDateTime.AddDays(30)
         };
-        IdentityResult result = await userManager.CreateAsync(user, Password);
-        Assert.True(result.Succeeded, string.Join(", ", result.Errors.Select(error => error.Description)));
+        var result = await userManager.CreateAsync(
+            user,
+            Password);
+        Assert.True(
+            result.Succeeded,
+            string.Join(
+                ", ",
+                result.Errors.Select(error => error.Description)));
+
         return user;
     }
 
-    private static async Task<Guid> GetOnlySessionId(PostgreSqlApiFactory factory)
+    private static async Task<Guid> GetOnlySessionIdAsync(PostgreSqlApiFactory factory)
     {
-        await using AsyncServiceScope scope = factory.Services.CreateAsyncScope();
-        MonKadoDbContext context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
+        await using var scope = factory.Services.CreateAsyncScope();
+        var context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
+
         return await context.AuthenticationSessions
             .Select(session => session.Id)
             .SingleAsync(TestContext.Current.CancellationToken);
     }
 
-    private static async Task<HttpResponseMessage> Login(
+    private static async Task<HttpResponseMessage> LoginAsync(
         HttpClient client,
         string email,
         string password,
         bool rememberMe)
     {
-        string csrfToken = await GetCsrfToken(client);
-        HttpRequestMessage request = new(HttpMethod.Post, "/api/v1/auth/sessions")
+        var csrfToken = await GetCsrfTokenAsync(client);
+        var request = new HttpRequestMessage(
+            HttpMethod.Post,
+            "/api/v1/auth/sessions")
         {
-            Content = JsonContent.Create(new { email, password, rememberMe })
+            Content = JsonContent.Create(new
+            {
+                email,
+                password,
+                rememberMe
+            })
         };
-        request.Headers.Add(WebSecurityOptions.AntiforgeryHeaderName, csrfToken);
-        return await client.SendAsync(request, TestContext.Current.CancellationToken);
+        request.Headers.Add(
+            WebSecurityOptions.AntiforgeryHeaderName,
+            csrfToken);
+
+        return await client.SendAsync(
+            request,
+            TestContext.Current.CancellationToken);
     }
 
-    private static async Task<string> GetCsrfToken(HttpClient client)
+    private static async Task<string> GetCsrfTokenAsync(HttpClient client)
     {
-        using HttpResponseMessage response = await client.GetAsync(
+        using var response = await client.GetAsync(
             "/security/csrf-token",
             TestContext.Current.CancellationToken);
-        CsrfTokenResponse payload = await response.Content.ReadFromJsonAsync<CsrfTokenResponse>(
+        var payload = await response.Content.ReadFromJsonAsync<CsrfTokenResponse>(
             TestContext.Current.CancellationToken)
             ?? throw new InvalidOperationException("The CSRF token response is empty.");
+
         return payload.Token;
     }
 
-    private static string GetIssuedSessionCookie(HttpResponseMessage response) =>
-        response.Headers.GetValues("Set-Cookie").Single(header =>
-            header.StartsWith("MonKado.Auth=", StringComparison.Ordinal) &&
-            !header.StartsWith("MonKado.Auth=;", StringComparison.Ordinal));
-
-    private static async Task<string?> GetProblemCode(HttpResponseMessage response)
+    private static string GetIssuedSessionCookie(HttpResponseMessage response)
     {
-        using JsonDocument document = await response.Content.ReadFromJsonAsync<JsonDocument>(
+
+        return response.Headers.GetValues("Set-Cookie").Single(header =>
+            header.StartsWith(
+                "MonKado.Auth=",
+                StringComparison.Ordinal) &&
+            !header.StartsWith(
+                "MonKado.Auth=;",
+                StringComparison.Ordinal));
+    }
+
+    private static async Task<string?> GetErrorCodeAsync(HttpResponseMessage response)
+    {
+        using var document = await response.Content.ReadFromJsonAsync<JsonDocument>(
             TestContext.Current.CancellationToken)
             ?? throw new InvalidOperationException("The authentication problem response is empty.");
-        return document.RootElement.GetProperty("code").GetString();
+
+        return document.RootElement.GetProperty("errorCode").GetString();
+    }
+
+    private static void AssertTimestampClose(
+        DateTime expected,
+        DateTime actual,
+        TimeSpan tolerance)
+    {
+        Assert.InRange(
+            actual,
+            expected.Subtract(tolerance),
+            expected.Add(tolerance));
     }
 
     private static void AssertTimestampClose(
         DateTimeOffset expected,
         DateTimeOffset actual,
-        TimeSpan tolerance) =>
-        Assert.InRange(actual, expected.Subtract(tolerance), expected.Add(tolerance));
-
-    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
+        TimeSpan tolerance)
     {
-        public override DateTimeOffset GetUtcNow() => now;
+        Assert.InRange(
+            actual,
+            expected.Subtract(tolerance),
+            expected.Add(tolerance));
     }
+
 }
