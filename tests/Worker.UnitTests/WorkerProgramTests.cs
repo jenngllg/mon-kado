@@ -10,7 +10,8 @@ public class WorkerProgramTests
         // Arrange
         var args = new[]
         {
-            "--environment=Staging"
+            "--environment=Staging",
+            "--ConnectionStrings:PostgreSql="
         };
 
         // Act
