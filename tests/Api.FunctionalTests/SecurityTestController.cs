@@ -49,6 +49,7 @@ public class SecurityTestController : ControllerBase
     }
 
     [HttpPost("required-body")]
+    [ValidateAntiForgeryToken]
     public IActionResult PostRequiredBody([FromBody] object body)
     {
         ArgumentNullException.ThrowIfNull(body);

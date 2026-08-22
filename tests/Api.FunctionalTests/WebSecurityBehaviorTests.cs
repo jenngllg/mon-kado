@@ -360,6 +360,7 @@ public class WebSecurityBehaviorTests
         // Arrange
         using var factory = new SecurityApiFactory();
         using var client = factory.CreateClient();
+        var csrfToken = await GetCsrfTokenAsync(client);
 
         using var invalidQueryResponse = await client.GetAsync(
             "/_tests/security/invalid-query?value=invalid",
@@ -367,18 +368,22 @@ public class WebSecurityBehaviorTests
         using var emptyErrorResponse = await client.GetAsync(
             "/_tests/security/empty-binding-error?value=invalid",
             TestContext.Current.CancellationToken);
+        using var request = new HttpRequestMessage(
+            HttpMethod.Post,
+            "/_tests/security/required-body")
+        {
+            Content = new StringContent(
+                string.Empty,
+                System.Text.Encoding.UTF8,
+                "application/json")
+        };
+        request.Headers.Add(
+            WebSecurityOptions.AntiforgeryHeaderName,
+            csrfToken);
 
         // Act
         using var missingBodyResponse = await client.SendAsync(
-            new HttpRequestMessage(
-                HttpMethod.Post,
-                "/_tests/security/required-body")
-            {
-                Content = new StringContent(
-                    string.Empty,
-                    System.Text.Encoding.UTF8,
-                    "application/json")
-            },
+            request,
             TestContext.Current.CancellationToken);
 
         // Assert
