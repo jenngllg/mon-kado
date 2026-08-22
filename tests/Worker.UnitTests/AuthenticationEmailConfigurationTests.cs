@@ -35,6 +35,36 @@ public class AuthenticationEmailConfigurationTests
     }
 
     [Fact]
+    public void ConfigureWorkerInjection_WhenConfigurationIsValid_RegistersWorkers()
+    {
+        // Arrange
+        var configuration = new ConfigurationManager();
+        var services = new ServiceCollection();
+
+        // Act
+        var result = services.ConfigureWorkerInjection(
+            configuration,
+            new TestHostEnvironment("Local"));
+
+        // Assert
+        Assert.Same(
+            services,
+            result);
+        Assert.Contains(
+            services,
+            descriptor => descriptor.ImplementationType ==
+                typeof(AuthenticationEmailDeliveryWorker));
+        Assert.Contains(
+            services,
+            descriptor => descriptor.ImplementationType ==
+                typeof(UnconfirmedAccountCleanupWorker));
+        Assert.Contains(
+            services,
+            descriptor => descriptor.ImplementationType ==
+                typeof(ExpiredAuthenticationSessionCleanupWorker));
+    }
+
+    [Fact]
     public void Configure_WhenLocalEnvironment_AllowsDisabledDeliveryWithoutGmailSecrets()
     {
         // Arrange

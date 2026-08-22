@@ -15,7 +15,10 @@ using System.Text.Json;
 
 namespace JennGllg.Fr.MonKado.Back.Worker.Services;
 
-internal sealed class GmailApiClient : IGmailApiClient, IDisposable
+/// <summary>
+/// Sends raw messages through the Gmail API.
+/// </summary>
+public sealed class GmailApiClient : IGmailApiClient, IDisposable
 {
     private static readonly TimeSpan _requestTimeout = TimeSpan.FromSeconds(15);
     private readonly HttpClient _httpClient;
@@ -59,7 +62,13 @@ internal sealed class GmailApiClient : IGmailApiClient, IDisposable
         _timeProvider = TimeProvider.System;
     }
 
-    internal GmailApiClient(
+    /// <summary>
+    /// Initializes a Gmail client with explicit HTTP dependencies.
+    /// </summary>
+    /// <param name="httpClient">The HTTP client used to call Gmail.</param>
+    /// <param name="messagesEndpoint">The Gmail messages endpoint.</param>
+    /// <param name="timeProvider">The time provider used to evaluate retry delays.</param>
+    public GmailApiClient(
         HttpClient httpClient,
         Uri messagesEndpoint,
         TimeProvider timeProvider)

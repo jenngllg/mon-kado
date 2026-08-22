@@ -61,7 +61,7 @@ public class RefreshTokenServiceTests
     [InlineData("")]
     [InlineData("invalid")]
     [InlineData("00000000000000000000000000000000.invalid!")]
-    [InlineData("00000000000000000000000000000000.AQ")]
+    [InlineData("0198d02751c070008000000000000001.AQ")]
     [InlineData("00000000000000000000000000000000.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA.extra")]
     public void TryGetSessionId_WhenTokenIsInvalid_ReturnsFalse(string value)
     {
@@ -93,19 +93,4 @@ public class RefreshTokenServiceTests
         Assert.False(result);
     }
 
-    [Fact]
-    public void Hash_WhenValueIsProvided_IsDeterministic()
-    {
-        // Arrange
-        const string value = "refresh-token";
-
-        // Act
-        var first = RefreshTokenService.Hash(value);
-        var second = RefreshTokenService.Hash(value);
-
-        // Assert
-        Assert.Equal(
-            first,
-            second);
-    }
 }

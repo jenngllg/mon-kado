@@ -2,6 +2,8 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 
+using System.Net;
+
 namespace JennGllg.Fr.MonKado.Back.Api.FunctionalTests;
 
 public class SecurityApiFactory(
@@ -9,7 +11,8 @@ public class SecurityApiFactory(
     string? allowedOrigin = "http://localhost:5173",
     string? allowedHosts = "localhost",
     string? dataProtectionKeysPath = null,
-    string? knownProxyNetwork = "127.0.0.0/8") : WebApplicationFactory<Program>
+    string? knownProxyNetwork = "127.0.0.0/8",
+    IPAddress? remoteIpAddress = null) : WebApplicationFactory<Program>
 {
     public const string JwtAudience = "MonKado.Frontend";
     public const string JwtIssuer = "MonKado.Api";
@@ -41,6 +44,11 @@ public class SecurityApiFactory(
             "ReverseProxy:KnownNetworks:0",
             knownProxyNetwork);
         builder.ConfigureServices(services =>
-            services.AddControllers().AddApplicationPart(typeof(SecurityTestController).Assembly));
+        {
+            services.AddControllers().AddApplicationPart(typeof(SecurityTestController).Assembly);
+
+            if (remoteIpAddress is not null)
+                services.AddSingleton<IStartupFilter>(new RemoteIpStartupFilter(remoteIpAddress));
+        });
     }
 }

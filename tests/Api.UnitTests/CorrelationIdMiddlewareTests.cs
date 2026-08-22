@@ -9,44 +9,37 @@ namespace JennGllg.Fr.MonKado.Back.Api.UnitTests;
 
 public class CorrelationIdMiddlewareTests
 {
-    [Theory]
-    [InlineData(null, false)]
-    [InlineData("invalid", false)]
-    [InlineData("00000000-0000-0000-0000-000000000000", false)]
-    [InlineData("0198d027-51c0-7000-8000-000000000001", true)]
-    public async Task InvokeAsync_WhenCorrelationHeaderIsProvided_ReturnsExpectedIdentifier(
-        string? providedValue,
-        bool preservesValue)
+    [Fact]
+    public async Task InvokeAsync_WhenActivityIsMissing_ReturnsHttpContextTraceIdentifier()
     {
         // Arrange
         var context = new DefaultHttpContext();
-
-        if (providedValue is not null)
-            context.Request.Headers[CorrelationIdMiddleware.HeaderName] = providedValue;
-
+        context.TraceIdentifier = "http-context-trace-id";
+        context.Request.Headers[CorrelationIdMiddleware.HeaderName] = "client-correlation-id";
         var middleware = new CorrelationIdMiddleware(
             _ => Task.CompletedTask,
             NullLogger<CorrelationIdMiddleware>.Instance);
+        var previousActivity = Activity.Current;
+        Activity.Current = null;
 
         // Act
-        await middleware.InvokeAsync(context);
+        try
+        {
+            await middleware.InvokeAsync(context);
+        }
+        finally
+        {
+            Activity.Current = previousActivity;
+        }
 
         // Assert
         var returnedValue = context.Response.Headers[CorrelationIdMiddleware.HeaderName].ToString();
-        Assert.True(Guid.TryParse(
-            returnedValue,
-            out var returnedIdentifier));
-        Assert.NotEqual(
-            Guid.Empty,
-            returnedIdentifier);
         Assert.Equal(
-            preservesValue ? providedValue : returnedValue,
+            context.TraceIdentifier,
             returnedValue);
-
-        if (!preservesValue && providedValue is not null)
-            Assert.NotEqual(
-                providedValue,
-                returnedValue);
+        Assert.NotEqual(
+            "client-correlation-id",
+            returnedValue);
     }
 
     [Fact]
@@ -64,8 +57,8 @@ public class CorrelationIdMiddlewareTests
         await middleware.InvokeAsync(context);
 
         // Assert
-        Assert.NotEqual(
-            default,
-            activity.TraceId);
+        Assert.Equal(
+            activity.TraceId.ToString(),
+            context.Response.Headers[CorrelationIdMiddleware.HeaderName].ToString());
     }
 }

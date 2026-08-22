@@ -3,6 +3,7 @@ using JennGllg.Fr.MonKado.Back.Api.Errors;
 using JennGllg.Fr.MonKado.Back.Api.Options;
 using JennGllg.Fr.MonKado.Back.Application.Abstractions;
 using JennGllg.Fr.MonKado.Back.Application.Models;
+using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Abstractions;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Contexts;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Entities;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Services;
@@ -11,6 +12,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 using System.IdentityModel.Tokens.Jwt;
 using System.Net;
@@ -52,7 +54,290 @@ public class LoginIntegrationTests(PostgreSqlContainerFixture fixture)
             "Set-Cookie",
             out var cookies) && cookies.Any(value => value.StartsWith(
                 "MonKado.Refresh=",
-                StringComparison.Ordinal)));
+            StringComparison.Ordinal)));
+    }
+
+    [Fact]
+    public async Task LoginAsync_WhenAccountDisappearsBeforeDatabaseLock_ReturnsInvalidCredentials()
+    {
+        // Arrange
+        await using var factory = await CreateMigratedFactoryAsync(
+            new FixedTimeProvider(_now),
+            services =>
+            {
+                services.RemoveAll<IMonKadoUserRepository>();
+                services.AddScoped<IMonKadoUserRepository, MissingLockedUserRepository>();
+            });
+        await CreateUserAsync(
+            factory,
+            "missing-lock@example.fr",
+            emailConfirmed: true);
+        await using var scope = factory.Services.CreateAsyncScope();
+        var service = scope.ServiceProvider.GetRequiredService<IAccountSessionService>();
+
+        // Act
+        var result = await service.LoginAsync(
+            "missing-lock@example.fr",
+            Password,
+            rememberMe: false,
+            currentRefreshToken: null,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(
+            AccountLoginResult.InvalidCredentials,
+            result.Result);
+        Assert.Null(result.Tokens);
+    }
+
+    [Theory]
+    [InlineData(false, "record the failed login attempt")]
+    [InlineData(true, "reset the failed login count")]
+    public async Task LoginAsync_WhenIdentityCannotPersistFailureState_ThrowsDetailedException(
+        bool usesValidPassword,
+        string expectedOperation)
+    {
+        // Arrange
+        await using var factory = await CreateMigratedFactoryAsync(
+            new FixedTimeProvider(_now),
+            services =>
+            {
+                services.RemoveAll<UserManager<MonKadoUser>>();
+                services.AddScoped<UserManager<MonKadoUser>, FailingIdentityUpdateUserManager>();
+            });
+        var user = await CreateUserAsync(
+            factory,
+            "identity-failure@example.fr",
+            emailConfirmed: true);
+
+        if (usesValidPassword)
+        {
+            await using var setupScope = factory.Services.CreateAsyncScope();
+            var setupContext = setupScope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
+            await setupContext.Users
+                .Where(value => value.Id == user.Id)
+                .ExecuteUpdateAsync(
+                    setters => setters.SetProperty(
+                        value => value.AccessFailedCount,
+                        1),
+                    TestContext.Current.CancellationToken);
+        }
+
+        await using var scope = factory.Services.CreateAsyncScope();
+        var service = scope.ServiceProvider.GetRequiredService<IAccountSessionService>();
+
+        // Act
+        Task<AccountSessionLoginResult> action() => service.LoginAsync(
+            "identity-failure@example.fr",
+            usesValidPassword ? Password : "wrong password",
+            rememberMe: false,
+            currentRefreshToken: null,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            (Func<Task<AccountSessionLoginResult>>)action);
+        Assert.Contains(
+            expectedOperation,
+            exception.Message,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "PersistenceFailed",
+            exception.Message,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task LoginAsync_WhenAccessTokenCreationFails_DoesNotPersistSession()
+    {
+        // Arrange
+        await using var factory = await CreateMigratedFactoryAsync(
+            new FixedTimeProvider(_now),
+            services =>
+            {
+                services.RemoveAll<IAccessTokenService>();
+                services.AddSingleton<IAccessTokenService, ThrowingAccessTokenService>();
+            });
+        await CreateUserAsync(
+            factory,
+            "token-failure@example.fr",
+            emailConfirmed: true);
+        await using var scope = factory.Services.CreateAsyncScope();
+        var service = scope.ServiceProvider.GetRequiredService<IAccountSessionService>();
+
+        // Act
+        Task<AccountSessionLoginResult> action() => service.LoginAsync(
+            "token-failure@example.fr",
+            Password,
+            rememberMe: false,
+            currentRefreshToken: null,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            (Func<Task<AccountSessionLoginResult>>)action);
+        await using var verificationScope = factory.Services.CreateAsyncScope();
+        var context = verificationScope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
+        Assert.Empty(await context.AuthenticationSessions
+            .AsNoTracking()
+            .ToArrayAsync(TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task RefreshAsync_WhenAccessTokenCreationFails_PreservesCurrentSessionToken()
+    {
+        // Arrange
+        await using var factory = await CreateMigratedFactoryAsync(
+            new FixedTimeProvider(_now),
+            services =>
+            {
+                services.RemoveAll<IAccessTokenService>();
+                services.AddSingleton<IAccessTokenService, ThrowingAccessTokenService>();
+            });
+        var user = await CreateUserAsync(
+            factory,
+            "refresh-token-failure@example.fr",
+            emailConfirmed: true);
+        var sessionId = Guid.CreateVersion7(_now.UtcDateTime);
+        var refreshToken = new RefreshTokenService().Create(sessionId);
+        var expiresAt = _now.UtcDateTime.AddHours(8);
+
+        await using (var setupScope = factory.Services.CreateAsyncScope())
+        {
+            var setupContext = setupScope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
+            setupContext.AuthenticationSessions.Add(AuthenticationSession.Create(
+                sessionId,
+                user.Id,
+                refreshToken.Hash,
+                isPersistent: false,
+                _now.UtcDateTime,
+                expiresAt));
+            await setupContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        await using var scope = factory.Services.CreateAsyncScope();
+        var service = scope.ServiceProvider.GetRequiredService<IAccountSessionService>();
+
+        // Act
+        Task<AccountSessionTokens?> action() => service.RefreshAsync(
+            refreshToken.Value,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            (Func<Task<AccountSessionTokens?>>)action);
+        await using var verificationScope = factory.Services.CreateAsyncScope();
+        var context = verificationScope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
+        var session = await context.AuthenticationSessions
+            .AsNoTracking()
+            .SingleAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(
+            refreshToken.Hash,
+            session.RefreshTokenHash);
+        AssertTimestampClose(
+            _now.UtcDateTime,
+            session.RenewedAt,
+            TimeSpan.FromMilliseconds(1));
+        AssertTimestampClose(
+            expiresAt,
+            session.ExpiresAt,
+            TimeSpan.FromMilliseconds(1));
+        Assert.Null(session.RevokedAt);
+    }
+
+    [Theory]
+    [InlineData("invalid", false)]
+    [InlineData("unknown", false)]
+    [InlineData("altered", true)]
+    [InlineData("revoked", true)]
+    public async Task LoginAsync_WhenCurrentBrowserTokenIsProvided_RevokesIdentifiedSession(
+        string scenario,
+        bool expectsRevocation)
+    {
+        // Arrange
+        var timeProvider = new FixedTimeProvider(_now);
+        await using var factory = await CreateMigratedFactoryAsync(timeProvider);
+        await CreateUserAsync(
+            factory,
+            "replacement@example.fr",
+            emailConfirmed: true);
+        string firstRefreshToken;
+
+        await using (var loginScope = factory.Services.CreateAsyncScope())
+        {
+            var service = loginScope.ServiceProvider.GetRequiredService<IAccountSessionService>();
+            var firstLogin = await service.LoginAsync(
+                "replacement@example.fr",
+                Password,
+                rememberMe: false,
+                currentRefreshToken: null,
+                TestContext.Current.CancellationToken);
+            Assert.NotNull(firstLogin.Tokens);
+            firstRefreshToken = firstLogin.Tokens.RefreshToken;
+        }
+
+        Guid firstSessionId;
+
+        await using (var setupScope = factory.Services.CreateAsyncScope())
+        {
+            var setupContext = setupScope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
+            var session = await setupContext.AuthenticationSessions.SingleAsync(
+                TestContext.Current.CancellationToken);
+            firstSessionId = session.Id;
+
+            if (scenario == "revoked")
+            {
+                session.Revoke(_now.UtcDateTime);
+                await setupContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+            }
+        }
+
+        var currentRefreshToken = scenario switch
+        {
+            "invalid" => "invalid",
+            "unknown" => new RefreshTokenService().Create(Guid.CreateVersion7()).Value,
+            "altered" => new RefreshTokenService().Create(firstSessionId).Value,
+            "revoked" => firstRefreshToken,
+            _ => throw new InvalidOperationException($"Unknown test scenario '{scenario}'.")
+        };
+        await using var scope = factory.Services.CreateAsyncScope();
+        var accountSessionService = scope.ServiceProvider.GetRequiredService<IAccountSessionService>();
+
+        // Act
+        var result = await accountSessionService.LoginAsync(
+            "replacement@example.fr",
+            Password,
+            rememberMe: false,
+            currentRefreshToken,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(
+            AccountLoginResult.Success,
+            result.Result);
+        var context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
+        var sessions = await context.AuthenticationSessions
+            .AsNoTracking()
+            .OrderBy(value => value.CreatedAt)
+            .ThenBy(value => value.Id)
+            .ToArrayAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(
+            2,
+            sessions.Length);
+        var revokedAt = sessions.Single(value => value.Id == firstSessionId).RevokedAt;
+
+        if (expectsRevocation)
+        {
+            Assert.NotNull(revokedAt);
+            AssertTimestampClose(
+                _now.UtcDateTime,
+                revokedAt.Value,
+                TimeSpan.FromMilliseconds(1));
+        }
+        else
+        {
+            Assert.Null(revokedAt);
+        }
     }
 
     [Fact]
@@ -178,6 +463,57 @@ public class LoginIntegrationTests(PostgreSqlContainerFixture fixture)
             timeProvider.UtcNow.UtcDateTime.AddHours(8),
             session.ExpiresAt,
             TimeSpan.FromSeconds(1));
+    }
+
+    [Fact]
+    public async Task RefreshAsync_WhenSameTokenIsRotatedConcurrently_AllowsOneAndRevokesSession()
+    {
+        // Arrange
+        await using var factory = await CreateMigratedFactoryAsync(new FixedTimeProvider(_now));
+        await CreateUserAsync(
+            factory,
+            "lea@example.fr",
+            emailConfirmed: true);
+        using var client = factory.CreateClient();
+        using var loginResponse = await LoginAsync(
+            client,
+            "lea@example.fr",
+            Password,
+            rememberMe: false);
+        var refreshToken = GetCookieValue(GetRefreshCookie(loginResponse));
+        await using var firstScope = factory.Services.CreateAsyncScope();
+        await using var secondScope = factory.Services.CreateAsyncScope();
+        var firstService = firstScope.ServiceProvider.GetRequiredService<IAccountSessionService>();
+        var secondService = secondScope.ServiceProvider.GetRequiredService<IAccountSessionService>();
+        var gate = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var firstRotation = RefreshWhenReleasedAsync(
+            firstService,
+            refreshToken,
+            gate.Task);
+        var secondRotation = RefreshWhenReleasedAsync(
+            secondService,
+            refreshToken,
+            gate.Task);
+
+        // Act
+        gate.SetResult(true);
+        var results = await Task.WhenAll(
+            firstRotation,
+            secondRotation);
+
+        // Assert
+        Assert.Single(
+            results,
+            result => result is not null);
+        Assert.Single(
+            results,
+            result => result is null);
+        await using var verificationScope = factory.Services.CreateAsyncScope();
+        var context = verificationScope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
+        var session = await context.AuthenticationSessions
+            .AsNoTracking()
+            .SingleAsync(TestContext.Current.CancellationToken);
+        Assert.NotNull(session.RevokedAt);
     }
 
     [Fact]
@@ -350,8 +686,7 @@ public class LoginIntegrationTests(PostgreSqlContainerFixture fixture)
         // Arrange
         await using var factory = await CreateMigratedFactoryAsync(new FixedTimeProvider(_now));
         await using var scope = factory.Services.CreateAsyncScope();
-        var service = Assert.IsType<AccountSessionService>(
-            scope.ServiceProvider.GetRequiredService<IAccountSessionService>());
+        var service = scope.ServiceProvider.GetRequiredService<IAccountSessionService>();
 
         // Act
         var result = await service.RefreshAsync(
@@ -360,32 +695,6 @@ public class LoginIntegrationTests(PostgreSqlContainerFixture fixture)
 
         // Assert
         Assert.Null(result);
-    }
-
-    [Fact]
-    public async Task AuthenticateWithAccountLockAsync_WhenAccountDisappeared_ReturnsInvalidCredentials()
-    {
-        // Arrange
-        await using var factory = await CreateMigratedFactoryAsync(new FixedTimeProvider(_now));
-        await using var scope = factory.Services.CreateAsyncScope();
-        var service = Assert.IsType<AccountSessionService>(
-            scope.ServiceProvider.GetRequiredService<IAccountSessionService>());
-        var context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
-        var executionStrategy = context.Database.CreateExecutionStrategy();
-
-        // Act
-        var result = await executionStrategy.ExecuteAsync(() =>
-            service.AuthenticateWithAccountLockAsync(
-                Guid.NewGuid(),
-                "MISSING@EXAMPLE.FR",
-                Password,
-                TestContext.Current.CancellationToken));
-
-        // Assert
-        Assert.Equal(
-            AccountLoginResult.InvalidCredentials,
-            result.Result);
-        Assert.Null(result.User);
     }
 
     [Theory]
@@ -529,62 +838,6 @@ public class LoginIntegrationTests(PostgreSqlContainerFixture fixture)
         Assert.NotNull((await verificationContext.AuthenticationSessions
             .AsNoTracking()
             .SingleAsync(TestContext.Current.CancellationToken)).RevokedAt);
-    }
-
-    [Fact]
-    public async Task RevokeCurrentSessionAsync_WhenTokenCannotIdentifyActiveSession_DoesNotChangeSession()
-    {
-        // Arrange
-        await using var factory = await CreateMigratedFactoryAsync(new FixedTimeProvider(_now));
-        await CreateUserAsync(
-            factory,
-            "lea@example.fr",
-            emailConfirmed: true);
-        using var client = factory.CreateClient();
-        using var loginResponse = await LoginAsync(
-            client,
-            "lea@example.fr",
-            Password,
-            rememberMe: false);
-        var currentToken = GetCookieValue(GetRefreshCookie(loginResponse));
-        await using var scope = factory.Services.CreateAsyncScope();
-        var service = Assert.IsType<AccountSessionService>(
-            scope.ServiceProvider.GetRequiredService<IAccountSessionService>());
-        var refreshTokenService = scope.ServiceProvider.GetRequiredService<IRefreshTokenService>();
-        Assert.True(refreshTokenService.TryGetSessionId(
-            currentToken,
-            out var sessionId));
-        var mismatchedToken = refreshTokenService.Create(sessionId).Value;
-        var unknownToken = refreshTokenService.Create(Guid.NewGuid()).Value;
-
-        // Act
-        await service.RevokeCurrentSessionAsync(
-            "invalid-refresh-token",
-            _now.UtcDateTime,
-            TestContext.Current.CancellationToken);
-        await service.RevokeCurrentSessionAsync(
-            unknownToken,
-            _now.UtcDateTime,
-            TestContext.Current.CancellationToken);
-        await service.RevokeCurrentSessionAsync(
-            mismatchedToken,
-            _now.UtcDateTime,
-            TestContext.Current.CancellationToken);
-        var context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
-        var session = await context.AuthenticationSessions
-            .SingleAsync(TestContext.Current.CancellationToken);
-        var revokedAt = _now.UtcDateTime.AddMinutes(1);
-        session.Revoke(revokedAt);
-        await context.SaveChangesAsync(TestContext.Current.CancellationToken);
-        await service.RevokeCurrentSessionAsync(
-            currentToken,
-            _now.UtcDateTime.AddMinutes(2),
-            TestContext.Current.CancellationToken);
-
-        // Assert
-        Assert.Equal(
-            revokedAt,
-            session.RevokedAt);
     }
 
     [Fact]
@@ -779,11 +1032,14 @@ public class LoginIntegrationTests(PostgreSqlContainerFixture fixture)
             .ToArrayAsync(TestContext.Current.CancellationToken));
     }
 
-    private async Task<PostgreSqlApiFactory> CreateMigratedFactoryAsync(TimeProvider timeProvider)
+    private async Task<PostgreSqlApiFactory> CreateMigratedFactoryAsync(
+        TimeProvider timeProvider,
+        Action<IServiceCollection>? configureServices = null)
     {
         var factory = new PostgreSqlApiFactory(
             fixture.Container.GetConnectionString(),
-            timeProvider);
+            timeProvider,
+            configureServices: configureServices);
         await using var scope = factory.Services.CreateAsyncScope();
         var context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
         await context.Database.MigrateAsync(TestContext.Current.CancellationToken);
@@ -863,6 +1119,18 @@ public class LoginIntegrationTests(PostgreSqlContainerFixture fixture)
 
         return await client.SendAsync(
             request,
+            TestContext.Current.CancellationToken);
+    }
+
+    private static async Task<AccountSessionTokens?> RefreshWhenReleasedAsync(
+        IAccountSessionService service,
+        string refreshToken,
+        Task gate)
+    {
+        await gate;
+
+        return await service.RefreshAsync(
+            refreshToken,
             TestContext.Current.CancellationToken);
     }
 

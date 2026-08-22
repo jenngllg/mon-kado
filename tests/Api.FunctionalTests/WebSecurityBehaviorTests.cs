@@ -337,6 +337,115 @@ public class WebSecurityBehaviorTests
     }
 
     [Fact]
+    public async Task ExecuteAsync_WhenUnavailableDependencyHasNoInnerException_ReturnsServiceUnavailable()
+    {
+        // Arrange
+        using var factory = new SecurityApiFactory();
+        using var client = factory.CreateClient();
+
+        // Act
+        using var response = await client.GetAsync(
+            "/_tests/security/unavailable",
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.ServiceUnavailable,
+            response.StatusCode);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_WhenModelBindingFails_ReturnsNormalizedValidationErrors()
+    {
+        // Arrange
+        using var factory = new SecurityApiFactory();
+        using var client = factory.CreateClient();
+
+        using var invalidQueryResponse = await client.GetAsync(
+            "/_tests/security/invalid-query?value=invalid",
+            TestContext.Current.CancellationToken);
+        using var emptyErrorResponse = await client.GetAsync(
+            "/_tests/security/empty-binding-error?value=invalid",
+            TestContext.Current.CancellationToken);
+
+        // Act
+        using var missingBodyResponse = await client.SendAsync(
+            new HttpRequestMessage(
+                HttpMethod.Post,
+                "/_tests/security/required-body")
+            {
+                Content = new StringContent(
+                    string.Empty,
+                    System.Text.Encoding.UTF8,
+                    "application/json")
+            },
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.BadRequest,
+            invalidQueryResponse.StatusCode);
+        Assert.Equal(
+            HttpStatusCode.BadRequest,
+            emptyErrorResponse.StatusCode);
+        Assert.Equal(
+            HttpStatusCode.BadRequest,
+            missingBodyResponse.StatusCode);
+        var invalidQuery = await invalidQueryResponse.Content.ReadFromJsonAsync<ErrorResponse>(
+            TestContext.Current.CancellationToken);
+        var missingBody = await missingBodyResponse.Content.ReadFromJsonAsync<ErrorResponse>(
+            TestContext.Current.CancellationToken);
+        var emptyError = await emptyErrorResponse.Content.ReadFromJsonAsync<ErrorResponse>(
+            TestContext.Current.CancellationToken);
+        Assert.Equal(
+            "value",
+            Assert.Single(invalidQuery?.ValidationErrors ?? []).PropertyName);
+        var missingBodyErrors = missingBody?.ValidationErrors?.ToArray() ?? [];
+        Assert.NotEmpty(missingBodyErrors);
+        Assert.All(
+            missingBodyErrors,
+            error => Assert.Equal(
+                "body",
+                error.PropertyName));
+        Assert.Equal(
+            "The request body is invalid.",
+            Assert.Single(emptyError?.ValidationErrors ?? []).ErrorMessage);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_WhenRemoteIpIsAvailable_PartitionsAuthenticationRequestByAddress()
+    {
+        // Arrange
+        using var factory = new SecurityApiFactory(remoteIpAddress: IPAddress.Loopback);
+        using var client = factory.CreateClient();
+        var csrfToken = await GetCsrfTokenAsync(client);
+        using var request = new HttpRequestMessage(
+            HttpMethod.Post,
+            "/api/v1/auth/sessions")
+        {
+            Content = JsonContent.Create(new
+            {
+                email = "member@example.fr",
+                password = "a sufficiently long password",
+                rememberMe = false
+            })
+        };
+        request.Headers.Add(
+            WebSecurityOptions.AntiforgeryHeaderName,
+            csrfToken);
+
+        // Act
+        using var response = await client.SendAsync(
+            request,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.ServiceUnavailable,
+            response.StatusCode);
+    }
+
+    [Fact]
     public async Task ExecuteAsync_WhenProductionHttps_UsesHostCookieAndHsts()
     {
         // Arrange

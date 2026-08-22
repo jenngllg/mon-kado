@@ -13,6 +13,7 @@ public class JwtAccessTokenServiceTests
 {
     private const string Audience = "MonKado.Frontend";
     private const string Issuer = "MonKado.Api";
+    private const int LifetimeSeconds = 900;
     private const string SigningKey = "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA=";
 
     private readonly DateTimeOffset _now = new(
@@ -42,7 +43,7 @@ public class JwtAccessTokenServiceTests
             .ToArray();
 
         Assert.Equal(
-            JwtAccessTokenService.LifetimeSeconds,
+            LifetimeSeconds,
             result.ExpiresIn);
         Assert.Equal(
             SecurityAlgorithms.HmacSha256,
@@ -54,7 +55,7 @@ public class JwtAccessTokenServiceTests
             Audience,
             Assert.Single(token.Audiences));
         Assert.Equal(
-            _now.AddSeconds(JwtAccessTokenService.LifetimeSeconds).UtcDateTime,
+            _now.AddSeconds(LifetimeSeconds).UtcDateTime,
             token.ValidTo);
         Assert.Equal(
             [

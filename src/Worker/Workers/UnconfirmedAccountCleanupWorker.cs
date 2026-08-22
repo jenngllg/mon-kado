@@ -7,7 +7,10 @@ using Microsoft.Extensions.Logging;
 
 namespace JennGllg.Fr.MonKado.Back.Worker.Workers;
 
-internal sealed class UnconfirmedAccountCleanupWorker(
+/// <summary>
+/// Removes expired unconfirmed accounts in the background.
+/// </summary>
+public sealed class UnconfirmedAccountCleanupWorker(
     IServiceScopeFactory scopeFactory,
     TimeProvider timeProvider,
     ILogger<UnconfirmedAccountCleanupWorker> logger) : BackgroundService
@@ -16,6 +19,7 @@ internal sealed class UnconfirmedAccountCleanupWorker(
     private static readonly TimeSpan _normalInterval = TimeSpan.FromHours(24);
     private static readonly TimeSpan _failureRetryInterval = TimeSpan.FromMinutes(15);
 
+    /// <inheritdoc />
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         while (true)
@@ -35,7 +39,7 @@ internal sealed class UnconfirmedAccountCleanupWorker(
         }
     }
 
-    internal async Task<TimeSpan> CleanupOnceAsync(CancellationToken cancellationToken)
+    private async Task<TimeSpan> CleanupOnceAsync(CancellationToken cancellationToken)
     {
         try
         {
@@ -59,13 +63,14 @@ internal sealed class UnconfirmedAccountCleanupWorker(
         {
             WorkerLogMessages.ExpiredAccountCleanupFailed(
                 logger,
-                exception.GetType().Name);
+                exception.GetType().Name,
+                exception);
 
             return _failureRetryInterval;
         }
     }
 
-    internal async Task<int> DeleteExpiredAccountsAsync(CancellationToken cancellationToken)
+    private async Task<int> DeleteExpiredAccountsAsync(CancellationToken cancellationToken)
     {
         var totalDeleted = 0;
         int deletedInBatch;

@@ -7,7 +7,7 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Service
 /// Removes expired authentication sessions from persistence.
 /// </summary>
 /// <param name="sessionRepository">The authentication session repository.</param>
-internal class ExpiredAuthenticationSessionCleanup(
+public class ExpiredAuthenticationSessionCleanup(
     IAuthenticationSessionRepository sessionRepository)
     : IExpiredAuthenticationSessionCleanup
 {

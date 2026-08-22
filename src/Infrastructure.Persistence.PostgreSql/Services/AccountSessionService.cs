@@ -20,7 +20,7 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Service
 /// <param name="accessTokenService">The access token service.</param>
 /// <param name="refreshTokenService">The refresh token service.</param>
 /// <param name="timeProvider">The time provider.</param>
-internal class AccountSessionService(
+public class AccountSessionService(
     MonKadoDbContext context,
     IUnitOfWork unitOfWork,
     IMonKadoUserRepository userRepository,
@@ -66,11 +66,12 @@ internal class AccountSessionService(
                     null);
             }
 
+            ArgumentNullException.ThrowIfNull(user.NormalizedEmail);
             var executionStrategy = context.Database.CreateExecutionStrategy();
             var attempt = await executionStrategy.ExecuteAsync(() =>
                 AuthenticateWithAccountLockAsync(
                     user.Id,
-                    user.NormalizedEmail!,
+                    user.NormalizedEmail,
                     password,
                     cancellationToken));
 
@@ -79,9 +80,10 @@ internal class AccountSessionService(
                     attempt.Result,
                     null);
 
+            ArgumentNullException.ThrowIfNull(attempt.User);
             var tokens = await executionStrategy.ExecuteAsync(() =>
                 CreateSessionAsync(
-                    attempt.User!.Id,
+                    attempt.User.Id,
                     rememberMe,
                     currentRefreshToken,
                     cancellationToken));
@@ -142,7 +144,7 @@ internal class AccountSessionService(
     /// <param name="password">The password.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>The authentication attempt result.</returns>
-    internal async Task<AuthenticationAttempt> AuthenticateWithAccountLockAsync(
+    private async Task<AuthenticationAttempt> AuthenticateWithAccountLockAsync(
         Guid userId,
         string normalizedEmail,
         string password,
@@ -156,17 +158,15 @@ internal class AccountSessionService(
             normalizedEmail,
             cancellationToken);
 
-        if (await CommitIfUserIsMissingAsync(
-            user,
-            transaction,
-            cancellationToken))
+        if (user is null)
         {
+            await transaction.CommitAsync(cancellationToken);
             PerformTimingEqualizationHash(password);
 
             return AuthenticationAttempt.InvalidCredentials;
         }
 
-        var existingUser = user!;
+        var existingUser = user;
 
         if (await userManager.IsLockedOutAsync(existingUser))
         {
@@ -234,7 +234,7 @@ internal class AccountSessionService(
     /// <param name="currentRefreshToken">The refresh token currently held by the browser.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>The created session tokens.</returns>
-    internal async Task<AccountSessionTokens> CreateSessionAsync(
+    private async Task<AccountSessionTokens> CreateSessionAsync(
         Guid userId,
         bool isPersistent,
         string? currentRefreshToken,
@@ -263,16 +263,17 @@ internal class AccountSessionService(
             isPersistent,
             now,
             expiresAt);
+        var tokens = CreateTokens(
+            userId,
+            refreshToken.Value,
+            expiresAt,
+            isPersistent);
 
         sessionRepository.Add(session);
         await unitOfWork.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 
-        return CreateTokens(
-            userId,
-            refreshToken.Value,
-            expiresAt,
-            isPersistent);
+        return tokens;
     }
 
     /// <summary>
@@ -282,7 +283,7 @@ internal class AccountSessionService(
     /// <param name="currentRefreshToken">The current refresh token.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>The rotated tokens when the session remains valid; otherwise, <see langword="null" />.</returns>
-    internal async Task<AccountSessionTokens?> RotateSessionAsync(
+    private async Task<AccountSessionTokens?> RotateSessionAsync(
         Guid sessionId,
         string currentRefreshToken,
         CancellationToken cancellationToken)
@@ -344,14 +345,15 @@ internal class AccountSessionService(
             rotatedRefreshToken.Hash,
             now,
             expiresAt);
-        await unitOfWork.SaveChangesAsync(cancellationToken);
-        await transaction.CommitAsync(cancellationToken);
-
-        return CreateTokens(
+        var tokens = CreateTokens(
             user.Id,
             rotatedRefreshToken.Value,
             expiresAt,
             session.IsPersistent);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+
+        return tokens;
     }
 
     /// <summary>
@@ -361,7 +363,7 @@ internal class AccountSessionService(
     /// <param name="revokedAt">The revocation date.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>A task that represents the asynchronous operation.</returns>
-    internal async Task RevokeCurrentSessionAsync(
+    private async Task RevokeCurrentSessionAsync(
         string? currentRefreshToken,
         DateTime revokedAt,
         CancellationToken cancellationToken)
@@ -376,11 +378,7 @@ internal class AccountSessionService(
             sessionId,
             cancellationToken);
 
-        if (session is null ||
-            session.RevokedAt is not null ||
-            !refreshTokenService.Verify(
-                currentRefreshToken,
-                session.RefreshTokenHash))
+        if (session is null || session.RevokedAt is not null)
             return;
 
         session.Revoke(revokedAt);
@@ -394,7 +392,7 @@ internal class AccountSessionService(
     /// <param name="refreshTokenExpiresAt">The refresh token expiration.</param>
     /// <param name="isPersistent">Whether the session is persistent.</param>
     /// <returns>The session tokens.</returns>
-    internal AccountSessionTokens CreateTokens(
+    private AccountSessionTokens CreateTokens(
         Guid userId,
         string refreshToken,
         DateTime refreshTokenExpiresAt,
@@ -407,13 +405,7 @@ internal class AccountSessionService(
             isPersistent);
     }
 
-    /// <summary>
-    /// Ensures that an Identity persistence operation succeeded.
-    /// </summary>
-    /// <param name="result">The Identity operation result.</param>
-    /// <param name="operation">The operation description.</param>
-    /// <exception cref="InvalidOperationException">The Identity operation failed.</exception>
-    internal static void EnsureIdentityUpdateSucceeded(
+    private static void EnsureIdentityUpdateSucceeded(
         IdentityResult result,
         string operation)
     {
@@ -425,26 +417,6 @@ internal class AccountSessionService(
             result.Errors.Select(error => error.Code));
 
         throw new InvalidOperationException($"Unable to {operation}: {errorCodes}.");
-    }
-
-    /// <summary>
-    /// Commits the account-lock transaction when the account no longer exists.
-    /// </summary>
-    /// <param name="user">The locked account.</param>
-    /// <param name="transaction">The current transaction.</param>
-    /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns><see langword="true" /> when the account is missing.</returns>
-    internal static async Task<bool> CommitIfUserIsMissingAsync(
-        MonKadoUser? user,
-        IDbContextTransaction transaction,
-        CancellationToken cancellationToken)
-    {
-        if (user is not null)
-            return false;
-
-        await transaction.CommitAsync(cancellationToken);
-
-        return true;
     }
 
     /// <summary>

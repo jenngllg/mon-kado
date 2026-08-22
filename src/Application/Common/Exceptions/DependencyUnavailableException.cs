@@ -7,7 +7,7 @@ namespace JennGllg.Fr.MonKado.Back.Application.Common.Exceptions;
 
 public class DependencyUnavailableException(
     string dependencyName,
-    Exception innerException)
+    Exception? innerException)
     : Exception(
         $"The {dependencyName} dependency is unavailable.",
         innerException)

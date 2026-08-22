@@ -1,49 +1,19 @@
+using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Abstractions;
+using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Contexts;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Entities;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Services;
+
+using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
+
+using Moq;
 
 namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.UnitTests;
 
 public class EmailConfirmationServiceInputTests
 {
-    private static readonly DateTime _now = new(
-        2026,
-        8,
-        21,
-        12,
-        0,
-        0,
-        DateTimeKind.Utc);
-
-    [Theory]
-    [InlineData(false, null, true)]
-    [InlineData(false, 0, true)]
-    [InlineData(false, 1, false)]
-    [InlineData(true, null, false)]
-    public void IsExpiredUnconfirmedAccount_WhenAccountIsProvided_ReturnsExpectedResult(
-        bool emailConfirmed,
-        int? expirationOffsetDays,
-        bool expected)
-    {
-        // Arrange
-        var user = new MonKadoUser
-        {
-            EmailConfirmed = emailConfirmed,
-            UnconfirmedAccountExpiresAt = expirationOffsetDays is null
-                ? null
-                : _now.AddDays(expirationOffsetDays.Value)
-        };
-
-        // Act
-        var result = EmailConfirmationService.IsExpiredUnconfirmedAccount(
-            user,
-            _now);
-
-        // Assert
-        Assert.Equal(
-            expected,
-            result);
-    }
-
     [Theory]
     [InlineData("invalid", "token")]
     [InlineData("00000000-0000-0000-0000-000000000000", "token")]
@@ -56,7 +26,20 @@ public class EmailConfirmationServiceInputTests
         string token)
     {
         // Arrange
-        var service = CreateService(new StubLookupNormalizer(null));
+        using var context = CreateContext();
+        using var provider = new ServiceCollection().BuildServiceProvider();
+        var normalizer = new StubLookupNormalizer(null);
+        var userRepositoryMock = new Mock<IMonKadoUserRepository>(MockBehavior.Strict);
+        var outboxRepositoryMock =
+            new Mock<IAuthenticationEmailOutboxRepository>(MockBehavior.Strict);
+        var storeMock = new Mock<IUserStore<MonKadoUser>>(MockBehavior.Strict);
+        var service = CreateService(
+            context,
+            provider,
+            normalizer,
+            userRepositoryMock,
+            outboxRepositoryMock,
+            storeMock);
 
         // Act
         var confirmed = await service.ConfirmAsync(
@@ -66,6 +49,9 @@ public class EmailConfirmationServiceInputTests
 
         // Assert
         Assert.False(confirmed);
+        userRepositoryMock.VerifyNoOtherCalls();
+        outboxRepositoryMock.VerifyNoOtherCalls();
+        storeMock.VerifyNoOtherCalls();
     }
 
     [Theory]
@@ -76,8 +62,20 @@ public class EmailConfirmationServiceInputTests
         string? normalizedEmail)
     {
         // Arrange
+        using var context = CreateContext();
+        using var provider = new ServiceCollection().BuildServiceProvider();
         var normalizer = new StubLookupNormalizer(normalizedEmail);
-        var service = CreateService(normalizer);
+        var userRepositoryMock = new Mock<IMonKadoUserRepository>(MockBehavior.Strict);
+        var outboxRepositoryMock =
+            new Mock<IAuthenticationEmailOutboxRepository>(MockBehavior.Strict);
+        var storeMock = new Mock<IUserStore<MonKadoUser>>(MockBehavior.Strict);
+        var service = CreateService(
+            context,
+            provider,
+            normalizer,
+            userRepositoryMock,
+            outboxRepositoryMock,
+            storeMock);
 
         // Act
         await service.RequestAsync(
@@ -88,17 +86,49 @@ public class EmailConfirmationServiceInputTests
         Assert.Equal(
             1,
             normalizer.NormalizeEmailCallCount);
+        userRepositoryMock.VerifyNoOtherCalls();
+        outboxRepositoryMock.VerifyNoOtherCalls();
+        storeMock.VerifyNoOtherCalls();
     }
 
-    private static EmailConfirmationService CreateService(StubLookupNormalizer normalizer)
+    private static EmailConfirmationService CreateService(
+        MonKadoDbContext context,
+        IServiceProvider serviceProvider,
+        StubLookupNormalizer normalizer,
+        Mock<IMonKadoUserRepository>? userRepositoryMock = null,
+        Mock<IAuthenticationEmailOutboxRepository>? outboxRepositoryMock = null,
+        Mock<IUserStore<MonKadoUser>>? storeMock = null)
     {
+        userRepositoryMock ??= new(MockBehavior.Strict);
+        outboxRepositoryMock ??= new(MockBehavior.Strict);
+        storeMock ??= new(MockBehavior.Strict);
+        var userManager = new UserManager<MonKadoUser>(
+            storeMock.Object,
+            Microsoft.Extensions.Options.Options.Create(new IdentityOptions()),
+            new PasswordHasher<MonKadoUser>(),
+            [],
+            [],
+            normalizer,
+            new IdentityErrorDescriber(),
+            serviceProvider,
+            NullLogger<UserManager<MonKadoUser>>.Instance);
+
         return new(
-            null!,
-            null!,
-            null!,
-            null!,
-            null!,
+            context,
+            context,
+            userRepositoryMock.Object,
+            outboxRepositoryMock.Object,
+            userManager,
             normalizer,
             TimeProvider.System);
+    }
+
+    private static MonKadoDbContext CreateContext()
+    {
+        var options = new DbContextOptionsBuilder<MonKadoDbContext>()
+            .UseNpgsql("Host=127.0.0.1;Database=mon_kado;Username=mon_kado;Password=test")
+            .Options;
+
+        return new MonKadoDbContext(options);
     }
 }

@@ -4,10 +4,14 @@ using System.Collections.Concurrent;
 
 namespace JennGllg.Fr.MonKado.Back.Tools.GmailOAuthBootstrap;
 
-internal class MemoryDataStore : IDataStore
+/// <summary>
+/// Stores temporary OAuth state in process memory.
+/// </summary>
+public class MemoryDataStore : IDataStore
 {
     private readonly ConcurrentDictionary<string, object> _values = new(StringComparer.Ordinal);
 
+    /// <inheritdoc />
     public Task ClearAsync()
     {
         _values.Clear();
@@ -15,6 +19,7 @@ internal class MemoryDataStore : IDataStore
         return Task.CompletedTask;
     }
 
+    /// <inheritdoc />
     public Task DeleteAsync<T>(string key)
     {
         _values.TryRemove(
@@ -24,6 +29,7 @@ internal class MemoryDataStore : IDataStore
         return Task.CompletedTask;
     }
 
+    /// <inheritdoc />
     public Task<T?> GetAsync<T>(string key)
     {
 
@@ -32,6 +38,7 @@ internal class MemoryDataStore : IDataStore
             out var value) ? (T)value : default);
     }
 
+    /// <inheritdoc />
     public Task StoreAsync<T>(
         string key,
         T value)

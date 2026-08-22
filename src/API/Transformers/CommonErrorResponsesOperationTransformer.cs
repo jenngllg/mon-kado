@@ -48,7 +48,7 @@ public class CommonErrorResponsesOperationTransformer : IOpenApiOperationTransfo
                 context.Document);
     }
 
-    internal static void AddAuthorizationResponses(
+    private static void AddAuthorizationResponses(
         OpenApiOperation operation,
         IOpenApiSchema schema,
         IEnumerable<object> metadata)
@@ -68,13 +68,13 @@ public class CommonErrorResponsesOperationTransformer : IOpenApiOperationTransfo
             schema);
     }
 
-    internal static bool RequiresAuthorization(IEnumerable<object> metadata)
+    private static bool RequiresAuthorization(IEnumerable<object> metadata)
     {
         return metadata.OfType<IAuthorizeData>().Any() &&
             !metadata.OfType<IAllowAnonymous>().Any();
     }
 
-    internal static void AddBearerSecurityRequirement(
+    private static void AddBearerSecurityRequirement(
         OpenApiOperation operation,
         OpenApiDocument? document)
     {
@@ -82,14 +82,16 @@ public class CommonErrorResponsesOperationTransformer : IOpenApiOperationTransfo
             OpenApiExtensions.BearerSecuritySchemeName,
             document,
             null);
-        operation.Security ??= [];
-        operation.Security.Add(new OpenApiSecurityRequirement
-        {
-            [scheme] = []
-        });
+        operation.Security =
+        [
+            new OpenApiSecurityRequirement
+            {
+                [scheme] = []
+            }
+        ];
     }
 
-    internal static void AddResponse(
+    private static void AddResponse(
         OpenApiOperation operation,
         int statusCode,
         string description,
@@ -106,7 +108,7 @@ public class CommonErrorResponsesOperationTransformer : IOpenApiOperationTransfo
                 }
             }
         };
-        operation.Responses ??= [];
+        ArgumentNullException.ThrowIfNull(operation.Responses);
         operation.Responses[statusCode.ToString(CultureInfo.InvariantCulture)] = response;
     }
 }

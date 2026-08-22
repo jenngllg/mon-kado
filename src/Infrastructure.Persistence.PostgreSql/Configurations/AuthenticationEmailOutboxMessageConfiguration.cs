@@ -75,7 +75,7 @@ internal sealed class AuthenticationEmailOutboxMessageConfiguration
                 true);
     }
 
-    internal static string ConvertKindToDatabase(AuthenticationEmailKind kind)
+    private static string ConvertKindToDatabase(AuthenticationEmailKind kind)
     {
 
         return kind switch
@@ -88,7 +88,7 @@ internal sealed class AuthenticationEmailOutboxMessageConfiguration
         };
     }
 
-    internal static AuthenticationEmailKind ConvertKindFromDatabase(string value)
+    private static AuthenticationEmailKind ConvertKindFromDatabase(string value)
     {
 
         return value switch

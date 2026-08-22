@@ -16,7 +16,7 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Service
 /// </summary>
 /// <param name="options">The JWT options.</param>
 /// <param name="timeProvider">The time provider.</param>
-internal class JwtAccessTokenService(
+public class JwtAccessTokenService(
     IOptions<JwtOptions> options,
     TimeProvider timeProvider) : IAccessTokenService
 {

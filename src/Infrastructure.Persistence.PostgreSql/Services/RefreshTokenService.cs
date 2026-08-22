@@ -11,7 +11,7 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Service
 /// <summary>
 /// Creates, parses and verifies refresh tokens.
 /// </summary>
-internal class RefreshTokenService : IRefreshTokenService
+public class RefreshTokenService : IRefreshTokenService
 {
     private const int SecretLength = 32;
     private const int TokenPartCount = 2;
@@ -60,7 +60,13 @@ internal class RefreshTokenService : IRefreshTokenService
 
         try
         {
-            return WebEncoders.Base64UrlDecode(parts[1]).Length == SecretLength;
+            var secretHasExpectedLength =
+                WebEncoders.Base64UrlDecode(parts[1]).Length == SecretLength;
+
+            if (!secretHasExpectedLength)
+                sessionId = Guid.Empty;
+
+            return secretHasExpectedLength;
         }
         catch (FormatException)
         {

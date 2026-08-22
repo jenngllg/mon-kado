@@ -179,7 +179,8 @@ secure `__Host-MonKado.Refresh` name; local development uses `MonKado.Refresh` f
 it is a browser-session cookie backed by an eight-hour sliding server session. With `rememberMe`, its absolute expiry
 is fixed at 30 days. PostgreSQL stores only the SHA-256 hash of the 256-bit refresh secret. Every successful refresh
 locks and atomically rotates its session; reuse of an older token revokes that entire session. Separate browsers and
-devices keep independent sessions. Signing in again replaces only the valid session presented by the current browser.
+devices keep independent sessions. Signing in again revokes the session identified by the current browser cookie,
+including when that cookie contains an older rotated token, without affecting sessions on other devices.
 
 Missing, invalid, expired, revoked, or reused refresh tokens return the standard `401` `ErrorResponse` and delete the
 refresh cookie. PostgreSQL unavailability returns `503` without deleting it. Token responses use `Cache-Control:
@@ -284,9 +285,13 @@ Create the local environment file once:
 
 ```powershell
 Copy-Item .env.example .env
+$postgresPassword = [Convert]::ToHexString([Security.Cryptography.RandomNumberGenerator]::GetBytes(32))
+$jwtSigningKey = [Convert]::ToBase64String([Security.Cryptography.RandomNumberGenerator]::GetBytes(32))
 ```
 
-Replace the example PostgreSQL password before starting the stack. The committed defaults expose Caddy at `http://localhost:8080`. The explicit local override additionally exposes PostgreSQL only on `127.0.0.1:5432` for development tools:
+Put `$postgresPassword` in `POSTGRES_PASSWORD` and `$jwtSigningKey` in `JWT_SIGNING_KEY` inside `.env` before
+starting the stack. The committed defaults expose Caddy at `http://localhost:8080`. The explicit local override
+additionally exposes PostgreSQL only on `127.0.0.1:5432` for development tools:
 
 ```powershell
 docker compose --env-file .env -f compose.yaml -f compose.local.yaml config
@@ -320,9 +325,11 @@ The VPS requires a current Docker Engine and Docker Compose v2. Before deploymen
 cp .env.example .env
 chmod 600 .env
 openssl rand -hex 32
+openssl rand -base64 32
 ```
 
-Put the generated hexadecimal value in `POSTGRES_PASSWORD`, set `API_HOST` to the real hostname such as `api.example.fr`, and use ports 80 and 443:
+Put the generated hexadecimal value in `POSTGRES_PASSWORD` and the generated Base64 value in `JWT_SIGNING_KEY`.
+Set `API_HOST` to the real hostname such as `api.example.fr`, and use ports 80 and 443:
 
 ```dotenv
 API_HOST=api.example.fr
@@ -334,6 +341,7 @@ EDGE_NETWORK_CIDR=172.30.0.0/24
 POSTGRES_DB=mon_kado
 POSTGRES_USER=mon_kado
 POSTGRES_PASSWORD=<generated-hexadecimal-value>
+JWT_SIGNING_KEY=<generated-base64-value>
 IMAGE_TAG=local
 AUTHENTICATION_EMAIL_PROVIDER=Gmail
 GMAIL_SENDER_ADDRESS=monkado.app@gmail.com

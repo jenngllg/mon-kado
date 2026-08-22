@@ -7,7 +7,10 @@ using Microsoft.Extensions.Logging;
 
 namespace JennGllg.Fr.MonKado.Back.Worker.Workers;
 
-internal sealed class ExpiredAuthenticationSessionCleanupWorker(
+/// <summary>
+/// Removes expired authentication sessions in the background.
+/// </summary>
+public sealed class ExpiredAuthenticationSessionCleanupWorker(
     IServiceScopeFactory scopeFactory,
     TimeProvider timeProvider,
     ILogger<ExpiredAuthenticationSessionCleanupWorker> logger) : BackgroundService
@@ -16,6 +19,7 @@ internal sealed class ExpiredAuthenticationSessionCleanupWorker(
     private static readonly TimeSpan _normalInterval = TimeSpan.FromHours(24);
     private static readonly TimeSpan _failureRetryInterval = TimeSpan.FromMinutes(15);
 
+    /// <inheritdoc />
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         while (true)
@@ -35,7 +39,7 @@ internal sealed class ExpiredAuthenticationSessionCleanupWorker(
         }
     }
 
-    internal async Task<TimeSpan> CleanupOnceAsync(CancellationToken cancellationToken)
+    private async Task<TimeSpan> CleanupOnceAsync(CancellationToken cancellationToken)
     {
         try
         {
@@ -59,13 +63,14 @@ internal sealed class ExpiredAuthenticationSessionCleanupWorker(
         {
             WorkerLogMessages.ExpiredSessionCleanupFailed(
                 logger,
-                exception.GetType().Name);
+                exception.GetType().Name,
+                exception);
 
             return _failureRetryInterval;
         }
     }
 
-    internal async Task<int> DeleteExpiredSessionsAsync(CancellationToken cancellationToken)
+    private async Task<int> DeleteExpiredSessionsAsync(CancellationToken cancellationToken)
     {
         var totalDeleted = 0;
         int deletedInBatch;

@@ -1,4 +1,5 @@
 using JennGllg.Fr.MonKado.Back.Api.Abstractions;
+using JennGllg.Fr.MonKado.Back.Api.Attributes;
 using JennGllg.Fr.MonKado.Back.Api.Contracts.Requests;
 using JennGllg.Fr.MonKado.Back.Api.Contracts.Responses;
 using JennGllg.Fr.MonKado.Back.Api.Errors;
@@ -71,6 +72,7 @@ public class AuthSessionsController(
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>A new bearer access token.</returns>
     [HttpPost("refresh")]
+    [RefreshTokenCookie]
     [ValidateAntiForgeryToken]
     [ProducesResponseType(typeof(AccessTokenResponse), StatusCodes.Status200OK, "application/json")]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest, "application/json")]

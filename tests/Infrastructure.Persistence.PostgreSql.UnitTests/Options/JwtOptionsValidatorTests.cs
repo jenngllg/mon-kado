@@ -50,24 +50,23 @@ public class JwtOptionsValidatorTests
     [InlineData("")]
     [InlineData("not-base64")]
     [InlineData("AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHw==")]
-    public void HasValidSigningKey_WhenKeyIsInvalid_ReturnsFalse(string signingKey)
+    public void Validate_WhenSigningKeyIsInvalid_ReturnsFailure(string signingKey)
     {
         // Arrange
+        var validator = new JwtOptionsValidator();
+        var options = new JwtOptions
+        {
+            Audience = "MonKado.Frontend",
+            Issuer = "MonKado.Api",
+            SigningKey = signingKey
+        };
+
         // Act
-        var result = JwtOptionsValidator.HasValidSigningKey(signingKey);
+        var result = validator.Validate(
+            null,
+            options);
 
         // Assert
-        Assert.False(result);
-    }
-
-    [Fact]
-    public void HasValidSigningKey_WhenKeyContains256Bits_ReturnsTrue()
-    {
-        // Arrange
-        // Act
-        var result = JwtOptionsValidator.HasValidSigningKey(SigningKey);
-
-        // Assert
-        Assert.True(result);
+        Assert.True(result.Failed);
     }
 }

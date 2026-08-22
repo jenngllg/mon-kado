@@ -68,4 +68,5 @@ public class WorkerProgramTests
         // Assert
         Assert.Null(exception);
     }
+
 }

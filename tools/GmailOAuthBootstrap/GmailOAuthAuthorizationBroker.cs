@@ -5,7 +5,10 @@ using Google.Apis.Util.Store;
 
 namespace JennGllg.Fr.MonKado.Back.Tools.GmailOAuthBootstrap;
 
-internal class GmailOAuthAuthorizationBroker : IGmailOAuthAuthorizationBroker
+/// <summary>
+/// Authorizes the dedicated Gmail sender account through Google OAuth.
+/// </summary>
+public class GmailOAuthAuthorizationBroker : IGmailOAuthAuthorizationBroker
 {
     private const string UserName = "mon-kado-authentication-email-sender";
     private readonly Func<
@@ -17,12 +20,19 @@ internal class GmailOAuthAuthorizationBroker : IGmailOAuthAuthorizationBroker
         ICodeReceiver?,
         Task<UserCredential>> _authorizeAsync;
 
+    /// <summary>
+    /// Initializes the broker with the Google authorization implementation.
+    /// </summary>
     public GmailOAuthAuthorizationBroker()
         : this(GoogleWebAuthorizationBroker.AuthorizeAsync)
     {
     }
 
-    internal GmailOAuthAuthorizationBroker(
+    /// <summary>
+    /// Initializes the broker with an authorization implementation.
+    /// </summary>
+    /// <param name="authorizeAsync">The authorization operation.</param>
+    public GmailOAuthAuthorizationBroker(
         Func<
             ClientSecrets,
             IEnumerable<string>,
@@ -35,6 +45,7 @@ internal class GmailOAuthAuthorizationBroker : IGmailOAuthAuthorizationBroker
         _authorizeAsync = authorizeAsync;
     }
 
+    /// <inheritdoc />
     public async Task<TokenResponse> AuthorizeAsync(
         ClientSecrets clientSecrets,
         CancellationToken cancellationToken)

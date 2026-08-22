@@ -2,6 +2,8 @@ using JennGllg.Fr.MonKado.Back.Application.Abstractions;
 using JennGllg.Fr.MonKado.Back.Worker.Workers;
 
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace JennGllg.Fr.MonKado.Back.Worker.UnitTests;
@@ -31,9 +33,10 @@ public class UnconfirmedAccountCleanupWorkerTests
 
         // Act
         await worker.StopAsync(TestContext.Current.CancellationToken);
+        var executeTask = GetExecuteTask(worker);
 
         // Assert
-        Assert.True(worker.ExecuteTask!.IsCompletedSuccessfully);
+        Assert.True(executeTask.IsCompletedSuccessfully);
         Assert.Single(cleanup.Calls);
     }
 
@@ -57,37 +60,45 @@ public class UnconfirmedAccountCleanupWorkerTests
         var worker = CreateWorker(
             provider,
             _now,
-            new ImmediateTimeProvider());
+            new ImmediateTimeProvider(_now));
 
         // Act
         await worker.StartAsync(source.Token);
-        await worker.ExecuteTask!.WaitAsync(TestContext.Current.CancellationToken);
+        var executeTask = GetExecuteTask(worker);
+        await executeTask.WaitAsync(TestContext.Current.CancellationToken);
 
         // Assert
-        Assert.True(worker.ExecuteTask.IsCompletedSuccessfully);
+        Assert.True(executeTask.IsCompletedSuccessfully);
     }
 
     [Fact]
-    public async Task DeleteExpiredAccountsAsync_WhenFullBatchesAreReturned_ReturnsTotal()
+    public async Task ExecuteAsync_WhenFullBatchesAreDeleted_ContinuesUntilPartialBatch()
     {
         // Arrange
+        using var source = new CancellationTokenSource();
         var cleanup = new RecordingAccountCleanup(
             500,
             500,
-            2);
+            2)
+        {
+            OnCall = callCount =>
+            {
+                if (callCount == 3)
+                    source.Cancel();
+            }
+        };
         await using var provider = CreateProvider(cleanup);
         var worker = CreateWorker(
             provider,
-            _now);
+            _now,
+            new ImmediateTimeProvider(_now));
 
         // Act
-        var deletedCount = await worker.DeleteExpiredAccountsAsync(
-            TestContext.Current.CancellationToken);
+        await worker.StartAsync(source.Token);
+        var executeTask = GetExecuteTask(worker);
+        await executeTask.WaitAsync(TestContext.Current.CancellationToken);
 
         // Assert
-        Assert.Equal(
-            1_002,
-            deletedCount);
         Assert.Equal(
             3,
             cleanup.Calls.Count);
@@ -104,84 +115,50 @@ public class UnconfirmedAccountCleanupWorkerTests
             });
     }
 
-    [Fact]
-    public async Task DeleteExpiredAccountsAsync_WhenFirstBatchIsEmpty_ReturnsZero()
-    {
-        // Arrange
-        var cleanup = new RecordingAccountCleanup(0);
-        await using var provider = CreateProvider(cleanup);
-        var worker = CreateWorker(
-            provider,
-            _now);
-
-        // Act
-        var deletedCount = await worker.DeleteExpiredAccountsAsync(
-            TestContext.Current.CancellationToken);
-
-        // Assert
-        Assert.Equal(
-            0,
-            deletedCount);
-        Assert.Single(cleanup.Calls);
-    }
-
-    [Fact]
-    public async Task CleanupOnceAsync_WhenAccountsAreDeleted_ReturnsNormalInterval()
-    {
-        // Arrange
-        var cleanup = new RecordingAccountCleanup(2);
-        await using var provider = CreateProvider(cleanup);
-        var worker = CreateWorker(
-            provider,
-            _now);
-
-        // Act
-        var delay = await worker.CleanupOnceAsync(
-            TestContext.Current.CancellationToken);
-
-        // Assert
-        Assert.Equal(
-            TimeSpan.FromHours(24),
-            delay);
-    }
-
-    [Fact]
-    public async Task CleanupOnceAsync_WhenCleanupFails_ReturnsFailureInterval()
-    {
-        // Arrange
-        var cleanup = new ThrowingAccountCleanup(new InvalidOperationException());
-        await using var provider = CreateProvider(cleanup);
-        var worker = CreateWorker(
-            provider,
-            _now);
-
-        // Act
-        var delay = await worker.CleanupOnceAsync(
-            TestContext.Current.CancellationToken);
-
-        // Assert
-        Assert.Equal(
-            TimeSpan.FromMinutes(15),
-            delay);
-    }
-
-    [Fact]
-    public async Task CleanupOnceAsync_WhenCleanupIsCanceled_PreservesCancellation()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ExecuteAsync_WhenCleanupFails_StopsCleanlyAfterCancellation(
+        bool isCancellation)
     {
         // Arrange
         using var source = new CancellationTokenSource();
-        source.Cancel();
-        var cleanup = new ThrowingAccountCleanup(new OperationCanceledException(source.Token));
+        Exception exception = isCancellation
+            ? new OperationCanceledException()
+            : new InvalidOperationException();
+        var cleanup = new ThrowingAccountCleanup(exception)
+        {
+            OnCall = source.Cancel
+        };
         await using var provider = CreateProvider(cleanup);
+        var logger = new RecordingLogger<UnconfirmedAccountCleanupWorker>();
         var worker = CreateWorker(
             provider,
-            _now);
+            _now,
+            logger: logger);
 
         // Act
-        Task<TimeSpan> action() => worker.CleanupOnceAsync(source.Token);
+        await worker.StartAsync(source.Token);
+        var executeTask = GetExecuteTask(worker);
+        await executeTask.WaitAsync(TestContext.Current.CancellationToken);
 
         // Assert
-        await Assert.ThrowsAnyAsync<OperationCanceledException>((Func<Task<TimeSpan>>)action);
+        Assert.True(executeTask.IsCompletedSuccessfully);
+
+        if (isCancellation)
+        {
+            Assert.Empty(logger.Entries);
+
+            return;
+        }
+
+        var entry = Assert.Single(logger.Entries);
+        Assert.Equal(
+            LogLevel.Error,
+            entry.LogLevel);
+        Assert.Same(
+            exception,
+            entry.Exception);
     }
 
     private static ServiceProvider CreateProvider(IExpiredAccountCleanup cleanup)
@@ -195,11 +172,20 @@ public class UnconfirmedAccountCleanupWorkerTests
     private static UnconfirmedAccountCleanupWorker CreateWorker(
         ServiceProvider provider,
         DateTimeOffset now,
-        TimeProvider? timeProvider = null)
+        TimeProvider? timeProvider = null,
+        ILogger<UnconfirmedAccountCleanupWorker>? logger = null)
     {
         return new(
             provider.GetRequiredService<IServiceScopeFactory>(),
             timeProvider ?? new FixedTimeProvider(now),
-            NullLogger<UnconfirmedAccountCleanupWorker>.Instance);
+            logger ?? NullLogger<UnconfirmedAccountCleanupWorker>.Instance);
+    }
+
+    private static Task GetExecuteTask(BackgroundService worker)
+    {
+        var executeTask = worker.ExecuteTask;
+        Assert.NotNull(executeTask);
+
+        return executeTask;
     }
 }

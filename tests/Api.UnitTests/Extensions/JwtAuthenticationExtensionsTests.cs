@@ -2,6 +2,9 @@ using JennGllg.Fr.MonKado.Back.Api.Extensions;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Options;
 
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 
 using System.IdentityModel.Tokens.Jwt;
@@ -14,18 +17,23 @@ public class JwtAuthenticationExtensionsTests
     public void ConfigureBearerOptions_WhenConfigurationIsValid_UsesHardenedValidation()
     {
         // Arrange
-        var options = new JwtBearerOptions();
-        var jwtOptions = new JwtOptions
-        {
-            Audience = "MonKado.Frontend",
-            Issuer = "MonKado.Api",
-            SigningKey = "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA="
-        };
+        var services = new ServiceCollection();
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Jwt:Audience"] = "MonKado.Frontend",
+                ["Jwt:Issuer"] = "MonKado.Api",
+                ["Jwt:SigningKey"] = "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA="
+            })
+            .Build();
 
         // Act
-        JwtAuthenticationExtensions.ConfigureBearerOptions(
-            options,
-            jwtOptions);
+        services.AddJwtAuthentication(configuration);
+        using var provider = services.BuildServiceProvider();
+        var jwtOptions = provider.GetRequiredService<IOptions<JwtOptions>>().Value;
+        var options = provider
+            .GetRequiredService<IOptionsMonitor<JwtBearerOptions>>()
+            .Get(JwtBearerDefaults.AuthenticationScheme);
 
         // Assert
         var parameters = options.TokenValidationParameters;

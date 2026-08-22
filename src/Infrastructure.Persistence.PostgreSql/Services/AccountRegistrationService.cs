@@ -13,7 +13,16 @@ using Npgsql;
 
 namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Services;
 
-internal class AccountRegistrationService(
+/// <summary>
+/// Registers member accounts and queues their confirmation messages.
+/// </summary>
+/// <param name="context">The database context.</param>
+/// <param name="unitOfWork">The unit of work.</param>
+/// <param name="outboxRepository">The authentication email outbox repository.</param>
+/// <param name="userManager">The Identity user manager.</param>
+/// <param name="passwordHasher">The password hasher.</param>
+/// <param name="timeProvider">The time provider.</param>
+public class AccountRegistrationService(
     MonKadoDbContext context,
     IUnitOfWork unitOfWork,
     IAuthenticationEmailOutboxRepository outboxRepository,
@@ -115,14 +124,14 @@ internal class AccountRegistrationService(
             password);
     }
 
-    internal static bool IsDuplicateAccount(IdentityResult result)
+    private static bool IsDuplicateAccount(IdentityResult result)
     {
 
         return result.Errors.Any(error =>
             error.Code is DuplicateEmailErrorCode or DuplicateUserNameErrorCode);
     }
 
-    internal static async Task IgnoreDuplicateAccountAsync(Func<Task> action)
+    private static async Task IgnoreDuplicateAccountAsync(Func<Task> action)
     {
         try
         {
@@ -134,7 +143,7 @@ internal class AccountRegistrationService(
         }
     }
 
-    internal static async Task<bool> CanContinueAfterCreationAsync(
+    private static async Task<bool> CanContinueAfterCreationAsync(
         IdentityResult result,
         IDbContextTransaction transaction,
         CancellationToken cancellationToken)
@@ -157,7 +166,7 @@ internal class AccountRegistrationService(
         throw new InvalidOperationException($"ASP.NET Core Identity rejected account creation: {errorCodes}.");
     }
 
-    internal static bool IsDuplicateAccount(DbUpdateException exception)
+    private static bool IsDuplicateAccount(DbUpdateException exception)
     {
 
         return exception.InnerException is PostgresException

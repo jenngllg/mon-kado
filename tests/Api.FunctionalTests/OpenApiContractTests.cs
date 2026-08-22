@@ -66,8 +66,12 @@ public class OpenApiContractTests(UnavailablePostgreSqlApiFactory factory) : ICl
             .GetProperty("paths")
             .GetProperty("/api/v1/auth/sessions/refresh")
             .GetProperty("post");
-        AssertTokenOperation(login);
-        AssertTokenOperation(refresh);
+        AssertTokenOperation(
+            login,
+            expectsRefreshCookie: false);
+        AssertTokenOperation(
+            refresh,
+            expectsRefreshCookie: true);
     }
 
     [Fact]
@@ -87,11 +91,37 @@ public class OpenApiContractTests(UnavailablePostgreSqlApiFactory factory) : ICl
             response.StatusCode);
     }
 
-    private static void AssertTokenOperation(JsonElement operation)
+    private static void AssertTokenOperation(
+        JsonElement operation,
+        bool expectsRefreshCookie)
     {
+        var parameters = operation.GetProperty("parameters").EnumerateArray().ToArray();
         Assert.Contains(
-            operation.GetProperty("parameters").EnumerateArray(),
+            parameters,
             parameter => parameter.GetProperty("name").GetString() == "X-CSRF-TOKEN");
+
+        if (expectsRefreshCookie)
+        {
+            var refreshCookie = Assert.Single(
+                parameters,
+                parameter => parameter.GetProperty("name").GetString() ==
+                    "__Host-MonKado.Refresh");
+            Assert.Equal(
+                "cookie",
+                refreshCookie.GetProperty("in").GetString());
+            Assert.True(refreshCookie.GetProperty("required").GetBoolean());
+            Assert.Contains(
+                "MonKado.Refresh",
+                refreshCookie.GetProperty("description").GetString(),
+                StringComparison.Ordinal);
+        }
+        else
+        {
+            Assert.DoesNotContain(
+                parameters,
+                parameter => parameter.GetProperty("in").GetString() == "cookie");
+        }
+
         var responses = operation.GetProperty("responses");
         Assert.True(responses.TryGetProperty(
             "200",

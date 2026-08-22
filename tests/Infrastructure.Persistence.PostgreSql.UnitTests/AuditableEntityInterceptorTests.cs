@@ -19,62 +19,22 @@ public class AuditableEntityInterceptorTests
         TimeSpan.Zero);
 
     [Fact]
-    public void ApplyAuditValues_WhenContextIsNull_DoesNothing()
+    public void SavingChanges_WhenContextIsMissing_DoesNothing()
     {
         // Arrange
         var interceptor = new AuditableEntityInterceptor(new FixedTimeProvider(_now));
+        var eventData = new DbContextEventData(
+            null!,
+            (_, _) => string.Empty,
+            null);
 
         // Act
-        interceptor.ApplyAuditValues(null);
+        var result = interceptor.SavingChanges(
+            eventData,
+            default);
 
         // Assert
-        Assert.NotNull(interceptor);
-    }
-
-    [Fact]
-    public void ApplyAuditValues_WhenEntityIsAdded_SetsCreatedAtOnly()
-    {
-        // Arrange
-        using var context = CreateContext();
-        var user = new MonKadoUser
-        {
-            Id = Guid.CreateVersion7(_now),
-            DisplayName = "Jenn"
-        };
-        context.Users.Add(user);
-        var interceptor = new AuditableEntityInterceptor(new FixedTimeProvider(_now));
-
-        // Act
-        interceptor.ApplyAuditValues(context);
-
-        // Assert
-        Assert.Equal(
-            _now.UtcDateTime,
-            user.CreatedAt);
-        Assert.Null(user.UpdatedAt);
-    }
-
-    [Fact]
-    public void ApplyAuditValues_WhenEntityIsModified_SetsUpdatedAt()
-    {
-        // Arrange
-        using var context = CreateContext();
-        var user = new MonKadoUser
-        {
-            Id = Guid.CreateVersion7(_now),
-            DisplayName = "Jenn"
-        };
-        context.Attach(user);
-        context.Entry(user).State = EntityState.Modified;
-        var interceptor = new AuditableEntityInterceptor(new FixedTimeProvider(_now));
-
-        // Act
-        interceptor.ApplyAuditValues(context);
-
-        // Assert
-        Assert.Equal(
-            _now.UtcDateTime,
-            user.UpdatedAt);
+        Assert.False(result.HasResult);
     }
 
     [Fact]

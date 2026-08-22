@@ -14,7 +14,17 @@ using System.Text;
 
 namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Services;
 
-internal class EmailConfirmationService(
+/// <summary>
+/// Confirms member email addresses and schedules replacement confirmation messages.
+/// </summary>
+/// <param name="context">The database context.</param>
+/// <param name="unitOfWork">The unit of work.</param>
+/// <param name="userRepository">The member repository.</param>
+/// <param name="outboxRepository">The authentication email outbox repository.</param>
+/// <param name="userManager">The Identity user manager.</param>
+/// <param name="lookupNormalizer">The email lookup normalizer.</param>
+/// <param name="timeProvider">The time provider.</param>
+public class EmailConfirmationService(
     MonKadoDbContext context,
     IUnitOfWork unitOfWork,
     IMonKadoUserRepository userRepository,
@@ -182,7 +192,7 @@ internal class EmailConfirmationService(
             cancellationToken);
     }
 
-    internal static async Task<bool> CompleteConfirmationAsync(
+    private static async Task<bool> CompleteConfirmationAsync(
         IdentityResult result,
         Guid userId,
         DateTime confirmedAt,
@@ -207,7 +217,7 @@ internal class EmailConfirmationService(
         return true;
     }
 
-    internal static bool IsExpiredUnconfirmedAccount(
+    private static bool IsExpiredUnconfirmedAccount(
         MonKadoUser user,
         DateTime now)
     {
@@ -250,9 +260,10 @@ internal class EmailConfirmationService(
 
         if (accountIsEligible && !pendingRequestExists && accountQuotaAllowsRequest)
         {
+            ArgumentNullException.ThrowIfNull(user);
             outboxRepository.Add(
                 AuthenticationEmailOutboxMessage.CreateEmailConfirmation(
-                    user!.Id,
+                    user.Id,
                     now));
             await unitOfWork.SaveChangesAsync(cancellationToken);
         }

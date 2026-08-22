@@ -12,7 +12,14 @@ namespace JennGllg.Fr.MonKado.Back.Api.Services;
 public class RefreshTokenCookieService(IWebHostEnvironment environment)
     : IRefreshTokenCookieService
 {
+    /// <summary>
+    /// Gets the refresh token cookie name used outside production.
+    /// </summary>
     internal const string LocalCookieName = "MonKado.Refresh";
+
+    /// <summary>
+    /// Gets the refresh token cookie name used in production.
+    /// </summary>
     internal const string ProductionCookieName = "__Host-MonKado.Refresh";
 
     /// <summary>
@@ -60,17 +67,11 @@ public class RefreshTokenCookieService(IWebHostEnvironment environment)
                 null));
     }
 
-    /// <summary>
-    /// Creates the hardened refresh token cookie options.
-    /// </summary>
-    /// <param name="requestIsHttps">Whether the current request uses HTTPS.</param>
-    /// <param name="expires">The optional absolute cookie expiration.</param>
-    /// <returns>The cookie options.</returns>
     [SuppressMessage(
         "Security",
         "S2092:Cookies should be sent over SSL/TLS",
         Justification = "Production cookies are always secure; loopback HTTP remains supported only for local development.")]
-    internal CookieOptions CreateCookieOptions(
+    private CookieOptions CreateCookieOptions(
         bool requestIsHttps,
         DateTimeOffset? expires)
     {
@@ -85,11 +86,7 @@ public class RefreshTokenCookieService(IWebHostEnvironment environment)
         };
     }
 
-    /// <summary>
-    /// Gets the refresh token cookie name for the current environment.
-    /// </summary>
-    /// <returns>The refresh token cookie name.</returns>
-    internal string GetCookieName()
+    private string GetCookieName()
     {
         return environment.IsProduction()
             ? ProductionCookieName

@@ -6,7 +6,11 @@ using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Abstraction
 
 namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Services;
 
-internal class ExpiredAccountCleanup(IMonKadoUserRepository userRepository)
+/// <summary>
+/// Removes expired unconfirmed member accounts.
+/// </summary>
+/// <param name="userRepository">The member repository.</param>
+public class ExpiredAccountCleanup(IMonKadoUserRepository userRepository)
     : IExpiredAccountCleanup
 {
     /// <summary>

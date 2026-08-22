@@ -147,8 +147,9 @@ public static class WebSecurityExtensions
                 {
                     var tokens = antiforgery.GetAndStoreTokens(context);
                     context.Response.Headers.CacheControl = "no-store";
+                    ArgumentNullException.ThrowIfNull(tokens.RequestToken);
 
-                    return TypedResults.Ok(CreateCsrfTokenResponse(tokens.RequestToken));
+                    return TypedResults.Ok(new CsrfTokenResponse(tokens.RequestToken));
                 })
             .WithName("GetCsrfToken");
 
@@ -178,14 +179,6 @@ public static class WebSecurityExtensions
                     WebSecurityOptions.AntiforgeryHeaderName)
                 .AllowCredentials()
                 .SetPreflightMaxAge(TimeSpan.FromMinutes(10)));
-    }
-
-    internal static CsrfTokenResponse CreateCsrfTokenResponse(string? requestToken)
-    {
-
-        return new CsrfTokenResponse(
-            requestToken ?? throw new InvalidOperationException(
-                "ASP.NET Core did not generate an antiforgery request token."));
     }
 
     internal static void ValidateConfiguration(
