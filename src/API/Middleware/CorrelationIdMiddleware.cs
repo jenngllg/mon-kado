@@ -23,16 +23,29 @@ public class CorrelationIdMiddleware(
 
     public async Task InvokeAsync(HttpContext context)
     {
+        var correlationId = GetCorrelationId(context);
         var traceId = Activity.Current?.TraceId.ToString() ?? context.TraceIdentifier;
-        context.Response.Headers[HeaderName] = traceId;
+        context.Response.Headers[HeaderName] = correlationId;
 
         using (logger.BeginScope(new Dictionary<string, object>(StringComparer.Ordinal)
         {
-            ["CorrelationId"] = traceId,
+            ["CorrelationId"] = correlationId,
             ["TraceId"] = traceId
         }))
         {
             await next(context);
         }
+    }
+
+    private static string GetCorrelationId(HttpContext context)
+    {
+        var providedCorrelationId = context.Request.Headers[HeaderName].ToString();
+
+        return Guid.TryParse(
+            providedCorrelationId,
+            out var parsedCorrelationId) &&
+            parsedCorrelationId != Guid.Empty
+            ? providedCorrelationId
+            : Guid.CreateVersion7().ToString("D");
     }
 }

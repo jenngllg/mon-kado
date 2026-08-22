@@ -1,5 +1,6 @@
 using JennGllg.Fr.MonKado.Back.Api.Contracts.Responses;
 using JennGllg.Fr.MonKado.Back.Api.Errors;
+using JennGllg.Fr.MonKado.Back.Api.Middleware;
 using JennGllg.Fr.MonKado.Back.Api.Options;
 using JennGllg.Fr.MonKado.Back.Application.Abstractions;
 
@@ -8,6 +9,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.Net.Http.Headers;
 
 using System.IdentityModel.Tokens.Jwt;
 using System.Net;
@@ -38,7 +40,7 @@ public class WebSecurityBehaviorTests
             "POST");
         request.Headers.Add(
             "Access-Control-Request-Headers",
-            "authorization,content-type,x-csrf-token");
+            "authorization,content-type,x-correlation-id,x-csrf-token");
 
         // Act
         using var response = await client.SendAsync(
@@ -55,27 +57,75 @@ public class WebSecurityBehaviorTests
         Assert.Equal(
             "true",
             Assert.Single(response.Headers.GetValues("Access-Control-Allow-Credentials")));
+        var allowedMethods = JoinHeader(
+            response,
+            "Access-Control-Allow-Methods");
+        var allowedHeaders = JoinHeader(
+            response,
+            "Access-Control-Allow-Headers");
         Assert.Contains(
             "POST",
-            JoinHeader(
-                response,
-                "Access-Control-Allow-Methods"),
+            allowedMethods,
             StringComparison.Ordinal);
         Assert.Contains(
             "x-csrf-token",
-            JoinHeader(
-                response,
-                "Access-Control-Allow-Headers"),
+            allowedHeaders,
             StringComparison.OrdinalIgnoreCase);
         Assert.Contains(
             "authorization",
-            JoinHeader(
-                response,
-                "Access-Control-Allow-Headers"),
+            allowedHeaders,
+            StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(
+            CorrelationIdMiddleware.HeaderName,
+            allowedHeaders,
             StringComparison.OrdinalIgnoreCase);
         Assert.Equal(
             "600",
             Assert.Single(response.Headers.GetValues("Access-Control-Max-Age")));
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_WhenAllowedOrigin_PreservesCorrelationAndExposesResponseHeaders()
+    {
+        // Arrange
+        const string CorrelationId = "0198d027-51c0-7000-8000-000000000001";
+        using var factory = new SecurityApiFactory();
+        using var client = factory.CreateClient();
+        using var request = new HttpRequestMessage(
+            HttpMethod.Get,
+            "/liveness");
+        request.Headers.Add(
+            "Origin",
+            AllowedOrigin);
+        request.Headers.Add(
+            CorrelationIdMiddleware.HeaderName,
+            CorrelationId);
+
+        // Act
+        using var response = await client.SendAsync(
+            request,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.OK,
+            response.StatusCode);
+        var correlationValues = response.Headers.GetValues(CorrelationIdMiddleware.HeaderName);
+        var returnedCorrelationId = Assert.Single(correlationValues);
+        var exposedHeaders = JoinHeader(
+            response,
+            "Access-Control-Expose-Headers");
+        Assert.Equal(
+            CorrelationId,
+            returnedCorrelationId);
+        Assert.Contains(
+            CorrelationIdMiddleware.HeaderName,
+            exposedHeaders,
+            StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(
+            HeaderNames.RetryAfter,
+            exposedHeaders,
+            StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

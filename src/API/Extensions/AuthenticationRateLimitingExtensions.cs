@@ -24,6 +24,10 @@ public static class AuthenticationRateLimitingExtensions
     /// </summary>
     public const string LoginPolicy = "Login";
     /// <summary>
+    /// Identifies refresh policy.
+    /// </summary>
+    public const string RefreshPolicy = "Refresh";
+    /// <summary>
     /// Identifies email confirmation request policy.
     /// </summary>
     public const string EmailConfirmationRequestPolicy = "EmailConfirmationRequest";
@@ -46,6 +50,11 @@ public static class AuthenticationRateLimitingExtensions
                     5));
             options.AddPolicy(
                 LoginPolicy,
+                context => CreateLimiter(
+                    context,
+                    10));
+            options.AddPolicy(
+                RefreshPolicy,
                 context => CreateLimiter(
                     context,
                     10));

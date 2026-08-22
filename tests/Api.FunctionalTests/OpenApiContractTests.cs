@@ -133,6 +133,9 @@ public class OpenApiContractTests(UnavailablePostgreSqlApiFactory factory) : ICl
             "401",
             out _));
         Assert.True(responses.TryGetProperty(
+            "429",
+            out _));
+        Assert.True(responses.TryGetProperty(
             "503",
             out _));
         var headers = success.GetProperty("headers");
