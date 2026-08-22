@@ -1,7 +1,10 @@
+using JennGllg.Fr.MonKado.Back.Api.Authorization;
 using JennGllg.Fr.MonKado.Back.Api.Extensions;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Options;
 
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization.Infrastructure;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -34,6 +37,8 @@ public class JwtAuthenticationExtensionsTests
         var options = provider
             .GetRequiredService<IOptionsMonitor<JwtBearerOptions>>()
             .Get(JwtBearerDefaults.AuthenticationScheme);
+        var authorizationOptions = provider.GetRequiredService<IOptions<AuthorizationOptions>>().Value;
+        var currentSessionPolicy = authorizationOptions.GetPolicy(AuthorizationPolicies.CurrentSession);
 
         // Assert
         var parameters = options.TokenValidationParameters;
@@ -66,5 +71,12 @@ public class JwtAuthenticationExtensionsTests
         Assert.Equal(
             Convert.FromBase64String(jwtOptions.SigningKey),
             signingKey.Key);
+        Assert.NotNull(currentSessionPolicy);
+        Assert.Equal(
+            [JwtBearerDefaults.AuthenticationScheme],
+            currentSessionPolicy.AuthenticationSchemes);
+        Assert.Contains(
+            currentSessionPolicy.Requirements,
+            requirement => requirement is DenyAnonymousAuthorizationRequirement);
     }
 }

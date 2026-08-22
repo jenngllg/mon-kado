@@ -174,6 +174,13 @@ other profile data. JWTs are neither persisted nor logged. `POST /api/v1/auth/se
 requires the standard CSRF token, rotates the browser refresh token, and returns the same JSON contract. The frontend
 must serialize refresh calls so that one browser never attempts two rotations concurrently.
 
+`GET /api/v1/auth/sessions/current` requires the Bearer access token and loads the current member identity directly
+from PostgreSQL. It returns `id`, `email`, `displayName`, and the current alphabetically ordered `roles`, with
+`Cache-Control: no-store`. It neither requires an antiforgery token nor rotates either token. Role changes are visible
+immediately without waiting for a new JWT. Every account receives the built-in `Member` role; the migration also
+backfills existing accounts. A valid JWT whose member has since been deleted returns `401 Unauthorized` and deletes
+the refresh cookie.
+
 The refresh token exists only in an HTTP-only, host-only, `SameSite=Strict` cookie with `Path=/`. Production uses the
 secure `__Host-MonKado.Refresh` name; local development uses `MonKado.Refresh` for loopback HTTP. Without `rememberMe`,
 it is a browser-session cookie backed by an eight-hour sliding server session. With `rememberMe`, its absolute expiry

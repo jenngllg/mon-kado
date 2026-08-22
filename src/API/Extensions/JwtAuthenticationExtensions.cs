@@ -1,3 +1,4 @@
+using JennGllg.Fr.MonKado.Back.Api.Authorization;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Options;
 
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -36,7 +37,13 @@ public static class JwtAuthenticationExtensions
                 jwtOptions) => ConfigureBearerOptions(
                     options,
                     jwtOptions.Value));
-        services.AddAuthorization();
+        services.AddAuthorization(options => options.AddPolicy(
+            AuthorizationPolicies.CurrentSession,
+            policy =>
+            {
+                policy.AddAuthenticationSchemes(JwtBearerDefaults.AuthenticationScheme);
+                policy.RequireAuthenticatedUser();
+            }));
 
         return services;
     }

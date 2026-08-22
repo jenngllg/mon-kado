@@ -21,6 +21,8 @@ public class RegistrationApiFactory : WebApplicationFactory<Program>
 
     public RecordingEmailConfirmationService EmailConfirmationService { get; } = new();
 
+    public RecordingCurrentSessionService CurrentSessionService { get; } = new();
+
     public RecordingAccountSessionService SessionService { get; } = new();
 
     public IReadOnlyCollection<string> LogMessages => _logProvider.Messages;
@@ -48,6 +50,8 @@ public class RegistrationApiFactory : WebApplicationFactory<Program>
             services.RemoveAll<IEmailConfirmationService>();
             services.RemoveAll<IAccountSessionService>();
             services.AddSingleton<IAccountSessionService>(SessionService);
+            services.RemoveAll<ICurrentSessionService>();
+            services.AddSingleton<ICurrentSessionService>(CurrentSessionService);
             services.AddSingleton<IEmailConfirmationService>(EmailConfirmationService);
         });
     }

@@ -35,6 +35,14 @@ public static class LogEventIds
     /// </summary>
     public const int ExpiredSessionCleanupFailed = 1021;
     /// <summary>
+    /// Identifies current session retrieval started.
+    /// </summary>
+    public const int CurrentSessionRetrievalStarted = 1030;
+    /// <summary>
+    /// Identifies current session retrieved.
+    /// </summary>
+    public const int CurrentSessionRetrieved = 1031;
+    /// <summary>
     /// Identifies expected http error.
     /// </summary>
 
