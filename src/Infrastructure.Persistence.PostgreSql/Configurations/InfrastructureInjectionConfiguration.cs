@@ -62,10 +62,6 @@ public static class InfrastructureInjectionConfiguration
                     npgsqlOptions.MigrationsHistoryTable(
                         HistoryRepository.DefaultTableName,
                         "public");
-                    npgsqlOptions.EnableRetryOnFailure(
-                        maxRetryCount: 1,
-                        maxRetryDelay: TimeSpan.FromMilliseconds(500),
-                        errorCodesToAdd: null);
                 })
                 .UseSnakeCaseNamingConvention()
                 .AddInterceptors(provider.GetRequiredService<AuditableEntityInterceptor>()));

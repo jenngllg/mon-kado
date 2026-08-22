@@ -9,13 +9,22 @@ namespace JennGllg.Fr.MonKado.Back.Api.UnitTests;
 
 public class CorrelationIdMiddlewareTests
 {
-    [Fact]
-    public async Task InvokeAsync_WhenActivityIsMissing_ReturnsHttpContextTraceIdentifier()
+    [Theory]
+    [InlineData(null, false)]
+    [InlineData("invalid", false)]
+    [InlineData("00000000-0000-0000-0000-000000000000", false)]
+    [InlineData("0198d027-51c0-7000-8000-000000000001", true)]
+    public async Task InvokeAsync_WhenCorrelationHeaderIsProvided_ReturnsExpectedIdentifier(
+        string? providedValue,
+        bool preservesValue)
     {
         // Arrange
         var context = new DefaultHttpContext();
         context.TraceIdentifier = "http-context-trace-id";
-        context.Request.Headers[CorrelationIdMiddleware.HeaderName] = "client-correlation-id";
+
+        if (providedValue is not null)
+            context.Request.Headers[CorrelationIdMiddleware.HeaderName] = providedValue;
+
         var middleware = new CorrelationIdMiddleware(
             _ => Task.CompletedTask,
             NullLogger<CorrelationIdMiddleware>.Instance);
@@ -34,31 +43,63 @@ public class CorrelationIdMiddlewareTests
 
         // Assert
         var returnedValue = context.Response.Headers[CorrelationIdMiddleware.HeaderName].ToString();
-        Assert.Equal(
-            context.TraceIdentifier,
-            returnedValue);
+        var identifierIsValid = Guid.TryParse(
+            returnedValue,
+            out var returnedIdentifier);
+        Assert.True(identifierIsValid);
         Assert.NotEqual(
-            "client-correlation-id",
-            returnedValue);
+            Guid.Empty,
+            returnedIdentifier);
+
+        if (preservesValue)
+        {
+            Assert.Equal(
+                providedValue,
+                returnedValue);
+
+            return;
+        }
+
+        Assert.Equal(
+            7,
+            returnedIdentifier.Version);
+
+        if (providedValue is not null)
+            Assert.NotEqual(
+                providedValue,
+                returnedValue);
     }
 
     [Fact]
-    public async Task InvokeAsync_WhenActivityExists_UsesActivityTraceIdentifier()
+    public async Task InvokeAsync_WhenActivityExists_KeepsCorrelationIdentifierDistinctFromTraceIdentifier()
     {
         // Arrange
+        const string CorrelationId = "0198d027-51c0-7000-8000-000000000001";
         using var activity = new Activity("test");
         activity.Start();
+        var traceId = activity.TraceId.ToString();
         var context = new DefaultHttpContext();
+        context.Request.Headers[CorrelationIdMiddleware.HeaderName] = CorrelationId;
+        var logger = new ScopeCapturingLogger<CorrelationIdMiddleware>();
         var middleware = new CorrelationIdMiddleware(
             _ => Task.CompletedTask,
-            NullLogger<CorrelationIdMiddleware>.Instance);
+            logger);
 
         // Act
         await middleware.InvokeAsync(context);
 
         // Assert
+        var returnedCorrelationId =
+            context.Response.Headers[CorrelationIdMiddleware.HeaderName].ToString();
+        Assert.NotNull(logger.Scope);
         Assert.Equal(
-            activity.TraceId.ToString(),
-            context.Response.Headers[CorrelationIdMiddleware.HeaderName].ToString());
+            CorrelationId,
+            returnedCorrelationId);
+        Assert.Equal(
+            CorrelationId,
+            logger.Scope["CorrelationId"]);
+        Assert.Equal(
+            traceId,
+            logger.Scope["TraceId"]);
     }
 }

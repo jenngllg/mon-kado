@@ -362,6 +362,39 @@ public class LoginTests
     }
 
     [Fact]
+    public async Task RefreshAsync_WhenEleventhRequestWithinOneMinute_IsRateLimited()
+    {
+        // Arrange
+        await using var factory = new RegistrationApiFactory();
+        using var client = factory.CreateClient();
+        using var loginResponse = await LoginAsync(
+            client,
+            "lea@example.fr",
+            "password",
+            rememberMe: false);
+
+        for (var requestNumber = 1; requestNumber <= 10; requestNumber++)
+        {
+            using var accepted = await RefreshAsync(client);
+            Assert.Equal(
+                HttpStatusCode.OK,
+                accepted.StatusCode);
+        }
+
+        // Act
+        using var rejected = await RefreshAsync(client);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.TooManyRequests,
+            rejected.StatusCode);
+        Assert.True(rejected.Headers.RetryAfter?.Delta > TimeSpan.Zero);
+        Assert.Equal(
+            10,
+            factory.SessionService.RefreshCallCount);
+    }
+
+    [Fact]
     public async Task RefreshAsync_WhenCookieIsMissing_ReturnsUnauthorizedAndDeletesCookie()
     {
         // Arrange

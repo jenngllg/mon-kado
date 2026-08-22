@@ -7,6 +7,7 @@ public class RecordingAccountSessionService : IAccountSessionService
 {
     private readonly List<LoginCall> _calls = [];
     private readonly Lock _sync = new();
+    private int _refreshCallCount;
 
     public AccountSessionTokens Tokens { get; set; } = CreateTokens();
 
@@ -14,12 +15,25 @@ public class RecordingAccountSessionService : IAccountSessionService
 
     public bool RefreshSucceeds { get; set; } = true;
 
+    public int RefreshCallCount
+    {
+        get
+        {
+            lock (_sync)
+            {
+
+                return _refreshCallCount;
+            }
+        }
+    }
+
     public IReadOnlyList<LoginCall> Calls
     {
         get
         {
             lock (_sync)
             {
+
                 return _calls.ToArray();
             }
         }
@@ -61,6 +75,11 @@ public class RecordingAccountSessionService : IAccountSessionService
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
+
+        lock (_sync)
+        {
+            _refreshCallCount++;
+        }
 
         return Task.FromResult(
             RefreshSucceeds

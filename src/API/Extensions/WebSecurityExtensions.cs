@@ -1,4 +1,5 @@
 using JennGllg.Fr.MonKado.Back.Api.Contracts.Responses;
+using JennGllg.Fr.MonKado.Back.Api.Middleware;
 using JennGllg.Fr.MonKado.Back.Api.Options;
 
 using Microsoft.AspNetCore.Antiforgery;
@@ -176,7 +177,11 @@ public static class WebSecurityExtensions
                 .WithHeaders(
                     HeaderNames.ContentType,
                     HeaderNames.Authorization,
+                    CorrelationIdMiddleware.HeaderName,
                     WebSecurityOptions.AntiforgeryHeaderName)
+                .WithExposedHeaders(
+                    CorrelationIdMiddleware.HeaderName,
+                    HeaderNames.RetryAfter)
                 .AllowCredentials()
                 .SetPreflightMaxAge(TimeSpan.FromMinutes(10)));
     }
