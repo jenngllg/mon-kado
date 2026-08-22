@@ -171,6 +171,7 @@
 ## Git et pull requests
 
 - Rédiger en anglais les messages de commit ainsi que les titres et descriptions des pull requests.
+- Ne jamais ajouter, committer ni pousser les plans d'implémentation dans le dépôt ; conserver les fichiers `*-implementation-plan.md` uniquement en local parmi les fichiers ignorés par Git.
 
 ## Gestion des conventions
 
