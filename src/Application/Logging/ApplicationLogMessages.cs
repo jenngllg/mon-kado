@@ -34,4 +34,24 @@ public static partial class ApplicationLogMessages
     public static partial void CurrentSessionRetrieved(
         ILogger logger,
         Guid memberId);
+
+    /// <summary>
+    /// Logs the start of a current session logout.
+    /// </summary>
+    /// <param name="logger">The logger.</param>
+    [LoggerMessage(
+        EventId = LogEventIds.CurrentSessionLogoutStarted,
+        Level = LogLevel.Debug,
+        Message = "Logging out the current browser session.")]
+    public static partial void CurrentSessionLogoutStarted(ILogger logger);
+
+    /// <summary>
+    /// Logs a completed current session logout.
+    /// </summary>
+    /// <param name="logger">The logger.</param>
+    [LoggerMessage(
+        EventId = LogEventIds.CurrentSessionLogoutCompleted,
+        Level = LogLevel.Information,
+        Message = "Current browser session logout completed.")]
+    public static partial void CurrentSessionLogoutCompleted(ILogger logger);
 }

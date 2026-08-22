@@ -181,6 +181,13 @@ immediately without waiting for a new JWT. Every account receives the built-in `
 backfills existing accounts. A valid JWT whose member has since been deleted returns `401 Unauthorized` and deletes
 the refresh cookie.
 
+`DELETE /api/v1/auth/sessions/current` ends only the refresh session held by the current browser. It remains available
+without a Bearer token so that an expired access token cannot prevent logout, but it requires the standard CSRF token.
+The operation is idempotent: a missing, malformed, expired, revoked, or unknown refresh token still returns
+`204 No Content` and deletes the browser cookie. PostgreSQL unavailability returns `503 Service Unavailable` without
+deleting the cookie so that the frontend can retry. The frontend must discard its in-memory access token after a
+successful response; an already-issued JWT remains cryptographically valid until its normal expiration.
+
 The refresh token exists only in an HTTP-only, host-only, `SameSite=Strict` cookie with `Path=/`. Production uses the
 secure `__Host-MonKado.Refresh` name; local development uses `MonKado.Refresh` for loopback HTTP. Without `rememberMe`,
 it is a browser-session cookie backed by an eight-hour sliding server session. With `rememberMe`, its absolute expiry

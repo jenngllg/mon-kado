@@ -11,7 +11,9 @@ using Microsoft.Extensions.Logging;
 
 namespace JennGllg.Fr.MonKado.Back.Api.FunctionalTests;
 
-public class RegistrationApiFactory : WebApplicationFactory<Program>
+public class RegistrationApiFactory(
+    string environment = "Local",
+    string? dataProtectionKeysPath = null) : WebApplicationFactory<Program>
 {
     private const string UnavailableConnectionString =
         "Host=127.0.0.1;Port=1;Database=mon_kado;Username=mon_kado;Password=functional-tests-only;" +
@@ -29,7 +31,10 @@ public class RegistrationApiFactory : WebApplicationFactory<Program>
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
-        builder.UseEnvironment("Local");
+        var allowedOrigin = environment == "Production"
+            ? "https://localhost"
+            : "http://localhost:5173";
+        builder.UseEnvironment(environment);
         builder.UseSetting(
             "ConnectionStrings:PostgreSql",
             UnavailableConnectionString);
@@ -38,10 +43,19 @@ public class RegistrationApiFactory : WebApplicationFactory<Program>
             "localhost");
         builder.UseSetting(
             "WebSecurity:AllowedOrigins:0",
-            "http://localhost:5173");
+            allowedOrigin);
         builder.UseSetting(
             "Jwt:SigningKey",
             "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA=");
+        builder.UseSetting(
+            "ReverseProxy:KnownNetworks:0",
+            "127.0.0.0/8");
+
+        if (dataProtectionKeysPath is not null)
+            builder.UseSetting(
+                "DataProtection:KeysPath",
+                dataProtectionKeysPath);
+
         builder.ConfigureLogging(logging => logging.AddProvider(_logProvider));
         builder.ConfigureServices(services =>
         {

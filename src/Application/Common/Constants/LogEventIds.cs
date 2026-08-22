@@ -43,6 +43,14 @@ public static class LogEventIds
     /// </summary>
     public const int CurrentSessionRetrieved = 1031;
     /// <summary>
+    /// Identifies current session logout started.
+    /// </summary>
+    public const int CurrentSessionLogoutStarted = 1032;
+    /// <summary>
+    /// Identifies current session logout completed.
+    /// </summary>
+    public const int CurrentSessionLogoutCompleted = 1033;
+    /// <summary>
     /// Identifies expected http error.
     /// </summary>
 

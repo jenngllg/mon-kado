@@ -130,6 +130,32 @@ public class AuthSessionsController(
         return Ok(response);
     }
 
+    /// <summary>
+    /// Ends the current browser refresh session.
+    /// </summary>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>No content after the browser session is cleared.</returns>
+    [HttpDelete("current")]
+    [AllowAnonymous]
+    [RefreshTokenCookie(isRequired: false)]
+    [DeletesRefreshTokenCookie]
+    [ValidateAntiForgeryToken]
+    [EnableRateLimiting(AuthenticationRateLimitingExtensions.RefreshPolicy)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status429TooManyRequests, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status503ServiceUnavailable, "application/json")]
+    public async Task<IActionResult> LogoutAsync(CancellationToken cancellationToken)
+    {
+        await sender.Send(
+            new LogoutCommand(refreshTokenCookieService.GetValue(Request)),
+            cancellationToken);
+        refreshTokenCookieService.Delete(HttpContext);
+        Response.Headers.CacheControl = "no-store";
+
+        return NoContent();
+    }
+
     internal static AccessTokenResponse CreateResponse(AccountSessionTokens tokens)
     {
         return new AccessTokenResponse(

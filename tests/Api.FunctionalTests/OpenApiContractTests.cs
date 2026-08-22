@@ -176,6 +176,77 @@ public class OpenApiContractTests(UnavailablePostgreSqlApiFactory factory) : ICl
                 .GetString());
     }
 
+    [Fact]
+    public async Task GetAsync_WhenLogoutIsDocumented_ExposesAnonymousIdempotentContract()
+    {
+        // Arrange
+        using var client = _factory.CreateClient();
+
+        // Act
+        using var document = await client.GetFromJsonAsync<JsonDocument>(
+            "/openapi/v1.json",
+            TestContext.Current.CancellationToken)
+            ?? throw new InvalidOperationException("The OpenAPI response body is empty.");
+        var operation = document.RootElement
+            .GetProperty("paths")
+            .GetProperty("/api/v1/auth/sessions/current")
+            .GetProperty("delete");
+
+        // Assert
+        Assert.Equal(
+            "Ends the current browser refresh session.",
+            operation.GetProperty("summary").GetString());
+        Assert.False(operation.TryGetProperty(
+            "security",
+            out var security) && security.GetArrayLength() > 0);
+        var parameters = operation.GetProperty("parameters").EnumerateArray().ToArray();
+        var antiforgery = Assert.Single(
+            parameters,
+            parameter => parameter.GetProperty("name").GetString() == "X-CSRF-TOKEN");
+        Assert.True(antiforgery.GetProperty("required").GetBoolean());
+        var refreshCookie = Assert.Single(
+            parameters,
+            parameter => parameter.GetProperty("name").GetString() ==
+                "__Host-MonKado.Refresh");
+        Assert.Equal(
+            "cookie",
+            refreshCookie.GetProperty("in").GetString());
+        Assert.False(refreshCookie.TryGetProperty(
+            "required",
+            out var required) && required.GetBoolean());
+        var responses = operation.GetProperty("responses");
+        Assert.True(responses.TryGetProperty(
+            "204",
+            out var success));
+        Assert.True(responses.TryGetProperty(
+            "400",
+            out _));
+        Assert.True(responses.TryGetProperty(
+            "429",
+            out _));
+        Assert.True(responses.TryGetProperty(
+            "500",
+            out _));
+        Assert.True(responses.TryGetProperty(
+            "503",
+            out _));
+        Assert.False(responses.TryGetProperty(
+            "401",
+            out _));
+        Assert.False(responses.TryGetProperty(
+            "403",
+            out _));
+        var headers = success.GetProperty("headers");
+        Assert.Contains(
+            "Deletes",
+            headers.GetProperty("Set-Cookie").GetProperty("description").GetString(),
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "no-store",
+            headers.GetProperty("Cache-Control").GetProperty("description").GetString(),
+            StringComparison.Ordinal);
+    }
+
     private static void AssertTokenOperation(
         JsonElement operation,
         bool expectsRefreshCookie)
