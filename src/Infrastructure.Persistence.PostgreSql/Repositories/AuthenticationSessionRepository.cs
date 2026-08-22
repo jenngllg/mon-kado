@@ -6,14 +6,20 @@ using Microsoft.EntityFrameworkCore;
 
 namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Repositories;
 
-internal class AuthenticationSessionRepository(MonKadoDbContext context)
+/// <summary>
+/// Provides PostgreSQL persistence operations for authentication sessions.
+/// </summary>
+/// <param name="context">The database context.</param>
+public class AuthenticationSessionRepository(MonKadoDbContext context)
     : IAuthenticationSessionRepository
 {
+    /// <inheritdoc />
     public void Add(AuthenticationSession session)
     {
         context.AuthenticationSessions.Add(session);
     }
 
+    /// <inheritdoc />
     public Task<AuthenticationSession?> GetByIdForUpdateAsync(
         Guid sessionId,
         CancellationToken cancellationToken)
@@ -24,6 +30,7 @@ internal class AuthenticationSessionRepository(MonKadoDbContext context)
             .SingleOrDefaultAsync(cancellationToken);
     }
 
+    /// <inheritdoc />
     public async Task<int> DeleteExpiredAsync(
         DateTime cutoff,
         int batchSize,

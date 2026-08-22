@@ -7,14 +7,20 @@ using Microsoft.EntityFrameworkCore;
 
 namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Repositories;
 
-internal class AuthenticationEmailOutboxRepository(MonKadoDbContext context)
+/// <summary>
+/// Provides PostgreSQL persistence operations for authentication email outbox messages.
+/// </summary>
+/// <param name="context">The database context.</param>
+public class AuthenticationEmailOutboxRepository(MonKadoDbContext context)
     : IAuthenticationEmailOutboxRepository
 {
+    /// <inheritdoc />
     public void Add(AuthenticationEmailOutboxMessage message)
     {
         context.AuthenticationEmailOutboxMessages.Add(message);
     }
 
+    /// <inheritdoc />
     public Task<AuthenticationEmailOutboxMessage?> GetNextForUpdateAsync(
         DateTime now,
         CancellationToken cancellationToken)
@@ -35,6 +41,7 @@ internal class AuthenticationEmailOutboxRepository(MonKadoDbContext context)
             .SingleOrDefaultAsync(cancellationToken);
     }
 
+    /// <inheritdoc />
     public Task<AuthenticationEmailOutboxMessage?> GetByIdForUpdateAsync(
         Guid messageId,
         CancellationToken cancellationToken)
@@ -45,6 +52,7 @@ internal class AuthenticationEmailOutboxRepository(MonKadoDbContext context)
             cancellationToken);
     }
 
+    /// <inheritdoc />
     public async Task MarkPendingConfirmationMessagesProcessedAsync(
         Guid userId,
         DateTime processedAt,
@@ -66,6 +74,7 @@ internal class AuthenticationEmailOutboxRepository(MonKadoDbContext context)
                 cancellationToken);
     }
 
+    /// <inheritdoc />
     public Task<bool> HasPendingConfirmationMessageAsync(
         Guid userId,
         CancellationToken cancellationToken)
@@ -79,6 +88,7 @@ internal class AuthenticationEmailOutboxRepository(MonKadoDbContext context)
             cancellationToken);
     }
 
+    /// <inheritdoc />
     public Task<EmailRequestStatistics?> GetConfirmationRequestStatisticsAsync(
         Guid userId,
         DateTime windowStart,
