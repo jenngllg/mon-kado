@@ -17,7 +17,8 @@ namespace JennGllg.Fr.MonKado.Back.Api.IntegrationTests;
 public sealed class PostgreSqlApiFactory(
     string connectionString,
     TimeProvider? timeProvider = null,
-    TimeSpan? emailConfirmationTokenLifespan = null) : WebApplicationFactory<Program>
+    TimeSpan? emailConfirmationTokenLifespan = null,
+    Action<IServiceCollection>? configureServices = null) : WebApplicationFactory<Program>
 {
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -30,6 +31,9 @@ public sealed class PostgreSqlApiFactory(
         builder.UseSetting(
             "WebSecurity:AllowedOrigins:0",
             "http://localhost:5173");
+        builder.UseSetting(
+            "Jwt:SigningKey",
+            "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA=");
         builder.ConfigureTestServices(services =>
         {
 
@@ -44,6 +48,8 @@ public sealed class PostgreSqlApiFactory(
                 services.Configure<EmailConfirmationTokenProviderOptions>(
                     options => options.TokenLifespan = lifespan);
             }
+
+            configureServices?.Invoke(services);
         });
     }
 }

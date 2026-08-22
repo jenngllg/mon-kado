@@ -3,7 +3,6 @@ using JennGllg.Fr.MonKado.Back.Api.Errors;
 using JennGllg.Fr.MonKado.Back.Api.Options;
 using JennGllg.Fr.MonKado.Back.Application.Abstractions;
 using JennGllg.Fr.MonKado.Back.Application.Commands;
-using JennGllg.Fr.MonKado.Back.Application.Handlers;
 using JennGllg.Fr.MonKado.Back.Application.Models;
 using JennGllg.Fr.MonKado.Back.Application.Validators;
 
@@ -17,7 +16,7 @@ namespace JennGllg.Fr.MonKado.Back.Api.FunctionalTests;
 public class LoginTests
 {
     [Fact]
-    public async Task LoginAsync_WhenValidRequest_ReturnsEmptyNoContentAndPreservesCredentials()
+    public async Task LoginAsync_WhenValidRequest_ReturnsAccessTokenAndPreservesCredentials()
     {
         // Arrange
         await using var factory = new RegistrationApiFactory();
@@ -32,12 +31,57 @@ public class LoginTests
 
         // Assert
         Assert.Equal(
-            HttpStatusCode.NoContent,
+            HttpStatusCode.OK,
             response.StatusCode);
-        Assert.Equal(
-            0,
-            response.Content.Headers.ContentLength);
         Assert.True(response.Headers.CacheControl?.NoStore);
+        using var document = await response.Content.ReadFromJsonAsync<JsonDocument>(
+            TestContext.Current.CancellationToken)
+            ?? throw new InvalidOperationException("The access token response is empty.");
+        var payload = document.RootElement;
+        Assert.Equal(
+            [
+                "accessToken",
+                "expiresIn",
+                "tokenType"
+            ],
+            payload.EnumerateObject()
+                .Select(property => property.Name)
+                .Order()
+                .ToArray());
+        Assert.Equal(
+            "functional-access-token",
+            payload.GetProperty("accessToken").GetString());
+        Assert.Equal(
+            "Bearer",
+            payload.GetProperty("tokenType").GetString());
+        Assert.Equal(
+            900,
+            payload.GetProperty("expiresIn").GetInt32());
+        var refreshCookie = Assert.Single(
+            response.Headers.GetValues("Set-Cookie"),
+            value => value.StartsWith(
+                "MonKado.Refresh=functional-refresh-token;",
+                StringComparison.Ordinal));
+        Assert.Contains(
+            "expires=",
+            refreshCookie,
+            StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(
+            "httponly",
+            refreshCookie,
+            StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(
+            "samesite=strict",
+            refreshCookie,
+            StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(
+            "domain=",
+            refreshCookie,
+            StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(
+            "secure",
+            refreshCookie,
+            StringComparison.OrdinalIgnoreCase);
         var call = Assert.Single(factory.SessionService.Calls);
         Assert.Equal(
             "Lea@example.fr",
@@ -46,6 +90,7 @@ public class LoginTests
             "  exact password  ",
             call.Password);
         Assert.True(call.RememberMe);
+        Assert.Null(call.CurrentRefreshToken);
     }
 
     [Theory]
@@ -205,7 +250,7 @@ public class LoginTests
                 "password",
                 rememberMe: false);
             Assert.Equal(
-                HttpStatusCode.NoContent,
+                HttpStatusCode.OK,
                 accepted.StatusCode);
         }
 
@@ -244,7 +289,7 @@ public class LoginTests
 
         // Assert
         Assert.Equal(
-            HttpStatusCode.NoContent,
+            HttpStatusCode.OK,
             response.StatusCode);
         Assert.DoesNotContain(
             factory.LogMessages,
@@ -254,6 +299,12 @@ public class LoginTests
                 StringComparison.Ordinal) ||
             message.Contains(
                 Password,
+                StringComparison.Ordinal) ||
+            message.Contains(
+                "functional-access-token",
+                StringComparison.Ordinal) ||
+            message.Contains(
+                "functional-refresh-token",
                 StringComparison.Ordinal));
     }
 
@@ -276,6 +327,124 @@ public class LoginTests
             HttpStatusCode.ServiceUnavailable,
             response.StatusCode);
         Assert.True(response.Headers.CacheControl?.NoStore);
+    }
+
+    [Fact]
+    public async Task RefreshAsync_WhenCookieIsValid_ReturnsAccessTokenAndRotatesCookie()
+    {
+        // Arrange
+        await using var factory = new RegistrationApiFactory();
+        using var client = factory.CreateClient();
+        using var loginResponse = await LoginAsync(
+            client,
+            "lea@example.fr",
+            "password",
+            rememberMe: false);
+
+        // Act
+        using var response = await RefreshAsync(client);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.OK,
+            response.StatusCode);
+        var payload = await response.Content.ReadFromJsonAsync<AccessTokenResponse>(
+            TestContext.Current.CancellationToken)
+            ?? throw new InvalidOperationException("The access token response is empty.");
+        Assert.Equal(
+            "functional-access-token",
+            payload.AccessToken);
+        Assert.Contains(
+            response.Headers.GetValues("Set-Cookie"),
+            value => value.StartsWith(
+                "MonKado.Refresh=functional-refresh-token;",
+                StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task RefreshAsync_WhenCookieIsMissing_ReturnsUnauthorizedAndDeletesCookie()
+    {
+        // Arrange
+        await using var factory = new RegistrationApiFactory();
+        using var client = factory.CreateClient();
+
+        // Act
+        using var response = await RefreshAsync(client);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.Unauthorized,
+            response.StatusCode);
+        using var document = await response.Content.ReadFromJsonAsync<JsonDocument>(
+            TestContext.Current.CancellationToken)
+            ?? throw new InvalidOperationException("The authentication error response is empty.");
+        Assert.Equal(
+            ErrorCodes.AccountAuthenticationSessionInvalid,
+            document.RootElement.GetProperty("errorCode").GetString());
+        Assert.Contains(
+            response.Headers.GetValues("Set-Cookie"),
+            value => value.StartsWith(
+                "MonKado.Refresh=;",
+                StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task RefreshAsync_WhenCsrfTokenIsMissing_ReturnsBadRequest()
+    {
+        // Arrange
+        await using var factory = new RegistrationApiFactory();
+        using var client = factory.CreateClient();
+        using var loginResponse = await LoginAsync(
+            client,
+            "lea@example.fr",
+            "password",
+            rememberMe: false);
+
+        // Act
+        using var response = await client.PostAsync(
+            "/api/v1/auth/sessions/refresh",
+            null,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.BadRequest,
+            response.StatusCode);
+    }
+
+    [Fact]
+    public async Task RefreshAsync_WhenPostgreSqlIsUnavailable_ReturnsServiceUnavailableAndPreservesCookie()
+    {
+        // Arrange
+        await using var factory = new UnavailablePostgreSqlApiFactory();
+        using var client = factory.CreateClient();
+        var csrfToken = await GetCsrfTokenAsync(client);
+        var refreshToken = $"{Guid.NewGuid():N}.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+        using var request = new HttpRequestMessage(
+            HttpMethod.Post,
+            "/api/v1/auth/sessions/refresh");
+        request.Headers.Add(
+            WebSecurityOptions.AntiforgeryHeaderName,
+            csrfToken);
+        request.Headers.Add(
+            "Cookie",
+            $"MonKado.Refresh={refreshToken}");
+
+        // Act
+        using var response = await client.SendAsync(
+            request,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.ServiceUnavailable,
+            response.StatusCode);
+        Assert.True(response.Headers.CacheControl?.NoStore);
+        Assert.False(response.Headers.TryGetValues(
+            "Set-Cookie",
+            out var cookies) && cookies.Any(value => value.StartsWith(
+                "MonKado.Refresh=;",
+                StringComparison.Ordinal)));
     }
 
     [Fact]
@@ -348,6 +517,21 @@ public class LoginTests
                 rememberMe
             })
         };
+        request.Headers.Add(
+            WebSecurityOptions.AntiforgeryHeaderName,
+            csrfToken);
+
+        return await client.SendAsync(
+            request,
+            TestContext.Current.CancellationToken);
+    }
+
+    private static async Task<HttpResponseMessage> RefreshAsync(HttpClient client)
+    {
+        var csrfToken = await GetCsrfTokenAsync(client);
+        var request = new HttpRequestMessage(
+            HttpMethod.Post,
+            "/api/v1/auth/sessions/refresh");
         request.Headers.Add(
             WebSecurityOptions.AntiforgeryHeaderName,
             csrfToken);

@@ -1,7 +1,6 @@
 using JennGllg.Fr.MonKado.Back.Application.Abstractions;
 using JennGllg.Fr.MonKado.Back.Application.Commands;
 using JennGllg.Fr.MonKado.Back.Application.Common.Exceptions;
-using JennGllg.Fr.MonKado.Back.Application.Handlers;
 using JennGllg.Fr.MonKado.Back.Application.Models;
 using JennGllg.Fr.MonKado.Back.Application.Validators;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Abstractions;
@@ -10,11 +9,22 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 
+using System.Diagnostics.CodeAnalysis;
 using System.Text;
 
 namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Services;
 
-internal class AuthenticationEmailDispatcher(
+/// <summary>
+/// Claims and delivers pending authentication email messages.
+/// </summary>
+/// <param name="context">The database context.</param>
+/// <param name="unitOfWork">The unit of work.</param>
+/// <param name="userRepository">The member repository.</param>
+/// <param name="outboxRepository">The authentication email outbox repository.</param>
+/// <param name="userManager">The Identity user manager.</param>
+/// <param name="sender">The authentication email sender.</param>
+/// <param name="timeProvider">The time provider.</param>
+public class AuthenticationEmailDispatcher(
     MonKadoDbContext context,
     IUnitOfWork unitOfWork,
     IMonKadoUserRepository userRepository,
@@ -107,7 +117,7 @@ internal class AuthenticationEmailDispatcher(
         return message.Id;
     }
 
-    internal async Task DeliverMessageAsync(
+    private async Task DeliverMessageAsync(
         Guid messageId,
         Uri frontendOrigin,
         CancellationToken cancellationToken)
@@ -123,7 +133,7 @@ internal class AuthenticationEmailDispatcher(
             now))
             return;
 
-        var deliverableMessage = message!;
+        var deliverableMessage = message;
 
         var user = await userRepository.Query()
             .SingleOrDefaultAsync(
@@ -140,7 +150,8 @@ internal class AuthenticationEmailDispatcher(
             return;
         }
 
-        var eligibleUser = user!;
+        var eligibleUser = user;
+        ArgumentNullException.ThrowIfNull(eligibleUser.Email);
         var token = await userManager.GenerateEmailConfirmationTokenAsync(eligibleUser);
         var confirmationUrl = BuildConfirmationUrl(
             frontendOrigin,
@@ -151,7 +162,7 @@ internal class AuthenticationEmailDispatcher(
             var result = await sender.SendEmailConfirmationAsync(
                 new AuthenticationEmailMessage(
                     deliverableMessage.Id,
-                    eligibleUser.Email!,
+                    eligibleUser.Email,
                     confirmationUrl),
                 cancellationToken);
             deliverableMessage.MarkProcessed(
@@ -173,7 +184,8 @@ internal class AuthenticationEmailDispatcher(
         await unitOfWork.SaveChangesAsync(cancellationToken);
     }
 
-    internal static bool CanReceiveConfirmation(
+    private static bool CanReceiveConfirmation(
+        [NotNullWhen(true)]
         MonKadoUser? user,
         DateTime now)
     {
@@ -181,12 +193,12 @@ internal class AuthenticationEmailDispatcher(
         return user is
         {
             EmailConfirmed: false,
-            Email: not null,
             UnconfirmedAccountExpiresAt: { } expiration
         } && expiration > now;
     }
 
-    internal static bool CanDeliver(
+    private static bool CanDeliver(
+        [NotNullWhen(true)]
         AuthenticationEmailOutboxMessage? message,
         DateTime now)
     {
@@ -218,7 +230,7 @@ internal class AuthenticationEmailDispatcher(
             UriKind.Absolute);
     }
 
-    internal static TimeSpan GetRetryDelay(
+    private static TimeSpan GetRetryDelay(
         int attemptCount,
         AuthenticationEmailFailureCategory category,
         TimeSpan? providerRetryAfter)

@@ -1,6 +1,5 @@
 using JennGllg.Fr.MonKado.Back.Application.Abstractions;
 using JennGllg.Fr.MonKado.Back.Application.Commands;
-using JennGllg.Fr.MonKado.Back.Application.Handlers;
 using JennGllg.Fr.MonKado.Back.Application.Models;
 using JennGllg.Fr.MonKado.Back.Application.Validators;
 
@@ -38,6 +37,9 @@ public class RegistrationApiFactory : WebApplicationFactory<Program>
         builder.UseSetting(
             "WebSecurity:AllowedOrigins:0",
             "http://localhost:5173");
+        builder.UseSetting(
+            "Jwt:SigningKey",
+            "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA=");
         builder.ConfigureLogging(logging => logging.AddProvider(_logProvider));
         builder.ConfigureServices(services =>
         {

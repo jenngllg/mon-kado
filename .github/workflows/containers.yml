@@ -67,6 +67,10 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Generate JWT signing key
+        shell: bash
+        run: echo "JWT_SIGNING_KEY=$(openssl rand -base64 32)" >> "$GITHUB_ENV"
+
       - name: Validate Compose configurations
         shell: bash
         run: |

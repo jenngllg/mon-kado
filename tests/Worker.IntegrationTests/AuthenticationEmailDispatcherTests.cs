@@ -1,7 +1,6 @@
 using JennGllg.Fr.MonKado.Back.Application.Abstractions;
 using JennGllg.Fr.MonKado.Back.Application.Commands;
 using JennGllg.Fr.MonKado.Back.Application.Common.Exceptions;
-using JennGllg.Fr.MonKado.Back.Application.Handlers;
 using JennGllg.Fr.MonKado.Back.Application.Models;
 using JennGllg.Fr.MonKado.Back.Application.Validators;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql;
@@ -188,6 +187,69 @@ public class AuthenticationEmailDispatcherTests(PostgreSqlWorkerFixture fixture)
             message.LastError);
     }
 
+    [Theory]
+    [InlineData(2, AuthenticationEmailFailureCategory.Transient, null, 5)]
+    [InlineData(3, AuthenticationEmailFailureCategory.Transient, 1, 15)]
+    [InlineData(4, AuthenticationEmailFailureCategory.Transient, null, 60)]
+    [InlineData(5, AuthenticationEmailFailureCategory.Transient, null, 360)]
+    [InlineData(1, AuthenticationEmailFailureCategory.RateLimited, null, 1)]
+    [InlineData(1, AuthenticationEmailFailureCategory.Permission, null, 360)]
+    [InlineData(1, AuthenticationEmailFailureCategory.InvalidRequest, null, 360)]
+    [InlineData(1, AuthenticationEmailFailureCategory.Unknown, null, 360)]
+    [InlineData(1, AuthenticationEmailFailureCategory.Transient, 1_500, 1_440)]
+    public async Task ExecuteAsync_WhenDeliveryFails_UsesExpectedRetryDelay(
+        int attemptCount,
+        AuthenticationEmailFailureCategory failureCategory,
+        int? providerRetryMinutes,
+        int expectedDelayMinutes)
+    {
+        // Arrange
+        var sender = new FakeEmailSender(
+            fail: true,
+            retryAfter: providerRetryMinutes is null
+                ? null
+                : TimeSpan.FromMinutes(providerRetryMinutes.Value),
+            failureCategory: failureCategory);
+        var now = new DateTimeOffset(
+            2026,
+            8,
+            13,
+            12,
+            0,
+            0,
+            TimeSpan.Zero);
+        await using var provider = await CreateProviderAsync(
+            sender,
+            now);
+        await CreateUnconfirmedAccountAsync(
+            provider,
+            now);
+        await using (var setupScope = provider.CreateAsyncScope())
+        {
+            var setupContext = setupScope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
+            await setupContext.AuthenticationEmailOutboxMessages.ExecuteUpdateAsync(
+                setters => setters.SetProperty(
+                    message => message.AttemptCount,
+                    attemptCount - 1),
+                TestContext.Current.CancellationToken);
+        }
+
+        // Act
+        await DispatchAsync(provider);
+
+        // Assert
+        await using var scope = provider.CreateAsyncScope();
+        var message = await scope.ServiceProvider
+            .GetRequiredService<MonKadoDbContext>()
+            .AuthenticationEmailOutboxMessages.SingleAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(
+            attemptCount,
+            message.AttemptCount);
+        Assert.Equal(
+            now.AddMinutes(expectedDelayMinutes),
+            message.AvailableAt);
+    }
+
     [Fact]
     public async Task ExecuteAsync_WhenExpiredLease_CanBeClaimedAgain()
     {
@@ -266,8 +328,12 @@ public class AuthenticationEmailDispatcherTests(PostgreSqlWorkerFixture fixture)
         Assert.Single(sender.Messages);
     }
 
-    [Fact]
-    public async Task ExecuteAsync_WhenConfirmedAccount_IsNotContactedAndMessageIsClosed()
+    [Theory]
+    [InlineData("confirmed")]
+    [InlineData("expired")]
+    [InlineData("missing-account")]
+    public async Task ExecuteAsync_WhenAccountCannotReceiveConfirmation_IsNotContactedAndMessageIsClosed(
+        string scenario)
     {
         // Arrange
         var sender = new FakeEmailSender();
@@ -289,11 +355,45 @@ public class AuthenticationEmailDispatcherTests(PostgreSqlWorkerFixture fixture)
         {
             var setupContext =
                 setupScope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
-            await setupContext.Users.ExecuteUpdateAsync(
-                setters => setters.SetProperty(
-                    user => user.EmailConfirmed,
-                    true),
-                TestContext.Current.CancellationToken);
+            switch (scenario)
+            {
+                case "confirmed":
+                    await setupContext.Users.ExecuteUpdateAsync(
+                        setters => setters.SetProperty(
+                            user => user.EmailConfirmed,
+                            true),
+                        TestContext.Current.CancellationToken);
+                    break;
+                case "expired":
+                    await setupContext.Users.ExecuteUpdateAsync(
+                        setters => setters.SetProperty(
+                            user => user.UnconfirmedAccountExpiresAt,
+                            now.UtcDateTime),
+                        TestContext.Current.CancellationToken);
+                    break;
+                case "missing-account":
+                    await setupContext.Database.OpenConnectionAsync(
+                        TestContext.Current.CancellationToken);
+
+                    try
+                    {
+                        await setupContext.Database.ExecuteSqlRawAsync(
+                            "SET session_replication_role = replica;",
+                            TestContext.Current.CancellationToken);
+                        await setupContext.Users.ExecuteDeleteAsync(
+                            TestContext.Current.CancellationToken);
+                    }
+                    finally
+                    {
+                        await setupContext.Database.ExecuteSqlRawAsync(
+                            "SET session_replication_role = origin;",
+                            TestContext.Current.CancellationToken);
+                        await setupContext.Database.CloseConnectionAsync();
+                    }
+                    break;
+                default:
+                    throw new InvalidOperationException($"Unknown test scenario '{scenario}'.");
+            }
         }
 
         // Act
@@ -308,6 +408,44 @@ public class AuthenticationEmailDispatcherTests(PostgreSqlWorkerFixture fixture)
         Assert.Equal(
             now.UtcDateTime,
             message.ProcessedAt);
+    }
+
+    [Theory]
+    [InlineData("missing-message")]
+    [InlineData("processed")]
+    [InlineData("missing-lease")]
+    [InlineData("expired-lease")]
+    public async Task ExecuteAsync_WhenClaimedMessageBecomesUndeliverable_DoesNotContactProvider(
+        string scenario)
+    {
+        // Arrange
+        var sender = new FakeEmailSender();
+        var now = new DateTimeOffset(
+            2026,
+            8,
+            13,
+            12,
+            0,
+            0,
+            TimeSpan.Zero);
+        await using var provider = await CreateProviderAsync(
+            sender,
+            now);
+        await CreateUnconfirmedAccountAsync(
+            provider,
+            now);
+        await CreateClaimMutationTriggerAsync(
+            provider,
+            scenario);
+
+        // Act
+        var claimedCount = await DispatchOneAsync(provider);
+
+        // Assert
+        Assert.Equal(
+            1,
+            claimedCount);
+        Assert.Empty(sender.Messages);
     }
 
     [Fact]
@@ -460,6 +598,90 @@ public class AuthenticationEmailDispatcherTests(PostgreSqlWorkerFixture fixture)
             new Uri("https://mon-kado.fr"),
             20,
             TimeSpan.FromMinutes(2),
+            TestContext.Current.CancellationToken);
+    }
+
+    private static async Task<int> DispatchOneAsync(ServiceProvider provider)
+    {
+        await using var scope = provider.CreateAsyncScope();
+        var dispatcher =
+            scope.ServiceProvider.GetRequiredService<IAuthenticationEmailDispatcher>();
+
+        return await dispatcher.DispatchPendingAsync(
+            new Uri("https://mon-kado.fr"),
+            1,
+            TimeSpan.FromMinutes(2),
+            TestContext.Current.CancellationToken);
+    }
+
+    private static async Task CreateClaimMutationTriggerAsync(
+        ServiceProvider provider,
+        string scenario)
+    {
+        await using var scope = provider.CreateAsyncScope();
+        var context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
+        var command = scenario switch
+        {
+            "missing-message" =>
+                """
+                CREATE OR REPLACE FUNCTION public.mutate_claimed_message()
+                RETURNS trigger AS $$
+                BEGIN
+                    DELETE FROM public.authentication_email_outbox WHERE id = NEW.id;
+                    RETURN NEW;
+                END;
+                $$ LANGUAGE plpgsql;
+                CREATE TRIGGER mutate_claimed_message
+                AFTER UPDATE OF locked_until ON public.authentication_email_outbox
+                FOR EACH ROW WHEN (NEW.locked_until IS NOT NULL)
+                EXECUTE FUNCTION public.mutate_claimed_message();
+                """,
+            "processed" =>
+                """
+                CREATE OR REPLACE FUNCTION public.mutate_claimed_message()
+                RETURNS trigger AS $$
+                BEGIN
+                    NEW.processed_at = NEW.locked_until;
+                    RETURN NEW;
+                END;
+                $$ LANGUAGE plpgsql;
+                CREATE TRIGGER mutate_claimed_message
+                BEFORE UPDATE OF locked_until ON public.authentication_email_outbox
+                FOR EACH ROW WHEN (NEW.locked_until IS NOT NULL)
+                EXECUTE FUNCTION public.mutate_claimed_message();
+                """,
+            "missing-lease" =>
+                """
+                CREATE OR REPLACE FUNCTION public.mutate_claimed_message()
+                RETURNS trigger AS $$
+                BEGIN
+                    NEW.locked_until = NULL;
+                    RETURN NEW;
+                END;
+                $$ LANGUAGE plpgsql;
+                CREATE TRIGGER mutate_claimed_message
+                BEFORE UPDATE OF locked_until ON public.authentication_email_outbox
+                FOR EACH ROW WHEN (NEW.locked_until IS NOT NULL)
+                EXECUTE FUNCTION public.mutate_claimed_message();
+                """,
+            "expired-lease" =>
+                """
+                CREATE OR REPLACE FUNCTION public.mutate_claimed_message()
+                RETURNS trigger AS $$
+                BEGIN
+                    NEW.locked_until = NEW.available_at;
+                    RETURN NEW;
+                END;
+                $$ LANGUAGE plpgsql;
+                CREATE TRIGGER mutate_claimed_message
+                BEFORE UPDATE OF locked_until ON public.authentication_email_outbox
+                FOR EACH ROW WHEN (NEW.locked_until IS NOT NULL)
+                EXECUTE FUNCTION public.mutate_claimed_message();
+                """,
+            _ => throw new InvalidOperationException($"Unknown test scenario '{scenario}'.")
+        };
+        await context.Database.ExecuteSqlRawAsync(
+            command,
             TestContext.Current.CancellationToken);
     }
 

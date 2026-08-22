@@ -111,14 +111,22 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Migrati
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("expires_at");
 
-                    b.Property<byte[]>("ProtectedTicket")
+                    b.Property<bool>("IsPersistent")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_persistent");
+
+                    b.Property<byte[]>("RefreshTokenHash")
                         .IsRequired()
                         .HasColumnType("bytea")
-                        .HasColumnName("protected_ticket");
+                        .HasColumnName("refresh_token_hash");
 
                     b.Property<DateTime>("RenewedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("renewed_at");
+
+                    b.Property<DateTime?>("RevokedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("revoked_at");
 
                     b.Property<Guid>("UserId")
                         .HasColumnType("uuid")
@@ -135,9 +143,9 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Migrati
 
                     b.ToTable("authentication_sessions", "public", t =>
                         {
-                            t.HasCheckConstraint("ck_authentication_sessions_ticket_not_empty", "octet_length(protected_ticket) > 0");
+                            t.HasCheckConstraint("ck_authentication_sessions_refresh_token_hash_length", "octet_length(refresh_token_hash) = 32");
 
-                            t.HasCheckConstraint("ck_authentication_sessions_timestamps_consistent", "renewed_at >= created_at AND expires_at > created_at AND expires_at >= renewed_at");
+                            t.HasCheckConstraint("ck_authentication_sessions_timestamps_consistent", "renewed_at >= created_at AND expires_at > created_at AND expires_at >= renewed_at AND (revoked_at IS NULL OR revoked_at >= created_at)");
                         });
                 });
 

@@ -14,5 +14,8 @@ public sealed class UnavailablePostgreSqlApiFactory : WebApplicationFactory<Prog
         builder.UseSetting(
             "ConnectionStrings:PostgreSql",
             UnavailableConnectionString);
+        builder.UseSetting(
+            "Jwt:SigningKey",
+            "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA=");
     }
 }

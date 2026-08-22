@@ -1,6 +1,5 @@
 using JennGllg.Fr.MonKado.Back.Application.Abstractions;
 using JennGllg.Fr.MonKado.Back.Application.Commands;
-using JennGllg.Fr.MonKado.Back.Application.Handlers;
 using JennGllg.Fr.MonKado.Back.Application.Models;
 using JennGllg.Fr.MonKado.Back.Application.Validators;
 using JennGllg.Fr.MonKado.Back.Worker.Configurations;
@@ -33,6 +32,36 @@ public class AuthenticationEmailConfigurationTests
         Assert.Same(
             services,
             result);
+    }
+
+    [Fact]
+    public void ConfigureWorkerInjection_WhenConfigurationIsValid_RegistersWorkers()
+    {
+        // Arrange
+        var configuration = new ConfigurationManager();
+        var services = new ServiceCollection();
+
+        // Act
+        var result = services.ConfigureWorkerInjection(
+            configuration,
+            new TestHostEnvironment("Local"));
+
+        // Assert
+        Assert.Same(
+            services,
+            result);
+        Assert.Contains(
+            services,
+            descriptor => descriptor.ImplementationType ==
+                typeof(AuthenticationEmailDeliveryWorker));
+        Assert.Contains(
+            services,
+            descriptor => descriptor.ImplementationType ==
+                typeof(UnconfirmedAccountCleanupWorker));
+        Assert.Contains(
+            services,
+            descriptor => descriptor.ImplementationType ==
+                typeof(ExpiredAuthenticationSessionCleanupWorker));
     }
 
     [Fact]

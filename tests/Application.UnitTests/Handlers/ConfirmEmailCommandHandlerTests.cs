@@ -1,7 +1,6 @@
 using JennGllg.Fr.MonKado.Back.Application.Abstractions;
 using JennGllg.Fr.MonKado.Back.Application.Commands;
 using JennGllg.Fr.MonKado.Back.Application.Common.Exceptions;
-using JennGllg.Fr.MonKado.Back.Application.Handlers;
 
 using Moq;
 

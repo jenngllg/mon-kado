@@ -1,6 +1,7 @@
 using JennGllg.Fr.MonKado.Back.Api.Contracts.Responses;
 using JennGllg.Fr.MonKado.Back.Api.Errors;
 using JennGllg.Fr.MonKado.Back.Api.Options;
+using JennGllg.Fr.MonKado.Back.Application.Abstractions;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Abstractions;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Configurations;
@@ -13,6 +14,7 @@ using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Services;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 using System.Net;
 using System.Net.Http.Json;
@@ -160,6 +162,77 @@ public class EmailConfirmationIntegrationTests(PostgreSqlContainerFixture fixtur
         // Act
         await AssertInvalidProblemAsync(response);
         // Assert
+    }
+
+    [Fact]
+    public async Task ConfirmAsync_WhenUnconfirmedAccountHasNoExpiration_ReturnsFalse()
+    {
+        // Arrange
+        await using var factory = await CreateMigratedFactoryAsync(TimeProvider.System);
+        using var client = factory.CreateClient();
+        var user = await RegisterAndLoadUserAsync(
+            factory,
+            client,
+            "missing-expiration@example.fr");
+        var token = await GenerateEncodedTokenAsync(
+            factory,
+            user);
+        await using var scope = factory.Services.CreateAsyncScope();
+        var context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
+        await context.Users
+            .Where(candidate => candidate.Id == user.Id)
+            .ExecuteUpdateAsync(
+                setters => setters.SetProperty(
+                    candidate => candidate.UnconfirmedAccountExpiresAt,
+                    (DateTime?)null),
+                TestContext.Current.CancellationToken);
+        var service = scope.ServiceProvider.GetRequiredService<IEmailConfirmationService>();
+
+        // Act
+        var result = await service.ConfirmAsync(
+            user.Id.ToString("D"),
+            token,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.False(result);
+    }
+
+    [Fact]
+    public async Task ConfirmAsync_WhenIdentityCannotPersistConfirmation_RollsBackAndReturnsFalse()
+    {
+        // Arrange
+        await using var factory = await CreateMigratedFactoryAsync(
+            TimeProvider.System,
+            configureServices: services =>
+            {
+                services.RemoveAll<UserManager<MonKadoUser>>();
+                services.AddScoped<UserManager<MonKadoUser>, FailingEmailConfirmationUserManager>();
+            });
+        using var client = factory.CreateClient();
+        var user = await RegisterAndLoadUserAsync(
+            factory,
+            client,
+            "confirmation-failure@example.fr");
+        var token = await GenerateEncodedTokenAsync(
+            factory,
+            user);
+        await using var scope = factory.Services.CreateAsyncScope();
+        var service = scope.ServiceProvider.GetRequiredService<IEmailConfirmationService>();
+
+        // Act
+        var result = await service.ConfirmAsync(
+            user.Id.ToString("D"),
+            token,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.False(result);
+        var context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
+        var persistedUser = await context.Users
+            .AsNoTracking()
+            .SingleAsync(TestContext.Current.CancellationToken);
+        Assert.False(persistedUser.EmailConfirmed);
     }
 
     [Fact]
@@ -468,12 +541,14 @@ public class EmailConfirmationIntegrationTests(PostgreSqlContainerFixture fixtur
 
     private async Task<PostgreSqlApiFactory> CreateMigratedFactoryAsync(
         TimeProvider timeProvider,
-        TimeSpan? tokenLifespan = null)
+        TimeSpan? tokenLifespan = null,
+        Action<IServiceCollection>? configureServices = null)
     {
         var factory = new PostgreSqlApiFactory(
             fixture.Container.GetConnectionString(),
             timeProvider,
-            tokenLifespan);
+            tokenLifespan,
+            configureServices);
         await using var scope = factory.Services.CreateAsyncScope();
         var context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
         await context.Database.MigrateAsync(TestContext.Current.CancellationToken);

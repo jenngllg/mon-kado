@@ -42,14 +42,21 @@ public class ApiExtensionRegistrationTests
     }
 
     [Fact]
-    public void AddIdentityAuthentication_WhenCalled_ReturnsServices()
+    public void AddJwtAuthentication_WhenCalled_ReturnsServices()
     {
         // Arrange
         var services = new ServiceCollection();
-        var environment = new TestWebHostEnvironment("Local");
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Jwt:Issuer"] = "MonKado.Api",
+                ["Jwt:Audience"] = "MonKado.Frontend",
+                ["Jwt:SigningKey"] = "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA="
+            })
+            .Build();
 
         // Act
-        var result = services.AddIdentityAuthentication(environment);
+        var result = services.AddJwtAuthentication(configuration);
 
         // Assert
         Assert.Same(

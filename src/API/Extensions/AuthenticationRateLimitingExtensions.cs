@@ -89,7 +89,7 @@ public static class AuthenticationRateLimitingExtensions
                 ApiLogMessages.ExpectedHttpError(
                     logger,
                     errorResponse.StatusCode,
-                    errorResponse.ErrorCode!);
+                    ErrorCodes.RequestRateLimitExceeded);
 
                 context.Response.StatusCode = errorResponse.StatusCode;
                 await context.Response.WriteAsJsonAsync(
@@ -101,7 +101,7 @@ public static class AuthenticationRateLimitingExtensions
         return services;
     }
 
-    internal static RateLimitPartition<string> CreateLimiter(
+    private static RateLimitPartition<string> CreateLimiter(
         HttpContext context,
         int permitLimit)
     {

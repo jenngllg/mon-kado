@@ -4,6 +4,9 @@ using JennGllg.Fr.MonKado.Back.Api.Logging;
 using JennGllg.Fr.MonKado.Back.Application.Common.Models;
 
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
+
+using System.Text.Json;
 
 namespace JennGllg.Fr.MonKado.Back.Api.Extensions;
 /// <summary>
@@ -27,8 +30,7 @@ public static class ErrorResponseExtensions
             options.InvalidModelStateResponseFactory = context =>
             {
                 var validationErrors = context.ModelState
-                    .Where(entry => entry.Value!.Errors.Count > 0)
-                    .SelectMany(entry => entry.Value!.Errors.Select(error => CreateValidationError(
+                    .SelectMany(entry => GetErrors(entry.Value).Select(error => CreateValidationError(
                         entry.Key,
                         error.ErrorMessage)))
                     .DistinctBy(error => new
@@ -50,7 +52,7 @@ public static class ErrorResponseExtensions
                 ApiLogMessages.ExpectedHttpError(
                     logger,
                     errorResponse.StatusCode,
-                    errorResponse.ErrorCode!);
+                    ErrorCodes.RequestValidationError);
                 context.HttpContext.Response.Headers.CacheControl = "no-store";
 
                 var result = new BadRequestObjectResult(errorResponse);
@@ -62,21 +64,16 @@ public static class ErrorResponseExtensions
         return services;
     }
 
-    internal static string ToCamelCasePath(string value)
+    private static string ToCamelCasePath(string value)
     {
-
-        return string.IsNullOrEmpty(value)
-            ? value
-            : string.Join(
-                '.',
-                value
+        return string.Join(
+            '.',
+            value
                 .Split('.')
-                .Select(segment => char.IsLower(segment[0])
-                    ? segment
-                    : char.ToLowerInvariant(segment[0]) + segment[1..]));
+                .Select(JsonNamingPolicy.CamelCase.ConvertName));
     }
 
-    internal static ValidationError CreateValidationError(
+    private static ValidationError CreateValidationError(
         string propertyName,
         string errorMessage)
     {
@@ -86,5 +83,12 @@ public static class ErrorResponseExtensions
             string.IsNullOrWhiteSpace(errorMessage)
                 ? "The request body is invalid."
                 : errorMessage);
+    }
+
+    private static ModelErrorCollection GetErrors(ModelStateEntry? entry)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+
+        return entry.Errors;
     }
 }

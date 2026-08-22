@@ -2,7 +2,10 @@ using Npgsql;
 
 namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Services;
 
-internal static class PostgreSqlFailureClassifier
+/// <summary>
+/// Classifies PostgreSQL failures that represent temporary unavailability.
+/// </summary>
+public static class PostgreSqlFailureClassifier
 {
     /// <summary>
     /// Executes the is unavailable operation.

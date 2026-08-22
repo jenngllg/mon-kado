@@ -2,15 +2,34 @@ using Google.Apis.Auth.OAuth2;
 
 namespace JennGllg.Fr.MonKado.Back.Tools.GmailOAuthBootstrap;
 
-internal class GmailOAuthBootstrapApplication(
+/// <summary>
+/// Runs the Gmail OAuth bootstrap workflow.
+/// </summary>
+/// <param name="authorizationBroker">The Gmail authorization broker.</param>
+/// <param name="getEnvironmentVariable">The environment variable reader.</param>
+/// <param name="output">The standard output writer.</param>
+/// <param name="error">The standard error writer.</param>
+public class GmailOAuthBootstrapApplication(
     IGmailOAuthAuthorizationBroker authorizationBroker,
     Func<string, string?> getEnvironmentVariable,
     TextWriter output,
     TextWriter error)
 {
-    internal const string ClientIdVariable = "GMAIL_CLIENT_ID";
-    internal const string ClientSecretVariable = "GMAIL_CLIENT_SECRET";
+    /// <summary>
+    /// Identifies the Gmail OAuth client identifier environment variable.
+    /// </summary>
+    public const string ClientIdVariable = "GMAIL_CLIENT_ID";
 
+    /// <summary>
+    /// Identifies the Gmail OAuth client secret environment variable.
+    /// </summary>
+    public const string ClientSecretVariable = "GMAIL_CLIENT_SECRET";
+
+    /// <summary>
+    /// Runs the bootstrap workflow.
+    /// </summary>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The process exit code.</returns>
     public async Task<int> RunAsync(CancellationToken cancellationToken)
     {
         var clientId = getEnvironmentVariable(ClientIdVariable) ?? string.Empty;

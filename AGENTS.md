@@ -17,7 +17,7 @@
 - Dès qu'une collection contient plusieurs éléments, placer chaque élément sur sa propre ligne, y compris avec les expressions de collection modernes.
 - Suffixer par `Async` le nom de toute méthode asynchrone, quelle que soit sa visibilité, y compris lorsqu'elle retourne directement un `Task` ou un `ValueTask` sans utiliser le mot-clé `async` ; conserver toutefois le nom imposé par une interface ou une classe de base externe, par exemple `IRequestHandler.Handle`.
 - Toute méthode asynchrone qui effectue des entrées/sorties doit accepter un `CancellationToken` obligatoire, sans valeur par défaut, le placer en dernier paramètre et le transmettre à tous les appels asynchrones qui le permettent.
-- Valider les commandes, requêtes et DTO entrants au moyen de validateurs dédiés plutôt qu'avec des vérifications dispersées dans les handlers ou services.
+- Valider les commandes, requêtes et DTO entrants de la couche Application exclusivement avec des validateurs FluentValidation dédiés exécutés dans le pipeline commun, plutôt qu'avec des vérifications dispersées dans les handlers ou services ; après cette validation, ne pas répéter dans un handler des contrôles de présence ou de format tels que `string.IsNullOrWhiteSpace(request.Property)`.
 - Déclarer comme nullables dans les DTO entrants les propriétés fournies par le client, y compris lorsqu'elles sont obligatoires fonctionnellement, et confier aux validateurs centralisés les règles de présence telles que `.NotNull()` ou `.NotEmpty()`, plutôt que d'utiliser le mot-clé `required`.
 - Lorsqu'un DTO entrant contient un sous-objet, créer un validateur dédié à ce sous-objet et le composer dans le validateur parent avec `SetValidator(...)`, plutôt que de dupliquer ou d'imbriquer toutes ses règles dans le parent.
 - Centraliser les modèles de messages de validation récurrents en anglais dans un unique fichier `ValidationMessages.cs` contenant des constantes, plutôt que de répéter les chaînes dans les validateurs ou d'utiliser des fichiers `.resx` tant que l'API ne gère pas elle-même plusieurs langues.
@@ -29,10 +29,13 @@
 - Ne pas déclarer les classes `sealed` par défaut ; réserver `sealed` aux cas où l'interdiction d'hériter est intentionnelle.
 - Déclarer les types du projet `public` par défaut plutôt que `internal`, sauf raison explicite de restreindre leur visibilité.
 - Définir une interface publique pour chaque service afin de pouvoir substituer ses dépendances et tester unitairement ses consommateurs, notamment avec `Mock<TInterface>`.
+- Documenter en anglais avec des commentaires XML chaque interface de service, chaque implémentation de service et chacune de leurs méthodes, y compris lorsque l'implémentation ou la méthode n'est pas `public` ; fournir au minimum un `/// <summary>` concis et ajouter `<param>`, `<returns>` et `<exception>` lorsqu'ils sont applicables.
 - Enregistrer les services applicatifs avec une durée de vie `Scoped` par défaut ; utiliser une autre durée de vie uniquement lorsqu'elle est explicitement justifiée.
 - Centraliser la traduction des exceptions dans un gestionnaire ASP.NET Core nommé `GlobalExceptionHandler`, qui implémente `IExceptionHandler`, et retourner une réponse HTTP `400 Bad Request` contenant toutes les erreurs de validation.
 - Faire confiance au conteneur d'injection de dépendances pour les services injectés et ne pas ajouter de garde `null` dans les constructeurs pour ces dépendances.
 - Placer chaque type C# dans son propre fichier, y compris les petits types internes et les exceptions, et nommer le fichier comme le type.
+- Faire une exception uniquement pour une commande ou une requête MediatR et son handler fortement couplé : les placer dans le même fichier, nommé d'après la commande ou la requête ; conserver les validateurs, exceptions, DTO et tous les autres types dans leurs propres fichiers.
+- Ne pas utiliser l'opérateur null-forgiving (`!`) lorsqu'il n'est pas nécessaire ; privilégier un contrat de nullabilité et un flux de contrôle qui permettent au compilateur d'établir la non-nullité, et réserver `!` aux invariants réellement garantis qui ne peuvent pas être exprimés autrement.
 - Appliquer ces conventions à tout code C# créé ou modifié, sans reformater des fichiers sans rapport avec la tâche en cours.
 
 ## Tests
@@ -63,6 +66,7 @@
 - Ne jamais utiliser `InternalsVisibleTo` pour exposer des types ou membres internes aux projets de tests ; tester les composants exclusivement à travers leurs contrats publics.
 - Viser initialement une couverture de tests de `100 %` des lignes et des branches conditionnelles dans la quality gate ; exclure uniquement le code généré automatiquement, les migrations EF Core et les types purement descriptifs explicitement autorisés ci-dessous, ne réduire cet objectif que plus tard lorsqu'un cas concret démontre qu'il n'est pas pertinent, et documenter alors explicitement les autres exclusions retenues.
 - Autoriser `[ExcludeFromCodeCoverage]` uniquement sur un type purement descriptif dépourvu de logique exécutable, par exemple un DTO, un modèle d'échange ou une classe de constantes ; ne pas exclure globalement un dossier ou une catégorie entière et conserver la couverture dès que le type contient un constructeur métier, une propriété calculée, une validation, un mapping ou tout autre comportement.
+- Ne jamais appliquer `[ExcludeFromCodeCoverage]` aux commandes ni aux requêtes MediatR : elles doivent rester couvertes par les tests qui parcourent le flux du contrôleur jusqu'au handler.
 - Ne pas configurer de retry automatique pour masquer les tests instables dans la CI ; lorsqu'un test échoue de façon intermittente sans modification du code, laisser la quality gate échouer et corriger la cause de cette instabilité.
 - Ne pas utiliser `Task.Delay` ni d'attente temporelle réelle dans les tests dépendant du temps ; injecter un `TimeProvider` contrôlé par le test et faire avancer son horloge instantanément.
 - Synchroniser les tests de workers et de traitements asynchrones avec des signaux déterministes tels que `TaskCompletionSource`, plutôt qu'avec des boucles de polling ou des délais arbitraires.
@@ -96,6 +100,7 @@
 - Conserver dans l'URL le parent d'une ressource qui ne peut pas être manipulée indépendamment, même lorsque ses identifiants sont globalement uniques ; accéder ainsi à un souhait par `/api/v1/wishlists/{wishlistId}/wishes/{wishId}` et rechercher la ressource avec les deux identifiants, sans considérer le GUID comme un mécanisme d'autorisation.
 - Déclarer les actions de contrôleur qui renvoient un DTO avec `ActionResult<TDto>`, ou `Task<ActionResult<TDto>>` lorsqu'elles sont asynchrones, plutôt qu'avec `IActionResult`, afin d'exposer précisément leur contrat de réponse et d'améliorer la documentation OpenAPI.
 - Déclarer les actions de contrôleur qui ne renvoient aucun corps avec `IActionResult`, ou `Task<IActionResult>` lorsqu'elles sont asynchrones, et documenter explicitement avec `[ProducesResponseType]` leurs statuts HTTP et schémas de réponse métier spécifiques ; conserver également cette documentation explicite pour les actions retournant `ActionResult<TDto>`.
+- Écrire chaque attribut `[ProducesResponseType(...)]` intégralement sur une seule ligne, paramètres compris, même lorsqu'il contient plusieurs arguments ; cette exception prévaut sur la règle générale qui place chaque argument sur sa propre ligne.
 - Centraliser les réponses OpenAPI communes dans un `IOpenApiOperationTransformer` dédié : ajouter `500 Internal Server Error` à toutes les opérations et ajouter conditionnellement `401 Unauthorized` et `403 Forbidden` aux opérations protégées, plutôt que de répéter ces attributs sur chaque action.
 - Documenter en anglais avec des commentaires XML tous les types et membres `public`, y compris chaque action de contrôleur ; fournir au minimum un `/// <summary>` concis, ajouter systématiquement `<param>`, `<returns>` et `<exception>` lorsqu'ils sont applicables, et utiliser la documentation des endpoints pour alimenter leur description OpenAPI.
 - Réserver les commentaires dans le corps du code à l'explication du « pourquoi » lorsqu'une décision n'est pas évidente ; ne pas commenter ce que le code exprime déjà clairement.
@@ -151,7 +156,7 @@
 
 ## Organisation du dépôt
 
-- À l'intérieur de chaque projet, organiser les dossiers par responsabilité technique (`Commands`, `Handlers`, `Validators`, `Services`, etc.) plutôt que par fonctionnalité métier.
+- À l'intérieur de chaque projet, organiser les dossiers par responsabilité technique (`Commands`, `Queries`, `Validators`, `Services`, etc.) plutôt que par fonctionnalité métier ; placer le handler d'une commande ou d'une requête MediatR dans le même fichier que celle-ci, au sein de son dossier `Commands` ou `Queries`.
 - Ranger les interfaces de services dans un dossier technique `Abstractions` et utiliser le namespace correspondant.
 - Ranger les implémentations de services dans un dossier technique `Services` et utiliser le namespace correspondant, plutôt que dans un dossier racine nommé d'après un provider.
 - Dans chaque projet, centraliser ses enregistrements d'injection de dépendances dans un dossier technique `Configurations` et exposer une méthode d'extension nommée `Configure<Project>Injection`, par exemple `ConfigureApplicationInjection()` ou `ConfigureDomainInjection()`.

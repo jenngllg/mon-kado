@@ -6,14 +6,20 @@ using Microsoft.EntityFrameworkCore;
 
 namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Repositories;
 
-internal class MonKadoUserRepository(MonKadoDbContext context) : IMonKadoUserRepository
+/// <summary>
+/// Provides PostgreSQL persistence operations for MonKado users.
+/// </summary>
+/// <param name="context">The database context.</param>
+public class MonKadoUserRepository(MonKadoDbContext context) : IMonKadoUserRepository
 {
+    /// <inheritdoc />
     public IQueryable<MonKadoUser> Query()
     {
 
         return context.Users.AsNoTracking();
     }
 
+    /// <inheritdoc />
     public Task<MonKadoUser?> GetByIdForUpdateAsync(
         Guid userId,
         CancellationToken cancellationToken)
@@ -25,6 +31,7 @@ internal class MonKadoUserRepository(MonKadoDbContext context) : IMonKadoUserRep
             .SingleOrDefaultAsync(cancellationToken);
     }
 
+    /// <inheritdoc />
     public Task<MonKadoUser?> GetByIdForUpdateAsync(
         Guid userId,
         string normalizedEmail,
@@ -40,6 +47,7 @@ internal class MonKadoUserRepository(MonKadoDbContext context) : IMonKadoUserRep
             .SingleOrDefaultAsync(cancellationToken);
     }
 
+    /// <inheritdoc />
     public Task<MonKadoUser?> GetByNormalizedEmailForUpdateAsync(
         string normalizedEmail,
         CancellationToken cancellationToken)
@@ -51,6 +59,7 @@ internal class MonKadoUserRepository(MonKadoDbContext context) : IMonKadoUserRep
             .SingleOrDefaultAsync(cancellationToken);
     }
 
+    /// <inheritdoc />
     public async Task<int> DeleteExpiredUnconfirmedAsync(
         DateTime cutoff,
         int batchSize,

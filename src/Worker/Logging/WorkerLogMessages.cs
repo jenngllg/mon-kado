@@ -23,14 +23,16 @@ public static partial class WorkerLogMessages
     /// </summary>
     /// <param name="logger">The logger.</param>
     /// <param name="exceptionType">The exception type.</param>
+    /// <param name="exception">The delivery exception.</param>
 
     [LoggerMessage(
         EventId = LogEventIds.AuthenticationEmailDeliveryFailed,
-        Level = LogLevel.Warning,
+        Level = LogLevel.Error,
         Message = "Authentication email delivery failed and will be retried. Exception type: {ExceptionType}")]
     public static partial void AuthenticationEmailDeliveryFailed(
         ILogger logger,
-        string exceptionType);
+        string exceptionType,
+        Exception exception);
     /// <summary>
     /// Executes the expired accounts deleted operation.
     /// </summary>
@@ -49,14 +51,16 @@ public static partial class WorkerLogMessages
     /// </summary>
     /// <param name="logger">The logger.</param>
     /// <param name="exceptionType">The exception type.</param>
+    /// <param name="exception">The cleanup exception.</param>
 
     [LoggerMessage(
         EventId = LogEventIds.ExpiredAccountCleanupFailed,
-        Level = LogLevel.Warning,
+        Level = LogLevel.Error,
         Message = "Expired account cleanup failed and will be retried. Exception type: {ExceptionType}")]
     public static partial void ExpiredAccountCleanupFailed(
         ILogger logger,
-        string exceptionType);
+        string exceptionType,
+        Exception exception);
     /// <summary>
     /// Executes the expired sessions deleted operation.
     /// </summary>
@@ -75,12 +79,14 @@ public static partial class WorkerLogMessages
     /// </summary>
     /// <param name="logger">The logger.</param>
     /// <param name="exceptionType">The exception type.</param>
+    /// <param name="exception">The cleanup exception.</param>
 
     [LoggerMessage(
         EventId = LogEventIds.ExpiredSessionCleanupFailed,
-        Level = LogLevel.Warning,
+        Level = LogLevel.Error,
         Message = "Authentication session cleanup failed and will be retried. Exception type: {ExceptionType}")]
     public static partial void ExpiredSessionCleanupFailed(
         ILogger logger,
-        string exceptionType);
+        string exceptionType,
+        Exception exception);
 }

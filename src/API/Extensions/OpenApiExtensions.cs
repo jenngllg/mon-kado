@@ -1,6 +1,11 @@
+using JennGllg.Fr.MonKado.Back.Api.Attributes;
+using JennGllg.Fr.MonKado.Back.Api.Contracts.Responses;
 using JennGllg.Fr.MonKado.Back.Api.Options;
+using JennGllg.Fr.MonKado.Back.Api.Services;
 using JennGllg.Fr.MonKado.Back.Api.Transformers;
 
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Net.Http.Headers;
 using Microsoft.OpenApi;
 
 namespace JennGllg.Fr.MonKado.Back.Api.Extensions;
@@ -10,6 +15,7 @@ namespace JennGllg.Fr.MonKado.Back.Api.Extensions;
 
 public static class OpenApiExtensions
 {
+    internal const string BearerSecuritySchemeName = "Bearer";
     private const string DocumentName = "v1";
     private const string DocumentPath = "/openapi/{documentName}.json";
     /// <summary>
@@ -33,6 +39,7 @@ public static class OpenApiExtensions
                 document.Info.Title = "Mon Kado API";
                 document.Info.Version = DocumentName;
                 document.Info.Description = "API for creating, sharing, and managing gift wishlists.";
+                AddBearerSecurityScheme(document);
 
                 return Task.CompletedTask;
             });
@@ -41,11 +48,16 @@ public static class OpenApiExtensions
                 context,
                 _) =>
             {
+                var metadata = context.Description.ActionDescriptor.EndpointMetadata;
 
-                if (!RequiresAntiforgeryToken(context.Description.HttpMethod))
-                    return Task.CompletedTask;
+                if (RequiresAntiforgeryToken(metadata))
+                    AddAntiforgeryParameter(operation);
 
-                AddAntiforgeryParameter(operation);
+                if (RequiresRefreshTokenCookie(metadata))
+                    AddRefreshTokenCookieParameter(operation);
+
+                if (ReturnsAccessToken(metadata))
+                    AddAccessTokenResponseHeaders(operation);
 
                 return Task.CompletedTask;
             });
@@ -67,24 +79,113 @@ public static class OpenApiExtensions
         return endpoints;
     }
 
-    internal static bool RequiresAntiforgeryToken(string? httpMethod)
+    private static bool RequiresAntiforgeryToken(IEnumerable<object> metadata)
     {
-
-        return httpMethod is not null &&
-            (HttpMethods.IsPost(httpMethod) || HttpMethods.IsPut(httpMethod) ||
-             HttpMethods.IsPatch(httpMethod) || HttpMethods.IsDelete(httpMethod));
+        return metadata.OfType<ValidateAntiForgeryTokenAttribute>().Any();
     }
 
-    internal static void AddAntiforgeryParameter(OpenApiOperation operation)
+    private static void AddBearerSecurityScheme(OpenApiDocument document)
     {
-        operation.Parameters ??= [];
-        operation.Parameters.Add(new OpenApiParameter
-        {
-            Name = WebSecurityOptions.AntiforgeryHeaderName,
-            In = ParameterLocation.Header,
-            Required = true,
-            Description = "Request token obtained from GET /security/csrf-token.",
-            Schema = new OpenApiSchema { Type = JsonSchemaType.String }
-        });
+        ArgumentNullException.ThrowIfNull(document.Components);
+        document.Components.SecuritySchemes = AddOrReplace(
+            document.Components.SecuritySchemes,
+            BearerSecuritySchemeName,
+            new OpenApiSecurityScheme
+            {
+                BearerFormat = "JWT",
+                Description = "JWT access token returned by the login or refresh endpoint.",
+                Scheme = "bearer",
+                Type = SecuritySchemeType.Http
+            });
+    }
+
+    private static bool ReturnsAccessToken(IEnumerable<object> metadata)
+    {
+        return metadata.OfType<ProducesResponseTypeAttribute>().Any(attribute =>
+            attribute.StatusCode == StatusCodes.Status200OK &&
+            attribute.Type == typeof(AccessTokenResponse));
+    }
+
+    private static void AddAccessTokenResponseHeaders(OpenApiOperation operation)
+    {
+        ArgumentNullException.ThrowIfNull(operation.Responses);
+        var response = operation.Responses[
+            StatusCodes.Status200OK.ToString(System.Globalization.CultureInfo.InvariantCulture)];
+        var mutableResponse = (OpenApiResponse)response;
+        mutableResponse.Headers = AddOrReplace(
+            mutableResponse.Headers,
+            HeaderNames.SetCookie,
+            new OpenApiHeader
+            {
+                Description =
+                    "Rotating refresh token cookie. It is HttpOnly, SameSite=Strict, host-only, and uses Path=/. " +
+                    "Production uses the Secure __Host-MonKado.Refresh name; local development uses MonKado.Refresh. " +
+                    "It is a browser-session cookie unless rememberMe requests the fixed 30-day expiration.",
+                Schema = new OpenApiSchema { Type = JsonSchemaType.String }
+            });
+        mutableResponse.Headers = AddOrReplace(
+            mutableResponse.Headers,
+            HeaderNames.CacheControl,
+            new OpenApiHeader
+            {
+                Description = "Always no-store for token responses.",
+                Schema = new OpenApiSchema { Type = JsonSchemaType.String }
+            });
+    }
+
+    private static void AddAntiforgeryParameter(OpenApiOperation operation)
+    {
+        operation.Parameters = AddItem(
+            operation.Parameters,
+            new OpenApiParameter
+            {
+                Name = WebSecurityOptions.AntiforgeryHeaderName,
+                In = ParameterLocation.Header,
+                Required = true,
+                Description = "Request token obtained from GET /security/csrf-token.",
+                Schema = new OpenApiSchema { Type = JsonSchemaType.String }
+            });
+    }
+
+    private static bool RequiresRefreshTokenCookie(IEnumerable<object> metadata)
+    {
+        return metadata.OfType<RefreshTokenCookieAttribute>().Any();
+    }
+
+    private static void AddRefreshTokenCookieParameter(OpenApiOperation operation)
+    {
+        operation.Parameters = AddItem(
+            operation.Parameters,
+            new OpenApiParameter
+            {
+                Name = RefreshTokenCookieService.ProductionCookieName,
+                In = ParameterLocation.Cookie,
+                Required = true,
+                Description =
+                    "HttpOnly rotating refresh token cookie. Production uses __Host-MonKado.Refresh; " +
+                    "local development uses MonKado.Refresh.",
+                Schema = new OpenApiSchema { Type = JsonSchemaType.String }
+            });
+    }
+
+    private static IDictionary<string, TValue> AddOrReplace<TValue>(
+        IDictionary<string, TValue>? values,
+        string key,
+        TValue value)
+    {
+        values ??= new Dictionary<string, TValue>();
+        values[key] = value;
+
+        return values;
+    }
+
+    private static IList<TValue> AddItem<TValue>(
+        IList<TValue>? values,
+        TValue value)
+    {
+        values ??= [];
+        values.Add(value);
+
+        return values;
     }
 }

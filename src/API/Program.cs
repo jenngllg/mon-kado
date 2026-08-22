@@ -21,7 +21,7 @@ app.UseTrustedReverseProxy();
 app.UseCorrelationId();
 app.UseApiErrorHandling();
 app.UseWebSecurity();
-app.UseIdentityAuthentication();
+app.UseJwtAuthentication();
 app.UseAuthenticationRequestBodyLimits();
 app.UseRateLimiter();
 

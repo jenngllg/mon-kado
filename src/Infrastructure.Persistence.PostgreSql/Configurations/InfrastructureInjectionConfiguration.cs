@@ -1,6 +1,5 @@
 using JennGllg.Fr.MonKado.Back.Application.Abstractions;
 using JennGllg.Fr.MonKado.Back.Application.Commands;
-using JennGllg.Fr.MonKado.Back.Application.Handlers;
 using JennGllg.Fr.MonKado.Back.Application.Models;
 using JennGllg.Fr.MonKado.Back.Application.Validators;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Abstractions;
@@ -13,8 +12,6 @@ using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Options;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Repositories;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Services;
 
-using Microsoft.AspNetCore.Authentication;
-using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Migrations;
@@ -90,8 +87,7 @@ public static class InfrastructureInjectionConfiguration
             })
             .AddRoles<IdentityRole<Guid>>()
             .AddEntityFrameworkStores<MonKadoDbContext>()
-            .AddPasswordValidator<MaximumPasswordLengthValidator<MonKadoUser>>()
-            .AddSignInManager();
+            .AddPasswordValidator<MaximumPasswordLengthValidator<MonKadoUser>>();
         services.Configure<PasswordHasherOptions>(options => options.IterationCount = 220_000);
 
         services.AddScoped<IUnitOfWork>(provider =>
@@ -102,14 +98,10 @@ public static class InfrastructureInjectionConfiguration
         services.AddScoped<IAccountRegistrationService, AccountRegistrationService>();
         services.AddScoped<IEmailConfirmationService, EmailConfirmationService>();
         services.AddScoped<IExpiredAccountCleanup, ExpiredAccountCleanup>();
+        services.AddSingleton<IAccessTokenService, JwtAccessTokenService>();
+        services.AddSingleton<IRefreshTokenService, RefreshTokenService>();
         services.AddScoped<IAccountSessionService, AccountSessionService>();
         services.AddScoped<IExpiredAuthenticationSessionCleanup, ExpiredAuthenticationSessionCleanup>();
-        services.AddSingleton<ITicketStore, PostgreSqlAuthenticationTicketStore>();
-        services.AddScoped<ResettableAuthenticationHandlerProvider>();
-        services.Replace(ServiceDescriptor.Scoped<IAuthenticationHandlerProvider>(provider =>
-            provider.GetRequiredService<ResettableAuthenticationHandlerProvider>()));
-        services.AddScoped<IAuthenticationHandlerResetter>(provider =>
-            provider.GetRequiredService<ResettableAuthenticationHandlerProvider>());
 
         return services;
     }

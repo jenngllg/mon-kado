@@ -26,7 +26,13 @@ public static class Program
             CancellationToken.None);
     }
 
-    internal static async Task RunAsync(
+    /// <summary>
+    /// Runs the worker until cancellation is requested.
+    /// </summary>
+    /// <param name="args">The command-line arguments.</param>
+    /// <param name="cancellationToken">The worker lifetime cancellation token.</param>
+    /// <returns>A task that represents the worker lifetime.</returns>
+    public static async Task RunAsync(
         string[] args,
         CancellationToken cancellationToken)
     {
@@ -41,7 +47,7 @@ public static class Program
         }
     }
 
-    internal static IHost Build(string[] args)
+    private static IHost Build(string[] args)
     {
         var builder = Host.CreateApplicationBuilder(args);
 

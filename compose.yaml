@@ -72,6 +72,7 @@ services:
     environment:
       <<: *app-environment
       ASPNETCORE_ENVIRONMENT: Production
+      Jwt__SigningKey: ${JWT_SIGNING_KEY:?Set JWT_SIGNING_KEY in .env}
       ReverseProxy__KnownNetworks__0: ${EDGE_NETWORK_CIDR:-172.30.0.0/24}
       ASPNETCORE_HTTP_PORTS: "8080"
       AllowedHosts: ${API_ALLOWED_HOST:?Set API_ALLOWED_HOST in .env}

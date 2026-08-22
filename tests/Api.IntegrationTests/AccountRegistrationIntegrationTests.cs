@@ -2,7 +2,6 @@ using JennGllg.Fr.MonKado.Back.Api.Contracts.Responses;
 using JennGllg.Fr.MonKado.Back.Api.Options;
 using JennGllg.Fr.MonKado.Back.Application.Abstractions;
 using JennGllg.Fr.MonKado.Back.Application.Commands;
-using JennGllg.Fr.MonKado.Back.Application.Handlers;
 using JennGllg.Fr.MonKado.Back.Application.Models;
 using JennGllg.Fr.MonKado.Back.Application.Validators;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql;
@@ -17,6 +16,7 @@ using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Services;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 using Npgsql;
 
@@ -145,6 +145,92 @@ public class AccountRegistrationIntegrationTests(PostgreSqlContainerFixture fixt
             error => error.Code == "PasswordTooLong");
         var context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
         Assert.Empty(await context.Users.ToArrayAsync(TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task RegisterAsync_WhenIdentityRejectsAccountCreation_ThrowsDetailedException()
+    {
+        // Arrange
+        await using var factory = await CreateMigratedFactoryAsync();
+        await using var scope = factory.Services.CreateAsyncScope();
+        var service = scope.ServiceProvider.GetRequiredService<IAccountRegistrationService>();
+        var password = new string(
+            'a',
+            129);
+
+        // Act
+        Task action() => service.RegisterAsync(
+            "rejected@example.fr",
+            password,
+            "Rejected",
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>((Func<Task>)action);
+        Assert.Contains(
+            "PasswordTooLong",
+            exception.Message,
+            StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("DuplicateEmail")]
+    [InlineData("DuplicateUserName")]
+    public async Task RegisterAsync_WhenIdentityReportsDuplicateAccount_RollsBackSilently(
+        string errorCode)
+    {
+        // Arrange
+        await using var factory = await CreateMigratedFactoryAsync(services =>
+        {
+            services.RemoveAll<IPasswordValidator<MonKadoUser>>();
+            services.AddSingleton<IPasswordValidator<MonKadoUser>>(
+                new RejectingPasswordValidator(errorCode));
+        });
+        await using var scope = factory.Services.CreateAsyncScope();
+        var service = scope.ServiceProvider.GetRequiredService<IAccountRegistrationService>();
+
+        // Act
+        await service.RegisterAsync(
+            $"{errorCode}@example.fr",
+            Password,
+            "Duplicate",
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        var context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
+        Assert.Empty(await context.Users.ToArrayAsync(TestContext.Current.CancellationToken));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task RegisterAsync_WhenDatabaseReportsNormalizedAccountConflict_CompletesSilently(
+        bool isUserNameConstraint)
+    {
+        // Arrange
+        await using var factory = await CreateMigratedFactoryAsync();
+        await CreateDuplicateAccountTriggerAsync(isUserNameConstraint);
+
+        try
+        {
+            await using var scope = factory.Services.CreateAsyncScope();
+            var service = scope.ServiceProvider.GetRequiredService<IAccountRegistrationService>();
+
+            // Act
+            await service.RegisterAsync(
+                "database-duplicate@example.fr",
+                Password,
+                "Database duplicate",
+                TestContext.Current.CancellationToken);
+
+            // Assert
+            var context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
+            Assert.Empty(await context.Users.ToArrayAsync(TestContext.Current.CancellationToken));
+        }
+        finally
+        {
+            await DropDuplicateAccountTriggerAsync();
+        }
     }
 
     [Fact]
@@ -330,9 +416,12 @@ public class AccountRegistrationIntegrationTests(PostgreSqlContainerFixture fixt
             TestContext.Current.CancellationToken));
     }
 
-    private async Task<PostgreSqlApiFactory> CreateMigratedFactoryAsync()
+    private async Task<PostgreSqlApiFactory> CreateMigratedFactoryAsync(
+        Action<IServiceCollection>? configureServices = null)
     {
-        var factory = new PostgreSqlApiFactory(fixture.Container.GetConnectionString());
+        var factory = new PostgreSqlApiFactory(
+            fixture.Container.GetConnectionString(),
+            configureServices: configureServices);
         await using var scope = factory.Services.CreateAsyncScope();
         var context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
         await context.Database.MigrateAsync(TestContext.Current.CancellationToken);
@@ -427,6 +516,52 @@ public class AccountRegistrationIntegrationTests(PostgreSqlContainerFixture fixt
             DROP TRIGGER IF EXISTS reject_authentication_email_outbox
                 ON public.authentication_email_outbox;
             DROP FUNCTION IF EXISTS public.reject_authentication_email_outbox();
+            """;
+        await command.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
+    }
+
+    private async Task CreateDuplicateAccountTriggerAsync(bool isUserNameConstraint)
+    {
+        await using var connection = new NpgsqlConnection(fixture.Container.GetConnectionString());
+        await connection.OpenAsync(TestContext.Current.CancellationToken);
+        await using var command = connection.CreateCommand();
+        command.CommandText = isUserNameConstraint
+            ?
+            """
+            CREATE OR REPLACE FUNCTION public.reject_duplicate_account()
+            RETURNS trigger AS $$
+            BEGIN
+                RAISE unique_violation USING CONSTRAINT = 'ux_users_normalized_user_name';
+            END;
+            $$ LANGUAGE plpgsql;
+            CREATE TRIGGER reject_duplicate_account
+            BEFORE INSERT ON public.users
+            FOR EACH ROW EXECUTE FUNCTION public.reject_duplicate_account();
+            """
+            :
+            """
+            CREATE OR REPLACE FUNCTION public.reject_duplicate_account()
+            RETURNS trigger AS $$
+            BEGIN
+                RAISE unique_violation USING CONSTRAINT = 'ux_users_normalized_email';
+            END;
+            $$ LANGUAGE plpgsql;
+            CREATE TRIGGER reject_duplicate_account
+            BEFORE INSERT ON public.users
+            FOR EACH ROW EXECUTE FUNCTION public.reject_duplicate_account();
+            """;
+        await command.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
+    }
+
+    private async Task DropDuplicateAccountTriggerAsync()
+    {
+        await using var connection = new NpgsqlConnection(fixture.Container.GetConnectionString());
+        await connection.OpenAsync(TestContext.Current.CancellationToken);
+        await using var command = connection.CreateCommand();
+        command.CommandText =
+            """
+            DROP TRIGGER IF EXISTS reject_duplicate_account ON public.users;
+            DROP FUNCTION IF EXISTS public.reject_duplicate_account();
             """;
         await command.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
     }

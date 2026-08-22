@@ -2,7 +2,10 @@ using System.Net.Mail;
 
 namespace JennGllg.Fr.MonKado.Back.Application.Validators;
 
-internal static class EmailAddressValidation
+/// <summary>
+/// Provides reusable email address validation rules.
+/// </summary>
+public static class EmailAddressValidation
 {
     /// <summary>
     /// Identifies maximum length.

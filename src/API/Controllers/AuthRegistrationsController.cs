@@ -3,7 +3,6 @@ using JennGllg.Fr.MonKado.Back.Api.Errors;
 using JennGllg.Fr.MonKado.Back.Api.Extensions;
 using JennGllg.Fr.MonKado.Back.Application.Abstractions;
 using JennGllg.Fr.MonKado.Back.Application.Commands;
-using JennGllg.Fr.MonKado.Back.Application.Handlers;
 using JennGllg.Fr.MonKado.Back.Application.Models;
 using JennGllg.Fr.MonKado.Back.Application.Validators;
 
@@ -30,24 +29,16 @@ public class AuthRegistrationsController(ISender sender) : ControllerBase
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>An accepted response when the request has been processed.</returns>
     [HttpPost]
+    [ValidateAntiForgeryToken]
     [EnableRateLimiting(AuthenticationRateLimitingExtensions.RegistrationPolicy)]
     [RequestSizeLimit(MaximumRequestBodySize)]
     [Consumes("application/json")]
     [ProducesResponseType(StatusCodes.Status202Accepted)]
-    [ProducesResponseType(
-        typeof(ErrorResponse),
-        StatusCodes.Status400BadRequest,
-        "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest, "application/json")]
     [ProducesResponseType(StatusCodes.Status413PayloadTooLarge)]
     [ProducesResponseType(StatusCodes.Status415UnsupportedMediaType)]
-    [ProducesResponseType(
-        typeof(ErrorResponse),
-        StatusCodes.Status429TooManyRequests,
-        "application/json")]
-    [ProducesResponseType(
-        typeof(ErrorResponse),
-        StatusCodes.Status503ServiceUnavailable,
-        "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status429TooManyRequests, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status503ServiceUnavailable, "application/json")]
     public async Task<IActionResult> RegisterAsync(
         RegisterAccountRequest request,
         CancellationToken cancellationToken)

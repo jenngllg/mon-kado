@@ -1,10 +1,19 @@
 using JennGllg.Fr.MonKado.Back.Api.Contracts.Responses;
+using JennGllg.Fr.MonKado.Back.Api.Errors;
 using JennGllg.Fr.MonKado.Back.Api.Options;
+using JennGllg.Fr.MonKado.Back.Application.Abstractions;
 
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.IdentityModel.Tokens;
 
+using System.IdentityModel.Tokens.Jwt;
 using System.Net;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Security.Claims;
 
 namespace JennGllg.Fr.MonKado.Back.Api.FunctionalTests;
 
@@ -29,7 +38,7 @@ public class WebSecurityBehaviorTests
             "POST");
         request.Headers.Add(
             "Access-Control-Request-Headers",
-            "content-type,x-csrf-token");
+            "authorization,content-type,x-csrf-token");
 
         // Act
         using var response = await client.SendAsync(
@@ -54,6 +63,12 @@ public class WebSecurityBehaviorTests
             StringComparison.Ordinal);
         Assert.Contains(
             "x-csrf-token",
+            JoinHeader(
+                response,
+                "Access-Control-Allow-Headers"),
+            StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(
+            "authorization",
             JoinHeader(
                 response,
                 "Access-Control-Allow-Headers"),
@@ -215,6 +230,64 @@ public class WebSecurityBehaviorTests
     }
 
     [Fact]
+    public async Task ExecuteAsync_WhenBearerTokenIsValid_AuthorizesWithoutAntiforgeryToken()
+    {
+        // Arrange
+        using var factory = new SecurityApiFactory();
+        using var client = factory.CreateClient();
+        var accessTokenService = factory.Services.GetRequiredService<IAccessTokenService>();
+        var token = accessTokenService.Create(Guid.NewGuid());
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            JwtBearerDefaults.AuthenticationScheme,
+            token.Value);
+
+        // Act
+        using var response = await client.GetAsync(
+            "/_tests/security/bearer",
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.NoContent,
+            response.StatusCode);
+    }
+
+    [Theory]
+    [InlineData("expired")]
+    [InlineData("issuer")]
+    [InlineData("audience")]
+    [InlineData("signature")]
+    public async Task ExecuteAsync_WhenBearerTokenIsInvalid_ReturnsStructuredUnauthorized(string scenario)
+    {
+        // Arrange
+        using var factory = new SecurityApiFactory();
+        using var client = factory.CreateClient();
+        var token = CreateInvalidToken(scenario);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            JwtBearerDefaults.AuthenticationScheme,
+            token);
+
+        // Act
+        using var response = await client.GetAsync(
+            "/_tests/security/bearer",
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.Unauthorized,
+            response.StatusCode);
+        var error = await response.Content.ReadFromJsonAsync<ErrorResponse>(
+            TestContext.Current.CancellationToken);
+        Assert.NotNull(error);
+        Assert.Equal(
+            StatusCodes.Status401Unauthorized,
+            error.StatusCode);
+        Assert.Equal(
+            ErrorCodes.SecurityUnauthorized,
+            error.ErrorCode);
+    }
+
+    [Fact]
     public async Task ExecuteAsync_WhenSafeEndpointsRemainAvailableAndIncludeSecurityHeaders_Completes()
     {
         // Arrange
@@ -261,6 +334,120 @@ public class WebSecurityBehaviorTests
             "same-site",
             Assert.Single(livenessResponse.Headers.GetValues("Cross-Origin-Resource-Policy")));
         Assert.False(livenessResponse.Headers.Contains("Strict-Transport-Security"));
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_WhenUnavailableDependencyHasNoInnerException_ReturnsServiceUnavailable()
+    {
+        // Arrange
+        using var factory = new SecurityApiFactory();
+        using var client = factory.CreateClient();
+
+        // Act
+        using var response = await client.GetAsync(
+            "/_tests/security/unavailable",
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.ServiceUnavailable,
+            response.StatusCode);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_WhenModelBindingFails_ReturnsNormalizedValidationErrors()
+    {
+        // Arrange
+        using var factory = new SecurityApiFactory();
+        using var client = factory.CreateClient();
+        var csrfToken = await GetCsrfTokenAsync(client);
+
+        using var invalidQueryResponse = await client.GetAsync(
+            "/_tests/security/invalid-query?value=invalid",
+            TestContext.Current.CancellationToken);
+        using var emptyErrorResponse = await client.GetAsync(
+            "/_tests/security/empty-binding-error?value=invalid",
+            TestContext.Current.CancellationToken);
+        using var request = new HttpRequestMessage(
+            HttpMethod.Post,
+            "/_tests/security/required-body")
+        {
+            Content = new StringContent(
+                string.Empty,
+                System.Text.Encoding.UTF8,
+                "application/json")
+        };
+        request.Headers.Add(
+            WebSecurityOptions.AntiforgeryHeaderName,
+            csrfToken);
+
+        // Act
+        using var missingBodyResponse = await client.SendAsync(
+            request,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.BadRequest,
+            invalidQueryResponse.StatusCode);
+        Assert.Equal(
+            HttpStatusCode.BadRequest,
+            emptyErrorResponse.StatusCode);
+        Assert.Equal(
+            HttpStatusCode.BadRequest,
+            missingBodyResponse.StatusCode);
+        var invalidQuery = await invalidQueryResponse.Content.ReadFromJsonAsync<ErrorResponse>(
+            TestContext.Current.CancellationToken);
+        var missingBody = await missingBodyResponse.Content.ReadFromJsonAsync<ErrorResponse>(
+            TestContext.Current.CancellationToken);
+        var emptyError = await emptyErrorResponse.Content.ReadFromJsonAsync<ErrorResponse>(
+            TestContext.Current.CancellationToken);
+        Assert.Equal(
+            "value",
+            Assert.Single(invalidQuery?.ValidationErrors ?? []).PropertyName);
+        var missingBodyErrors = missingBody?.ValidationErrors?.ToArray() ?? [];
+        Assert.NotEmpty(missingBodyErrors);
+        Assert.All(
+            missingBodyErrors,
+            error => Assert.Equal(
+                "body",
+                error.PropertyName));
+        Assert.Equal(
+            "The request body is invalid.",
+            Assert.Single(emptyError?.ValidationErrors ?? []).ErrorMessage);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_WhenRemoteIpIsAvailable_PartitionsAuthenticationRequestByAddress()
+    {
+        // Arrange
+        using var factory = new SecurityApiFactory(remoteIpAddress: IPAddress.Loopback);
+        using var client = factory.CreateClient();
+        var csrfToken = await GetCsrfTokenAsync(client);
+        using var request = new HttpRequestMessage(
+            HttpMethod.Post,
+            "/api/v1/auth/sessions")
+        {
+            Content = JsonContent.Create(new
+            {
+                email = "member@example.fr",
+                password = "a sufficiently long password",
+                rememberMe = false
+            })
+        };
+        request.Headers.Add(
+            WebSecurityOptions.AntiforgeryHeaderName,
+            csrfToken);
+
+        // Act
+        using var response = await client.SendAsync(
+            request,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.ServiceUnavailable,
+            response.StatusCode);
     }
 
     [Fact]
@@ -380,5 +567,36 @@ public class WebSecurityBehaviorTests
         return string.Join(
             ',',
             response.Headers.GetValues(name));
+    }
+
+    private static string CreateInvalidToken(string scenario)
+    {
+        var issuer = scenario == "issuer"
+            ? "Unexpected.Api"
+            : SecurityApiFactory.JwtIssuer;
+        var audience = scenario == "audience"
+            ? "Unexpected.Frontend"
+            : SecurityApiFactory.JwtAudience;
+        var signingKey = scenario == "signature"
+            ? "ICEiIyQlJicoKSorLC0uLzAxMjM0NTY3ODk6Ozw9Pj8="
+            : SecurityApiFactory.JwtSigningKey;
+        var expires = scenario == "expired"
+            ? DateTime.UtcNow.AddMinutes(-1)
+            : DateTime.UtcNow.AddMinutes(15);
+        var credentials = new SigningCredentials(
+            new SymmetricSecurityKey(Convert.FromBase64String(signingKey)),
+            SecurityAlgorithms.HmacSha256);
+        var token = new JwtSecurityToken(
+            issuer,
+            audience,
+            [
+                new Claim(
+                    JwtRegisteredClaimNames.Sub,
+                    Guid.NewGuid().ToString("D"))
+            ],
+            expires: expires,
+            signingCredentials: credentials);
+
+        return new JwtSecurityTokenHandler().WriteToken(token);
     }
 }

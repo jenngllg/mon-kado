@@ -1,4 +1,5 @@
 using JennGllg.Fr.MonKado.Back.Api.Errors;
+using JennGllg.Fr.MonKado.Back.Api.Extensions;
 
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.OpenApi;
@@ -40,17 +41,19 @@ public class CommonErrorResponsesOperationTransformer : IOpenApiOperationTransfo
             operation,
             schema,
             context.Description.ActionDescriptor.EndpointMetadata);
+
+        if (RequiresAuthorization(context.Description.ActionDescriptor.EndpointMetadata))
+            AddBearerSecurityRequirement(
+                operation,
+                context.Document);
     }
 
-    internal static void AddAuthorizationResponses(
+    private static void AddAuthorizationResponses(
         OpenApiOperation operation,
         IOpenApiSchema schema,
         IEnumerable<object> metadata)
     {
-        var requiresAuthorization = metadata.OfType<IAuthorizeData>().Any() &&
-            !metadata.OfType<IAllowAnonymous>().Any();
-
-        if (!requiresAuthorization)
+        if (!RequiresAuthorization(metadata))
             return;
 
         AddResponse(
@@ -65,7 +68,30 @@ public class CommonErrorResponsesOperationTransformer : IOpenApiOperationTransfo
             schema);
     }
 
-    internal static void AddResponse(
+    private static bool RequiresAuthorization(IEnumerable<object> metadata)
+    {
+        return metadata.OfType<IAuthorizeData>().Any() &&
+            !metadata.OfType<IAllowAnonymous>().Any();
+    }
+
+    private static void AddBearerSecurityRequirement(
+        OpenApiOperation operation,
+        OpenApiDocument? document)
+    {
+        var scheme = new OpenApiSecuritySchemeReference(
+            OpenApiExtensions.BearerSecuritySchemeName,
+            document,
+            null);
+        operation.Security =
+        [
+            new OpenApiSecurityRequirement
+            {
+                [scheme] = []
+            }
+        ];
+    }
+
+    private static void AddResponse(
         OpenApiOperation operation,
         int statusCode,
         string description,
@@ -82,7 +108,7 @@ public class CommonErrorResponsesOperationTransformer : IOpenApiOperationTransfo
                 }
             }
         };
-        operation.Responses ??= [];
+        ArgumentNullException.ThrowIfNull(operation.Responses);
         operation.Responses[statusCode.ToString(CultureInfo.InvariantCulture)] = response;
     }
 }

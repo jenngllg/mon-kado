@@ -44,6 +44,34 @@ public class OpenApiContractTests(UnavailablePostgreSqlApiFactory factory) : ICl
         Assert.Equal(
             JsonValueKind.Object,
             root.GetProperty("paths").ValueKind);
+        var bearer = root
+            .GetProperty("components")
+            .GetProperty("securitySchemes")
+            .GetProperty("Bearer");
+        Assert.Equal(
+            "http",
+            bearer.GetProperty("type").GetString());
+        Assert.Equal(
+            "bearer",
+            bearer.GetProperty("scheme").GetString());
+        Assert.Equal(
+            "JWT",
+            bearer.GetProperty("bearerFormat").GetString());
+
+        var login = root
+            .GetProperty("paths")
+            .GetProperty("/api/v1/auth/sessions")
+            .GetProperty("post");
+        var refresh = root
+            .GetProperty("paths")
+            .GetProperty("/api/v1/auth/sessions/refresh")
+            .GetProperty("post");
+        AssertTokenOperation(
+            login,
+            expectsRefreshCookie: false);
+        AssertTokenOperation(
+            refresh,
+            expectsRefreshCookie: true);
     }
 
     [Fact]
@@ -61,5 +89,60 @@ public class OpenApiContractTests(UnavailablePostgreSqlApiFactory factory) : ICl
         Assert.Equal(
             HttpStatusCode.NotFound,
             response.StatusCode);
+    }
+
+    private static void AssertTokenOperation(
+        JsonElement operation,
+        bool expectsRefreshCookie)
+    {
+        var parameters = operation.GetProperty("parameters").EnumerateArray().ToArray();
+        Assert.Contains(
+            parameters,
+            parameter => parameter.GetProperty("name").GetString() == "X-CSRF-TOKEN");
+
+        if (expectsRefreshCookie)
+        {
+            var refreshCookie = Assert.Single(
+                parameters,
+                parameter => parameter.GetProperty("name").GetString() ==
+                    "__Host-MonKado.Refresh");
+            Assert.Equal(
+                "cookie",
+                refreshCookie.GetProperty("in").GetString());
+            Assert.True(refreshCookie.GetProperty("required").GetBoolean());
+            Assert.Contains(
+                "MonKado.Refresh",
+                refreshCookie.GetProperty("description").GetString(),
+                StringComparison.Ordinal);
+        }
+        else
+        {
+            Assert.DoesNotContain(
+                parameters,
+                parameter => parameter.GetProperty("in").GetString() == "cookie");
+        }
+
+        var responses = operation.GetProperty("responses");
+        Assert.True(responses.TryGetProperty(
+            "200",
+            out var success));
+        Assert.True(responses.TryGetProperty(
+            "400",
+            out _));
+        Assert.True(responses.TryGetProperty(
+            "401",
+            out _));
+        Assert.True(responses.TryGetProperty(
+            "503",
+            out _));
+        var headers = success.GetProperty("headers");
+        Assert.Contains(
+            "__Host-MonKado.Refresh",
+            headers.GetProperty("Set-Cookie").GetProperty("description").GetString(),
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "no-store",
+            headers.GetProperty("Cache-Control").GetProperty("description").GetString(),
+            StringComparison.Ordinal);
     }
 }

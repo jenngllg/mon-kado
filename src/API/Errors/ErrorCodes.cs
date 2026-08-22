@@ -19,6 +19,10 @@ public static class ErrorCodes
     /// </summary>
     public const string AccountInvalidCredentials = "ACCOUNT_INVALID_CREDENTIALS";
     /// <summary>
+    /// Identifies an invalid authentication session.
+    /// </summary>
+    public const string AccountAuthenticationSessionInvalid = "ACCOUNT_AUTHENTICATION_SESSION_INVALID";
+    /// <summary>
     /// Identifies account email confirmation invalid.
     /// </summary>
     public const string AccountEmailConfirmationInvalid = "ACCOUNT_EMAIL_CONFIRMATION_INVALID";

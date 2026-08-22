@@ -4,7 +4,11 @@ using System.Text;
 
 namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Services;
 
-internal sealed class MaximumPasswordLengthValidator<TUser> : IPasswordValidator<TUser>
+/// <summary>
+/// Rejects passwords that exceed the storage safety limit.
+/// </summary>
+/// <typeparam name="TUser">The Identity user type.</typeparam>
+public class MaximumPasswordLengthValidator<TUser> : IPasswordValidator<TUser>
     where TUser : class
 {
     private const int MaximumPasswordLength = 128;
@@ -33,7 +37,7 @@ internal sealed class MaximumPasswordLengthValidator<TUser> : IPasswordValidator
             : Task.FromResult(IdentityResult.Success);
     }
 
-    internal static bool IsTooLong(string? password)
+    private static bool IsTooLong(string? password)
     {
 
         return password is not null && password.EnumerateRunes().Count() > MaximumPasswordLength;

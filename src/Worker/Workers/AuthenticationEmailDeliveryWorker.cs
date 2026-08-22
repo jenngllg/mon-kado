@@ -9,7 +9,10 @@ using Microsoft.Extensions.Options;
 
 namespace JennGllg.Fr.MonKado.Back.Worker.Workers;
 
-internal sealed class AuthenticationEmailDeliveryWorker(
+/// <summary>
+/// Delivers pending authentication emails in the background.
+/// </summary>
+public sealed class AuthenticationEmailDeliveryWorker(
     IServiceScopeFactory scopeFactory,
     IOptions<AuthenticationEmailOptions> options,
     TimeProvider timeProvider,
@@ -21,6 +24,7 @@ internal sealed class AuthenticationEmailDeliveryWorker(
     private static readonly TimeSpan _failureInterval = TimeSpan.FromMinutes(1);
     private readonly AuthenticationEmailOptions _emailOptions = options.Value;
 
+    /// <inheritdoc />
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
 
@@ -31,8 +35,9 @@ internal sealed class AuthenticationEmailDeliveryWorker(
             return;
         }
 
+        ArgumentNullException.ThrowIfNull(_emailOptions.FrontendOrigin);
         var frontendOrigin = new Uri(
-            _emailOptions.FrontendOrigin!,
+            _emailOptions.FrontendOrigin,
             UriKind.Absolute);
         while (true)
         {
@@ -53,7 +58,7 @@ internal sealed class AuthenticationEmailDeliveryWorker(
         }
     }
 
-    internal async Task<TimeSpan> DispatchOnceAsync(
+    private async Task<TimeSpan> DispatchOnceAsync(
         Uri frontendOrigin,
         CancellationToken cancellationToken)
     {
@@ -81,7 +86,8 @@ internal sealed class AuthenticationEmailDeliveryWorker(
         {
             WorkerLogMessages.AuthenticationEmailDeliveryFailed(
                 logger,
-                exception.GetType().Name);
+                exception.GetType().Name,
+                exception);
 
             nextDelay = _failureInterval;
         }

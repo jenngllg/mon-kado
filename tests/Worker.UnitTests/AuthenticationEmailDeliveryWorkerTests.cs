@@ -1,12 +1,13 @@
 using JennGllg.Fr.MonKado.Back.Application.Abstractions;
 using JennGllg.Fr.MonKado.Back.Application.Commands;
-using JennGllg.Fr.MonKado.Back.Application.Handlers;
 using JennGllg.Fr.MonKado.Back.Application.Models;
 using JennGllg.Fr.MonKado.Back.Application.Validators;
 using JennGllg.Fr.MonKado.Back.Worker.Options;
 using JennGllg.Fr.MonKado.Back.Worker.Workers;
 
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
@@ -26,13 +27,15 @@ public class AuthenticationEmailDeliveryWorkerTests
             new AuthenticationEmailOptions { Provider = AuthenticationEmailOptions.DisabledProvider });
 
         await worker.StartAsync(TestContext.Current.CancellationToken);
+        var executeTask = GetExecuteTask(worker);
+
         // Act
-        await worker.ExecuteTask!.WaitAsync(
+        await executeTask.WaitAsync(
             TimeSpan.FromSeconds(5),
             TestContext.Current.CancellationToken);
 
         // Assert
-        Assert.True(worker.ExecuteTask.IsCompletedSuccessfully);
+        Assert.True(executeTask.IsCompletedSuccessfully);
     }
 
     [Fact]
@@ -51,9 +54,10 @@ public class AuthenticationEmailDeliveryWorkerTests
             TestContext.Current.CancellationToken);
         // Act
         await worker.StopAsync(TestContext.Current.CancellationToken);
+        var executeTask = GetExecuteTask(worker);
 
         // Assert
-        Assert.True(worker.ExecuteTask!.IsCompletedSuccessfully);
+        Assert.True(executeTask.IsCompletedSuccessfully);
         Assert.Equal(
             _frontendOrigin,
             dispatcher.FrontendOrigin);
@@ -87,72 +91,67 @@ public class AuthenticationEmailDeliveryWorkerTests
 
         // Act
         await worker.StartAsync(source.Token);
-        await worker.ExecuteTask!.WaitAsync(TestContext.Current.CancellationToken);
+        var executeTask = GetExecuteTask(worker);
+        await executeTask.WaitAsync(TestContext.Current.CancellationToken);
 
         // Assert
-        Assert.True(worker.ExecuteTask.IsCompletedSuccessfully);
+        Assert.True(executeTask.IsCompletedSuccessfully);
     }
 
     [Fact]
-    public async Task ExecuteAsync_WhenSuccessfulIteration_UsesNormalPollingDelay()
-    {
-        // Arrange
-        var dispatcher = new RecordingDispatcher();
-        await using var provider = CreateProvider(dispatcher);
-        var worker = CreateWorker(
-            provider,
-            EnabledOptions());
-
-        // Act
-        var delay = await worker.DispatchOnceAsync(
-            _frontendOrigin,
-            TestContext.Current.CancellationToken);
-
-        // Assert
-        Assert.Equal(
-            TimeSpan.FromSeconds(10),
-            delay);
-    }
-
-    [Fact]
-    public async Task ExecuteAsync_WhenFailedIteration_UsesFailureDelay()
-    {
-        // Arrange
-        var dispatcher = new RecordingDispatcher(new InvalidOperationException("Database unavailable."));
-        await using var provider = CreateProvider(dispatcher);
-        var worker = CreateWorker(
-            provider,
-            EnabledOptions());
-
-        // Act
-        var delay = await worker.DispatchOnceAsync(
-            _frontendOrigin,
-            TestContext.Current.CancellationToken);
-
-        // Assert
-        Assert.Equal(
-            TimeSpan.FromMinutes(1),
-            delay);
-    }
-
-    [Fact]
-    public async Task ExecuteAsync_WhenIteration_PreservesHostCancellation()
+    public async Task ExecuteAsync_WhenIterationFails_RetriesUntilHostStops()
     {
         // Arrange
         using var source = new CancellationTokenSource();
-        source.Cancel();
-        var dispatcher = new RecordingDispatcher(new OperationCanceledException(source.Token));
+        var exception = new InvalidOperationException("Database unavailable.");
+        var dispatcher = new RecordingDispatcher(exception)
+        {
+            OnCall = _ => source.Cancel()
+        };
+        await using var provider = CreateProvider(dispatcher);
+        var logger = new RecordingLogger<AuthenticationEmailDeliveryWorker>();
+        var worker = CreateWorker(
+            provider,
+            EnabledOptions(),
+            logger: logger);
+
         // Act
+        await worker.StartAsync(source.Token);
+        var executeTask = GetExecuteTask(worker);
+        await executeTask.WaitAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.True(executeTask.IsCompletedSuccessfully);
+        var entry = Assert.Single(logger.Entries);
+        Assert.Equal(
+            LogLevel.Error,
+            entry.LogLevel);
+        Assert.Same(
+            exception,
+            entry.Exception);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_WhenDispatchIsCanceled_PreservesHostCancellation()
+    {
+        // Arrange
+        using var source = new CancellationTokenSource();
+        var dispatcher = new RecordingDispatcher(new OperationCanceledException())
+        {
+            OnCall = _ => source.Cancel()
+        };
         await using var provider = CreateProvider(dispatcher);
         var worker = CreateWorker(
             provider,
             EnabledOptions());
 
+        // Act
+        await worker.StartAsync(source.Token);
+        var executeTask = GetExecuteTask(worker);
+        await executeTask.WaitAsync(TestContext.Current.CancellationToken);
+
         // Assert
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
-            worker.DispatchOnceAsync(
-                _frontendOrigin,
-                source.Token));
+        Assert.True(executeTask.IsCompletedSuccessfully);
     }
 
     private static AuthenticationEmailOptions EnabledOptions()
@@ -177,14 +176,22 @@ public class AuthenticationEmailDeliveryWorkerTests
     private static AuthenticationEmailDeliveryWorker CreateWorker(
         ServiceProvider provider,
         AuthenticationEmailOptions options,
-        TimeProvider? timeProvider = null)
+        TimeProvider? timeProvider = null,
+        ILogger<AuthenticationEmailDeliveryWorker>? logger = null)
     {
 
         return new(
             provider.GetRequiredService<IServiceScopeFactory>(),
             Microsoft.Extensions.Options.Options.Create(options),
             timeProvider ?? TimeProvider.System,
-            NullLogger<AuthenticationEmailDeliveryWorker>.Instance);
+            logger ?? NullLogger<AuthenticationEmailDeliveryWorker>.Instance);
     }
 
+    private static Task GetExecuteTask(BackgroundService worker)
+    {
+        var executeTask = worker.ExecuteTask;
+        Assert.NotNull(executeTask);
+
+        return executeTask;
+    }
 }

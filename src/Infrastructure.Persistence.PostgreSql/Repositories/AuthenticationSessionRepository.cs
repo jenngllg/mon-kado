@@ -6,62 +6,31 @@ using Microsoft.EntityFrameworkCore;
 
 namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Repositories;
 
-internal class AuthenticationSessionRepository(MonKadoDbContext context)
+/// <summary>
+/// Provides PostgreSQL persistence operations for authentication sessions.
+/// </summary>
+/// <param name="context">The database context.</param>
+public class AuthenticationSessionRepository(MonKadoDbContext context)
     : IAuthenticationSessionRepository
 {
+    /// <inheritdoc />
     public void Add(AuthenticationSession session)
     {
         context.AuthenticationSessions.Add(session);
     }
 
-    public Task<AuthenticationSession?> GetByIdAsync(
+    /// <inheritdoc />
+    public Task<AuthenticationSession?> GetByIdForUpdateAsync(
         Guid sessionId,
         CancellationToken cancellationToken)
     {
-
         return context.AuthenticationSessions
-            .AsNoTracking()
-            .SingleOrDefaultAsync(
-                session => session.Id == sessionId,
-                cancellationToken);
+            .FromSqlInterpolated(
+                $"SELECT * FROM public.authentication_sessions WHERE id = {sessionId} FOR UPDATE")
+            .SingleOrDefaultAsync(cancellationToken);
     }
 
-    public async Task UpdateAsync(
-        Guid sessionId,
-        Guid userId,
-        byte[] protectedTicket,
-        DateTime renewedAt,
-        DateTime expiresAt,
-        CancellationToken cancellationToken)
-    {
-        await context.AuthenticationSessions
-            .Where(session => session.Id == sessionId)
-            .ExecuteUpdateAsync(
-                setters => setters
-                    .SetProperty(
-                        session => session.UserId,
-                        userId)
-                    .SetProperty(
-                        session => session.ProtectedTicket,
-                        protectedTicket)
-                    .SetProperty(
-                        session => session.RenewedAt,
-                        renewedAt)
-                    .SetProperty(
-                        session => session.ExpiresAt,
-                        expiresAt),
-                cancellationToken);
-    }
-
-    public async Task DeleteAsync(
-        Guid sessionId,
-        CancellationToken cancellationToken)
-    {
-        await context.AuthenticationSessions
-            .Where(session => session.Id == sessionId)
-            .ExecuteDeleteAsync(cancellationToken);
-    }
-
+    /// <inheritdoc />
     public async Task<int> DeleteExpiredAsync(
         DateTime cutoff,
         int batchSize,
