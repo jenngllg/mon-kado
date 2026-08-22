@@ -81,8 +81,7 @@ public class AccountRegistrationService(
                         UserName = email,
                         DisplayName = displayName,
                         EmailConfirmed = false,
-                        UnconfirmedAccountExpiresAt = now.Add(_unconfirmedAccountLifetime),
-                        Version = 1
+                        UnconfirmedAccountExpiresAt = now.Add(_unconfirmedAccountLifetime)
                     };
 
                     var result = await userManager.CreateAsync(

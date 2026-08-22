@@ -29,8 +29,7 @@ internal sealed class MonKadoUserConfiguration : IEntityTypeConfiguration<MonKad
             .HasMaxLength(80)
             .IsRequired();
         builder.Property(user => user.Version)
-            .HasDefaultValue(1)
-            .IsConcurrencyToken();
+            .IsRowVersion();
 
         builder.HasIndex(user => user.NormalizedEmail)
             .HasDatabaseName("ux_users_normalized_email")
@@ -44,9 +43,6 @@ internal sealed class MonKadoUserConfiguration : IEntityTypeConfiguration<MonKad
 
         builder.ToTable(table =>
         {
-            table.HasCheckConstraint(
-                "ck_users_version_positive",
-                "version > 0");
             table.HasCheckConstraint(
                 "ck_users_display_name_valid",
                 "char_length(btrim(display_name)) > 0 AND display_name !~ '[[:cntrl:]]'");

@@ -91,6 +91,11 @@ The local launch profile listens on `http://localhost:7000` and uses the `Local`
 | `POST /api/v1/auth/registrations` | Creates an unconfirmed account and queues an e-mail request |
 | `POST /api/v1/auth/email-confirmations` | Confirms an e-mail address from a user identifier and Base64URL token |
 | `POST /api/v1/auth/email-confirmation-requests` | Silently requests another confirmation e-mail |
+| `POST /api/v1/auth/sessions` | Authenticates an account and creates a refresh session |
+| `POST /api/v1/auth/sessions/refresh` | Rotates the browser refresh token and returns a new access token |
+| `GET /api/v1/auth/sessions/current` | Returns the current member identity and profile ETag |
+| `DELETE /api/v1/auth/sessions/current` | Ends the current browser refresh session |
+| `PUT /api/v1/members/current/profile` | Updates the current member display name with optimistic concurrency |
 
 Liveness never contacts PostgreSQL. Readiness allows at most two seconds for PostgreSQL to accept a connection and returns `503 Unhealthy` otherwise; it checks connectivity, not whether all migrations have been applied.
 
@@ -175,11 +180,18 @@ requires the standard CSRF token, rotates the browser refresh token, and returns
 must serialize refresh calls so that one browser never attempts two rotations concurrently.
 
 `GET /api/v1/auth/sessions/current` requires the Bearer access token and loads the current member identity directly
-from PostgreSQL. It returns `id`, `email`, `displayName`, and the current alphabetically ordered `roles`, with
-`Cache-Control: no-store`. It neither requires an antiforgery token nor rotates either token. Role changes are visible
+from PostgreSQL. It returns `id`, `email`, `displayName`, and the current alphabetically ordered `roles`, together with
+a strong `ETag` representing the profile version and `Cache-Control: no-store`. It neither requires an antiforgery
+token nor rotates either token. Role changes are visible
 immediately without waiting for a new JWT. Every account receives the built-in `Member` role; the migration also
 backfills existing accounts. A valid JWT whose member has since been deleted returns `401 Unauthorized` and deletes
 the refresh cookie.
+
+`PUT /api/v1/members/current/profile` changes only `displayName`. It requires the Bearer access token and the latest
+strong ETag in `If-Match`, but no antiforgery token. A missing precondition returns `428 Precondition Required`; a stale
+version returns `412 Precondition Failed`. A successful update returns `200 OK`, `{ "displayName": "..." }`, the new
+ETag, and `Cache-Control: no-store`. Sending the same trimmed display name is idempotent: PostgreSQL is not written and
+the ETag remains unchanged. PostgreSQL maps the member version to its native `xmin` concurrency token.
 
 `DELETE /api/v1/auth/sessions/current` ends only the refresh session held by the current browser. It remains available
 without a Bearer token so that an expired access token cannot prevent logout, but it requires the standard CSRF token.

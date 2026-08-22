@@ -1,6 +1,7 @@
 using JennGllg.Fr.MonKado.Back.Application.Abstractions;
 using JennGllg.Fr.MonKado.Back.Application.Common.Behaviors;
 using JennGllg.Fr.MonKado.Back.Application.Common.Exceptions;
+using JennGllg.Fr.MonKado.Back.Application.Common.Models;
 
 using MediatR;
 
@@ -26,8 +27,12 @@ public class ConfirmEmailCommand(
     /// </summary>
     public string? Token { get; } = token;
 
-    Exception IGenericValidationFailure.CreateValidationException()
+    /// <inheritdoc />
+    Exception IGenericValidationFailure.CreateValidationException(
+        IEnumerable<ValidationError> validationErrors)
     {
+        _ = validationErrors;
+
         return new EmailConfirmationInvalidException();
     }
 }

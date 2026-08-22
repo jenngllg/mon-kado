@@ -30,7 +30,8 @@ namespace JennGllg.Fr.MonKado.Back.Api.Controllers;
 [Route("api/v1/auth/sessions")]
 public class AuthSessionsController(
     ISender sender,
-    IRefreshTokenCookieService refreshTokenCookieService) : ControllerBase
+    IRefreshTokenCookieService refreshTokenCookieService,
+    IEntityTagService entityTagService) : ControllerBase
 {
     private const int MaximumRequestBodySize = 4 * 1024;
 
@@ -108,6 +109,7 @@ public class AuthSessionsController(
     /// <returns>The current member identity and roles.</returns>
     [HttpGet("current")]
     [Authorize(Policy = AuthorizationPolicies.CurrentSession)]
+    [EntityTag]
     [ProducesResponseType(typeof(CurrentSessionResponse), StatusCodes.Status200OK, "application/json")]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status503ServiceUnavailable, "application/json")]
     public async Task<ActionResult<CurrentSessionResponse>> GetCurrentAsync(
@@ -125,6 +127,7 @@ public class AuthSessionsController(
             currentSession.Email,
             currentSession.DisplayName,
             currentSession.Roles);
+        Response.Headers.ETag = entityTagService.Format(currentSession.Version);
         Response.Headers.CacheControl = "no-store";
 
         return Ok(response);

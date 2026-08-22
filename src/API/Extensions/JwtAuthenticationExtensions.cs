@@ -1,4 +1,5 @@
 using JennGllg.Fr.MonKado.Back.Api.Authorization;
+using JennGllg.Fr.MonKado.Back.Application.Common.Exceptions;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Options;
 
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -6,6 +7,7 @@ using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 
 using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
 
 namespace JennGllg.Fr.MonKado.Back.Api.Extensions;
 
@@ -68,6 +70,31 @@ public static class JwtAuthenticationExtensions
         options.IncludeErrorDetails = false;
         options.MapInboundClaims = false;
         options.SaveToken = false;
+        options.Events = new JwtBearerEvents
+        {
+            OnAuthenticationFailed = context =>
+            {
+
+                if (context.Exception is InvalidAuthenticationSessionException)
+                    throw context.Exception;
+
+                return Task.CompletedTask;
+            },
+            OnTokenValidated = context =>
+            {
+                var subject = context.Principal?.FindFirstValue(JwtRegisteredClaimNames.Sub);
+
+                if (!Guid.TryParse(
+                    subject,
+                    out var memberId) || memberId == Guid.Empty)
+                {
+
+                    throw new InvalidAuthenticationSessionException();
+                }
+
+                return Task.CompletedTask;
+            }
+        };
         options.TokenValidationParameters = new TokenValidationParameters
         {
             ClockSkew = TimeSpan.FromSeconds(30),

@@ -136,6 +136,9 @@ public class OpenApiContractTests(UnavailablePostgreSqlApiFactory factory) : ICl
         Assert.True(responses.TryGetProperty(
             "503",
             out _));
+        Assert.True(success.GetProperty("headers").TryGetProperty(
+            "ETag",
+            out _));
         var schema = success
             .GetProperty("content")
             .GetProperty("application/json")
@@ -174,6 +177,97 @@ public class OpenApiContractTests(UnavailablePostgreSqlApiFactory factory) : ICl
                 .GetProperty("roles")
                 .GetProperty("type")
                 .GetString());
+    }
+
+    [Fact]
+    public async Task GetAsync_WhenMemberProfileUpdateIsDocumented_ExposesOptimisticConcurrencyContract()
+    {
+        // Arrange
+        using var client = _factory.CreateClient();
+
+        // Act
+        using var document = await client.GetFromJsonAsync<JsonDocument>(
+            "/openapi/v1.json",
+            TestContext.Current.CancellationToken)
+            ?? throw new InvalidOperationException("The OpenAPI response body is empty.");
+        var operation = document.RootElement
+            .GetProperty("paths")
+            .GetProperty("/api/v1/members/current/profile")
+            .GetProperty("put");
+
+        // Assert
+        Assert.Equal(
+            "Updates the display name of the current authenticated member.",
+            operation.GetProperty("summary").GetString());
+        var security = Assert.Single(operation.GetProperty("security").EnumerateArray());
+        Assert.True(security.TryGetProperty(
+            "Bearer",
+            out _));
+        var parameters = operation.GetProperty("parameters").EnumerateArray().ToArray();
+        var ifMatch = Assert.Single(
+            parameters,
+            parameter => parameter.GetProperty("name").GetString() == "If-Match");
+        Assert.Equal(
+            "header",
+            ifMatch.GetProperty("in").GetString());
+        Assert.True(ifMatch.GetProperty("required").GetBoolean());
+        Assert.DoesNotContain(
+            parameters,
+            parameter => parameter.GetProperty("name").GetString() == "X-CSRF-TOKEN");
+        var responses = operation.GetProperty("responses");
+
+        foreach (var statusCode in new[]
+        {
+            "200",
+            "400",
+            "401",
+            "403",
+            "412",
+            "413",
+            "415",
+            "428",
+            "500",
+            "503"
+        })
+        {
+            Assert.True(
+                responses.TryGetProperty(
+                    statusCode,
+                    out _),
+                $"Response {statusCode} is missing.");
+        }
+
+        var success = responses.GetProperty("200");
+        Assert.True(success.GetProperty("headers").TryGetProperty(
+            "ETag",
+            out _));
+        var responseSchema = ResolveSchema(
+            document.RootElement,
+            success
+                .GetProperty("content")
+                .GetProperty("application/json")
+                .GetProperty("schema"));
+        Assert.Equal(
+            ["displayName"],
+            responseSchema
+                .GetProperty("properties")
+                .EnumerateObject()
+                .Select(property => property.Name)
+                .ToArray());
+        var requestSchema = ResolveSchema(
+            document.RootElement,
+            operation
+                .GetProperty("requestBody")
+                .GetProperty("content")
+                .GetProperty("application/json")
+                .GetProperty("schema"));
+        Assert.Equal(
+            ["displayName"],
+            requestSchema
+                .GetProperty("properties")
+                .EnumerateObject()
+                .Select(property => property.Name)
+                .ToArray());
     }
 
     [Fact]
@@ -303,5 +397,27 @@ public class OpenApiContractTests(UnavailablePostgreSqlApiFactory factory) : ICl
             "no-store",
             headers.GetProperty("Cache-Control").GetProperty("description").GetString(),
             StringComparison.Ordinal);
+    }
+
+    private static JsonElement ResolveSchema(
+        JsonElement document,
+        JsonElement schema)
+    {
+
+        if (!schema.TryGetProperty(
+            "$ref",
+            out var reference))
+        {
+
+            return schema;
+        }
+
+        var schemaName = reference.GetString()?.Split('/').Last()
+            ?? throw new InvalidOperationException("The schema reference is invalid.");
+
+        return document
+            .GetProperty("components")
+            .GetProperty("schemas")
+            .GetProperty(schemaName);
     }
 }

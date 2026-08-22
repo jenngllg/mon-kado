@@ -177,10 +177,12 @@ public static class WebSecurityExtensions
                 .WithHeaders(
                     HeaderNames.ContentType,
                     HeaderNames.Authorization,
+                    HeaderNames.IfMatch,
                     CorrelationIdMiddleware.HeaderName,
                     WebSecurityOptions.AntiforgeryHeaderName)
                 .WithExposedHeaders(
                     CorrelationIdMiddleware.HeaderName,
+                    HeaderNames.ETag,
                     HeaderNames.RetryAfter)
                 .AllowCredentials()
                 .SetPreflightMaxAge(TimeSpan.FromMinutes(10)));

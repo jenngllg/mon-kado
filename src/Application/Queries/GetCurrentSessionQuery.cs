@@ -1,6 +1,7 @@
 using JennGllg.Fr.MonKado.Back.Application.Abstractions;
 using JennGllg.Fr.MonKado.Back.Application.Common.Behaviors;
 using JennGllg.Fr.MonKado.Back.Application.Common.Exceptions;
+using JennGllg.Fr.MonKado.Back.Application.Common.Models;
 using JennGllg.Fr.MonKado.Back.Application.Logging;
 using JennGllg.Fr.MonKado.Back.Application.Models;
 
@@ -22,8 +23,11 @@ public class GetCurrentSessionQuery(Guid memberId)
     /// </summary>
     public Guid MemberId { get; } = memberId;
 
-    Exception IGenericValidationFailure.CreateValidationException()
+    /// <inheritdoc />
+    Exception IGenericValidationFailure.CreateValidationException(
+        IEnumerable<ValidationError> validationErrors)
     {
+        _ = validationErrors;
 
         return new InvalidAuthenticationSessionException();
     }

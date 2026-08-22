@@ -22,7 +22,7 @@ app.UseCorrelationId();
 app.UseApiErrorHandling();
 app.UseWebSecurity();
 app.UseJwtAuthentication();
-app.UseAuthenticationRequestBodyLimits();
+app.UseRequestBodyLimits();
 app.UseRateLimiter();
 
 app.MapControllers();

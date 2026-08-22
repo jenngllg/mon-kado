@@ -33,6 +33,7 @@ public static class ApiInjectionConfiguration
     {
         services.AddJwtAuthentication(configuration);
         services.AddSingleton<IRefreshTokenCookieService, RefreshTokenCookieService>();
+        services.AddSingleton<IEntityTagService, EntityTagService>();
         services.ConfigureDataProtection(
             configuration,
             environment);

@@ -63,6 +63,10 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
             migration => Assert.EndsWith(
                 "_AddMemberRole",
                 migration,
+                StringComparison.Ordinal),
+            migration => Assert.EndsWith(
+                "_UseMemberXminVersion",
+                migration,
                 StringComparison.Ordinal));
         Assert.False(context.Database.HasPendingModelChanges());
 
@@ -92,6 +96,9 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
             constraints);
         Assert.Contains(
             "ck_users_timestamps_consistent",
+            constraints);
+        Assert.DoesNotContain(
+            "ck_users_version_positive",
             constraints);
         Assert.Contains(
             "ck_authentication_email_outbox_kind_valid",
@@ -155,6 +162,9 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
                 context,
                 cancellationToken));
         Assert.True(await IsUserUpdatedAtNullableAsync(
+            context,
+            cancellationToken));
+        Assert.False(await HasUserVersionColumnAsync(
             context,
             cancellationToken));
     }
@@ -311,6 +321,14 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
         Assert.Equal(
             RoleIds.Member,
             assignment.RoleId);
+        var member = await context.Users
+            .AsNoTracking()
+            .SingleAsync(
+                value => value.Id == memberId,
+                cancellationToken);
+        Assert.NotEqual(
+            0u,
+            member.Version);
 
         await context.Database.MigrateAsync(
             "20260821191432_ReplaceAuthenticationTicketsWithRefreshSessions",
@@ -495,5 +513,29 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
 
         return (bool)(await command.ExecuteScalarAsync(cancellationToken)
             ?? throw new InvalidOperationException("The users.updated_at column is missing."));
+    }
+
+    private static async Task<bool> HasUserVersionColumnAsync(
+        MonKadoDbContext context,
+        CancellationToken cancellationToken)
+    {
+        var connection = context.Database.GetDbConnection();
+
+        if (connection.State != System.Data.ConnectionState.Open)
+            await connection.OpenAsync(cancellationToken);
+
+        await using var command = connection.CreateCommand();
+        command.CommandText =
+            """
+            SELECT EXISTS (
+                SELECT 1
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = 'users'
+                  AND column_name = 'version');
+            """;
+
+        return (bool)(await command.ExecuteScalarAsync(cancellationToken)
+            ?? throw new InvalidOperationException("The users table could not be inspected."));
     }
 }

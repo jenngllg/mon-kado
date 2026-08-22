@@ -32,7 +32,8 @@ public class GetCurrentSessionQueryHandlerTests
             memberId,
             "jenn@example.fr",
             "Jenn",
-            ["Member"]);
+            ["Member"],
+            42);
         var query = new GetCurrentSessionQuery(memberId);
         _currentSessionServiceMock
             .Setup(service => service.GetAsync(

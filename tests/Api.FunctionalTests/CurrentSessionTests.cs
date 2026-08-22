@@ -37,7 +37,8 @@ public class CurrentSessionTests
             [
                 "Administrator",
                 "Member"
-            ]);
+            ],
+            42);
         using var client = factory.CreateClient();
         var accessTokenService = factory.Services.GetRequiredService<IAccessTokenService>();
         var accessToken = accessTokenService.Create(memberId);
@@ -55,6 +56,9 @@ public class CurrentSessionTests
             HttpStatusCode.OK,
             response.StatusCode);
         Assert.True(response.Headers.CacheControl?.NoStore);
+        Assert.Equal(
+            "\"0000002a\"",
+            response.Headers.ETag?.Tag);
         using var document = await response.Content.ReadFromJsonAsync<JsonDocument>(
             TestContext.Current.CancellationToken)
             ?? throw new InvalidOperationException("The current session response is empty.");

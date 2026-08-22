@@ -31,16 +31,16 @@ public class WebSecurityBehaviorTests
         using var client = factory.CreateClient();
         using var request = new HttpRequestMessage(
             HttpMethod.Options,
-            "/_tests/security/mutate");
+            "/api/v1/members/current/profile");
         request.Headers.Add(
             "Origin",
             AllowedOrigin);
         request.Headers.Add(
             "Access-Control-Request-Method",
-            "POST");
+            "PUT");
         request.Headers.Add(
             "Access-Control-Request-Headers",
-            "authorization,content-type,x-correlation-id,x-csrf-token");
+            "authorization,content-type,if-match,x-correlation-id,x-csrf-token");
 
         // Act
         using var response = await client.SendAsync(
@@ -64,9 +64,13 @@ public class WebSecurityBehaviorTests
             response,
             "Access-Control-Allow-Headers");
         Assert.Contains(
-            "POST",
+            "PUT",
             allowedMethods,
             StringComparison.Ordinal);
+        Assert.Contains(
+            HeaderNames.IfMatch,
+            allowedHeaders,
+            StringComparison.OrdinalIgnoreCase);
         Assert.Contains(
             "x-csrf-token",
             allowedHeaders,
@@ -120,6 +124,10 @@ public class WebSecurityBehaviorTests
             returnedCorrelationId);
         Assert.Contains(
             CorrelationIdMiddleware.HeaderName,
+            exposedHeaders,
+            StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(
+            HeaderNames.ETag,
             exposedHeaders,
             StringComparison.OrdinalIgnoreCase);
         Assert.Contains(

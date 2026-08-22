@@ -68,6 +68,15 @@ public static class OpenApiExtensions
                 if (DeletesRefreshTokenCookie(metadata))
                     AddDeletedRefreshTokenResponseHeaders(operation);
 
+                var entityTag = metadata
+                    .OfType<EntityTagAttribute>()
+                    .SingleOrDefault();
+
+                if (entityTag is not null)
+                    AddEntityTagContract(
+                        operation,
+                        entityTag.IsRequired);
+
                 return Task.CompletedTask;
             });
             options.AddOperationTransformer<CommonErrorResponsesOperationTransformer>();
@@ -200,6 +209,38 @@ public static class OpenApiExtensions
             new OpenApiHeader
             {
                 Description = "Always no-store for logout responses.",
+                Schema = new OpenApiSchema { Type = JsonSchemaType.String }
+            });
+    }
+
+    private static void AddEntityTagContract(
+        OpenApiOperation operation,
+        bool isRequired)
+    {
+        ArgumentNullException.ThrowIfNull(operation.Responses);
+        var response = operation.Responses[
+            StatusCodes.Status200OK.ToString(System.Globalization.CultureInfo.InvariantCulture)];
+        var mutableResponse = (OpenApiResponse)response;
+        mutableResponse.Headers = AddOrReplace(
+            mutableResponse.Headers,
+            HeaderNames.ETag,
+            new OpenApiHeader
+            {
+                Description = "Strong entity tag representing the current member profile version.",
+                Schema = new OpenApiSchema { Type = JsonSchemaType.String }
+            });
+
+        if (!isRequired)
+            return;
+
+        operation.Parameters = AddItem(
+            operation.Parameters,
+            new OpenApiParameter
+            {
+                Name = HeaderNames.IfMatch,
+                In = ParameterLocation.Header,
+                Required = true,
+                Description = "Strong entity tag returned by the current session or the previous profile update.",
                 Schema = new OpenApiSchema { Type = JsonSchemaType.String }
             });
     }

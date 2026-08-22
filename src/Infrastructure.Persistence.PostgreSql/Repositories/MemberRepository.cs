@@ -2,6 +2,7 @@ using JennGllg.Fr.MonKado.Back.Application.Models;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Abstractions;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Constants;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Contexts;
+using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Entities;
 
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -48,7 +49,19 @@ public class MemberRepository(MonKadoDbContext context) : IMemberRepository
                             _,
                             role) => role.Name!)
                     .OrderBy(role => role)
-                    .ToArray()))
+                    .ToArray(),
+                member.Version))
             .SingleOrDefaultAsync(cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public Task<MonKadoUser?> GetForProfileUpdateAsync(
+        Guid memberId,
+        CancellationToken cancellationToken)
+    {
+
+        return context.Users.SingleOrDefaultAsync(
+            member => member.Id == memberId,
+            cancellationToken);
     }
 }
