@@ -51,6 +51,14 @@ public static class LogEventIds
     /// </summary>
     public const int CurrentSessionLogoutCompleted = 1033;
     /// <summary>
+    /// Identifies member profile update started.
+    /// </summary>
+    public const int MemberProfileUpdateStarted = 1040;
+    /// <summary>
+    /// Identifies member profile updated.
+    /// </summary>
+    public const int MemberProfileUpdated = 1041;
+    /// <summary>
     /// Identifies expected http error.
     /// </summary>
 

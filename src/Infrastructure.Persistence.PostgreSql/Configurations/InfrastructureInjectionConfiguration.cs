@@ -99,6 +99,7 @@ public static class InfrastructureInjectionConfiguration
         services.AddSingleton<IRefreshTokenService, RefreshTokenService>();
         services.AddScoped<IAccountSessionService, AccountSessionService>();
         services.AddScoped<ICurrentSessionService, CurrentSessionService>();
+        services.AddScoped<IMemberProfileService, MemberProfileService>();
         services.AddScoped<IExpiredAuthenticationSessionCleanup, ExpiredAuthenticationSessionCleanup>();
 
         return services;

@@ -1,10 +1,13 @@
 using JennGllg.Fr.MonKado.Back.Api.Authorization;
 using JennGllg.Fr.MonKado.Back.Api.Extensions;
+using JennGllg.Fr.MonKado.Back.Application.Common.Exceptions;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Options;
 
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Authorization.Infrastructure;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -78,5 +81,47 @@ public class JwtAuthenticationExtensionsTests
         Assert.Contains(
             currentSessionPolicy.Requirements,
             requirement => requirement is DenyAnonymousAuthorizationRequirement);
+    }
+
+    [Fact]
+    public async Task OnTokenValidated_WhenPrincipalIsMissing_ThrowsInvalidAuthenticationSessionException()
+    {
+        // Arrange
+        var services = new ServiceCollection();
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Jwt:Audience"] = "MonKado.Frontend",
+                ["Jwt:Issuer"] = "MonKado.Api",
+                ["Jwt:SigningKey"] = "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA="
+            })
+            .Build();
+        services.AddJwtAuthentication(configuration);
+        using var provider = services.BuildServiceProvider();
+        var options = provider
+            .GetRequiredService<IOptionsMonitor<JwtBearerOptions>>()
+            .Get(JwtBearerDefaults.AuthenticationScheme);
+        var scheme = new AuthenticationScheme(
+            JwtBearerDefaults.AuthenticationScheme,
+            displayName: null,
+            typeof(JwtBearerHandler));
+        var context = new TokenValidatedContext(
+            new DefaultHttpContext(),
+            scheme,
+            options);
+
+        Task action()
+        {
+            return options.Events.OnTokenValidated(context);
+        }
+
+        // Act
+        var exception = await Assert.ThrowsAsync<InvalidAuthenticationSessionException>(
+            (Func<Task>)action);
+
+        // Assert
+        Assert.Equal(
+            "The authentication session is invalid or expired.",
+            exception.Message);
     }
 }

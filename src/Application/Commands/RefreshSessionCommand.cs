@@ -1,6 +1,7 @@
 using JennGllg.Fr.MonKado.Back.Application.Abstractions;
 using JennGllg.Fr.MonKado.Back.Application.Common.Behaviors;
 using JennGllg.Fr.MonKado.Back.Application.Common.Exceptions;
+using JennGllg.Fr.MonKado.Back.Application.Common.Models;
 using JennGllg.Fr.MonKado.Back.Application.Models;
 
 using MediatR;
@@ -19,8 +20,12 @@ public class RefreshSessionCommand(string? refreshToken)
     /// </summary>
     public string? RefreshToken { get; } = refreshToken;
 
-    Exception IGenericValidationFailure.CreateValidationException()
+    /// <inheritdoc />
+    Exception IGenericValidationFailure.CreateValidationException(
+        IEnumerable<ValidationError> validationErrors)
     {
+        _ = validationErrors;
+
         return new InvalidAuthenticationSessionException();
     }
 }

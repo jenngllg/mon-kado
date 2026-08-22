@@ -178,7 +178,6 @@ public class EmailConfirmationService(
         }
 
         user.UnconfirmedAccountExpiresAt = null;
-        user.Version++;
         var result = await userManager.ConfirmEmailAsync(
             user,
             decodedToken);

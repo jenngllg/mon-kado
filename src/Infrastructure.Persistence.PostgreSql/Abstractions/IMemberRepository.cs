@@ -1,4 +1,5 @@
 using JennGllg.Fr.MonKado.Back.Application.Models;
+using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Entities;
 
 namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Abstractions;
 
@@ -20,6 +21,16 @@ public interface IMemberRepository
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>The current session when the member exists; otherwise, <see langword="null" />.</returns>
     Task<CurrentSession?> GetCurrentSessionAsync(
+        Guid memberId,
+        CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Gets a tracked member for an optimistic profile update.
+    /// </summary>
+    /// <param name="memberId">The member identifier.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The tracked member when found; otherwise, <see langword="null" />.</returns>
+    Task<MonKadoUser?> GetForProfileUpdateAsync(
         Guid memberId,
         CancellationToken cancellationToken);
 }

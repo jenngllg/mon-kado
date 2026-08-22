@@ -60,6 +60,18 @@ public class GlobalExceptionHandler(
                 "One or more fields are invalid.",
                 ErrorCodes.RequestValidationError,
                 validationException.ValidationErrors),
+            MemberProfileVersionConflictException => new ErrorResponse(
+                StatusCodes.Status412PreconditionFailed,
+                "Profile update conflict",
+                "The member profile has changed. Retrieve it again before retrying.",
+                ErrorCodes.MemberProfileVersionConflict,
+                null),
+            PreconditionRequiredException => new ErrorResponse(
+                StatusCodes.Status428PreconditionRequired,
+                "Precondition required",
+                "The If-Match header is required.",
+                ErrorCodes.RequestPreconditionRequired,
+                null),
             DependencyUnavailableException => new ErrorResponse(
                 StatusCodes.Status503ServiceUnavailable,
                 "Service temporarily unavailable",

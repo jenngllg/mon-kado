@@ -5,6 +5,8 @@ using JennGllg.Fr.MonKado.Back.Application.Commands;
 using JennGllg.Fr.MonKado.Back.Application.Common.Behaviors;
 using JennGllg.Fr.MonKado.Back.Application.Common.Exceptions;
 using JennGllg.Fr.MonKado.Back.Application.Common.Models;
+using JennGllg.Fr.MonKado.Back.Application.Models;
+using JennGllg.Fr.MonKado.Back.Application.Queries;
 using JennGllg.Fr.MonKado.Back.Application.Validators;
 
 using MediatR;
@@ -170,6 +172,61 @@ public class ValidationBehaviorTests
         // Act
         var exception = await Assert.ThrowsAsync<InvalidAuthenticationSessionException>(
             (Func<Task<Unit>>)action);
+
+        // Assert
+        Assert.Equal(
+            "The authentication session is invalid or expired.",
+            exception.Message);
+    }
+
+    [Fact]
+    public async Task Handle_WhenCurrentSessionMemberIdIsEmpty_ThrowsInvalidAuthenticationSessionException()
+    {
+        // Arrange
+        var query = new GetCurrentSessionQuery(Guid.Empty);
+        var behavior = new ValidationBehavior<GetCurrentSessionQuery, CurrentSession>(
+            [new GetCurrentSessionQueryValidator()]);
+
+        Task<CurrentSession> action()
+        {
+            return behavior.Handle(
+                query,
+                _ => throw new InvalidOperationException("The handler must not be invoked."),
+                TestContext.Current.CancellationToken);
+        }
+
+        // Act
+        var exception = await Assert.ThrowsAsync<InvalidAuthenticationSessionException>(
+            (Func<Task<CurrentSession>>)action);
+
+        // Assert
+        Assert.Equal(
+            "The authentication session is invalid or expired.",
+            exception.Message);
+    }
+
+    [Fact]
+    public async Task Handle_WhenProfileMemberIdIsEmpty_ThrowsInvalidAuthenticationSessionException()
+    {
+        // Arrange
+        var command = new UpdateMemberProfileCommand(
+            Guid.Empty,
+            "Jenn",
+            42);
+        var behavior = new ValidationBehavior<UpdateMemberProfileCommand, MemberProfile>(
+            [new UpdateMemberProfileCommandValidator()]);
+
+        Task<MemberProfile> action()
+        {
+            return behavior.Handle(
+                command,
+                _ => throw new InvalidOperationException("The handler must not be invoked."),
+                TestContext.Current.CancellationToken);
+        }
+
+        // Act
+        var exception = await Assert.ThrowsAsync<InvalidAuthenticationSessionException>(
+            (Func<Task<MemberProfile>>)action);
 
         // Assert
         Assert.Equal(

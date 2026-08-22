@@ -41,5 +41,8 @@ public class MonKadoUser : IdentityUser<Guid>, IAuditableEntity
     /// Gets version.
     /// </summary>
 
-    public int Version { get; set; } = 1;
+    public uint Version
+    {
+        get; private set;
+    }
 }

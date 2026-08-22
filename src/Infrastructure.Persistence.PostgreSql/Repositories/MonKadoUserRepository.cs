@@ -27,7 +27,7 @@ public class MonKadoUserRepository(MonKadoDbContext context) : IMonKadoUserRepos
 
         return context.Users
             .FromSqlInterpolated(
-                $"SELECT * FROM public.users WHERE id = {userId} FOR UPDATE")
+                $"SELECT *, xmin FROM public.users WHERE id = {userId} FOR UPDATE")
             .SingleOrDefaultAsync(cancellationToken);
     }
 
@@ -40,7 +40,7 @@ public class MonKadoUserRepository(MonKadoDbContext context) : IMonKadoUserRepos
 
         return context.Users
             .FromSqlInterpolated($"""
-                SELECT * FROM public.users
+                SELECT *, xmin FROM public.users
                 WHERE id = {userId} AND normalized_email = {normalizedEmail}
                 FOR UPDATE
                 """)
@@ -55,7 +55,7 @@ public class MonKadoUserRepository(MonKadoDbContext context) : IMonKadoUserRepos
 
         return context.Users
             .FromSqlInterpolated(
-                $"SELECT * FROM public.users WHERE normalized_email = {normalizedEmail} FOR UPDATE")
+                $"SELECT *, xmin FROM public.users WHERE normalized_email = {normalizedEmail} FOR UPDATE")
             .SingleOrDefaultAsync(cancellationToken);
     }
 

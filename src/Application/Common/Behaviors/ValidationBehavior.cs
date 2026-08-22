@@ -56,7 +56,7 @@ public class ValidationBehavior<TRequest, TResponse>(IEnumerable<IValidator<TReq
         {
 
             if (request is IGenericValidationFailure genericFailure)
-                throw genericFailure.CreateValidationException();
+                throw genericFailure.CreateValidationException(validationErrors);
 
             throw new RequestValidationException(validationErrors);
         }

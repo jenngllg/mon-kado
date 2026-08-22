@@ -56,26 +56,37 @@ public static class ErrorCodes
     /// </summary>
     public const string RequestUnsupportedMediaType = "REQUEST_UNSUPPORTED_MEDIA_TYPE";
     /// <summary>
-    /// Identifies security unauthorized.
+    /// Identifies a missing request precondition.
     /// </summary>
-
+    public const string RequestPreconditionRequired = "REQUEST_PRECONDITION_REQUIRED";
     #endregion
 
     #region Security
 
+    /// <summary>
+    /// Identifies security unauthorized.
+    /// </summary>
     public const string SecurityUnauthorized = "SECURITY_UNAUTHORIZED";
     /// <summary>
     /// Identifies security forbidden.
     /// </summary>
     public const string SecurityForbidden = "SECURITY_FORBIDDEN";
+    #endregion
+
+    #region Member
+
     /// <summary>
-    /// Identifies technical dependency unavailable.
+    /// Identifies a member profile version conflict.
     /// </summary>
+    public const string MemberProfileVersionConflict = "MEMBER_PROFILE_VERSION_CONFLICT";
 
     #endregion
 
     #region Technical
 
+    /// <summary>
+    /// Identifies technical dependency unavailable.
+    /// </summary>
     public const string TechnicalDependencyUnavailable = "TECHNICAL_DEPENDENCY_UNAVAILABLE";
     /// <summary>
     /// Identifies technical internal server error.

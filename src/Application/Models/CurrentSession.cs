@@ -9,12 +9,14 @@ namespace JennGllg.Fr.MonKado.Back.Application.Models;
 /// <param name="email">The member email address.</param>
 /// <param name="displayName">The member display name.</param>
 /// <param name="roles">The current member roles.</param>
+/// <param name="version">The member profile version.</param>
 [ExcludeFromCodeCoverage]
 public class CurrentSession(
     Guid id,
     string email,
     string displayName,
-    IEnumerable<string> roles)
+    IEnumerable<string> roles,
+    uint version)
 {
     /// <summary>
     /// Gets the member identifier.
@@ -35,4 +37,9 @@ public class CurrentSession(
     /// Gets the current member roles.
     /// </summary>
     public IEnumerable<string> Roles { get; } = Array.AsReadOnly<string>([.. roles]);
+
+    /// <summary>
+    /// Gets the member profile version used for optimistic concurrency.
+    /// </summary>
+    public uint Version { get; } = version;
 }

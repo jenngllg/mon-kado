@@ -3,9 +3,6 @@ using FluentValidation;
 using JennGllg.Fr.MonKado.Back.Application.Commands;
 using JennGllg.Fr.MonKado.Back.Application.Common.Constants;
 
-using System.Globalization;
-using System.Text;
-
 namespace JennGllg.Fr.MonKado.Back.Application.Validators;
 /// <summary>
 /// Represents register account command validator.
@@ -15,7 +12,6 @@ public class RegisterAccountCommandValidator : AbstractValidator<RegisterAccount
 {
     private const int MinimumPasswordLength = 12;
     private const int MaximumPasswordLength = 128;
-    private const int MaximumDisplayNameLength = 80;
     /// <summary>
     /// Initializes a new instance of the class.
     /// </summary>
@@ -41,22 +37,7 @@ public class RegisterAccountCommandValidator : AbstractValidator<RegisterAccount
             .WithMessage($"The password must not exceed {MaximumPasswordLength} characters.");
 
         RuleFor(command => command.DisplayName)
-            .Cascade(CascadeMode.Stop)
-            .NotEmpty()
-            .WithMessage(ValidationMessages.MandatoryProperty)
-            .Must(displayName => CountUnicodeScalars(displayName!.Trim()) >= 1)
-            .WithMessage(ValidationMessages.MandatoryProperty)
-            .Must(displayName => CountUnicodeScalars(displayName!.Trim()) <= MaximumDisplayNameLength)
-            .WithMessage($"The display name must not exceed {MaximumDisplayNameLength} characters.")
-            .Must(displayName => NotContainControlCharacters(displayName!))
-            .WithMessage("The display name must not contain control characters.");
-    }
-
-    private static bool NotContainControlCharacters(string value)
-    {
-
-        return value.EnumerateRunes().All(rune =>
-            Rune.GetUnicodeCategory(rune) is not UnicodeCategory.Control and not UnicodeCategory.Surrogate);
+            .ApplyDisplayNameRules();
     }
 
     private static int CountUnicodeScalars(string value)

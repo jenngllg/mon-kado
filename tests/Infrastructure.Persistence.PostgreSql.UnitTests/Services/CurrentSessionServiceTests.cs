@@ -28,7 +28,8 @@ public class CurrentSessionServiceTests
             memberId,
             "jenn@example.fr",
             "Jenn",
-            ["Member"]);
+            ["Member"],
+            42);
         _memberRepositoryMock
             .Setup(repository => repository.GetCurrentSessionAsync(
                 memberId,

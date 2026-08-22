@@ -88,8 +88,8 @@ public class EmailConfirmationIntegrationTests(PostgreSqlContainerFixture fixtur
         Assert.Equal(
             _referenceTime.UtcDateTime,
             confirmed.UpdatedAt);
-        Assert.Equal(
-            2,
+        Assert.NotEqual(
+            user.Version,
             confirmed.Version);
         Assert.Equal(
             _referenceTime.UtcDateTime,
