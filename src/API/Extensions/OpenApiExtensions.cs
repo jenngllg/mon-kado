@@ -53,11 +53,20 @@ public static class OpenApiExtensions
                 if (RequiresAntiforgeryToken(metadata))
                     AddAntiforgeryParameter(operation);
 
-                if (RequiresRefreshTokenCookie(metadata))
-                    AddRefreshTokenCookieParameter(operation);
+                var refreshTokenCookie = metadata
+                    .OfType<RefreshTokenCookieAttribute>()
+                    .SingleOrDefault();
+
+                if (refreshTokenCookie is not null)
+                    AddRefreshTokenCookieParameter(
+                        operation,
+                        refreshTokenCookie.IsRequired);
 
                 if (ReturnsAccessToken(metadata))
                     AddAccessTokenResponseHeaders(operation);
+
+                if (DeletesRefreshTokenCookie(metadata))
+                    AddDeletedRefreshTokenResponseHeaders(operation);
 
                 return Task.CompletedTask;
             });
@@ -147,12 +156,14 @@ public static class OpenApiExtensions
             });
     }
 
-    private static bool RequiresRefreshTokenCookie(IEnumerable<object> metadata)
+    private static bool DeletesRefreshTokenCookie(IEnumerable<object> metadata)
     {
-        return metadata.OfType<RefreshTokenCookieAttribute>().Any();
+        return metadata.OfType<DeletesRefreshTokenCookieAttribute>().Any();
     }
 
-    private static void AddRefreshTokenCookieParameter(OpenApiOperation operation)
+    private static void AddRefreshTokenCookieParameter(
+        OpenApiOperation operation,
+        bool isRequired)
     {
         operation.Parameters = AddItem(
             operation.Parameters,
@@ -160,10 +171,35 @@ public static class OpenApiExtensions
             {
                 Name = RefreshTokenCookieService.ProductionCookieName,
                 In = ParameterLocation.Cookie,
-                Required = true,
+                Required = isRequired,
                 Description =
                     "HttpOnly rotating refresh token cookie. Production uses __Host-MonKado.Refresh; " +
                     "local development uses MonKado.Refresh.",
+                Schema = new OpenApiSchema { Type = JsonSchemaType.String }
+            });
+    }
+
+    private static void AddDeletedRefreshTokenResponseHeaders(OpenApiOperation operation)
+    {
+        ArgumentNullException.ThrowIfNull(operation.Responses);
+        var response = operation.Responses[
+            StatusCodes.Status204NoContent.ToString(System.Globalization.CultureInfo.InvariantCulture)];
+        var mutableResponse = (OpenApiResponse)response;
+        mutableResponse.Headers = AddOrReplace(
+            mutableResponse.Headers,
+            HeaderNames.SetCookie,
+            new OpenApiHeader
+            {
+                Description =
+                    "Deletes the HttpOnly refresh token cookie for the current browser session.",
+                Schema = new OpenApiSchema { Type = JsonSchemaType.String }
+            });
+        mutableResponse.Headers = AddOrReplace(
+            mutableResponse.Headers,
+            HeaderNames.CacheControl,
+            new OpenApiHeader
+            {
+                Description = "Always no-store for logout responses.",
                 Schema = new OpenApiSchema { Type = JsonSchemaType.String }
             });
     }

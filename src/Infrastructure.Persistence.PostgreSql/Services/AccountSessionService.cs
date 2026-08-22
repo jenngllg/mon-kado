@@ -101,6 +101,41 @@ public class AccountSessionService(
     }
 
     /// <summary>
+    /// Revokes the refresh session held by the current browser.
+    /// </summary>
+    /// <param name="refreshToken">The refresh token currently held by the browser.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    /// <exception cref="DependencyUnavailableException">PostgreSQL is unavailable.</exception>
+    public async Task LogoutAsync(
+        string? refreshToken,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (refreshToken is null ||
+            !refreshTokenService.TryGetSessionId(
+                refreshToken,
+                out var sessionId))
+            return;
+
+        try
+        {
+            var executionStrategy = context.Database.CreateExecutionStrategy();
+            await executionStrategy.ExecuteAsync(() => LogoutSessionAsync(
+                sessionId,
+                refreshToken,
+                cancellationToken));
+        }
+        catch (Exception exception) when (PostgreSqlFailureClassifier.IsUnavailable(exception))
+        {
+            throw new DependencyUnavailableException(
+                "PostgreSQL",
+                exception);
+        }
+    }
+
+    /// <summary>
     /// Rotates an existing refresh session.
     /// </summary>
     /// <param name="refreshToken">The current refresh token.</param>
@@ -274,6 +309,64 @@ public class AccountSessionService(
         await transaction.CommitAsync(cancellationToken);
 
         return tokens;
+    }
+
+    /// <summary>
+    /// Revokes a browser refresh session while holding its database lock.
+    /// </summary>
+    /// <param name="sessionId">The session identifier.</param>
+    /// <param name="refreshToken">The refresh token held by the browser.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    private async Task LogoutSessionAsync(
+        Guid sessionId,
+        string refreshToken,
+        CancellationToken cancellationToken)
+    {
+        context.ChangeTracker.Clear();
+        await using var transaction =
+            await context.Database.BeginTransactionAsync(cancellationToken);
+        var session = await sessionRepository.GetByIdForUpdateAsync(
+            sessionId,
+            cancellationToken);
+
+        if (session is null || session.RevokedAt is not null)
+        {
+            await transaction.CommitAsync(cancellationToken);
+
+            return;
+        }
+
+        var now = timeProvider.GetUtcNow().UtcDateTime;
+        // Preserve fixed-time verification before revoking both current and reused token variants.
+        _ = refreshTokenService.Verify(
+            refreshToken,
+            session.RefreshTokenHash);
+
+        await RevokeSessionAndCommitAsync(
+            session,
+            now,
+            transaction,
+            cancellationToken);
+    }
+
+    /// <summary>
+    /// Revokes and commits an authentication session.
+    /// </summary>
+    /// <param name="session">The authentication session.</param>
+    /// <param name="revokedAt">The revocation date.</param>
+    /// <param name="transaction">The current database transaction.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    private async Task RevokeSessionAndCommitAsync(
+        AuthenticationSession session,
+        DateTime revokedAt,
+        IDbContextTransaction transaction,
+        CancellationToken cancellationToken)
+    {
+        session.Revoke(revokedAt);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
     }
 
     /// <summary>

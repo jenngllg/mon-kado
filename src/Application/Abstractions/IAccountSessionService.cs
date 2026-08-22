@@ -24,6 +24,16 @@ public interface IAccountSessionService
         CancellationToken cancellationToken);
 
     /// <summary>
+    /// Revokes the refresh session held by the current browser.
+    /// </summary>
+    /// <param name="refreshToken">The refresh token currently held by the browser.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    Task LogoutAsync(
+        string? refreshToken,
+        CancellationToken cancellationToken);
+
+    /// <summary>
     /// Rotates an existing authentication session.
     /// </summary>
     /// <param name="refreshToken">The refresh token.</param>

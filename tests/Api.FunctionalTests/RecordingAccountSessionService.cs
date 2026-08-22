@@ -6,6 +6,7 @@ namespace JennGllg.Fr.MonKado.Back.Api.FunctionalTests;
 public class RecordingAccountSessionService : IAccountSessionService
 {
     private readonly List<LoginCall> _calls = [];
+    private readonly List<string?> _logoutRefreshTokens = [];
     private readonly Lock _sync = new();
     private int _refreshCallCount;
 
@@ -39,6 +40,18 @@ public class RecordingAccountSessionService : IAccountSessionService
         }
     }
 
+    public IReadOnlyList<string?> LogoutRefreshTokens
+    {
+        get
+        {
+            lock (_sync)
+            {
+
+                return _logoutRefreshTokens.ToArray();
+            }
+        }
+    }
+
     public Task<AccountSessionLoginResult> LoginAsync(
         string email,
         string password,
@@ -68,6 +81,20 @@ public class RecordingAccountSessionService : IAccountSessionService
         return Task.FromResult(new AccountSessionLoginResult(
             Result,
             tokens));
+    }
+
+    public Task LogoutAsync(
+        string? refreshToken,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        lock (_sync)
+        {
+            _logoutRefreshTokens.Add(refreshToken);
+        }
+
+        return Task.CompletedTask;
     }
 
     public Task<AccountSessionTokens?> RefreshAsync(
