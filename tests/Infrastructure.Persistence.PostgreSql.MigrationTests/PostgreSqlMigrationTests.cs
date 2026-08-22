@@ -1,5 +1,7 @@
+using JennGllg.Fr.MonKado.Back.Application.Common.Constants;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Configurations;
+using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Constants;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Contexts;
 
 using Microsoft.EntityFrameworkCore;
@@ -56,6 +58,10 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
                 StringComparison.Ordinal),
             migration => Assert.EndsWith(
                 "_ReplaceAuthenticationTicketsWithRefreshSessions",
+                migration,
+                StringComparison.Ordinal),
+            migration => Assert.EndsWith(
+                "_AddMemberRole",
                 migration,
                 StringComparison.Ordinal));
         Assert.False(context.Database.HasPendingModelChanges());
@@ -228,6 +234,92 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
 
         // Assert
         Assert.Empty(await context.AuthenticationSessions
+            .AsNoTracking()
+            .ToArrayAsync(cancellationToken));
+    }
+
+    [Fact]
+    public async Task MigrateAsync_WhenExistingMember_BackfillsAndRemovesMemberRole()
+    {
+        // Arrange
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var provider = CreateServiceProvider();
+        await using var scope = provider.CreateAsyncScope();
+        var context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
+        await context.Database.MigrateAsync(
+            "20260821191432_ReplaceAuthenticationTicketsWithRefreshSessions",
+            cancellationToken);
+        await context.Database.ExecuteSqlRawAsync(
+            "DELETE FROM public.users;",
+            cancellationToken);
+        var memberId = Guid.CreateVersion7();
+        var now = DateTime.UtcNow;
+        await context.Database.ExecuteSqlInterpolatedAsync(
+            $"""
+            INSERT INTO public.users (
+                id,
+                display_name,
+                created_at,
+                version,
+                user_name,
+                normalized_user_name,
+                email,
+                normalized_email,
+                email_confirmed,
+                phone_number_confirmed,
+                two_factor_enabled,
+                lockout_enabled,
+                access_failed_count)
+            VALUES (
+                {memberId},
+                {"Existing member"},
+                {now},
+                {1},
+                {"existing@example.test"},
+                {"EXISTING@EXAMPLE.TEST"},
+                {"existing@example.test"},
+                {"EXISTING@EXAMPLE.TEST"},
+                {true},
+                {false},
+                {false},
+                {true},
+                {0});
+            """,
+            cancellationToken);
+
+        // Act
+        await context.Database.MigrateAsync(cancellationToken);
+
+        // Assert
+        var role = await context.Roles
+            .AsNoTracking()
+            .SingleAsync(
+                value => value.Id == RoleIds.Member,
+                cancellationToken);
+        Assert.Equal(
+            RoleNames.Member,
+            role.Name);
+        Assert.Equal(
+            "MEMBER",
+            role.NormalizedName);
+        var assignment = await context.UserRoles
+            .AsNoTracking()
+            .SingleAsync(cancellationToken);
+        Assert.Equal(
+            memberId,
+            assignment.UserId);
+        Assert.Equal(
+            RoleIds.Member,
+            assignment.RoleId);
+
+        await context.Database.MigrateAsync(
+            "20260821191432_ReplaceAuthenticationTicketsWithRefreshSessions",
+            cancellationToken);
+        Assert.Empty(await context.Roles
+            .AsNoTracking()
+            .Where(value => value.Id == RoleIds.Member)
+            .ToArrayAsync(cancellationToken));
+        Assert.Empty(await context.UserRoles
             .AsNoTracking()
             .ToArrayAsync(cancellationToken));
     }

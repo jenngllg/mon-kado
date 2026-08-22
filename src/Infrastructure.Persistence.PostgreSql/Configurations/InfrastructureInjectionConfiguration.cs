@@ -89,6 +89,7 @@ public static class InfrastructureInjectionConfiguration
         services.AddScoped<IUnitOfWork>(provider =>
             provider.GetRequiredService<MonKadoDbContext>());
         services.AddScoped<IMonKadoUserRepository, MonKadoUserRepository>();
+        services.AddScoped<IMemberRepository, MemberRepository>();
         services.AddScoped<IAuthenticationEmailOutboxRepository, AuthenticationEmailOutboxRepository>();
         services.AddScoped<IAuthenticationSessionRepository, AuthenticationSessionRepository>();
         services.AddScoped<IAccountRegistrationService, AccountRegistrationService>();
@@ -97,6 +98,7 @@ public static class InfrastructureInjectionConfiguration
         services.AddSingleton<IAccessTokenService, JwtAccessTokenService>();
         services.AddSingleton<IRefreshTokenService, RefreshTokenService>();
         services.AddScoped<IAccountSessionService, AccountSessionService>();
+        services.AddScoped<ICurrentSessionService, CurrentSessionService>();
         services.AddScoped<IExpiredAuthenticationSessionCleanup, ExpiredAuthenticationSessionCleanup>();
 
         return services;

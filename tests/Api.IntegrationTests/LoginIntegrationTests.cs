@@ -2,12 +2,14 @@ using JennGllg.Fr.MonKado.Back.Api.Contracts.Responses;
 using JennGllg.Fr.MonKado.Back.Api.Errors;
 using JennGllg.Fr.MonKado.Back.Api.Options;
 using JennGllg.Fr.MonKado.Back.Application.Abstractions;
+using JennGllg.Fr.MonKado.Back.Application.Common.Constants;
 using JennGllg.Fr.MonKado.Back.Application.Models;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Abstractions;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Contexts;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Entities;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Services;
 
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
@@ -16,6 +18,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 
 using System.IdentityModel.Tokens.Jwt;
 using System.Net;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text;
@@ -681,6 +684,160 @@ public class LoginIntegrationTests(PostgreSqlContainerFixture fixture)
     }
 
     [Fact]
+    public async Task GetCurrentAsync_WhenMemberIsAuthenticated_ReturnsPersistedIdentityAndRoles()
+    {
+        // Arrange
+        await using var factory = await CreateMigratedFactoryAsync(new FixedTimeProvider(_now));
+        var user = await CreateUserAsync(
+            factory,
+            "current@example.fr",
+            emailConfirmed: true);
+        using var client = factory.CreateClient();
+        using var loginResponse = await LoginAsync(
+            client,
+            "current@example.fr",
+            Password,
+            rememberMe: false);
+        var accessToken = await ReadAccessTokenAsync(loginResponse);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            JwtBearerDefaults.AuthenticationScheme,
+            accessToken.AccessToken);
+
+        // Act
+        using var response = await client.GetAsync(
+            "/api/v1/auth/sessions/current",
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.OK,
+            response.StatusCode);
+        var currentSession = await response.Content.ReadFromJsonAsync<CurrentSessionResponse>(
+            TestContext.Current.CancellationToken);
+        Assert.NotNull(currentSession);
+        Assert.Equal(
+            user.Id,
+            currentSession.Id);
+        Assert.Equal(
+            user.Email,
+            currentSession.Email);
+        Assert.Equal(
+            user.DisplayName,
+            currentSession.DisplayName);
+        Assert.Equal(
+            [RoleNames.Member],
+            currentSession.Roles);
+    }
+
+    [Fact]
+    public async Task GetCurrentAsync_WhenRolesChange_ReturnsUpdatedRolesWithSameAccessToken()
+    {
+        // Arrange
+        const string AdministratorRole = "Administrator";
+        await using var factory = await CreateMigratedFactoryAsync(new FixedTimeProvider(_now));
+        var user = await CreateUserAsync(
+            factory,
+            "roles@example.fr",
+            emailConfirmed: true);
+        using var client = factory.CreateClient();
+        using var loginResponse = await LoginAsync(
+            client,
+            "roles@example.fr",
+            Password,
+            rememberMe: false);
+        var accessToken = await ReadAccessTokenAsync(loginResponse);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            JwtBearerDefaults.AuthenticationScheme,
+            accessToken.AccessToken);
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole<Guid>>>();
+            var roleResult = await roleManager.CreateAsync(new IdentityRole<Guid>
+            {
+                Id = Guid.CreateVersion7(),
+                Name = AdministratorRole
+            });
+            Assert.True(roleResult.Succeeded);
+            var userManager = scope.ServiceProvider.GetRequiredService<UserManager<MonKadoUser>>();
+            var persistedUser = await userManager.FindByIdAsync(user.Id.ToString("D"));
+            Assert.NotNull(persistedUser);
+            var roleAssignmentResult = await userManager.AddToRoleAsync(
+                persistedUser,
+                AdministratorRole);
+            Assert.True(roleAssignmentResult.Succeeded);
+        }
+
+        // Act
+        using var response = await client.GetAsync(
+            "/api/v1/auth/sessions/current",
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.OK,
+            response.StatusCode);
+        var currentSession = await response.Content.ReadFromJsonAsync<CurrentSessionResponse>(
+            TestContext.Current.CancellationToken);
+        Assert.NotNull(currentSession);
+        Assert.Equal(
+            [
+                AdministratorRole,
+                RoleNames.Member
+            ],
+            currentSession.Roles);
+        var token = new JwtSecurityTokenHandler().ReadJwtToken(accessToken.AccessToken);
+        Assert.DoesNotContain(
+            token.Claims,
+            claim => claim.Type == System.Security.Claims.ClaimTypes.Role);
+    }
+
+    [Fact]
+    public async Task GetCurrentAsync_WhenMemberWasDeleted_ReturnsUnauthorizedAndDeletesRefreshCookie()
+    {
+        // Arrange
+        await using var factory = await CreateMigratedFactoryAsync(new FixedTimeProvider(_now));
+        var user = await CreateUserAsync(
+            factory,
+            "deleted-current@example.fr",
+            emailConfirmed: true);
+        using var client = factory.CreateClient();
+        using var loginResponse = await LoginAsync(
+            client,
+            "deleted-current@example.fr",
+            Password,
+            rememberMe: false);
+        var accessToken = await ReadAccessTokenAsync(loginResponse);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            JwtBearerDefaults.AuthenticationScheme,
+            accessToken.AccessToken);
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
+            await context.Users
+                .Where(member => member.Id == user.Id)
+                .ExecuteDeleteAsync(TestContext.Current.CancellationToken);
+        }
+
+        // Act
+        using var response = await client.GetAsync(
+            "/api/v1/auth/sessions/current",
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.Unauthorized,
+            response.StatusCode);
+        Assert.Equal(
+            ErrorCodes.AccountAuthenticationSessionInvalid,
+            await GetErrorCodeAsync(response));
+        Assert.Contains(
+            response.Headers.GetValues("Set-Cookie"),
+            value => value.StartsWith(
+                "MonKado.Refresh=;",
+                StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task RefreshAsync_WhenTokenFormatIsInvalid_ReturnsNullBeforeDatabaseLookup()
     {
         // Arrange
@@ -1076,6 +1233,14 @@ public class LoginIntegrationTests(PostgreSqlContainerFixture fixture)
             string.Join(
                 ", ",
                 result.Errors.Select(error => error.Description)));
+        var roleResult = await userManager.AddToRoleAsync(
+            user,
+            RoleNames.Member);
+        Assert.True(
+            roleResult.Succeeded,
+            string.Join(
+                ", ",
+                roleResult.Errors.Select(error => error.Description)));
 
         return user;
     }

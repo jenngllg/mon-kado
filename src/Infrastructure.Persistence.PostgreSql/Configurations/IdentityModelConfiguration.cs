@@ -1,3 +1,6 @@
+using JennGllg.Fr.MonKado.Back.Application.Common.Constants;
+using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Constants;
+
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
@@ -13,10 +16,19 @@ internal static class IdentityModelConfiguration
 
     public static void Configure(ModelBuilder builder)
     {
-        builder.Entity<IdentityRole<Guid>>()
-            .HasIndex(role => role.NormalizedName)
-            .HasDatabaseName("ux_roles_normalized_name")
-            .IsUnique();
+        builder.Entity<IdentityRole<Guid>>(role =>
+        {
+            role.HasIndex(value => value.NormalizedName)
+                .HasDatabaseName("ux_roles_normalized_name")
+                .IsUnique();
+            role.HasData(new IdentityRole<Guid>
+            {
+                ConcurrencyStamp = "0198d027-51c0-7000-8000-000000000003",
+                Id = RoleIds.Member,
+                Name = RoleNames.Member,
+                NormalizedName = RoleNames.Member.ToUpperInvariant()
+            });
+        });
 
         builder.Entity<IdentityUserClaim<Guid>>()
             .HasOne<MonKadoUser>()

@@ -18,6 +18,7 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Service
 /// </summary>
 /// <param name="context">The database context.</param>
 /// <param name="unitOfWork">The unit of work.</param>
+/// <param name="memberRepository">The member repository.</param>
 /// <param name="outboxRepository">The authentication email outbox repository.</param>
 /// <param name="userManager">The Identity user manager.</param>
 /// <param name="passwordHasher">The password hasher.</param>
@@ -25,6 +26,7 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Service
 public class AccountRegistrationService(
     MonKadoDbContext context,
     IUnitOfWork unitOfWork,
+    IMemberRepository memberRepository,
     IAuthenticationEmailOutboxRepository outboxRepository,
     UserManager<MonKadoUser> userManager,
     IPasswordHasher<MonKadoUser> passwordHasher,
@@ -93,6 +95,7 @@ public class AccountRegistrationService(
                         cancellationToken))
                         return;
 
+                    memberRepository.AddMemberRole(user.Id);
                     outboxRepository.Add(
                         AuthenticationEmailOutboxMessage.CreateEmailConfirmation(
                             user.Id,

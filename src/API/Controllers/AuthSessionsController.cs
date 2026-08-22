@@ -1,5 +1,6 @@
 using JennGllg.Fr.MonKado.Back.Api.Abstractions;
 using JennGllg.Fr.MonKado.Back.Api.Attributes;
+using JennGllg.Fr.MonKado.Back.Api.Authorization;
 using JennGllg.Fr.MonKado.Back.Api.Contracts.Requests;
 using JennGllg.Fr.MonKado.Back.Api.Contracts.Responses;
 using JennGllg.Fr.MonKado.Back.Api.Errors;
@@ -7,13 +8,18 @@ using JennGllg.Fr.MonKado.Back.Api.Extensions;
 using JennGllg.Fr.MonKado.Back.Application.Abstractions;
 using JennGllg.Fr.MonKado.Back.Application.Commands;
 using JennGllg.Fr.MonKado.Back.Application.Models;
+using JennGllg.Fr.MonKado.Back.Application.Queries;
 using JennGllg.Fr.MonKado.Back.Application.Validators;
 
 using MediatR;
 
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ViewFeatures;
 using Microsoft.AspNetCore.RateLimiting;
+
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
 
 namespace JennGllg.Fr.MonKado.Back.Api.Controllers;
 
@@ -93,6 +99,35 @@ public class AuthSessionsController(
         Response.Headers.CacheControl = "no-store";
 
         return Ok(CreateResponse(tokens));
+    }
+
+    /// <summary>
+    /// Gets the current authenticated member session from persistence.
+    /// </summary>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The current member identity and roles.</returns>
+    [HttpGet("current")]
+    [Authorize(Policy = AuthorizationPolicies.CurrentSession)]
+    [ProducesResponseType(typeof(CurrentSessionResponse), StatusCodes.Status200OK, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status503ServiceUnavailable, "application/json")]
+    public async Task<ActionResult<CurrentSessionResponse>> GetCurrentAsync(
+        CancellationToken cancellationToken)
+    {
+        var subject = User.FindFirstValue(JwtRegisteredClaimNames.Sub);
+        _ = Guid.TryParse(
+            subject,
+            out var memberId);
+        var currentSession = await sender.Send(
+            new GetCurrentSessionQuery(memberId),
+            cancellationToken);
+        var response = new CurrentSessionResponse(
+            currentSession.Id,
+            currentSession.Email,
+            currentSession.DisplayName,
+            currentSession.Roles);
+        Response.Headers.CacheControl = "no-store";
+
+        return Ok(response);
     }
 
     internal static AccessTokenResponse CreateResponse(AccountSessionTokens tokens)

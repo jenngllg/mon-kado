@@ -2,6 +2,7 @@ using JennGllg.Fr.MonKado.Back.Api.Contracts.Responses;
 using JennGllg.Fr.MonKado.Back.Api.Options;
 using JennGllg.Fr.MonKado.Back.Application.Abstractions;
 using JennGllg.Fr.MonKado.Back.Application.Commands;
+using JennGllg.Fr.MonKado.Back.Application.Common.Constants;
 using JennGllg.Fr.MonKado.Back.Application.Models;
 using JennGllg.Fr.MonKado.Back.Application.Validators;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql;
@@ -104,6 +105,19 @@ public class AccountRegistrationIntegrationTests(PostgreSqlContainerFixture fixt
             message.AttemptCount);
         Assert.Null(message.ProcessedAt);
         Assert.Null(message.LastError);
+        var roles = await context.UserRoles
+            .Where(userRole => userRole.UserId == user.Id)
+            .Join(
+                context.Roles,
+                userRole => userRole.RoleId,
+                role => role.Id,
+                (
+                    _,
+                    role) => role.Name ?? string.Empty)
+            .ToArrayAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(
+            [RoleNames.Member],
+            roles);
 
         await using var connection = new NpgsqlConnection(fixture.Container.GetConnectionString());
         await connection.OpenAsync(TestContext.Current.CancellationToken);

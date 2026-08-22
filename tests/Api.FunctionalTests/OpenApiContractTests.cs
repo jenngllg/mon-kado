@@ -91,6 +91,91 @@ public class OpenApiContractTests(UnavailablePostgreSqlApiFactory factory) : ICl
             response.StatusCode);
     }
 
+    [Fact]
+    public async Task GetAsync_WhenCurrentSessionIsDocumented_RequiresBearerAndExposesExpectedContract()
+    {
+        // Arrange
+        using var client = _factory.CreateClient();
+
+        // Act
+        using var document = await client.GetFromJsonAsync<JsonDocument>(
+            "/openapi/v1.json",
+            TestContext.Current.CancellationToken)
+            ?? throw new InvalidOperationException("The OpenAPI response body is empty.");
+        var operation = document.RootElement
+            .GetProperty("paths")
+            .GetProperty("/api/v1/auth/sessions/current")
+            .GetProperty("get");
+
+        // Assert
+        Assert.Equal(
+            "Gets the current authenticated member session from persistence.",
+            operation.GetProperty("summary").GetString());
+        var security = Assert.Single(operation.GetProperty("security").EnumerateArray());
+        Assert.True(security.TryGetProperty(
+            "Bearer",
+            out _));
+        Assert.False(operation.TryGetProperty(
+            "parameters",
+            out var parameters) && parameters.EnumerateArray().Any(parameter =>
+                parameter.GetProperty("name").GetString() is
+                    "X-CSRF-TOKEN" or "__Host-MonKado.Refresh"));
+        var responses = operation.GetProperty("responses");
+        Assert.True(responses.TryGetProperty(
+            "200",
+            out var success));
+        Assert.True(responses.TryGetProperty(
+            "401",
+            out _));
+        Assert.True(responses.TryGetProperty(
+            "403",
+            out _));
+        Assert.True(responses.TryGetProperty(
+            "500",
+            out _));
+        Assert.True(responses.TryGetProperty(
+            "503",
+            out _));
+        var schema = success
+            .GetProperty("content")
+            .GetProperty("application/json")
+            .GetProperty("schema");
+
+        if (schema.TryGetProperty(
+            "$ref",
+            out var reference))
+        {
+            var schemaName = reference.GetString()?.Split('/').Last()
+                ?? throw new InvalidOperationException("The current session schema reference is invalid.");
+            schema = document.RootElement
+                .GetProperty("components")
+                .GetProperty("schemas")
+                .GetProperty(schemaName);
+        }
+
+        var properties = schema
+            .GetProperty("properties")
+            .EnumerateObject()
+            .Select(property => property.Name)
+            .OrderBy(property => property)
+            .ToArray();
+        Assert.Equal(
+            [
+                "displayName",
+                "email",
+                "id",
+                "roles"
+            ],
+            properties);
+        Assert.Equal(
+            "array",
+            schema
+                .GetProperty("properties")
+                .GetProperty("roles")
+                .GetProperty("type")
+                .GetString());
+    }
+
     private static void AssertTokenOperation(
         JsonElement operation,
         bool expectsRefreshCookie)
