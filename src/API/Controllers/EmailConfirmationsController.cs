@@ -10,6 +10,7 @@ using JennGllg.Fr.MonKado.Back.Application.Validators;
 
 using MediatR;
 
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 
@@ -95,6 +96,7 @@ public class EmailConfirmationsController(
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>An empty response when confirmation succeeds.</returns>
     [HttpPost("email-change-confirmations")]
+    [AllowAnonymous]
     [DeletesRefreshTokenCookie]
     [ValidateAntiForgeryToken]
     [EnableRateLimiting(AuthenticationRateLimitingExtensions.EmailChangeConfirmationPolicy)]
@@ -107,6 +109,8 @@ public class EmailConfirmationsController(
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status415UnsupportedMediaType, "application/json")]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status429TooManyRequests, "application/json")]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status503ServiceUnavailable, "application/json")]
+    // Authorization is provided by the request-specific single-use token and antiforgery validation.
+    // codeql[cs/web/missing-function-level-access-control]
     public async Task<IActionResult> ConfirmEmailChangeAsync(
         ConfirmMemberEmailChangeRequest request,
         CancellationToken cancellationToken)
