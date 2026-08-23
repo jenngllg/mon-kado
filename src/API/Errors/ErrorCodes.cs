@@ -27,6 +27,10 @@ public static class ErrorCodes
     /// </summary>
     public const string AccountEmailConfirmationInvalid = "ACCOUNT_EMAIL_CONFIRMATION_INVALID";
     /// <summary>
+    /// Identifies an invalid account password reset link.
+    /// </summary>
+    public const string AccountPasswordResetInvalid = "ACCOUNT_PASSWORD_RESET_INVALID";
+    /// <summary>
     /// Identifies request validation error.
     /// </summary>
 

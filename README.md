@@ -91,6 +91,8 @@ The local launch profile listens on `http://localhost:7000` and uses the `Local`
 | `POST /api/v1/auth/registrations` | Creates an unconfirmed account and queues an e-mail request |
 | `POST /api/v1/auth/email-confirmations` | Confirms an e-mail address from a user identifier and Base64URL token |
 | `POST /api/v1/auth/email-confirmation-requests` | Silently requests another confirmation e-mail |
+| `POST /api/v1/auth/password-reset-requests` | Silently requests a password reset e-mail |
+| `POST /api/v1/auth/password-resets` | Replaces a forgotten password from a user identifier and Base64URL token |
 | `POST /api/v1/auth/sessions` | Authenticates an account and creates a refresh session |
 | `POST /api/v1/auth/sessions/refresh` | Rotates the browser refresh token and returns a new access token |
 | `GET /api/v1/auth/sessions/current` | Returns the current member identity and profile ETag |
@@ -218,6 +220,26 @@ Identity to replace the hash and renew the security stamp, revokes every refresh
 change, queues a security notification to the current address, deletes the current refresh cookie, and returns
 `204 No Content` with `Cache-Control: no-store`. The frontend must discard its in-memory JWT and require a new sign-in.
 Already-issued JWTs remain cryptographically valid for at most their remaining 15-minute lifetime.
+
+`POST /api/v1/auth/password-reset-requests` accepts an e-mail address and always returns the same empty
+`202 Accepted` response for a syntactically valid request. Only confirmed accounts receive a message. The service
+silently enforces one request per minute and five requests per hour for each account, while the API accepts at most
+five requests per minute for one client address. The response takes at least 200 milliseconds to reduce observable
+timing differences between account existence, confirmation state, quotas, and pending delivery.
+
+The Worker creates a one-hour ASP.NET Core Identity token only when it delivers the message. The outbox never stores
+that token: it snapshots the recipient address and security stamp and discards the message if either value changes or
+the request becomes stale. The link uses
+`https://<frontend>/reset-password#userId=<uuid>&token=<base64url>`. The frontend must remove the fragment from browser
+history, keep it only in memory, obtain an antiforgery token, and submit `userId`, `token`, and `newPassword` to
+`POST /api/v1/auth/password-resets`.
+
+A successful reset unlocks the account, invalidates every other reset link through the Identity security stamp,
+revokes every refresh session and pending e-mail change, queues the existing password-change security notification,
+deletes the current refresh cookie, and returns `204 No Content`. It creates no authenticated session. Invalid,
+expired, altered, reused, deleted-member, and unconfirmed-member links return the same generic `400` response. The
+frontend must discard any in-memory JWT and sign in with the new password; already-issued JWTs remain valid for at
+most their remaining 15-minute lifetime.
 
 `DELETE /api/v1/auth/sessions/current` ends only the refresh session held by the current browser. It remains available
 without a Bearer token so that an expired access token cannot prevent logout, but it requires the standard CSRF token.

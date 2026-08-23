@@ -49,6 +49,25 @@ public class GmailAuthenticationEmailSender(
     }
 
     /// <inheritdoc />
+    public async Task<AuthenticationEmailSendResult> SendPasswordResetAsync(
+        AuthenticationPasswordResetMessage message,
+        CancellationToken cancellationToken)
+    {
+
+        var result = await SendAsync(
+            message.OutboxMessageId,
+            token => CreatePasswordResetRawMessageAsync(
+                message,
+                token),
+            cancellationToken);
+        WorkerLogMessages.AccountPasswordResetEmailSent(
+            logger,
+            message.OutboxMessageId);
+
+        return result;
+    }
+
+    /// <inheritdoc />
     public async Task<AuthenticationEmailSendResult> SendEmailChangeConfirmationAsync(
         AuthenticationEmailMessage message,
         CancellationToken cancellationToken)
@@ -192,6 +211,27 @@ public class GmailAuthenticationEmailSender(
             cancellationToken);
     }
 
+    /// <summary>
+    /// Creates the Gmail raw message for a password reset request.
+    /// </summary>
+    /// <param name="message">The password reset message.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The URL-safe Base64 encoded MIME message.</returns>
+    private Task<string> CreatePasswordResetRawMessageAsync(
+        AuthenticationPasswordResetMessage message,
+        CancellationToken cancellationToken)
+    {
+        var url = message.ResetUrl.AbsoluteUri;
+
+        return CreateRawMessageAsync(
+            message.OutboxMessageId,
+            message.RecipientAddress,
+            "Réinitialisez votre mot de passe – MonKado",
+            CreatePasswordResetTextBody(url),
+            CreatePasswordResetHtmlBody(HtmlEncoder.Default.Encode(url)),
+            cancellationToken);
+    }
+
     private Task<string> CreateEmailChangeConfirmationRawMessageAsync(
         AuthenticationEmailMessage message,
         CancellationToken cancellationToken)
@@ -303,6 +343,39 @@ public class GmailAuthenticationEmailSender(
             $"<p><a href='{encodedUrl}'>Confirmer mon adresse e-mail</a></p>" +
             "<p>Ce lien est valable pendant 24 heures.</p>" +
             "<p>Si vous n'avez pas créé ce compte, ignorez cet e-mail.</p>" +
+            "</body></html>";
+    }
+
+    /// <summary>
+    /// Creates the plain-text body for a password reset request.
+    /// </summary>
+    /// <param name="url">The password reset URL.</param>
+    /// <returns>The plain-text body.</returns>
+    private static string CreatePasswordResetTextBody(string url)
+    {
+
+        return "Bonjour,\n\n" +
+            "Vous avez demandé la réinitialisation du mot de passe de votre compte MonKado.\n" +
+            "Choisissez un nouveau mot de passe en ouvrant ce lien :\n" +
+            url + "\n\n" +
+            "Ce lien est valable pendant 1 heure. " +
+            "Si vous n'êtes pas à l'origine de cette demande, ignorez cet e-mail.";
+    }
+
+    /// <summary>
+    /// Creates the HTML body for a password reset request.
+    /// </summary>
+    /// <param name="encodedUrl">The HTML-encoded password reset URL.</param>
+    /// <returns>The HTML body.</returns>
+    private static string CreatePasswordResetHtmlBody(string encodedUrl)
+    {
+
+        return "<!doctype html><html lang='fr'><body>" +
+            "<p>Bonjour,</p>" +
+            "<p>Vous avez demandé la réinitialisation du mot de passe de votre compte MonKado.</p>" +
+            $"<p><a href='{encodedUrl}'>Réinitialiser mon mot de passe</a></p>" +
+            "<p>Ce lien est valable pendant 1 heure.</p>" +
+            "<p>Si vous n'êtes pas à l'origine de cette demande, ignorez cet e-mail.</p>" +
             "</body></html>";
     }
 

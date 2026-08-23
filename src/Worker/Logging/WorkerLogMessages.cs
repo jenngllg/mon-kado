@@ -47,6 +47,18 @@ public static partial class WorkerLogMessages
         ILogger logger,
         Guid outboxMessageId);
     /// <summary>
+    /// Logs a delivered account password reset email.
+    /// </summary>
+    /// <param name="logger">The logger.</param>
+    /// <param name="outboxMessageId">The outbox message identifier.</param>
+    [LoggerMessage(
+        EventId = LogEventIds.AccountPasswordResetEmailSent,
+        Level = LogLevel.Information,
+        Message = "Account password reset email {OutboxMessageId} sent.")]
+    public static partial void AccountPasswordResetEmailSent(
+        ILogger logger,
+        Guid outboxMessageId);
+    /// <summary>
     /// Logs a delivered member email change confirmation.
     /// </summary>
     /// <param name="logger">The logger.</param>

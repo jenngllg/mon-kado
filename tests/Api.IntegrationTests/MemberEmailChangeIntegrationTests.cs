@@ -1035,6 +1035,14 @@ public class MemberEmailChangeIntegrationTests(PostgreSqlContainerFixture fixtur
         "generic-failure@example.fr",
         HttpStatusCode.InternalServerError,
         null)]
+    [InlineData(
+        "stamp-concurrency-failure@example.fr",
+        HttpStatusCode.BadRequest,
+        ErrorCodes.MemberEmailChangeInvalid)]
+    [InlineData(
+        "stamp-generic-failure@example.fr",
+        HttpStatusCode.InternalServerError,
+        null)]
     public async Task ConfirmEmailChangeAsync_WhenIdentityCannotPersist_RollsBackAndReturnsExpectedError(
         string requestedEmail,
         HttpStatusCode expectedStatusCode,

@@ -223,6 +223,16 @@ public class MemberEmailChangeService(
         return true;
     }
 
+    /// <summary>
+    /// Confirms one member email change and invalidates its authentication state atomically.
+    /// </summary>
+    /// <param name="requestId">The email change request identifier.</param>
+    /// <param name="decodedToken">The decoded Identity confirmation token.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns><see langword="true" /> when the email change was confirmed; otherwise, <see langword="false" />.</returns>
+    /// <exception cref="MemberEmailAlreadyUsedException">Thrown when the new email address is already used.</exception>
+    /// <exception cref="MemberEmailChangeInvalidException">Thrown when Identity detects a concurrent email change.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when Identity reports an unexpected failure.</exception>
     private async Task<bool> ConfirmOnceAsync(
         Guid requestId,
         string decodedToken,
@@ -315,17 +325,27 @@ public class MemberEmailChangeService(
         {
             await transaction.RollbackAsync(cancellationToken);
 
-            if (result.Errors.Any(error =>
-                error.Code is "DuplicateEmail" or "DuplicateUserName"))
-                throw new MemberEmailAlreadyUsedException();
+            throw CreateIdentityFailure(
+                result,
+                "Identity could not apply the member email change.");
+        }
 
-            if (result.Errors.Any(error => error.Code == "ConcurrencyFailure"))
-                throw new MemberEmailChangeInvalidException();
+        var securityStampResult = await userManager.UpdateSecurityStampAsync(member);
 
-            throw new InvalidOperationException("Identity could not apply the member email change.");
+        if (!securityStampResult.Succeeded)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+
+            throw CreateIdentityFailure(
+                securityStampResult,
+                "Identity could not renew the member security stamp.");
         }
 
         await sessionRepository.RevokeAllForUserAsync(
+            member.Id,
+            now,
+            cancellationToken);
+        await outboxRepository.MarkPendingPasswordResetMessagesProcessedAsync(
             member.Id,
             now,
             cancellationToken);
@@ -333,6 +353,27 @@ public class MemberEmailChangeService(
         await transaction.CommitAsync(cancellationToken);
 
         return true;
+    }
+
+    /// <summary>
+    /// Translates an Identity email change failure into an application exception.
+    /// </summary>
+    /// <param name="result">The failed Identity result.</param>
+    /// <param name="unexpectedFailureMessage">The message for an unexpected Identity failure.</param>
+    /// <returns>The application exception representing the failure.</returns>
+    private static Exception CreateIdentityFailure(
+        IdentityResult result,
+        string unexpectedFailureMessage)
+    {
+
+        if (result.Errors.Any(error =>
+            error.Code is "DuplicateEmail" or "DuplicateUserName"))
+            return new MemberEmailAlreadyUsedException();
+
+        if (result.Errors.Any(error => error.Code == "ConcurrencyFailure"))
+            return new MemberEmailChangeInvalidException();
+
+        return new InvalidOperationException(unexpectedFailureMessage);
     }
 
     private static bool IsUniqueEmailViolation(Exception exception)

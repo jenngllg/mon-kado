@@ -78,4 +78,26 @@ public class FailingMemberEmailChangeUserManager(
                 token)
         };
     }
+
+    /// <inheritdoc />
+    public override Task<IdentityResult> UpdateSecurityStampAsync(MonKadoUser user)
+    {
+
+        return user.Email switch
+        {
+            "stamp-concurrency-failure@example.fr" => Task.FromResult(IdentityResult.Failed(
+                new IdentityError
+                {
+                    Code = "ConcurrencyFailure",
+                    Description = "Concurrency failure."
+                })),
+            "stamp-generic-failure@example.fr" => Task.FromResult(IdentityResult.Failed(
+                new IdentityError
+                {
+                    Code = "PersistenceFailed",
+                    Description = "Persistence failed."
+                })),
+            _ => base.UpdateSecurityStampAsync(user)
+        };
+    }
 }

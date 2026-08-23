@@ -43,6 +43,14 @@ public class AuthenticationEmailOutboxMessage
         get; private set;
     }
     /// <summary>
+    /// Gets the immutable security stamp used to validate a password reset request.
+    /// </summary>
+
+    public string? SecurityStampSnapshot
+    {
+        get; private set;
+    }
+    /// <summary>
     /// Gets kind.
     /// </summary>
 
@@ -213,6 +221,33 @@ public class AuthenticationEmailOutboxMessage
             UserId = userId,
             RecipientEmail = recipientEmail,
             Kind = AuthenticationEmailKind.PasswordChangedSecurityNotification,
+            CreatedAt = createdAt,
+            AvailableAt = createdAt
+        };
+    }
+
+    /// <summary>
+    /// Creates a password reset message for an eligible member.
+    /// </summary>
+    /// <param name="userId">The member identifier.</param>
+    /// <param name="recipientEmail">The member email address at request time.</param>
+    /// <param name="securityStampSnapshot">The member security stamp at request time.</param>
+    /// <param name="createdAt">The request date and time.</param>
+    /// <returns>The created outbox message.</returns>
+    public static AuthenticationEmailOutboxMessage CreatePasswordReset(
+        Guid userId,
+        string recipientEmail,
+        string securityStampSnapshot,
+        DateTime createdAt)
+    {
+
+        return new AuthenticationEmailOutboxMessage
+        {
+            Id = Guid.CreateVersion7(new DateTimeOffset(createdAt)),
+            UserId = userId,
+            RecipientEmail = recipientEmail,
+            SecurityStampSnapshot = securityStampSnapshot,
+            Kind = AuthenticationEmailKind.PasswordReset,
             CreatedAt = createdAt,
             AvailableAt = createdAt
         };

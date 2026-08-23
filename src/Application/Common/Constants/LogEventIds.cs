@@ -39,6 +39,10 @@ public static class LogEventIds
     /// </summary>
     public const int MemberPasswordChangedSecurityNotificationSent = 1006;
     /// <summary>
+    /// Identifies a delivered account password reset email.
+    /// </summary>
+    public const int AccountPasswordResetEmailSent = 1007;
+    /// <summary>
     /// Identifies expired accounts deleted.
     /// </summary>
     public const int ExpiredAccountsDeleted = 1010;
@@ -110,6 +114,22 @@ public static class LogEventIds
     /// Identifies a member email change request cleanup failure.
     /// </summary>
     public const int MemberEmailChangeRequestCleanupFailed = 1061;
+    /// <summary>
+    /// Identifies the start of a password reset email request.
+    /// </summary>
+    public const int PasswordResetRequestStarted = 1070;
+    /// <summary>
+    /// Identifies an accepted password reset email request.
+    /// </summary>
+    public const int PasswordResetRequested = 1071;
+    /// <summary>
+    /// Identifies the start of an account password reset.
+    /// </summary>
+    public const int PasswordResetStarted = 1072;
+    /// <summary>
+    /// Identifies a completed account password reset.
+    /// </summary>
+    public const int PasswordResetCompleted = 1073;
     /// <summary>
     /// Identifies expected http error.
     /// </summary>

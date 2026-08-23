@@ -22,15 +22,20 @@ internal sealed class AuthenticationEmailOutboxMessageConfiguration
             table.HasCheckConstraint(
                 "ck_authentication_email_outbox_kind_valid",
                 "kind IN ('EMAIL_CONFIRMATION', 'EMAIL_CHANGE_CONFIRMATION', " +
-                "'EMAIL_CHANGE_SECURITY_NOTIFICATION', 'PASSWORD_CHANGED_SECURITY_NOTIFICATION')");
+                "'EMAIL_CHANGE_SECURITY_NOTIFICATION', 'PASSWORD_RESET', " +
+                "'PASSWORD_CHANGED_SECURITY_NOTIFICATION')");
             table.HasCheckConstraint(
                 "ck_authentication_email_outbox_email_change_fields_consistent",
                 "(kind = 'EMAIL_CONFIRMATION' AND member_email_change_request_id IS NULL " +
-                "AND recipient_email IS NULL) OR " +
+                "AND recipient_email IS NULL AND security_stamp_snapshot IS NULL) OR " +
                 "(kind IN ('EMAIL_CHANGE_CONFIRMATION', 'EMAIL_CHANGE_SECURITY_NOTIFICATION') " +
-                "AND member_email_change_request_id IS NOT NULL AND recipient_email IS NOT NULL) OR " +
+                "AND member_email_change_request_id IS NOT NULL AND recipient_email IS NOT NULL " +
+                "AND security_stamp_snapshot IS NULL) OR " +
+                "(kind = 'PASSWORD_RESET' AND member_email_change_request_id IS NULL " +
+                "AND recipient_email IS NOT NULL AND security_stamp_snapshot IS NOT NULL) OR " +
                 "(kind = 'PASSWORD_CHANGED_SECURITY_NOTIFICATION' " +
-                "AND member_email_change_request_id IS NULL AND recipient_email IS NOT NULL)");
+                "AND member_email_change_request_id IS NULL AND recipient_email IS NOT NULL " +
+                "AND security_stamp_snapshot IS NULL)");
             table.HasCheckConstraint(
                 "ck_authentication_email_outbox_timestamps_consistent",
                 "available_at >= created_at AND " +
@@ -49,6 +54,8 @@ internal sealed class AuthenticationEmailOutboxMessageConfiguration
             .HasMaxLength(255);
         builder.Property(message => message.RecipientEmail)
             .HasMaxLength(254);
+        builder.Property(message => message.SecurityStampSnapshot)
+            .HasMaxLength(256);
 
         builder.HasOne<MonKadoUser>()
             .WithMany()
@@ -102,6 +109,7 @@ internal sealed class AuthenticationEmailOutboxMessageConfiguration
             AuthenticationEmailKind.EmailChangeConfirmation => "EMAIL_CHANGE_CONFIRMATION",
             AuthenticationEmailKind.EmailChangeSecurityNotification =>
                 "EMAIL_CHANGE_SECURITY_NOTIFICATION",
+            AuthenticationEmailKind.PasswordReset => "PASSWORD_RESET",
             AuthenticationEmailKind.PasswordChangedSecurityNotification =>
                 "PASSWORD_CHANGED_SECURITY_NOTIFICATION",
             _ => throw new ArgumentOutOfRangeException(
@@ -120,6 +128,7 @@ internal sealed class AuthenticationEmailOutboxMessageConfiguration
             "EMAIL_CHANGE_CONFIRMATION" => AuthenticationEmailKind.EmailChangeConfirmation,
             "EMAIL_CHANGE_SECURITY_NOTIFICATION" =>
                 AuthenticationEmailKind.EmailChangeSecurityNotification,
+            "PASSWORD_RESET" => AuthenticationEmailKind.PasswordReset,
             "PASSWORD_CHANGED_SECURITY_NOTIFICATION" =>
                 AuthenticationEmailKind.PasswordChangedSecurityNotification,
             _ => throw new InvalidOperationException($"Unknown authentication email kind '{value}'.")

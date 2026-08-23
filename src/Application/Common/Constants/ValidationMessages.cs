@@ -29,6 +29,10 @@ public static class ValidationMessages
     /// </summary>
     public const string InvalidEmailChangeConfirmationLink = "The email change confirmation link is invalid.";
     /// <summary>
+    /// Identifies an invalid password reset link.
+    /// </summary>
+    public const string InvalidPasswordResetLink = "The password reset link is invalid.";
+    /// <summary>
     /// Identifies a password below the minimum supported length.
     /// </summary>
     public const string PasswordTooShort = "The password must contain at least 12 characters.";

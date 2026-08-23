@@ -1,7 +1,5 @@
 using JennGllg.Fr.MonKado.Back.Application.Abstractions;
-using JennGllg.Fr.MonKado.Back.Application.Common.Constants;
 using JennGllg.Fr.MonKado.Back.Application.Common.Exceptions;
-using JennGllg.Fr.MonKado.Back.Application.Common.Models;
 
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -29,17 +27,6 @@ public class MemberPasswordService(
     UserManager<MonKadoUser> userManager,
     TimeProvider timeProvider) : IMemberPasswordService
 {
-    private static readonly HashSet<string> _passwordPolicyErrorCodes =
-    [
-        "PasswordTooShort",
-        "PasswordTooLong",
-        "PasswordRequiresUniqueChars",
-        "PasswordRequiresNonAlphanumeric",
-        "PasswordRequiresDigit",
-        "PasswordRequiresLower",
-        "PasswordRequiresUpper"
-    ];
-
     /// <inheritdoc />
     public async Task<bool> ChangeAsync(
         Guid memberId,
@@ -77,6 +64,9 @@ public class MemberPasswordService(
     /// <param name="newPassword">The new password.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns><see langword="true" /> when the password was changed; otherwise, <see langword="false" />.</returns>
+    /// <exception cref="CurrentPasswordInvalidException">Thrown when the current password is invalid.</exception>
+    /// <exception cref="RequestValidationException">Thrown when Identity rejects the new password.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when Identity reports an unexpected failure.</exception>
     private async Task<bool> ChangeOnceAsync(
         Guid memberId,
         string currentPassword,
@@ -106,7 +96,7 @@ public class MemberPasswordService(
         {
             await transaction.RollbackAsync(cancellationToken);
 
-            throw CreateIdentityFailure(result);
+            throw IdentityPasswordFailureTranslator.CreateChangeException(result);
         }
 
         var now = timeProvider.GetUtcNow().UtcDateTime;
@@ -114,17 +104,26 @@ public class MemberPasswordService(
             .GetActiveByUserIdForUpdateAsync(
                 member.Id,
                 cancellationToken);
+        Guid? revokedEmailChangeRequestId = null;
 
         if (emailChangeRequest is not null)
         {
             emailChangeRequest.Revoke(now);
-            await outboxRepository.MarkPendingEmailChangeMessagesProcessedAsync(
-                emailChangeRequest.Id,
-                now,
-                cancellationToken);
+            revokedEmailChangeRequestId = emailChangeRequest.Id;
         }
 
         await sessionRepository.RevokeAllForUserAsync(
+            member.Id,
+            now,
+            cancellationToken);
+
+        if (revokedEmailChangeRequestId is { } requestId)
+            await outboxRepository.MarkPendingEmailChangeMessagesProcessedAsync(
+                requestId,
+                now,
+                cancellationToken);
+
+        await outboxRepository.MarkPendingPasswordResetMessagesProcessedAsync(
             member.Id,
             now,
             cancellationToken);
@@ -140,55 +139,4 @@ public class MemberPasswordService(
         return true;
     }
 
-    /// <summary>
-    /// Translates an Identity password change failure into an application exception.
-    /// </summary>
-    /// <param name="result">The failed Identity result.</param>
-    /// <returns>The application exception representing the failure.</returns>
-    private static Exception CreateIdentityFailure(IdentityResult result)
-    {
-        var errors = result.Errors.ToArray();
-
-        if (errors.Any(error => error.Code == "PasswordMismatch"))
-            return new CurrentPasswordInvalidException();
-
-        var passwordErrors = errors
-            .Where(error => IsPasswordPolicyError(error.Code))
-            .Select(error => new ValidationError(
-                "newPassword",
-                GetPasswordPolicyMessage(error)))
-            .ToArray();
-
-        if (passwordErrors.Length != 0)
-            return new RequestValidationException(passwordErrors);
-
-        return new InvalidOperationException("Identity could not change the member password.");
-    }
-
-    /// <summary>
-    /// Determines whether an Identity error represents a password policy violation.
-    /// </summary>
-    /// <param name="code">The Identity error code.</param>
-    /// <returns><see langword="true" /> for a password policy error; otherwise, <see langword="false" />.</returns>
-    private static bool IsPasswordPolicyError(string code)
-    {
-
-        return _passwordPolicyErrorCodes.Contains(code);
-    }
-
-    /// <summary>
-    /// Gets the client-facing validation message for a password policy error.
-    /// </summary>
-    /// <param name="error">The Identity password policy error.</param>
-    /// <returns>The validation message.</returns>
-    private static string GetPasswordPolicyMessage(IdentityError error)
-    {
-
-        return error.Code switch
-        {
-            "PasswordTooShort" => ValidationMessages.PasswordTooShort,
-            "PasswordTooLong" => ValidationMessages.PasswordTooLong,
-            _ => error.Description
-        };
-    }
 }
