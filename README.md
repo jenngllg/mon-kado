@@ -97,6 +97,7 @@ The local launch profile listens on `http://localhost:7000` and uses the `Local`
 | `DELETE /api/v1/auth/sessions/current` | Ends the current browser refresh session |
 | `PUT /api/v1/members/current/profile` | Updates the current member display name with optimistic concurrency |
 | `PUT /api/v1/members/current/email` | Requests an e-mail change after password verification |
+| `PUT /api/v1/members/current/password` | Changes the current member password and ends every refresh session |
 | `POST /api/v1/auth/email-change-confirmations` | Confirms a pending e-mail change from the new address |
 
 Liveness never contacts PostgreSQL. Readiness allows at most two seconds for PostgreSQL to accept a connection and returns `503 Unhealthy` otherwise; it checks connectivity, not whether all migrations have been applied.
@@ -209,6 +210,14 @@ browser refresh cookie, and returns `204 No Content`. The frontend must also dis
 new sign-in with the new address. Invalid, expired, revoked, replaced, or reused links return the same generic `400`
 response. The Worker removes expired requests and requests confirmed or revoked more than seven days ago in bounded
 batches.
+
+`PUT /api/v1/members/current/password` requires the Bearer access token, the exact current password, and a new
+12-to-128-character Unicode password. It requires neither an ETag nor an antiforgery token. The new password must
+differ from the current password, and neither value is trimmed or normalized. A successful change uses ASP.NET Core
+Identity to replace the hash and renew the security stamp, revokes every refresh session and any pending e-mail
+change, queues a security notification to the current address, deletes the current refresh cookie, and returns
+`204 No Content` with `Cache-Control: no-store`. The frontend must discard its in-memory JWT and require a new sign-in.
+Already-issued JWTs remain cryptographically valid for at most their remaining 15-minute lifetime.
 
 `DELETE /api/v1/auth/sessions/current` ends only the refresh session held by the current browser. It remains available
 without a Bearer token so that an expired access token cannot prevent logout, but it requires the standard CSRF token.

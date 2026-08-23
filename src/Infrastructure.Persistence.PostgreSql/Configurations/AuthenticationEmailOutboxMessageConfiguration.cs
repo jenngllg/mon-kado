@@ -22,13 +22,15 @@ internal sealed class AuthenticationEmailOutboxMessageConfiguration
             table.HasCheckConstraint(
                 "ck_authentication_email_outbox_kind_valid",
                 "kind IN ('EMAIL_CONFIRMATION', 'EMAIL_CHANGE_CONFIRMATION', " +
-                "'EMAIL_CHANGE_SECURITY_NOTIFICATION')");
+                "'EMAIL_CHANGE_SECURITY_NOTIFICATION', 'PASSWORD_CHANGED_SECURITY_NOTIFICATION')");
             table.HasCheckConstraint(
                 "ck_authentication_email_outbox_email_change_fields_consistent",
                 "(kind = 'EMAIL_CONFIRMATION' AND member_email_change_request_id IS NULL " +
                 "AND recipient_email IS NULL) OR " +
                 "(kind IN ('EMAIL_CHANGE_CONFIRMATION', 'EMAIL_CHANGE_SECURITY_NOTIFICATION') " +
-                "AND member_email_change_request_id IS NOT NULL AND recipient_email IS NOT NULL)");
+                "AND member_email_change_request_id IS NOT NULL AND recipient_email IS NOT NULL) OR " +
+                "(kind = 'PASSWORD_CHANGED_SECURITY_NOTIFICATION' " +
+                "AND member_email_change_request_id IS NULL AND recipient_email IS NOT NULL)");
             table.HasCheckConstraint(
                 "ck_authentication_email_outbox_timestamps_consistent",
                 "available_at >= created_at AND " +
@@ -67,7 +69,8 @@ internal sealed class AuthenticationEmailOutboxMessageConfiguration
         })
             .HasDatabaseName("ux_authentication_email_outbox_pending_user_kind")
             .IsUnique()
-            .HasFilter("processed_at IS NULL");
+            .HasFilter(
+                "processed_at IS NULL AND kind <> 'PASSWORD_CHANGED_SECURITY_NOTIFICATION'");
 
         builder.HasIndex(message => new
         {
@@ -99,6 +102,8 @@ internal sealed class AuthenticationEmailOutboxMessageConfiguration
             AuthenticationEmailKind.EmailChangeConfirmation => "EMAIL_CHANGE_CONFIRMATION",
             AuthenticationEmailKind.EmailChangeSecurityNotification =>
                 "EMAIL_CHANGE_SECURITY_NOTIFICATION",
+            AuthenticationEmailKind.PasswordChangedSecurityNotification =>
+                "PASSWORD_CHANGED_SECURITY_NOTIFICATION",
             _ => throw new ArgumentOutOfRangeException(
                 nameof(kind),
                 kind,
@@ -115,6 +120,8 @@ internal sealed class AuthenticationEmailOutboxMessageConfiguration
             "EMAIL_CHANGE_CONFIRMATION" => AuthenticationEmailKind.EmailChangeConfirmation,
             "EMAIL_CHANGE_SECURITY_NOTIFICATION" =>
                 AuthenticationEmailKind.EmailChangeSecurityNotification,
+            "PASSWORD_CHANGED_SECURITY_NOTIFICATION" =>
+                AuthenticationEmailKind.PasswordChangedSecurityNotification,
             _ => throw new InvalidOperationException($"Unknown authentication email kind '{value}'.")
         };
     }

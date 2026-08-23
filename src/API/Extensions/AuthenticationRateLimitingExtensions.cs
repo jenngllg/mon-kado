@@ -39,6 +39,10 @@ public static class AuthenticationRateLimitingExtensions
     /// Identifies the member email change confirmation policy.
     /// </summary>
     public const string EmailChangeConfirmationPolicy = "EmailChangeConfirmation";
+    /// <summary>
+    /// Identifies the member password change policy.
+    /// </summary>
+    public const string PasswordChangePolicy = "PasswordChange";
 
     private static readonly TimeSpan _window = TimeSpan.FromMinutes(1);
     /// <summary>
@@ -86,6 +90,11 @@ public static class AuthenticationRateLimitingExtensions
                 context => CreateLimiter(
                     context,
                     10));
+            options.AddPolicy(
+                PasswordChangePolicy,
+                context => CreateLimiter(
+                    context,
+                    5));
 
             options.OnRejected = async (
                 rejectionContext,

@@ -376,6 +376,72 @@ public class GmailAuthenticationEmailSenderTests
             log.EventId.Id);
     }
 
+    [Fact]
+    public async Task SendPasswordChangedSecurityNotificationAsync_WhenCalled_CreatesDedicatedNotification()
+    {
+        // Arrange
+        var client = new CapturingGmailClient();
+        var logger = new RecordingLogger<GmailAuthenticationEmailSender>();
+        var sender = CreateSender(
+            client,
+            logger);
+        var outboxMessageId = Guid.CreateVersion7();
+        var changedAt = new DateTime(
+            2026,
+            8,
+            23,
+            10,
+            15,
+            0,
+            DateTimeKind.Utc);
+        var message = new AuthenticationPasswordChangedNotification(
+            outboxMessageId,
+            "member@example.fr",
+            changedAt);
+
+        // Act
+        var result = await sender.SendPasswordChangedSecurityNotificationAsync(
+            message,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(
+            "gmail-message-id",
+            result.ProviderMessageId);
+        var mime = await DecodeAsync(client.RawMessage ?? string.Empty);
+        Assert.Equal(
+            "member@example.fr",
+            mime.To.Mailboxes.Single().Address);
+        Assert.Contains(
+            "mot de passe",
+            mime.Subject,
+            StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(
+            "2026-08-23T10:15:00.0000000Z",
+            mime.TextBody,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "Toutes vos sessions ont été déconnectées",
+            mime.HtmlBody,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            "password",
+            mime.TextBody,
+            StringComparison.OrdinalIgnoreCase);
+        var log = Assert.Single(logger.Entries);
+        Assert.Equal(
+            LogEventIds.MemberPasswordChangedSecurityNotificationSent,
+            log.EventId.Id);
+        Assert.Contains(
+            outboxMessageId.ToString(),
+            log.Message,
+            StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(
+            "member@example.fr",
+            log.Message,
+            StringComparison.OrdinalIgnoreCase);
+    }
+
     private static GmailAuthenticationEmailSender CreateSender(
         IGmailApiClient client,
         ILogger<GmailAuthenticationEmailSender>? logger = null)

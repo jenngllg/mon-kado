@@ -35,6 +35,10 @@ public static class LogEventIds
     /// </summary>
     public const int AuthenticationEmailProviderRejectedMessage = 1005;
     /// <summary>
+    /// Identifies a delivered member password change security notification.
+    /// </summary>
+    public const int MemberPasswordChangedSecurityNotificationSent = 1006;
+    /// <summary>
     /// Identifies expired accounts deleted.
     /// </summary>
     public const int ExpiredAccountsDeleted = 1010;
@@ -90,6 +94,14 @@ public static class LogEventIds
     /// Identifies a completed member email change.
     /// </summary>
     public const int MemberEmailChanged = 1053;
+    /// <summary>
+    /// Identifies the start of a member password change.
+    /// </summary>
+    public const int MemberPasswordChangeStarted = 1054;
+    /// <summary>
+    /// Identifies a completed member password change.
+    /// </summary>
+    public const int MemberPasswordChanged = 1055;
     /// <summary>
     /// Identifies deleted member email change requests.
     /// </summary>

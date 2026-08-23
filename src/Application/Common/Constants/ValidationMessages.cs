@@ -28,4 +28,16 @@ public static class ValidationMessages
     /// Identifies an invalid member email change confirmation link.
     /// </summary>
     public const string InvalidEmailChangeConfirmationLink = "The email change confirmation link is invalid.";
+    /// <summary>
+    /// Identifies a password below the minimum supported length.
+    /// </summary>
+    public const string PasswordTooShort = "The password must contain at least 12 characters.";
+    /// <summary>
+    /// Identifies a password above the maximum supported length.
+    /// </summary>
+    public const string PasswordTooLong = "The password must not exceed 128 characters.";
+    /// <summary>
+    /// Identifies a new password that is identical to the current password.
+    /// </summary>
+    public const string NewPasswordMustDiffer = "The new password must differ from the current password.";
 }

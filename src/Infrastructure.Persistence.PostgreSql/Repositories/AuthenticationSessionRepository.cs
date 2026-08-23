@@ -31,6 +31,18 @@ public class AuthenticationSessionRepository(MonKadoDbContext context)
     }
 
     /// <inheritdoc />
+    public Task<Guid?> GetUserIdAsync(
+        Guid sessionId,
+        CancellationToken cancellationToken)
+    {
+        return context.AuthenticationSessions
+            .AsNoTracking()
+            .Where(session => session.Id == sessionId)
+            .Select(session => (Guid?)session.UserId)
+            .SingleOrDefaultAsync(cancellationToken);
+    }
+
+    /// <inheritdoc />
     public async Task<int> DeleteExpiredAsync(
         DateTime cutoff,
         int batchSize,

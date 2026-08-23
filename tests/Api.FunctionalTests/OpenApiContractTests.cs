@@ -481,6 +481,100 @@ public class OpenApiContractTests(UnavailablePostgreSqlApiFactory factory) : ICl
             "415");
     }
 
+    [Fact]
+    public async Task GetAsync_WhenMemberPasswordChangeIsDocumented_ExposesSecureContract()
+    {
+        // Arrange
+        using var client = _factory.CreateClient();
+
+        // Act
+        using var document = await client.GetFromJsonAsync<JsonDocument>(
+            "/openapi/v1.json",
+            TestContext.Current.CancellationToken)
+            ?? throw new InvalidOperationException("The OpenAPI response body is empty.");
+        var operation = document.RootElement
+            .GetProperty("paths")
+            .GetProperty("/api/v1/members/current/password")
+            .GetProperty("put");
+
+        // Assert
+        Assert.Equal(
+            "Changes the password of the current authenticated member.",
+            operation.GetProperty("summary").GetString());
+        Assert.True(Assert.Single(
+            operation.GetProperty("security").EnumerateArray())
+            .TryGetProperty(
+                "Bearer",
+                out _));
+        Assert.False(operation.TryGetProperty(
+            "parameters",
+            out var parameters) && parameters.EnumerateArray().Any(parameter =>
+                parameter.GetProperty("name").GetString() is
+                    "If-Match" or
+                    "X-CSRF-TOKEN"));
+        var responses = operation.GetProperty("responses");
+
+        foreach (var statusCode in new[]
+        {
+            "204",
+            "400",
+            "401",
+            "403",
+            "413",
+            "415",
+            "429",
+            "500",
+            "503"
+        })
+        {
+            Assert.True(
+                responses.TryGetProperty(
+                    statusCode,
+                    out _),
+                $"Response {statusCode} is missing.");
+        }
+
+        var successHeaders = responses
+            .GetProperty("204")
+            .GetProperty("headers");
+        Assert.Contains(
+            "Deletes",
+            successHeaders
+                .GetProperty("Set-Cookie")
+                .GetProperty("description")
+                .GetString(),
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "no-store",
+            successHeaders
+                .GetProperty("Cache-Control")
+                .GetProperty("description")
+                .GetString(),
+            StringComparison.Ordinal);
+        var requestSchema = ResolveSchema(
+            document.RootElement,
+            operation
+                .GetProperty("requestBody")
+                .GetProperty("content")
+                .GetProperty("application/json")
+                .GetProperty("schema"));
+        Assert.Equal(
+            [
+                "currentPassword",
+                "newPassword"
+            ],
+            requestSchema
+                .GetProperty("properties")
+                .EnumerateObject()
+                .Select(property => property.Name)
+                .OrderBy(property => property)
+                .ToArray());
+        AssertErrorResponseSchema(
+            document.RootElement,
+            responses,
+            "400");
+    }
+
     private static void AssertErrorResponseSchema(
         JsonElement document,
         JsonElement responses,

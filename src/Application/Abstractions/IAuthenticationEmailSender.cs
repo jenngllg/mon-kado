@@ -36,4 +36,14 @@ public interface IAuthenticationEmailSender
     Task<AuthenticationEmailSendResult> SendEmailChangeSecurityNotificationAsync(
         AuthenticationEmailSecurityNotification message,
         CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Sends a notification after a member password change.
+    /// </summary>
+    /// <param name="message">The password change notification.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The provider delivery result.</returns>
+    Task<AuthenticationEmailSendResult> SendPasswordChangedSecurityNotificationAsync(
+        AuthenticationPasswordChangedNotification message,
+        CancellationToken cancellationToken);
 }

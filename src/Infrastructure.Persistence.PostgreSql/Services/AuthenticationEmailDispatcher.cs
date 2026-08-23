@@ -171,9 +171,14 @@ public class AuthenticationEmailDispatcher(
                 now,
                 cancellationToken);
 
-        return await SendEmailChangeSecurityNotificationAsync(
+        if (message.Kind == AuthenticationEmailKind.EmailChangeSecurityNotification)
+            return await SendEmailChangeSecurityNotificationAsync(
+                message,
+                now,
+                cancellationToken);
+
+        return await SendPasswordChangedSecurityNotificationAsync(
             message,
-            now,
             cancellationToken);
     }
 
@@ -289,6 +294,28 @@ public class AuthenticationEmailDispatcher(
                 message.Id,
                 recipientEmail,
                 request.NewEmail),
+            cancellationToken);
+    }
+
+    /// <summary>
+    /// Sends a password change security notification when its recipient is available.
+    /// </summary>
+    /// <param name="message">The claimed outbox message.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The provider result, or <see langword="null" /> when the message cannot be delivered.</returns>
+    private async Task<AuthenticationEmailSendResult?> SendPasswordChangedSecurityNotificationAsync(
+        AuthenticationEmailOutboxMessage message,
+        CancellationToken cancellationToken)
+    {
+
+        if (message.RecipientEmail is not { } recipientEmail)
+            return null;
+
+        return await sender.SendPasswordChangedSecurityNotificationAsync(
+            new AuthenticationPasswordChangedNotification(
+                message.Id,
+                recipientEmail,
+                message.CreatedAt),
             cancellationToken);
     }
 

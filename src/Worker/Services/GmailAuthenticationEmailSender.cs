@@ -10,6 +10,7 @@ using Microsoft.Extensions.Options;
 
 using MimeKit;
 
+using System.Globalization;
 using System.Net;
 using System.Text.Encodings.Web;
 
@@ -79,6 +80,25 @@ public class GmailAuthenticationEmailSender(
                 token),
             cancellationToken);
         WorkerLogMessages.MemberEmailChangeSecurityNotificationSent(
+            logger,
+            message.OutboxMessageId);
+
+        return result;
+    }
+
+    /// <inheritdoc />
+    public async Task<AuthenticationEmailSendResult> SendPasswordChangedSecurityNotificationAsync(
+        AuthenticationPasswordChangedNotification message,
+        CancellationToken cancellationToken)
+    {
+
+        var result = await SendAsync(
+            message.OutboxMessageId,
+            token => CreatePasswordChangedSecurityNotificationRawMessageAsync(
+                message,
+                token),
+            cancellationToken);
+        WorkerLogMessages.MemberPasswordChangedSecurityNotificationSent(
             logger,
             message.OutboxMessageId);
 
@@ -203,6 +223,29 @@ public class GmailAuthenticationEmailSender(
             cancellationToken);
     }
 
+    /// <summary>
+    /// Creates the Gmail raw message for a password change security notification.
+    /// </summary>
+    /// <param name="message">The password change notification.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The URL-safe Base64 encoded MIME message.</returns>
+    private Task<string> CreatePasswordChangedSecurityNotificationRawMessageAsync(
+        AuthenticationPasswordChangedNotification message,
+        CancellationToken cancellationToken)
+    {
+        var changedAt = message.ChangedAt.ToString(
+            "O",
+            CultureInfo.InvariantCulture);
+
+        return CreateRawMessageAsync(
+            message.OutboxMessageId,
+            message.RecipientAddress,
+            "Votre mot de passe a été modifié – MonKado",
+            CreatePasswordChangedSecurityNotificationTextBody(changedAt),
+            CreatePasswordChangedSecurityNotificationHtmlBody(changedAt),
+            cancellationToken);
+    }
+
     private async Task<string> CreateRawMessageAsync(
         Guid outboxMessageId,
         string recipientAddress,
@@ -304,6 +347,37 @@ public class GmailAuthenticationEmailSender(
             "pour votre compte MonKado.</p>" +
             "<p>Votre adresse actuelle reste active tant que la nouvelle adresse n'est pas confirmée.</p>" +
             "<p>Si vous n'êtes pas à l'origine de cette demande, sécurisez immédiatement votre compte.</p>" +
+            "</body></html>";
+    }
+
+    /// <summary>
+    /// Creates the plain-text body for a password change security notification.
+    /// </summary>
+    /// <param name="changedAt">The formatted password change timestamp.</param>
+    /// <returns>The plain-text body.</returns>
+    private static string CreatePasswordChangedSecurityNotificationTextBody(string changedAt)
+    {
+
+        return "Bonjour,\n\n" +
+            $"Le mot de passe de votre compte MonKado a été modifié le {changedAt}.\n\n" +
+            "Toutes vos sessions ont été déconnectées. " +
+            "Si vous n'êtes pas à l'origine de ce changement, sécurisez immédiatement votre compte.";
+    }
+
+    /// <summary>
+    /// Creates the HTML body for a password change security notification.
+    /// </summary>
+    /// <param name="changedAt">The formatted password change timestamp.</param>
+    /// <returns>The HTML body.</returns>
+    private static string CreatePasswordChangedSecurityNotificationHtmlBody(string changedAt)
+    {
+
+        return "<!doctype html><html lang='fr'><body>" +
+            "<p>Bonjour,</p>" +
+            $"<p>Le mot de passe de votre compte MonKado a été modifié le {changedAt}.</p>" +
+            "<p>Toutes vos sessions ont été déconnectées.</p>" +
+            "<p>Si vous n'êtes pas à l'origine de ce changement, " +
+            "sécurisez immédiatement votre compte.</p>" +
             "</body></html>";
     }
 

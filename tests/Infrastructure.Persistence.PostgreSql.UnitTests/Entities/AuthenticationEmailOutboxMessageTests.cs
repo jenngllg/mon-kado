@@ -2,7 +2,7 @@ using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Entities;
 
 namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.UnitTests.Entities;
 
-public class AuthenticationEmailOutboxMessageEmailChangeTests
+public class AuthenticationEmailOutboxMessageTests
 {
     private readonly DateTime _now = new(
         2026,
@@ -60,5 +60,40 @@ public class AuthenticationEmailOutboxMessageEmailChangeTests
         Assert.Equal(
             _now,
             message.AvailableAt);
+    }
+
+    [Fact]
+    public void CreatePasswordChangedSecurityNotification_WhenCalled_CreatesSnapshotMessage()
+    {
+        // Arrange
+        var userId = Guid.CreateVersion7();
+
+        // Act
+        var message = AuthenticationEmailOutboxMessage
+            .CreatePasswordChangedSecurityNotification(
+                userId,
+                "member@example.fr",
+                _now);
+
+        // Assert
+        Assert.Equal(
+            7,
+            message.Id.Version);
+        Assert.Equal(
+            userId,
+            message.UserId);
+        Assert.Equal(
+            "member@example.fr",
+            message.RecipientEmail);
+        Assert.Equal(
+            AuthenticationEmailKind.PasswordChangedSecurityNotification,
+            message.Kind);
+        Assert.Equal(
+            _now,
+            message.CreatedAt);
+        Assert.Equal(
+            _now,
+            message.AvailableAt);
+        Assert.Null(message.MemberEmailChangeRequestId);
     }
 }

@@ -10,7 +10,6 @@ namespace JennGllg.Fr.MonKado.Back.Application.Validators;
 
 public class LoginCommandValidator : AbstractValidator<LoginCommand>
 {
-    private const int MaximumPasswordLength = 128;
     /// <summary>
     /// Initializes a new instance of the class.
     /// </summary>
@@ -27,10 +26,6 @@ public class LoginCommandValidator : AbstractValidator<LoginCommand>
             .WithMessage(ValidationMessages.InvalidEmailAddress);
 
         RuleFor(command => command.Password)
-            .Cascade(CascadeMode.Stop)
-            .NotEmpty()
-            .WithMessage(ValidationMessages.MandatoryProperty)
-            .Must(password => password!.EnumerateRunes().Count() <= MaximumPasswordLength)
-            .WithMessage($"The password must not exceed {MaximumPasswordLength} characters.");
+            .ApplySubmittedPasswordRules();
     }
 }

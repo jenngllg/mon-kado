@@ -1,3 +1,8 @@
+using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Contexts;
+
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Migrations;
+
 using Testcontainers.PostgreSql;
 
 namespace JennGllg.Fr.MonKado.Back.Api.IntegrationTests;
@@ -15,11 +20,43 @@ public sealed class PostgreSqlContainerFixture : IAsyncLifetime
 
     public async ValueTask InitializeAsync()
     {
-        await Container.StartAsync();
+        await Container.StartAsync(TestContext.Current.CancellationToken);
+        await using var context = CreateContext();
+        await context.Database.MigrateAsync(TestContext.Current.CancellationToken);
     }
 
     public async ValueTask DisposeAsync()
     {
         await Container.DisposeAsync();
+    }
+
+    /// <summary>
+    /// Resets all application data between API integration tests.
+    /// </summary>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    public async Task ResetDatabaseAsync(CancellationToken cancellationToken)
+    {
+        await using var context = CreateContext();
+        await context.Database.ExecuteSqlRawAsync(
+            "TRUNCATE TABLE public.users CASCADE;",
+            cancellationToken);
+    }
+
+    private MonKadoDbContext CreateContext()
+    {
+        var options = new DbContextOptionsBuilder<MonKadoDbContext>()
+            .UseNpgsql(
+                Container.GetConnectionString(),
+                npgsqlOptions =>
+                {
+                    npgsqlOptions.MigrationsAssembly(typeof(MonKadoDbContext).Assembly.FullName);
+                    npgsqlOptions.MigrationsHistoryTable(
+                        HistoryRepository.DefaultTableName,
+                        "public");
+                })
+            .UseSnakeCaseNamingConvention()
+            .Options;
+
+        return new MonKadoDbContext(options);
     }
 }

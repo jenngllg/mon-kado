@@ -493,6 +493,92 @@ public class AuthenticationEmailDispatcherTests(PostgreSqlWorkerFixture fixture)
         Assert.Empty(sender.Messages);
     }
 
+    [Fact]
+    public async Task ExecuteAsync_WhenPasswordChangedNotificationIsPending_SendsSnapshotNotification()
+    {
+        // Arrange
+        var sender = new FakeEmailSender();
+        var now = new DateTimeOffset(
+            2026,
+            8,
+            23,
+            10,
+            0,
+            0,
+            TimeSpan.Zero);
+        await using var provider = await CreateProviderAsync(
+            sender,
+            now);
+        var messageId = await CreatePasswordChangedNotificationAsync(
+            provider,
+            now);
+
+        // Act
+        await DispatchAsync(provider);
+
+        // Assert
+        var notification = Assert.Single(sender.PasswordChangedNotifications);
+        Assert.Equal(
+            messageId,
+            notification.OutboxMessageId);
+        Assert.Equal(
+            "member@example.fr",
+            notification.RecipientAddress);
+        Assert.Equal(
+            now.UtcDateTime,
+            notification.ChangedAt);
+        Assert.Empty(sender.Messages);
+        Assert.Empty(sender.EmailChangeConfirmations);
+        Assert.Empty(sender.EmailChangeNotifications);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_WhenPasswordChangedNotificationHasNoRecipient_ClosesWithoutSending()
+    {
+        // Arrange
+        var sender = new FakeEmailSender();
+        var now = new DateTimeOffset(
+            2026,
+            8,
+            23,
+            10,
+            0,
+            0,
+            TimeSpan.Zero);
+        await using var provider = await CreateProviderAsync(
+            sender,
+            now);
+        await CreatePasswordChangedNotificationAsync(
+            provider,
+            now);
+        await using (var setupScope = provider.CreateAsyncScope())
+        {
+            var context = setupScope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
+            await context.Database.ExecuteSqlRawAsync(
+                "ALTER TABLE public.authentication_email_outbox " +
+                "DROP CONSTRAINT ck_authentication_email_outbox_email_change_fields_consistent;",
+                TestContext.Current.CancellationToken);
+            await context.AuthenticationEmailOutboxMessages.ExecuteUpdateAsync(
+                setters => setters.SetProperty(
+                    message => message.RecipientEmail,
+                    (string?)null),
+                TestContext.Current.CancellationToken);
+        }
+
+        // Act
+        await DispatchAsync(provider);
+
+        // Assert
+        Assert.Empty(sender.PasswordChangedNotifications);
+        await using var assertionScope = provider.CreateAsyncScope();
+        var message = await assertionScope.ServiceProvider
+            .GetRequiredService<MonKadoDbContext>()
+            .AuthenticationEmailOutboxMessages
+            .AsNoTracking()
+            .SingleAsync(TestContext.Current.CancellationToken);
+        Assert.NotNull(message.ProcessedAt);
+    }
+
     [Theory]
     [InlineData("revoked")]
     [InlineData("expired")]
@@ -869,6 +955,34 @@ public class AuthenticationEmailDispatcherTests(PostgreSqlWorkerFixture fixture)
         await context.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         return request.Id;
+    }
+
+    private static async Task<Guid> CreatePasswordChangedNotificationAsync(
+        ServiceProvider provider,
+        DateTimeOffset now)
+    {
+        await using var scope = provider.CreateAsyncScope();
+        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<MonKadoUser>>();
+        var user = new MonKadoUser
+        {
+            Id = Guid.CreateVersion7(now),
+            Email = "member@example.fr",
+            UserName = "member@example.fr",
+            EmailConfirmed = true,
+            DisplayName = "Member"
+        };
+        var result = await userManager.CreateAsync(user);
+        Assert.True(result.Succeeded);
+        var message = AuthenticationEmailOutboxMessage
+            .CreatePasswordChangedSecurityNotification(
+                user.Id,
+                "member@example.fr",
+                now.UtcDateTime);
+        var context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
+        context.AuthenticationEmailOutboxMessages.Add(message);
+        await context.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        return message.Id;
     }
 
     private static async Task DispatchAsync(ServiceProvider provider)

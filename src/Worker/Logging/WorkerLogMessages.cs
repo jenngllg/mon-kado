@@ -71,6 +71,18 @@ public static partial class WorkerLogMessages
         ILogger logger,
         Guid outboxMessageId);
     /// <summary>
+    /// Logs a delivered member password change security notification.
+    /// </summary>
+    /// <param name="logger">The logger.</param>
+    /// <param name="outboxMessageId">The outbox message identifier.</param>
+    [LoggerMessage(
+        EventId = LogEventIds.MemberPasswordChangedSecurityNotificationSent,
+        Level = LogLevel.Information,
+        Message = "Member password change security notification {OutboxMessageId} sent.")]
+    public static partial void MemberPasswordChangedSecurityNotificationSent(
+        ILogger logger,
+        Guid outboxMessageId);
+    /// <summary>
     /// Logs an authentication email rejected by Gmail.
     /// </summary>
     /// <param name="logger">The logger.</param>
