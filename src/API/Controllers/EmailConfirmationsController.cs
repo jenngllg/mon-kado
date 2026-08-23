@@ -95,6 +95,9 @@ public class EmailConfirmationsController(
     /// <param name="request">The email change confirmation request.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>An empty response when confirmation succeeds.</returns>
+    /// <remarks>
+    /// Authorization is provided by the request-specific single-use token and antiforgery validation.
+    /// </remarks>
     [HttpPost("email-change-confirmations")]
     [AllowAnonymous]
     [DeletesRefreshTokenCookie]
@@ -109,8 +112,6 @@ public class EmailConfirmationsController(
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status415UnsupportedMediaType, "application/json")]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status429TooManyRequests, "application/json")]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status503ServiceUnavailable, "application/json")]
-    // Authorization is provided by the request-specific single-use token and antiforgery validation.
-    // codeql[cs/web/missing-function-level-access-control]
     public async Task<IActionResult> ConfirmEmailChangeAsync(
         ConfirmMemberEmailChangeRequest request,
         CancellationToken cancellationToken)
