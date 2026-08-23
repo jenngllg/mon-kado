@@ -194,6 +194,30 @@ public class AuthenticationEmailOutboxMessage
             createdAt);
     }
 
+    /// <summary>
+    /// Creates a security notification for a completed member password change.
+    /// </summary>
+    /// <param name="userId">The member identifier.</param>
+    /// <param name="recipientEmail">The current member email address.</param>
+    /// <param name="createdAt">The password change date and time.</param>
+    /// <returns>The created outbox message.</returns>
+    public static AuthenticationEmailOutboxMessage CreatePasswordChangedSecurityNotification(
+        Guid userId,
+        string recipientEmail,
+        DateTime createdAt)
+    {
+
+        return new AuthenticationEmailOutboxMessage
+        {
+            Id = Guid.CreateVersion7(new DateTimeOffset(createdAt)),
+            UserId = userId,
+            RecipientEmail = recipientEmail,
+            Kind = AuthenticationEmailKind.PasswordChangedSecurityNotification,
+            CreatedAt = createdAt,
+            AvailableAt = createdAt
+        };
+    }
+
     internal void Claim(DateTime lockedUntil)
     {
         AttemptCount++;

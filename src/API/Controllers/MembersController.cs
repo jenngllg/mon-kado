@@ -24,12 +24,14 @@ namespace JennGllg.Fr.MonKado.Back.Api.Controllers;
 /// </summary>
 /// <param name="sender">The mediator sender.</param>
 /// <param name="entityTagService">The entity tag service.</param>
+/// <param name="refreshTokenCookieService">The refresh token cookie service.</param>
 [ApiController]
 [Authorize(Policy = AuthorizationPolicies.CurrentSession)]
 [Route("api/v1/members")]
 public class MembersController(
     ISender sender,
-    IEntityTagService entityTagService) : ControllerBase
+    IEntityTagService entityTagService,
+    IRefreshTokenCookieService refreshTokenCookieService) : ControllerBase
 {
     private const int MaximumRequestBodySize = 4 * 1024;
 
@@ -113,5 +115,43 @@ public class MembersController(
         Response.Headers.CacheControl = "no-store";
 
         return Accepted();
+    }
+
+    /// <summary>
+    /// Changes the password of the current authenticated member.
+    /// </summary>
+    /// <param name="request">The member password update request.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>An empty response when the password has been changed.</returns>
+    [HttpPut("current/password")]
+    [DeletesRefreshTokenCookie]
+    [EnableRateLimiting(AuthenticationRateLimitingExtensions.PasswordChangePolicy)]
+    [RequestSizeLimit(MaximumRequestBodySize)]
+    [Consumes("application/json")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status403Forbidden, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status413PayloadTooLarge, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status415UnsupportedMediaType, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status429TooManyRequests, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status503ServiceUnavailable, "application/json")]
+    public async Task<IActionResult> UpdatePasswordAsync(
+        UpdateMemberPasswordRequest request,
+        CancellationToken cancellationToken)
+    {
+        var subject = User.FindFirstValue(JwtRegisteredClaimNames.Sub);
+        _ = Guid.TryParse(
+            subject,
+            out var memberId);
+        await sender.Send(
+            new UpdateMemberPasswordCommand(
+                memberId,
+                request.CurrentPassword,
+                request.NewPassword),
+            cancellationToken);
+        refreshTokenCookieService.Delete(HttpContext);
+        Response.Headers.CacheControl = "no-store";
+
+        return NoContent();
     }
 }

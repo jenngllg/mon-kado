@@ -24,6 +24,16 @@ public interface IAuthenticationSessionRepository
         CancellationToken cancellationToken);
 
     /// <summary>
+    /// Gets the member identifier associated with a session without tracking it.
+    /// </summary>
+    /// <param name="sessionId">The session identifier.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The member identifier when the session exists; otherwise, <see langword="null" />.</returns>
+    Task<Guid?> GetUserIdAsync(
+        Guid sessionId,
+        CancellationToken cancellationToken);
+
+    /// <summary>
     /// Deletes one batch of expired sessions.
     /// </summary>
     /// <param name="cutoff">The inclusive expiration cutoff.</param>

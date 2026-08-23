@@ -19,6 +19,8 @@ internal class FakeEmailSender(
 
     public ConcurrentQueue<AuthenticationEmailSecurityNotification> EmailChangeNotifications { get; } = new();
 
+    public ConcurrentQueue<AuthenticationPasswordChangedNotification> PasswordChangedNotifications { get; } = new();
+
     public async Task<AuthenticationEmailSendResult> SendEmailConfirmationAsync(
         AuthenticationEmailMessage message,
         CancellationToken cancellationToken)
@@ -51,6 +53,15 @@ internal class FakeEmailSender(
         CancellationToken cancellationToken)
     {
         EmailChangeNotifications.Enqueue(message);
+
+        return await CompleteAsync(cancellationToken);
+    }
+
+    public async Task<AuthenticationEmailSendResult> SendPasswordChangedSecurityNotificationAsync(
+        AuthenticationPasswordChangedNotification message,
+        CancellationToken cancellationToken)
+    {
+        PasswordChangedNotifications.Enqueue(message);
 
         return await CompleteAsync(cancellationToken);
     }

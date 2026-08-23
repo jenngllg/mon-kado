@@ -68,29 +68,16 @@ public class AccountSessionService(
 
             ArgumentNullException.ThrowIfNull(user.NormalizedEmail);
             var executionStrategy = context.Database.CreateExecutionStrategy();
-            var attempt = await executionStrategy.ExecuteAsync(() =>
-                AuthenticateWithAccountLockAsync(
+            var result = await executionStrategy.ExecuteAsync(() =>
+                AuthenticateAndCreateSessionAsync(
                     user.Id,
                     user.NormalizedEmail,
                     password,
-                    cancellationToken));
-
-            if (attempt.Result != AccountLoginResult.Success)
-                return new AccountSessionLoginResult(
-                    attempt.Result,
-                    null);
-
-            ArgumentNullException.ThrowIfNull(attempt.User);
-            var tokens = await executionStrategy.ExecuteAsync(() =>
-                CreateSessionAsync(
-                    attempt.User.Id,
                     rememberMe,
                     currentRefreshToken,
                     cancellationToken));
 
-            return new AccountSessionLoginResult(
-                AccountLoginResult.Success,
-                tokens);
+            return result;
         }
         catch (Exception exception) when (PostgreSqlFailureClassifier.IsUnavailable(exception))
         {
@@ -172,17 +159,21 @@ public class AccountSessionService(
     }
 
     /// <summary>
-    /// Authenticates an account while holding its database lock.
+    /// Authenticates an account and creates its session while holding the account lock.
     /// </summary>
     /// <param name="userId">The member identifier.</param>
     /// <param name="normalizedEmail">The normalized email.</param>
     /// <param name="password">The password.</param>
+    /// <param name="isPersistent">Whether the session has a fixed persistent lifetime.</param>
+    /// <param name="currentRefreshToken">The refresh token currently held by the browser.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>The authentication attempt result.</returns>
-    private async Task<AuthenticationAttempt> AuthenticateWithAccountLockAsync(
+    /// <returns>The authentication result and its tokens when successful.</returns>
+    private async Task<AccountSessionLoginResult> AuthenticateAndCreateSessionAsync(
         Guid userId,
         string normalizedEmail,
         string password,
+        bool isPersistent,
+        string? currentRefreshToken,
         CancellationToken cancellationToken)
     {
         context.ChangeTracker.Clear();
@@ -198,7 +189,9 @@ public class AccountSessionService(
             await transaction.CommitAsync(cancellationToken);
             PerformTimingEqualizationHash(password);
 
-            return AuthenticationAttempt.InvalidCredentials;
+            return new AccountSessionLoginResult(
+                AccountLoginResult.InvalidCredentials,
+                null);
         }
 
         var existingUser = user;
@@ -208,7 +201,9 @@ public class AccountSessionService(
             await transaction.CommitAsync(cancellationToken);
             PerformTimingEqualizationHash(password);
 
-            return AuthenticationAttempt.InvalidCredentials;
+            return new AccountSessionLoginResult(
+                AccountLoginResult.InvalidCredentials,
+                null);
         }
 
         var passwordValid = await userManager.CheckPasswordAsync(
@@ -223,7 +218,9 @@ public class AccountSessionService(
                 "record the failed login attempt");
             await transaction.CommitAsync(cancellationToken);
 
-            return AuthenticationAttempt.InvalidCredentials;
+            return new AccountSessionLoginResult(
+                AccountLoginResult.InvalidCredentials,
+                null);
         }
 
         var now = timeProvider.GetUtcNow().UtcDateTime;
@@ -234,14 +231,16 @@ public class AccountSessionService(
         {
             await transaction.CommitAsync(cancellationToken);
 
-            return AuthenticationAttempt.InvalidCredentials;
+            return new AccountSessionLoginResult(
+                AccountLoginResult.InvalidCredentials,
+                null);
         }
 
         if (!existingUser.EmailConfirmed)
         {
             await transaction.CommitAsync(cancellationToken);
 
-            return new AuthenticationAttempt(
+            return new AccountSessionLoginResult(
                 AccountLoginResult.EmailNotConfirmed,
                 null);
         }
@@ -254,15 +253,20 @@ public class AccountSessionService(
                 "reset the failed login count");
         }
 
+        var tokens = await CreateSessionAsync(
+            existingUser.Id,
+            isPersistent,
+            currentRefreshToken,
+            cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 
-        return new AuthenticationAttempt(
+        return new AccountSessionLoginResult(
             AccountLoginResult.Success,
-            existingUser);
+            tokens);
     }
 
     /// <summary>
-    /// Creates and persists an authentication session.
+    /// Creates and persists an authentication session in the current transaction.
     /// </summary>
     /// <param name="userId">The member identifier.</param>
     /// <param name="isPersistent">Whether the session has a fixed persistent lifetime.</param>
@@ -275,9 +279,6 @@ public class AccountSessionService(
         string? currentRefreshToken,
         CancellationToken cancellationToken)
     {
-        context.ChangeTracker.Clear();
-        await using var transaction =
-            await context.Database.BeginTransactionAsync(cancellationToken);
         var now = timeProvider.GetUtcNow().UtcDateTime;
 
         await RevokeCurrentSessionAsync(
@@ -306,7 +307,6 @@ public class AccountSessionService(
 
         sessionRepository.Add(session);
         await unitOfWork.SaveChangesAsync(cancellationToken);
-        await transaction.CommitAsync(cancellationToken);
 
         return tokens;
     }
@@ -384,6 +384,20 @@ public class AccountSessionService(
         context.ChangeTracker.Clear();
         await using var transaction =
             await context.Database.BeginTransactionAsync(cancellationToken);
+        var userId = await sessionRepository.GetUserIdAsync(
+            sessionId,
+            cancellationToken);
+
+        if (userId is not { } existingUserId)
+        {
+            await transaction.CommitAsync(cancellationToken);
+
+            return null;
+        }
+
+        var user = await userRepository.GetByIdForUpdateAsync(
+            existingUserId,
+            cancellationToken);
         var session = await sessionRepository.GetByIdForUpdateAsync(
             sessionId,
             cancellationToken);
@@ -397,31 +411,12 @@ public class AccountSessionService(
 
         var now = timeProvider.GetUtcNow().UtcDateTime;
 
-        if (session.RevokedAt is not null || session.ExpiresAt <= now)
-        {
-            session.Revoke(now);
-            await unitOfWork.SaveChangesAsync(cancellationToken);
-            await transaction.CommitAsync(cancellationToken);
-
-            return null;
-        }
-
-        if (!refreshTokenService.Verify(
-            currentRefreshToken,
-            session.RefreshTokenHash))
-        {
-            session.Revoke(now);
-            await unitOfWork.SaveChangesAsync(cancellationToken);
-            await transaction.CommitAsync(cancellationToken);
-
-            return null;
-        }
-
-        var user = await userRepository.GetByIdForUpdateAsync(
-            session.UserId,
-            cancellationToken);
-
-        if (user is null)
+        if (user is null ||
+            session.RevokedAt is not null ||
+            session.ExpiresAt <= now ||
+            !refreshTokenService.Verify(
+                currentRefreshToken,
+                session.RefreshTokenHash))
         {
             session.Revoke(now);
             await unitOfWork.SaveChangesAsync(cancellationToken);

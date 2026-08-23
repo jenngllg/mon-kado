@@ -132,4 +132,30 @@ public static partial class ApplicationLogMessages
     public static partial void MemberEmailChanged(
         ILogger logger,
         Guid requestId);
+
+    /// <summary>
+    /// Logs the start of a member password change.
+    /// </summary>
+    /// <param name="logger">The logger.</param>
+    /// <param name="memberId">The member identifier.</param>
+    [LoggerMessage(
+        EventId = LogEventIds.MemberPasswordChangeStarted,
+        Level = LogLevel.Debug,
+        Message = "Changing the password for member {MemberId}.")]
+    public static partial void MemberPasswordChangeStarted(
+        ILogger logger,
+        Guid memberId);
+
+    /// <summary>
+    /// Logs a completed member password change.
+    /// </summary>
+    /// <param name="logger">The logger.</param>
+    /// <param name="memberId">The member identifier.</param>
+    [LoggerMessage(
+        EventId = LogEventIds.MemberPasswordChanged,
+        Level = LogLevel.Information,
+        Message = "Password changed for member {MemberId}.")]
+    public static partial void MemberPasswordChanged(
+        ILogger logger,
+        Guid memberId);
 }

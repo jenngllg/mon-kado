@@ -72,6 +72,10 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
             migration => Assert.EndsWith(
                 "_AddMemberEmailChanges",
                 migration,
+                StringComparison.Ordinal),
+            migration => Assert.EndsWith(
+                "_AddMemberPasswordChanges",
+                migration,
                 StringComparison.Ordinal));
         Assert.False(context.Database.HasPendingModelChanges());
 
@@ -265,6 +269,10 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
                 request.Id,
                 member.Id,
                 request.CurrentEmail,
+                now),
+            AuthenticationEmailOutboxMessage.CreatePasswordChangedSecurityNotification(
+                member.Id,
+                email,
                 now));
         await context.SaveChangesAsync(cancellationToken);
         IReadOnlyList<string> remainingKinds;

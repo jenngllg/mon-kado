@@ -18,5 +18,10 @@ public enum AuthenticationEmailKind
     /// <summary>
     /// Indicates a member email change security notification sent to the current address.
     /// </summary>
-    EmailChangeSecurityNotification
+    EmailChangeSecurityNotification,
+
+    /// <summary>
+    /// Indicates a security notification sent after a member password change.
+    /// </summary>
+    PasswordChangedSecurityNotification
 }
