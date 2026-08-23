@@ -1,3 +1,5 @@
+using JennGllg.Fr.MonKado.Back.Api.Abstractions;
+using JennGllg.Fr.MonKado.Back.Api.Attributes;
 using JennGllg.Fr.MonKado.Back.Api.Contracts.Requests;
 using JennGllg.Fr.MonKado.Back.Api.Errors;
 using JennGllg.Fr.MonKado.Back.Api.Extensions;
@@ -14,11 +16,13 @@ using Microsoft.AspNetCore.RateLimiting;
 namespace JennGllg.Fr.MonKado.Back.Api.Controllers;
 
 /// <summary>
-/// Manages account email confirmation.
+/// Manages account and member email confirmation flows.
 /// </summary>
 [ApiController]
 [Route("api/v1/auth")]
-public class EmailConfirmationsController(ISender sender) : ControllerBase
+public class EmailConfirmationsController(
+    ISender sender,
+    IRefreshTokenCookieService refreshTokenCookieService) : ControllerBase
 {
     private const int MaximumRequestBodySize = 4 * 1024;
 
@@ -82,5 +86,39 @@ public class EmailConfirmationsController(ISender sender) : ControllerBase
         Response.Headers.CacheControl = "no-store";
 
         return Accepted();
+    }
+
+    /// <summary>
+    /// Confirms a pending member email change.
+    /// </summary>
+    /// <param name="request">The email change confirmation request.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>An empty response when confirmation succeeds.</returns>
+    [HttpPost("email-change-confirmations")]
+    [DeletesRefreshTokenCookie]
+    [ValidateAntiForgeryToken]
+    [EnableRateLimiting(AuthenticationRateLimitingExtensions.EmailChangeConfirmationPolicy)]
+    [RequestSizeLimit(MaximumRequestBodySize)]
+    [Consumes("application/json")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status409Conflict, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status413PayloadTooLarge, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status415UnsupportedMediaType, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status429TooManyRequests, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status503ServiceUnavailable, "application/json")]
+    public async Task<IActionResult> ConfirmEmailChangeAsync(
+        ConfirmMemberEmailChangeRequest request,
+        CancellationToken cancellationToken)
+    {
+        await sender.Send(
+            new ConfirmMemberEmailChangeCommand(
+                request.RequestId,
+                request.Token),
+            cancellationToken);
+        refreshTokenCookieService.Delete(HttpContext);
+        Response.Headers.CacheControl = "no-store";
+
+        return NoContent();
     }
 }

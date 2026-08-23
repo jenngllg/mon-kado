@@ -449,7 +449,178 @@ public class AuthenticationEmailDispatcherTests(PostgreSqlWorkerFixture fixture)
     }
 
     [Fact]
-    public async Task ExecuteAsync_WhenSeparateInstanceSharingKeys_CanValidateGeneratedToken()
+    public async Task ExecuteAsync_WhenEmailChangeMessagesArePending_SendsBothMessagesToTheirSnapshotRecipients()
+    {
+        // Arrange
+        var sender = new FakeEmailSender();
+        var now = new DateTimeOffset(
+            2026,
+            8,
+            13,
+            12,
+            0,
+            0,
+            TimeSpan.Zero);
+        await using var provider = await CreateProviderAsync(
+            sender,
+            now);
+        var requestId = await CreateMemberEmailChangeRequestAsync(
+            provider,
+            now);
+
+        // Act
+        await DispatchAsync(provider);
+
+        // Assert
+        var confirmation = Assert.Single(sender.EmailChangeConfirmations);
+        Assert.Equal(
+            "new-member@example.fr",
+            confirmation.RecipientAddress);
+        Assert.Equal(
+            "/confirm-email-change",
+            confirmation.ConfirmationUrl.AbsolutePath);
+        Assert.Contains(
+            $"requestId={requestId:D}",
+            confirmation.ConfirmationUrl.Fragment,
+            StringComparison.Ordinal);
+        var notification = Assert.Single(sender.EmailChangeNotifications);
+        Assert.Equal(
+            "member@example.fr",
+            notification.RecipientAddress);
+        Assert.Equal(
+            "new-member@example.fr",
+            notification.RequestedAddress);
+        Assert.Empty(sender.Messages);
+    }
+
+    [Theory]
+    [InlineData("revoked")]
+    [InlineData("expired")]
+    [InlineData("changed-current-email")]
+    public async Task ExecuteAsync_WhenEmailChangeRequestCannotBeConfirmed_ClosesConfirmationWithoutSending(
+        string scenario)
+    {
+        // Arrange
+        var sender = new FakeEmailSender();
+        var now = new DateTimeOffset(
+            2026,
+            8,
+            13,
+            12,
+            0,
+            0,
+            TimeSpan.Zero);
+        await using var provider = await CreateProviderAsync(
+            sender,
+            now);
+        await CreateMemberEmailChangeRequestAsync(
+            provider,
+            now);
+        await using (var setupScope = provider.CreateAsyncScope())
+        {
+            var setupContext = setupScope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
+
+            if (scenario == "revoked")
+                await setupContext.MemberEmailChangeRequests.ExecuteUpdateAsync(
+                    setters => setters.SetProperty(
+                        request => request.RevokedAt,
+                        now.UtcDateTime),
+                    TestContext.Current.CancellationToken);
+
+            if (scenario == "expired")
+                await setupContext.MemberEmailChangeRequests.ExecuteUpdateAsync(
+                    setters => setters
+                        .SetProperty(
+                            request => request.CreatedAt,
+                            now.UtcDateTime.AddHours(-2))
+                        .SetProperty(
+                            request => request.ExpiresAt,
+                            now.UtcDateTime.AddHours(-1)),
+                    TestContext.Current.CancellationToken);
+
+            if (scenario == "changed-current-email")
+                await setupContext.Users.ExecuteUpdateAsync(
+                    setters => setters.SetProperty(
+                        user => user.Email,
+                        "changed@example.fr"),
+                    TestContext.Current.CancellationToken);
+        }
+
+        // Act
+        await DispatchAsync(provider);
+
+        // Assert
+        Assert.Empty(sender.EmailChangeConfirmations);
+    }
+
+    [Theory]
+    [InlineData(AuthenticationEmailKind.EmailChangeConfirmation, true)]
+    [InlineData(AuthenticationEmailKind.EmailChangeConfirmation, false)]
+    [InlineData(AuthenticationEmailKind.EmailChangeSecurityNotification, true)]
+    [InlineData(AuthenticationEmailKind.EmailChangeSecurityNotification, false)]
+    public async Task ExecuteAsync_WhenEmailChangeMessageIsIncomplete_ClosesMessageWithoutSending(
+        AuthenticationEmailKind kind,
+        bool removesRequestId)
+    {
+        // Arrange
+        var sender = new FakeEmailSender();
+        var now = new DateTimeOffset(
+            2026,
+            8,
+            13,
+            12,
+            0,
+            0,
+            TimeSpan.Zero);
+        await using var provider = await CreateProviderAsync(
+            sender,
+            now);
+        await CreateMemberEmailChangeRequestAsync(
+            provider,
+            now);
+        await using (var setupScope = provider.CreateAsyncScope())
+        {
+            var context = setupScope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
+            await context.AuthenticationEmailOutboxMessages
+                .Where(message => message.Kind != kind)
+                .ExecuteDeleteAsync(TestContext.Current.CancellationToken);
+            await context.Database.ExecuteSqlRawAsync(
+                "ALTER TABLE public.authentication_email_outbox " +
+                "DROP CONSTRAINT ck_authentication_email_outbox_email_change_fields_consistent;",
+                TestContext.Current.CancellationToken);
+
+            if (removesRequestId)
+                await context.AuthenticationEmailOutboxMessages.ExecuteUpdateAsync(
+                    setters => setters.SetProperty(
+                        message => message.MemberEmailChangeRequestId,
+                        (Guid?)null),
+                    TestContext.Current.CancellationToken);
+
+            if (!removesRequestId)
+                await context.AuthenticationEmailOutboxMessages.ExecuteUpdateAsync(
+                    setters => setters.SetProperty(
+                        message => message.RecipientEmail,
+                        (string?)null),
+                    TestContext.Current.CancellationToken);
+        }
+
+        // Act
+        await DispatchAsync(provider);
+
+        // Assert
+        Assert.Empty(sender.EmailChangeConfirmations);
+        Assert.Empty(sender.EmailChangeNotifications);
+        await using var assertionScope = provider.CreateAsyncScope();
+        var message = await assertionScope.ServiceProvider
+            .GetRequiredService<MonKadoDbContext>()
+            .AuthenticationEmailOutboxMessages
+            .AsNoTracking()
+            .SingleAsync(TestContext.Current.CancellationToken);
+        Assert.NotNull(message.ProcessedAt);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_WhenSeparateInstanceSharingKeys_CanValidateGeneratedAccountConfirmationToken()
     {
         // Arrange
         var sender = new FakeEmailSender();
@@ -492,13 +663,81 @@ public class AuthenticationEmailDispatcherTests(PostgreSqlWorkerFixture fixture)
         await using var scope = validatingProvider.CreateAsyncScope();
         var userManager =
             scope.ServiceProvider.GetRequiredService<UserManager<MonKadoUser>>();
-        var user = (await userManager.FindByIdAsync(userId.ToString("D")))!;
+        var user = await userManager.FindByIdAsync(userId.ToString("D"))
+            ?? throw new InvalidOperationException("The member does not exist.");
+
         // Assert
         Assert.True(await userManager.VerifyUserTokenAsync(
             user,
             userManager.Options.Tokens.EmailConfirmationTokenProvider,
             UserManager<MonKadoUser>.ConfirmEmailTokenPurpose,
             token));
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_WhenSeparateInstanceSharingKeys_CanValidateGeneratedEmailChangeToken()
+    {
+        // Arrange
+        var sender = new FakeEmailSender();
+        var now = new DateTimeOffset(
+            2026,
+            8,
+            13,
+            12,
+            0,
+            0,
+            TimeSpan.Zero);
+        await using var sendingProvider = await CreateProviderAsync(
+            sender,
+            now);
+        var requestId = await CreateMemberEmailChangeRequestAsync(
+            sendingProvider,
+            now);
+        await DispatchAsync(sendingProvider);
+        await using var validatingProvider = BuildProvider(
+            new FakeEmailSender(),
+            now);
+        var delivery = Assert.Single(sender.EmailChangeConfirmations);
+        var fragment = delivery.ConfirmationUrl.Fragment
+            .TrimStart('#')
+            .Split(
+                '&',
+                StringSplitOptions.RemoveEmptyEntries)
+            .Select(part => part.Split(
+                '=',
+                2))
+            .ToDictionary(
+                parts => parts[0],
+                parts => parts[1],
+                StringComparer.Ordinal);
+        var deliveredRequestId = Guid.Parse(fragment["requestId"]);
+        var token = DecodeBase64Url(fragment["token"]);
+        await using var scope = validatingProvider.CreateAsyncScope();
+        var context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
+        var request = await context.MemberEmailChangeRequests
+            .AsNoTracking()
+            .SingleAsync(
+                candidate => candidate.Id == requestId,
+                TestContext.Current.CancellationToken);
+        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<MonKadoUser>>();
+        var user = await userManager.FindByIdAsync(request.UserId.ToString("D"))
+            ?? throw new InvalidOperationException("The member does not exist.");
+        var purpose = MemberEmailChangeTokenPurpose.Create(
+            request.Id,
+            request.NormalizedNewEmail);
+
+        // Act
+        var isValid = await userManager.VerifyUserTokenAsync(
+            user,
+            EmailChangeTokenProviderOptions.ProviderName,
+            purpose,
+            token);
+
+        // Assert
+        Assert.Equal(
+            requestId,
+            deliveredRequestId);
+        Assert.True(isValid);
     }
 
     public void Dispose()
@@ -587,6 +826,49 @@ public class AuthenticationEmailDispatcherTests(PostgreSqlWorkerFixture fixture)
         await context.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         return message.Id;
+    }
+
+    private static async Task<Guid> CreateMemberEmailChangeRequestAsync(
+        ServiceProvider provider,
+        DateTimeOffset now)
+    {
+        await using var scope = provider.CreateAsyncScope();
+        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<MonKadoUser>>();
+        var user = new MonKadoUser()
+        {
+            Id = Guid.CreateVersion7(now),
+            Email = "member@example.fr",
+            UserName = "member@example.fr",
+            EmailConfirmed = true,
+            DisplayName = "Member"
+        };
+        var result = await userManager.CreateAsync(user);
+        Assert.True(result.Succeeded);
+        var request = MemberEmailChangeRequest.Create(
+            user.Id,
+            "member@example.fr",
+            "new-member@example.fr",
+            "NEW-MEMBER@EXAMPLE.FR",
+            now.UtcDateTime,
+            now.UtcDateTime.AddHours(24));
+        var confirmation = AuthenticationEmailOutboxMessage.CreateEmailChangeConfirmation(
+            request.Id,
+            user.Id,
+            request.NewEmail,
+            now.UtcDateTime);
+        var notification = AuthenticationEmailOutboxMessage.CreateEmailChangeSecurityNotification(
+            request.Id,
+            user.Id,
+            request.CurrentEmail,
+            now.UtcDateTime);
+        var context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
+        context.MemberEmailChangeRequests.Add(request);
+        context.AuthenticationEmailOutboxMessages.AddRange(
+            confirmation,
+            notification);
+        await context.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        return request.Id;
     }
 
     private static async Task DispatchAsync(ServiceProvider provider)

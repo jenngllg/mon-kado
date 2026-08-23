@@ -341,6 +341,175 @@ public class OpenApiContractTests(UnavailablePostgreSqlApiFactory factory) : ICl
             StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task GetAsync_WhenMemberEmailChangeIsDocumented_ExposesSecureTwoStepContract()
+    {
+        // Arrange
+        using var client = _factory.CreateClient();
+
+        // Act
+        using var document = await client.GetFromJsonAsync<JsonDocument>(
+            "/openapi/v1.json",
+            TestContext.Current.CancellationToken)
+            ?? throw new InvalidOperationException("The OpenAPI response body is empty.");
+        var paths = document.RootElement.GetProperty("paths");
+        var requestOperation = paths
+            .GetProperty("/api/v1/members/current/email")
+            .GetProperty("put");
+        var confirmationOperation = paths
+            .GetProperty("/api/v1/auth/email-change-confirmations")
+            .GetProperty("post");
+
+        // Assert
+        Assert.Equal(
+            "Requests a change to the current authenticated member email address.",
+            requestOperation.GetProperty("summary").GetString());
+        Assert.True(Assert.Single(
+            requestOperation.GetProperty("security").EnumerateArray())
+            .TryGetProperty(
+                "Bearer",
+                out _));
+        var requestParameters = requestOperation
+            .GetProperty("parameters")
+            .EnumerateArray()
+            .ToArray();
+        var ifMatch = Assert.Single(
+            requestParameters,
+            parameter => parameter.GetProperty("name").GetString() == "If-Match");
+        Assert.True(ifMatch.GetProperty("required").GetBoolean());
+        Assert.DoesNotContain(
+            requestParameters,
+            parameter => parameter.GetProperty("name").GetString() == "X-CSRF-TOKEN");
+        var requestResponses = requestOperation.GetProperty("responses");
+
+        foreach (var statusCode in new[]
+        {
+            "202",
+            "400",
+            "401",
+            "403",
+            "409",
+            "412",
+            "413",
+            "415",
+            "428",
+            "429",
+            "500",
+            "503"
+        })
+        {
+            Assert.True(
+                requestResponses.TryGetProperty(
+                    statusCode,
+                    out _),
+                $"Response {statusCode} is missing.");
+        }
+
+        var requestSuccessHeaders = requestResponses
+            .GetProperty("202")
+            .GetProperty("headers");
+        Assert.False(requestSuccessHeaders.TryGetProperty(
+            "ETag",
+            out _));
+        Assert.Contains(
+            "no-store",
+            requestSuccessHeaders
+                .GetProperty("Cache-Control")
+                .GetProperty("description")
+                .GetString(),
+            StringComparison.Ordinal);
+        AssertErrorResponseSchema(
+            document.RootElement,
+            requestResponses,
+            "413");
+        AssertErrorResponseSchema(
+            document.RootElement,
+            requestResponses,
+            "415");
+        var requestSchema = ResolveSchema(
+            document.RootElement,
+            requestOperation
+                .GetProperty("requestBody")
+                .GetProperty("content")
+                .GetProperty("application/json")
+                .GetProperty("schema"));
+        Assert.Equal(
+            [
+                "currentPassword",
+                "email"
+            ],
+            requestSchema
+                .GetProperty("properties")
+                .EnumerateObject()
+                .Select(property => property.Name)
+                .OrderBy(property => property)
+                .ToArray());
+
+        Assert.Equal(
+            "Confirms a pending member email change.",
+            confirmationOperation.GetProperty("summary").GetString());
+        Assert.False(confirmationOperation.TryGetProperty(
+            "security",
+            out var security) && security.GetArrayLength() > 0);
+        var confirmationParameters = confirmationOperation
+            .GetProperty("parameters")
+            .EnumerateArray()
+            .ToArray();
+        Assert.Contains(
+            confirmationParameters,
+            parameter => parameter.GetProperty("name").GetString() == "X-CSRF-TOKEN");
+        var confirmationResponses = confirmationOperation.GetProperty("responses");
+        var confirmationSuccess = confirmationResponses.GetProperty("204");
+        Assert.True(confirmationSuccess
+            .GetProperty("headers")
+            .TryGetProperty(
+                "Set-Cookie",
+                out _));
+        Assert.True(confirmationResponses.TryGetProperty(
+            "409",
+            out _));
+        Assert.True(confirmationResponses.TryGetProperty(
+            "503",
+            out _));
+        AssertErrorResponseSchema(
+            document.RootElement,
+            confirmationResponses,
+            "413");
+        AssertErrorResponseSchema(
+            document.RootElement,
+            confirmationResponses,
+            "415");
+    }
+
+    private static void AssertErrorResponseSchema(
+        JsonElement document,
+        JsonElement responses,
+        string statusCode)
+    {
+        var schema = ResolveSchema(
+            document,
+            responses
+                .GetProperty(statusCode)
+                .GetProperty("content")
+                .GetProperty("application/json")
+                .GetProperty("schema"));
+
+        Assert.Equal(
+            [
+                "errorCode",
+                "message",
+                "statusCode",
+                "title",
+                "validationErrors"
+            ],
+            schema
+                .GetProperty("properties")
+                .EnumerateObject()
+                .Select(property => property.Name)
+                .OrderBy(property => property)
+                .ToArray());
+    }
+
     private static void AssertTokenOperation(
         JsonElement operation,
         bool expectsRefreshCookie)

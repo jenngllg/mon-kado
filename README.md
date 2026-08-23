@@ -96,6 +96,8 @@ The local launch profile listens on `http://localhost:7000` and uses the `Local`
 | `GET /api/v1/auth/sessions/current` | Returns the current member identity and profile ETag |
 | `DELETE /api/v1/auth/sessions/current` | Ends the current browser refresh session |
 | `PUT /api/v1/members/current/profile` | Updates the current member display name with optimistic concurrency |
+| `PUT /api/v1/members/current/email` | Requests an e-mail change after password verification |
+| `POST /api/v1/auth/email-change-confirmations` | Confirms a pending e-mail change from the new address |
 
 Liveness never contacts PostgreSQL. Readiness allows at most two seconds for PostgreSQL to accept a connection and returns `503 Unhealthy` otherwise; it checks connectivity, not whether all migrations have been applied.
 
@@ -192,6 +194,21 @@ strong ETag in `If-Match`, but no antiforgery token. A missing precondition retu
 version returns `412 Precondition Failed`. A successful update returns `200 OK`, `{ "displayName": "..." }`, the new
 ETag, and `Cache-Control: no-store`. Sending the same trimmed display name is idempotent: PostgreSQL is not written and
 the ETag remains unchanged. PostgreSQL maps the member version to its native `xmin` concurrency token.
+
+`PUT /api/v1/members/current/email` requires the Bearer access token, the latest profile ETag, the new address, and the
+current password. It returns `202 Accepted` without exposing the address, request identifier, or token. The current
+address remains active while a 24-hour confirmation link is sent to the new address and a security notification is
+sent to the old address. Repeating the current address has no effect; a later valid request revokes and replaces the
+previous request.
+
+The confirmation link stores its request identifier and Data Protection token in the URL fragment. The frontend must
+remove the fragment from browser history and send its values with an antiforgery token to
+`POST /api/v1/auth/email-change-confirmations`. This endpoint does not require a Bearer token. A successful confirmation
+atomically updates the Identity e-mail and user name, revokes every refresh session for the member, deletes the current
+browser refresh cookie, and returns `204 No Content`. The frontend must also discard its in-memory JWT and require a
+new sign-in with the new address. Invalid, expired, revoked, replaced, or reused links return the same generic `400`
+response. The Worker removes expired requests and requests confirmed or revoked more than seven days ago in bounded
+batches.
 
 `DELETE /api/v1/auth/sessions/current` ends only the refresh session held by the current browser. It remains available
 without a Bearer token so that an expired access token cannot prevent logout, but it requires the standard CSRF token.
@@ -299,7 +316,7 @@ Docker Compose runs five services:
 |---|---|---|
 | `caddy` | Terminates HTTPS and proxies the API hostname | 80 and 443 |
 | `api` | Serves HTTP internally on port 8080 | None |
-| `worker` | Delivers authentication e-mails and removes expired unconfirmed accounts | None |
+| `worker` | Delivers authentication e-mails and removes expired authentication state | None |
 | `migrations` | Applies the EF migration bundle once, then exits | None |
 | `postgres` | Stores application data in a named volume | None |
 

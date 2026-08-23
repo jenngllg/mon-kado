@@ -51,9 +51,13 @@ public static class DataProtectionConfiguration
                 EmailConfirmationTokenProviderOptions.ProviderName;
             identity.Tokens.ProviderMap[EmailConfirmationTokenProviderOptions.ProviderName] =
                 new TokenProviderDescriptor(typeof(EmailConfirmationTokenProvider<MonKadoUser>));
+            identity.Tokens.ProviderMap[EmailChangeTokenProviderOptions.ProviderName] =
+                new TokenProviderDescriptor(typeof(EmailChangeTokenProvider<MonKadoUser>));
         });
         services.Configure<EmailConfirmationTokenProviderOptions>(_ => { });
+        services.Configure<EmailChangeTokenProviderOptions>(_ => { });
         services.AddTransient<EmailConfirmationTokenProvider<MonKadoUser>>();
+        services.AddTransient<EmailChangeTokenProvider<MonKadoUser>>();
 
         return services;
     }

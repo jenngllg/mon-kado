@@ -4,7 +4,10 @@ namespace JennGllg.Fr.MonKado.Back.Worker.UnitTests;
 
 public class RecordingLogger<TCategory> : ILogger<TCategory>
 {
-    public List<(LogLevel LogLevel, Exception? Exception)> Entries { get; } = [];
+    public List<(LogLevel LogLevel, EventId EventId, Exception? Exception, string Message)> Entries
+    {
+        get;
+    } = [];
 
     public IDisposable? BeginScope<TState>(TState state)
         where TState : notnull
@@ -26,6 +29,10 @@ public class RecordingLogger<TCategory> : ILogger<TCategory>
     {
         Entries.Add((
             logLevel,
-            exception));
+            eventId,
+            exception,
+            formatter(
+                state,
+                exception)));
     }
 }

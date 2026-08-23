@@ -53,4 +53,22 @@ public class AuthenticationSessionRepository(MonKadoDbContext context)
                     session.ExpiresAt <= cutoff)
                 .ExecuteDeleteAsync(cancellationToken);
     }
+
+    /// <inheritdoc />
+    public Task<int> RevokeAllForUserAsync(
+        Guid userId,
+        DateTime revokedAt,
+        CancellationToken cancellationToken)
+    {
+
+        return context.AuthenticationSessions
+            .Where(session =>
+                session.UserId == userId &&
+                session.RevokedAt == null)
+            .ExecuteUpdateAsync(
+                setters => setters.SetProperty(
+                    session => session.RevokedAt,
+                    revokedAt),
+                cancellationToken);
+    }
 }

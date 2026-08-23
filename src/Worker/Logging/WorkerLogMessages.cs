@@ -1,4 +1,5 @@
 using JennGllg.Fr.MonKado.Back.Application.Common.Constants;
+using JennGllg.Fr.MonKado.Back.Application.Models;
 
 using Microsoft.Extensions.Logging;
 
@@ -33,6 +34,56 @@ public static partial class WorkerLogMessages
         ILogger logger,
         string exceptionType,
         Exception exception);
+    /// <summary>
+    /// Logs a delivered account confirmation email.
+    /// </summary>
+    /// <param name="logger">The logger.</param>
+    /// <param name="outboxMessageId">The outbox message identifier.</param>
+    [LoggerMessage(
+        EventId = LogEventIds.AccountConfirmationEmailSent,
+        Level = LogLevel.Information,
+        Message = "Account confirmation email {OutboxMessageId} sent.")]
+    public static partial void AccountConfirmationEmailSent(
+        ILogger logger,
+        Guid outboxMessageId);
+    /// <summary>
+    /// Logs a delivered member email change confirmation.
+    /// </summary>
+    /// <param name="logger">The logger.</param>
+    /// <param name="outboxMessageId">The outbox message identifier.</param>
+    [LoggerMessage(
+        EventId = LogEventIds.MemberEmailChangeConfirmationSent,
+        Level = LogLevel.Information,
+        Message = "Member email change confirmation {OutboxMessageId} sent.")]
+    public static partial void MemberEmailChangeConfirmationSent(
+        ILogger logger,
+        Guid outboxMessageId);
+    /// <summary>
+    /// Logs a delivered member email change security notification.
+    /// </summary>
+    /// <param name="logger">The logger.</param>
+    /// <param name="outboxMessageId">The outbox message identifier.</param>
+    [LoggerMessage(
+        EventId = LogEventIds.MemberEmailChangeSecurityNotificationSent,
+        Level = LogLevel.Information,
+        Message = "Member email change security notification {OutboxMessageId} sent.")]
+    public static partial void MemberEmailChangeSecurityNotificationSent(
+        ILogger logger,
+        Guid outboxMessageId);
+    /// <summary>
+    /// Logs an authentication email rejected by Gmail.
+    /// </summary>
+    /// <param name="logger">The logger.</param>
+    /// <param name="outboxMessageId">The outbox message identifier.</param>
+    /// <param name="failureCategory">The technical failure category.</param>
+    [LoggerMessage(
+        EventId = LogEventIds.AuthenticationEmailProviderRejectedMessage,
+        Level = LogLevel.Error,
+        Message = "Authentication email {OutboxMessageId} was rejected by the provider with category {FailureCategory}.")]
+    public static partial void AuthenticationEmailProviderRejectedMessage(
+        ILogger logger,
+        Guid outboxMessageId,
+        AuthenticationEmailFailureCategory failureCategory);
     /// <summary>
     /// Executes the expired accounts deleted operation.
     /// </summary>
@@ -86,6 +137,34 @@ public static partial class WorkerLogMessages
         Level = LogLevel.Error,
         Message = "Authentication session cleanup failed and will be retried. Exception type: {ExceptionType}")]
     public static partial void ExpiredSessionCleanupFailed(
+        ILogger logger,
+        string exceptionType,
+        Exception exception);
+
+    /// <summary>
+    /// Logs deleted member email change requests.
+    /// </summary>
+    /// <param name="logger">The logger.</param>
+    /// <param name="deletedRequestCount">The deleted request count.</param>
+    [LoggerMessage(
+        EventId = LogEventIds.ExpiredMemberEmailChangeRequestsDeleted,
+        Level = LogLevel.Information,
+        Message = "Deleted {DeletedRequestCount} expired member email change requests.")]
+    public static partial void ExpiredMemberEmailChangeRequestsDeleted(
+        ILogger logger,
+        int deletedRequestCount);
+
+    /// <summary>
+    /// Logs a member email change request cleanup failure.
+    /// </summary>
+    /// <param name="logger">The logger.</param>
+    /// <param name="exceptionType">The exception type.</param>
+    /// <param name="exception">The cleanup exception.</param>
+    [LoggerMessage(
+        EventId = LogEventIds.MemberEmailChangeRequestCleanupFailed,
+        Level = LogLevel.Error,
+        Message = "Member email change request cleanup failed and will be retried. Exception type: {ExceptionType}")]
+    public static partial void MemberEmailChangeRequestCleanupFailed(
         ILogger logger,
         string exceptionType,
         Exception exception);

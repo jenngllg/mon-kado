@@ -19,6 +19,22 @@ public static class LogEventIds
     /// </summary>
     public const int AuthenticationEmailDeliveryFailed = 1001;
     /// <summary>
+    /// Identifies a delivered account confirmation email.
+    /// </summary>
+    public const int AccountConfirmationEmailSent = 1002;
+    /// <summary>
+    /// Identifies a delivered member email change confirmation.
+    /// </summary>
+    public const int MemberEmailChangeConfirmationSent = 1003;
+    /// <summary>
+    /// Identifies a delivered member email change security notification.
+    /// </summary>
+    public const int MemberEmailChangeSecurityNotificationSent = 1004;
+    /// <summary>
+    /// Identifies an authentication email rejected by the provider.
+    /// </summary>
+    public const int AuthenticationEmailProviderRejectedMessage = 1005;
+    /// <summary>
     /// Identifies expired accounts deleted.
     /// </summary>
     public const int ExpiredAccountsDeleted = 1010;
@@ -58,6 +74,30 @@ public static class LogEventIds
     /// Identifies member profile updated.
     /// </summary>
     public const int MemberProfileUpdated = 1041;
+    /// <summary>
+    /// Identifies a member email change request start.
+    /// </summary>
+    public const int MemberEmailChangeRequestStarted = 1050;
+    /// <summary>
+    /// Identifies an accepted member email change request.
+    /// </summary>
+    public const int MemberEmailChangeRequested = 1051;
+    /// <summary>
+    /// Identifies a member email change confirmation start.
+    /// </summary>
+    public const int MemberEmailChangeConfirmationStarted = 1052;
+    /// <summary>
+    /// Identifies a completed member email change.
+    /// </summary>
+    public const int MemberEmailChanged = 1053;
+    /// <summary>
+    /// Identifies deleted member email change requests.
+    /// </summary>
+    public const int ExpiredMemberEmailChangeRequestsDeleted = 1060;
+    /// <summary>
+    /// Identifies a member email change request cleanup failure.
+    /// </summary>
+    public const int MemberEmailChangeRequestCleanupFailed = 1061;
     /// <summary>
     /// Identifies expected http error.
     /// </summary>

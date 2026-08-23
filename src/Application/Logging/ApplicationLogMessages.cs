@@ -80,4 +80,56 @@ public static partial class ApplicationLogMessages
     public static partial void MemberProfileUpdated(
         ILogger logger,
         Guid memberId);
+
+    /// <summary>
+    /// Logs the start of a member email change request.
+    /// </summary>
+    /// <param name="logger">The logger.</param>
+    /// <param name="memberId">The member identifier.</param>
+    [LoggerMessage(
+        EventId = LogEventIds.MemberEmailChangeRequestStarted,
+        Level = LogLevel.Debug,
+        Message = "Requesting an email change for member {MemberId}.")]
+    public static partial void MemberEmailChangeRequestStarted(
+        ILogger logger,
+        Guid memberId);
+
+    /// <summary>
+    /// Logs an accepted member email change request.
+    /// </summary>
+    /// <param name="logger">The logger.</param>
+    /// <param name="memberId">The member identifier.</param>
+    [LoggerMessage(
+        EventId = LogEventIds.MemberEmailChangeRequested,
+        Level = LogLevel.Information,
+        Message = "Email change requested for member {MemberId}.")]
+    public static partial void MemberEmailChangeRequested(
+        ILogger logger,
+        Guid memberId);
+
+    /// <summary>
+    /// Logs the start of a member email change confirmation.
+    /// </summary>
+    /// <param name="logger">The logger.</param>
+    /// <param name="requestId">The email change request identifier.</param>
+    [LoggerMessage(
+        EventId = LogEventIds.MemberEmailChangeConfirmationStarted,
+        Level = LogLevel.Debug,
+        Message = "Confirming member email change request {RequestId}.")]
+    public static partial void MemberEmailChangeConfirmationStarted(
+        ILogger logger,
+        Guid requestId);
+
+    /// <summary>
+    /// Logs a completed member email change.
+    /// </summary>
+    /// <param name="logger">The logger.</param>
+    /// <param name="requestId">The email change request identifier.</param>
+    [LoggerMessage(
+        EventId = LogEventIds.MemberEmailChanged,
+        Level = LogLevel.Information,
+        Message = "Member email change request {RequestId} completed.")]
+    public static partial void MemberEmailChanged(
+        ILogger logger,
+        Guid requestId);
 }

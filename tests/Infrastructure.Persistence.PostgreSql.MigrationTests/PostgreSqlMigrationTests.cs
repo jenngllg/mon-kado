@@ -3,6 +3,7 @@ using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Configurations;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Constants;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Contexts;
+using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Entities;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -67,6 +68,10 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
             migration => Assert.EndsWith(
                 "_UseMemberXminVersion",
                 migration,
+                StringComparison.Ordinal),
+            migration => Assert.EndsWith(
+                "_AddMemberEmailChanges",
+                migration,
                 StringComparison.Ordinal));
         Assert.False(context.Database.HasPendingModelChanges());
 
@@ -78,6 +83,7 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
                 "__EFMigrationsHistory",
                 "authentication_email_outbox",
                 "authentication_sessions",
+                "member_email_change_requests",
                 "role_claims",
                 "roles",
                 "user_claims",
@@ -115,6 +121,21 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
         Assert.Contains(
             "fk_authentication_sessions_users_user_id",
             constraints);
+        Assert.Contains(
+            "ck_authentication_email_outbox_email_change_fields_consistent",
+            constraints);
+        Assert.Contains(
+            "ck_member_email_change_requests_emails_different",
+            constraints);
+        Assert.Contains(
+            "ck_member_email_change_requests_timestamps_consistent",
+            constraints);
+        Assert.Contains(
+            "fk_authentication_email_outbox_member_email_change_request_id",
+            constraints);
+        Assert.Contains(
+            "fk_member_email_change_requests_users_user_id",
+            constraints);
 
         var indexes = await GetPublicIndexesAsync(
             context,
@@ -140,6 +161,15 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
         Assert.Contains(
             "ix_authentication_sessions_user_id",
             indexes);
+        Assert.Contains(
+            "ix_authentication_email_outbox_member_email_change_request_id",
+            indexes);
+        Assert.Contains(
+            "ix_member_email_change_requests_expires_at",
+            indexes);
+        Assert.Contains(
+            "ux_member_email_change_requests_active_user",
+            indexes);
 
         var columns = await GetAuthenticationEmailOutboxColumnsAsync(
             context,
@@ -147,6 +177,27 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
         Assert.Contains(
             "provider_message_id",
             columns);
+        Assert.Contains(
+            "member_email_change_request_id",
+            columns);
+        Assert.Contains(
+            "recipient_email",
+            columns);
+        Assert.Equal(
+            [
+                "confirmed_at",
+                "created_at",
+                "current_email",
+                "expires_at",
+                "id",
+                "new_email",
+                "normalized_new_email",
+                "revoked_at",
+                "user_id"
+            ],
+            await GetMemberEmailChangeRequestColumnsAsync(
+                context,
+                cancellationToken));
         Assert.Equal(
             [
                 "created_at",
@@ -167,6 +218,76 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
         Assert.False(await HasUserVersionColumnAsync(
             context,
             cancellationToken));
+    }
+
+    [Fact]
+    public async Task MigrateAsync_WhenEmailChangeRowsExist_RollsBackWithoutViolatingOutboxConstraint()
+    {
+        // Arrange
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var provider = CreateServiceProvider();
+        await using var scope = provider.CreateAsyncScope();
+        var context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
+        await context.Database.MigrateAsync(cancellationToken);
+        var suffix = Guid.CreateVersion7().ToString("N");
+        var email = $"rollback-{suffix}@example.test";
+        var member = new MonKadoUser
+        {
+            Id = Guid.CreateVersion7(),
+            DisplayName = "Email rollback test",
+            Email = email,
+            NormalizedEmail = email.ToUpperInvariant(),
+            UserName = email,
+            NormalizedUserName = email.ToUpperInvariant(),
+            EmailConfirmed = true
+        };
+        context.Users.Add(member);
+        await context.SaveChangesAsync(cancellationToken);
+        var now = DateTime.UtcNow;
+        var request = MemberEmailChangeRequest.Create(
+            member.Id,
+            email,
+            $"new-{email}",
+            $"NEW-{email.ToUpperInvariant()}",
+            now,
+            now.AddHours(24));
+        context.MemberEmailChangeRequests.Add(request);
+        context.AuthenticationEmailOutboxMessages.AddRange(
+            AuthenticationEmailOutboxMessage.CreateEmailConfirmation(
+                member.Id,
+                now),
+            AuthenticationEmailOutboxMessage.CreateEmailChangeConfirmation(
+                request.Id,
+                member.Id,
+                request.NewEmail,
+                now),
+            AuthenticationEmailOutboxMessage.CreateEmailChangeSecurityNotification(
+                request.Id,
+                member.Id,
+                request.CurrentEmail,
+                now));
+        await context.SaveChangesAsync(cancellationToken);
+        IReadOnlyList<string> remainingKinds;
+
+        try
+        {
+            // Act
+            await context.Database.MigrateAsync(
+                "20260822180349_UseMemberXminVersion",
+                cancellationToken);
+            remainingKinds = await GetAuthenticationEmailOutboxKindsAsync(
+                context,
+                cancellationToken);
+        }
+        finally
+        {
+            await context.Database.MigrateAsync(cancellationToken);
+        }
+
+        // Assert
+        Assert.Equal(
+            ["EMAIL_CONFIRMATION"],
+            remainingKinds);
     }
 
     [Fact]
@@ -370,6 +491,32 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
         return columns;
     }
 
+    private static async Task<IReadOnlyList<string>> GetAuthenticationEmailOutboxKindsAsync(
+        MonKadoDbContext context,
+        CancellationToken cancellationToken)
+    {
+        var connection = context.Database.GetDbConnection();
+
+        if (connection.State != System.Data.ConnectionState.Open)
+            await connection.OpenAsync(cancellationToken);
+
+        await using var command = connection.CreateCommand();
+        command.CommandText =
+            """
+            SELECT kind
+            FROM public.authentication_email_outbox
+            ORDER BY kind;
+            """;
+        var kinds = new List<string>();
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            kinds.Add(reader.GetString(0));
+        }
+
+        return kinds;
+    }
+
     private static async Task<IReadOnlyList<string>> GetAuthenticationSessionColumnsAsync(
         MonKadoDbContext context,
         CancellationToken cancellationToken)
@@ -386,6 +533,34 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
             FROM information_schema.columns
             WHERE table_schema = 'public'
               AND table_name = 'authentication_sessions'
+            ORDER BY column_name;
+            """;
+        var columns = new List<string>();
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            columns.Add(reader.GetString(0));
+        }
+
+        return columns;
+    }
+
+    private static async Task<IReadOnlyList<string>> GetMemberEmailChangeRequestColumnsAsync(
+        MonKadoDbContext context,
+        CancellationToken cancellationToken)
+    {
+        var connection = context.Database.GetDbConnection();
+
+        if (connection.State != System.Data.ConnectionState.Open)
+            await connection.OpenAsync(cancellationToken);
+
+        await using var command = connection.CreateCommand();
+        command.CommandText =
+            """
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'member_email_change_requests'
             ORDER BY column_name;
             """;
         var columns = new List<string>();

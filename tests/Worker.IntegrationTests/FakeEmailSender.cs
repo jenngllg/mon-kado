@@ -15,11 +15,49 @@ internal class FakeEmailSender(
 {
     public ConcurrentQueue<AuthenticationEmailMessage> Messages { get; } = new();
 
+    public ConcurrentQueue<AuthenticationEmailMessage> EmailChangeConfirmations { get; } = new();
+
+    public ConcurrentQueue<AuthenticationEmailSecurityNotification> EmailChangeNotifications { get; } = new();
+
     public async Task<AuthenticationEmailSendResult> SendEmailConfirmationAsync(
         AuthenticationEmailMessage message,
         CancellationToken cancellationToken)
     {
         Messages.Enqueue(message);
+
+        if (delay is { } value)
+            await Task.Delay(
+                value,
+                cancellationToken);
+
+        return fail
+            ? throw new AuthenticationEmailDeliveryException(
+                failureCategory,
+                retryAfter)
+            : new AuthenticationEmailSendResult("fake-provider-id");
+    }
+
+    public async Task<AuthenticationEmailSendResult> SendEmailChangeConfirmationAsync(
+        AuthenticationEmailMessage message,
+        CancellationToken cancellationToken)
+    {
+        EmailChangeConfirmations.Enqueue(message);
+
+        return await CompleteAsync(cancellationToken);
+    }
+
+    public async Task<AuthenticationEmailSendResult> SendEmailChangeSecurityNotificationAsync(
+        AuthenticationEmailSecurityNotification message,
+        CancellationToken cancellationToken)
+    {
+        EmailChangeNotifications.Enqueue(message);
+
+        return await CompleteAsync(cancellationToken);
+    }
+
+    private async Task<AuthenticationEmailSendResult> CompleteAsync(
+        CancellationToken cancellationToken)
+    {
 
         if (delay is { } value)
             await Task.Delay(

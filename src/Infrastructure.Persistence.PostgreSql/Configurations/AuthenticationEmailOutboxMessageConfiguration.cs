@@ -21,7 +21,14 @@ internal sealed class AuthenticationEmailOutboxMessageConfiguration
                 "attempt_count >= 0");
             table.HasCheckConstraint(
                 "ck_authentication_email_outbox_kind_valid",
-                "kind IN ('EMAIL_CONFIRMATION')");
+                "kind IN ('EMAIL_CONFIRMATION', 'EMAIL_CHANGE_CONFIRMATION', " +
+                "'EMAIL_CHANGE_SECURITY_NOTIFICATION')");
+            table.HasCheckConstraint(
+                "ck_authentication_email_outbox_email_change_fields_consistent",
+                "(kind = 'EMAIL_CONFIRMATION' AND member_email_change_request_id IS NULL " +
+                "AND recipient_email IS NULL) OR " +
+                "(kind IN ('EMAIL_CHANGE_CONFIRMATION', 'EMAIL_CHANGE_SECURITY_NOTIFICATION') " +
+                "AND member_email_change_request_id IS NOT NULL AND recipient_email IS NOT NULL)");
             table.HasCheckConstraint(
                 "ck_authentication_email_outbox_timestamps_consistent",
                 "available_at >= created_at AND " +
@@ -38,12 +45,20 @@ internal sealed class AuthenticationEmailOutboxMessageConfiguration
             .HasMaxLength(1000);
         builder.Property(message => message.ProviderMessageId)
             .HasMaxLength(255);
+        builder.Property(message => message.RecipientEmail)
+            .HasMaxLength(254);
 
         builder.HasOne<MonKadoUser>()
             .WithMany()
             .HasForeignKey(message => message.UserId)
             .OnDelete(DeleteBehavior.Cascade)
             .HasConstraintName("fk_authentication_email_outbox_users_user_id");
+
+        builder.HasOne<MemberEmailChangeRequest>()
+            .WithMany()
+            .HasForeignKey(message => message.MemberEmailChangeRequestId)
+            .OnDelete(DeleteBehavior.Cascade)
+            .HasConstraintName("fk_authentication_email_outbox_member_email_change_request_id");
 
         builder.HasIndex(message => new
         {
@@ -81,6 +96,9 @@ internal sealed class AuthenticationEmailOutboxMessageConfiguration
         return kind switch
         {
             AuthenticationEmailKind.EmailConfirmation => "EMAIL_CONFIRMATION",
+            AuthenticationEmailKind.EmailChangeConfirmation => "EMAIL_CHANGE_CONFIRMATION",
+            AuthenticationEmailKind.EmailChangeSecurityNotification =>
+                "EMAIL_CHANGE_SECURITY_NOTIFICATION",
             _ => throw new ArgumentOutOfRangeException(
                 nameof(kind),
                 kind,
@@ -94,6 +112,9 @@ internal sealed class AuthenticationEmailOutboxMessageConfiguration
         return value switch
         {
             "EMAIL_CONFIRMATION" => AuthenticationEmailKind.EmailConfirmation,
+            "EMAIL_CHANGE_CONFIRMATION" => AuthenticationEmailKind.EmailChangeConfirmation,
+            "EMAIL_CHANGE_SECURITY_NOTIFICATION" =>
+                AuthenticationEmailKind.EmailChangeSecurityNotification,
             _ => throw new InvalidOperationException($"Unknown authentication email kind '{value}'.")
         };
     }

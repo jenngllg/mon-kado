@@ -27,6 +27,22 @@ public class AuthenticationEmailOutboxMessage
         get; private set;
     }
     /// <summary>
+    /// Gets the related member email change request identifier.
+    /// </summary>
+
+    public Guid? MemberEmailChangeRequestId
+    {
+        get; private set;
+    }
+    /// <summary>
+    /// Gets the immutable recipient address for request-specific messages.
+    /// </summary>
+
+    public string? RecipientEmail
+    {
+        get; private set;
+    }
+    /// <summary>
     /// Gets kind.
     /// </summary>
 
@@ -132,6 +148,52 @@ public class AuthenticationEmailOutboxMessage
         };
     }
 
+    /// <summary>
+    /// Creates a confirmation message for a requested member email change.
+    /// </summary>
+    /// <param name="requestId">The member email change request identifier.</param>
+    /// <param name="userId">The member identifier.</param>
+    /// <param name="recipientEmail">The new email address.</param>
+    /// <param name="createdAt">The creation date and time.</param>
+    /// <returns>The created outbox message.</returns>
+    public static AuthenticationEmailOutboxMessage CreateEmailChangeConfirmation(
+        Guid requestId,
+        Guid userId,
+        string recipientEmail,
+        DateTime createdAt)
+    {
+
+        return CreateEmailChangeMessage(
+            requestId,
+            userId,
+            recipientEmail,
+            AuthenticationEmailKind.EmailChangeConfirmation,
+            createdAt);
+    }
+
+    /// <summary>
+    /// Creates a security notification for a requested member email change.
+    /// </summary>
+    /// <param name="requestId">The member email change request identifier.</param>
+    /// <param name="userId">The member identifier.</param>
+    /// <param name="recipientEmail">The current email address.</param>
+    /// <param name="createdAt">The creation date and time.</param>
+    /// <returns>The created outbox message.</returns>
+    public static AuthenticationEmailOutboxMessage CreateEmailChangeSecurityNotification(
+        Guid requestId,
+        Guid userId,
+        string recipientEmail,
+        DateTime createdAt)
+    {
+
+        return CreateEmailChangeMessage(
+            requestId,
+            userId,
+            recipientEmail,
+            AuthenticationEmailKind.EmailChangeSecurityNotification,
+            createdAt);
+    }
+
     internal void Claim(DateTime lockedUntil)
     {
         AttemptCount++;
@@ -155,5 +217,25 @@ public class AuthenticationEmailOutboxMessage
         AvailableAt = availableAt;
         LockedUntil = null;
         LastError = lastError;
+    }
+
+    private static AuthenticationEmailOutboxMessage CreateEmailChangeMessage(
+        Guid requestId,
+        Guid userId,
+        string recipientEmail,
+        AuthenticationEmailKind kind,
+        DateTime createdAt)
+    {
+
+        return new AuthenticationEmailOutboxMessage
+        {
+            Id = Guid.CreateVersion7(new DateTimeOffset(createdAt)),
+            UserId = userId,
+            MemberEmailChangeRequestId = requestId,
+            RecipientEmail = recipientEmail,
+            Kind = kind,
+            CreatedAt = createdAt,
+            AvailableAt = createdAt
+        };
     }
 }

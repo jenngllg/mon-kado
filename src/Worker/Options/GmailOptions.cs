@@ -16,10 +16,10 @@ public class GmailOptions
     /// Gets sender address.
     /// </summary>
 
-    public string? SenderAddress
+    public string SenderAddress
     {
         get; init;
-    }
+    } = string.Empty;
     /// <summary>
     /// Gets client id.
     /// </summary>
