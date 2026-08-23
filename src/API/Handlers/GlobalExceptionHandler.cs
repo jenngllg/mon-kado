@@ -66,6 +66,24 @@ public class GlobalExceptionHandler(
                 "The member profile has changed. Retrieve it again before retrying.",
                 ErrorCodes.MemberProfileVersionConflict,
                 null),
+            CurrentPasswordInvalidException => new ErrorResponse(
+                StatusCodes.Status403Forbidden,
+                "Current password verification failed",
+                "The current password is invalid.",
+                ErrorCodes.MemberCurrentPasswordInvalid,
+                null),
+            MemberEmailAlreadyUsedException => new ErrorResponse(
+                StatusCodes.Status409Conflict,
+                "Email address unavailable",
+                "The email address is already used by another account.",
+                ErrorCodes.MemberEmailAlreadyUsed,
+                null),
+            MemberEmailChangeInvalidException => new ErrorResponse(
+                StatusCodes.Status400BadRequest,
+                "Email change confirmation failed",
+                "The email change confirmation link is invalid or expired.",
+                ErrorCodes.MemberEmailChangeInvalid,
+                null),
             PreconditionRequiredException => new ErrorResponse(
                 StatusCodes.Status428PreconditionRequired,
                 "Precondition required",
@@ -129,7 +147,7 @@ public class GlobalExceptionHandler(
         ApiLogMessages.ExpectedHttpError(
             logger,
             response.StatusCode,
-            response.ErrorCode!);
+            response.ErrorCode);
     }
 
     internal static string GetDependencyName(DependencyUnavailableException exception)

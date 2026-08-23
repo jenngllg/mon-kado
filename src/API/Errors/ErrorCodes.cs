@@ -79,6 +79,18 @@ public static class ErrorCodes
     /// Identifies a member profile version conflict.
     /// </summary>
     public const string MemberProfileVersionConflict = "MEMBER_PROFILE_VERSION_CONFLICT";
+    /// <summary>
+    /// Identifies an invalid current password for a sensitive member operation.
+    /// </summary>
+    public const string MemberCurrentPasswordInvalid = "MEMBER_CURRENT_PASSWORD_INVALID";
+    /// <summary>
+    /// Identifies an email address already assigned to another member.
+    /// </summary>
+    public const string MemberEmailAlreadyUsed = "MEMBER_EMAIL_ALREADY_USED";
+    /// <summary>
+    /// Identifies an invalid member email change confirmation.
+    /// </summary>
+    public const string MemberEmailChangeInvalid = "MEMBER_EMAIL_CHANGE_INVALID";
 
     #endregion
 

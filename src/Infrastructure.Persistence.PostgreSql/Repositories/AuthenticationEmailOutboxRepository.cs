@@ -75,6 +75,27 @@ public class AuthenticationEmailOutboxRepository(MonKadoDbContext context)
     }
 
     /// <inheritdoc />
+    public async Task MarkPendingEmailChangeMessagesProcessedAsync(
+        Guid requestId,
+        DateTime processedAt,
+        CancellationToken cancellationToken)
+    {
+        await context.AuthenticationEmailOutboxMessages
+            .Where(message =>
+                message.MemberEmailChangeRequestId == requestId &&
+                message.ProcessedAt == null)
+            .ExecuteUpdateAsync(
+                setters => setters
+                    .SetProperty(
+                        message => message.ProcessedAt,
+                        processedAt)
+                    .SetProperty(
+                        message => message.LockedUntil,
+                        (DateTime?)null),
+                cancellationToken);
+    }
+
+    /// <inheritdoc />
     public Task<bool> HasPendingConfirmationMessageAsync(
         Guid userId,
         CancellationToken cancellationToken)

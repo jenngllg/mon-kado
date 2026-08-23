@@ -7,8 +7,15 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.UnitTes
 
 public class AuthenticationEmailOutboxMessageConfigurationTests
 {
-    [Fact]
-    public void Convert_WhenEmailConfirmationKindIsProvided_UsesDatabaseValue()
+    [Theory]
+    [InlineData(AuthenticationEmailKind.EmailConfirmation, "EMAIL_CONFIRMATION")]
+    [InlineData(AuthenticationEmailKind.EmailChangeConfirmation, "EMAIL_CHANGE_CONFIRMATION")]
+    [InlineData(
+        AuthenticationEmailKind.EmailChangeSecurityNotification,
+        "EMAIL_CHANGE_SECURITY_NOTIFICATION")]
+    public void Convert_WhenKnownKindIsProvided_UsesDatabaseValue(
+        AuthenticationEmailKind kind,
+        string expectedDatabaseValue)
     {
         // Arrange
         using var context = CreateContext();
@@ -16,15 +23,15 @@ public class AuthenticationEmailOutboxMessageConfigurationTests
 
         // Act
         var databaseValue = converter.ConvertToProvider(
-            AuthenticationEmailKind.EmailConfirmation);
-        var modelValue = converter.ConvertFromProvider("EMAIL_CONFIRMATION");
+            kind);
+        var modelValue = converter.ConvertFromProvider(expectedDatabaseValue);
 
         // Assert
         Assert.Equal(
-            "EMAIL_CONFIRMATION",
+            expectedDatabaseValue,
             databaseValue);
         Assert.Equal(
-            AuthenticationEmailKind.EmailConfirmation,
+            kind,
             modelValue);
     }
 

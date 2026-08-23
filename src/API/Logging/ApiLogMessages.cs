@@ -22,7 +22,7 @@ public static partial class ApiLogMessages
     public static partial void ExpectedHttpError(
         ILogger logger,
         int statusCode,
-        string errorCode);
+        string? errorCode);
     /// <summary>
     /// Executes the dependency unavailable operation.
     /// </summary>

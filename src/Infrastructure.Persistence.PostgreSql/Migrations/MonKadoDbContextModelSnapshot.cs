@@ -57,6 +57,10 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Migrati
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("locked_until");
 
+                    b.Property<Guid?>("MemberEmailChangeRequestId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("member_email_change_request_id");
+
                     b.Property<DateTime?>("ProcessedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("processed_at");
@@ -66,12 +70,20 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Migrati
                         .HasColumnType("character varying(255)")
                         .HasColumnName("provider_message_id");
 
+                    b.Property<string>("RecipientEmail")
+                        .HasMaxLength(254)
+                        .HasColumnType("character varying(254)")
+                        .HasColumnName("recipient_email");
+
                     b.Property<Guid>("UserId")
                         .HasColumnType("uuid")
                         .HasColumnName("user_id");
 
                     b.HasKey("Id")
                         .HasName("pk_authentication_email_outbox");
+
+                    b.HasIndex("MemberEmailChangeRequestId")
+                        .HasDatabaseName("ix_authentication_email_outbox_member_email_change_request_id");
 
                     b.HasIndex("AvailableAt", "CreatedAt")
                         .HasDatabaseName("ix_authentication_email_outbox_pending_delivery")
@@ -90,7 +102,9 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Migrati
                         {
                             t.HasCheckConstraint("ck_authentication_email_outbox_attempt_count_non_negative", "attempt_count >= 0");
 
-                            t.HasCheckConstraint("ck_authentication_email_outbox_kind_valid", "kind IN ('EMAIL_CONFIRMATION')");
+                            t.HasCheckConstraint("ck_authentication_email_outbox_email_change_fields_consistent", "(kind = 'EMAIL_CONFIRMATION' AND member_email_change_request_id IS NULL AND recipient_email IS NULL) OR (kind IN ('EMAIL_CHANGE_CONFIRMATION', 'EMAIL_CHANGE_SECURITY_NOTIFICATION') AND member_email_change_request_id IS NOT NULL AND recipient_email IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_authentication_email_outbox_kind_valid", "kind IN ('EMAIL_CONFIRMATION', 'EMAIL_CHANGE_CONFIRMATION', 'EMAIL_CHANGE_SECURITY_NOTIFICATION')");
 
                             t.HasCheckConstraint("ck_authentication_email_outbox_timestamps_consistent", "available_at >= created_at AND (processed_at IS NULL OR processed_at >= created_at)");
                         });
@@ -146,6 +160,70 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Migrati
                             t.HasCheckConstraint("ck_authentication_sessions_refresh_token_hash_length", "octet_length(refresh_token_hash) = 32");
 
                             t.HasCheckConstraint("ck_authentication_sessions_timestamps_consistent", "renewed_at >= created_at AND expires_at > created_at AND expires_at >= renewed_at AND (revoked_at IS NULL OR revoked_at >= created_at)");
+                        });
+                });
+
+            modelBuilder.Entity("JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Entities.MemberEmailChangeRequest", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime?>("ConfirmedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("confirmed_at");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("CurrentEmail")
+                        .IsRequired()
+                        .HasMaxLength(254)
+                        .HasColumnType("character varying(254)")
+                        .HasColumnName("current_email");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expires_at");
+
+                    b.Property<string>("NewEmail")
+                        .IsRequired()
+                        .HasMaxLength(254)
+                        .HasColumnType("character varying(254)")
+                        .HasColumnName("new_email");
+
+                    b.Property<string>("NormalizedNewEmail")
+                        .IsRequired()
+                        .HasMaxLength(254)
+                        .HasColumnType("character varying(254)")
+                        .HasColumnName("normalized_new_email");
+
+                    b.Property<DateTime?>("RevokedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("revoked_at");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_member_email_change_requests");
+
+                    b.HasIndex("ExpiresAt")
+                        .HasDatabaseName("ix_member_email_change_requests_expires_at");
+
+                    b.HasIndex("UserId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_member_email_change_requests_active_user")
+                        .HasFilter("confirmed_at IS NULL AND revoked_at IS NULL");
+
+                    b.ToTable("member_email_change_requests", "public", t =>
+                        {
+                            t.HasCheckConstraint("ck_member_email_change_requests_emails_different", "current_email <> new_email");
+
+                            t.HasCheckConstraint("ck_member_email_change_requests_timestamps_consistent", "expires_at > created_at AND (confirmed_at IS NULL OR confirmed_at >= created_at) AND (revoked_at IS NULL OR revoked_at >= created_at) AND NOT (confirmed_at IS NOT NULL AND revoked_at IS NOT NULL)");
                         });
                 });
 
@@ -445,6 +523,12 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Migrati
 
             modelBuilder.Entity("JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Entities.AuthenticationEmailOutboxMessage", b =>
                 {
+                    b.HasOne("JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Entities.MemberEmailChangeRequest", null)
+                        .WithMany()
+                        .HasForeignKey("MemberEmailChangeRequestId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .HasConstraintName("fk_authentication_email_outbox_member_email_change_request_id");
+
                     b.HasOne("JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Entities.MonKadoUser", null)
                         .WithMany()
                         .HasForeignKey("UserId")
@@ -461,6 +545,16 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Migrati
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_authentication_sessions_users_user_id");
+                });
+
+            modelBuilder.Entity("JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Entities.MemberEmailChangeRequest", b =>
+                {
+                    b.HasOne("JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Entities.MonKadoUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_member_email_change_requests_users_user_id");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<System.Guid>", b =>

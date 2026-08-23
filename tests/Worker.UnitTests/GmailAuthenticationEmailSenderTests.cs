@@ -1,5 +1,6 @@
 using JennGllg.Fr.MonKado.Back.Application.Abstractions;
 using JennGllg.Fr.MonKado.Back.Application.Commands;
+using JennGllg.Fr.MonKado.Back.Application.Common.Constants;
 using JennGllg.Fr.MonKado.Back.Application.Common.Exceptions;
 using JennGllg.Fr.MonKado.Back.Application.Models;
 using JennGllg.Fr.MonKado.Back.Application.Validators;
@@ -7,6 +8,8 @@ using JennGllg.Fr.MonKado.Back.Worker.Exceptions;
 using JennGllg.Fr.MonKado.Back.Worker.Options;
 using JennGllg.Fr.MonKado.Back.Worker.Services;
 
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
 using MimeKit;
@@ -23,10 +26,12 @@ public class GmailAuthenticationEmailSenderTests
     {
         // Arrange
         var client = new CapturingGmailClient();
+        var logger = new RecordingLogger<GmailAuthenticationEmailSender>();
         var sender = new GmailAuthenticationEmailSender(
             client,
             Microsoft.Extensions.Options.Options.Create(
-                new GmailOptions { SenderAddress = "monkado.app@gmail.com" }));
+                new GmailOptions { SenderAddress = "monkado.app@gmail.com" }),
+            logger);
         var outboxId = Guid.Parse("019c52dd-56c1-7cc6-8a95-243f3a032e03");
         var confirmationUrl = new Uri(
             "https://mon-kado.fr/confirm-email#userId=019c52dd-56c1-7cc6-8a95-243f3a032e04&token=a-b_c");
@@ -74,6 +79,17 @@ public class GmailAuthenticationEmailSenderTests
             "tracking",
             mime.HtmlBody,
             StringComparison.OrdinalIgnoreCase);
+        var log = Assert.Single(logger.Entries);
+        Assert.Equal(
+            LogLevel.Information,
+            log.LogLevel);
+        Assert.Equal(
+            LogEventIds.AccountConfirmationEmailSent,
+            log.EventId.Id);
+        Assert.Contains(
+            outboxId.ToString(),
+            log.Message,
+            StringComparison.OrdinalIgnoreCase);
     }
 
     [Theory]
@@ -105,10 +121,12 @@ public class GmailAuthenticationEmailSenderTests
         // Arrange
         // Act
         var retryAfter = TimeSpan.FromMinutes(12);
+        var logger = new RecordingLogger<GmailAuthenticationEmailSender>();
         var sender = CreateSender(
             new ThrowingGmailClient(new GmailRequestException(
                 statusCode,
-                retryAfter)));
+                retryAfter)),
+            logger);
 
         var exception =
             await Assert.ThrowsAsync<AuthenticationEmailDeliveryException>(() =>
@@ -123,6 +141,21 @@ public class GmailAuthenticationEmailSenderTests
         Assert.Equal(
             retryAfter,
             exception.RetryAfter);
+        var log = Assert.Single(logger.Entries);
+        Assert.Equal(
+            LogLevel.Error,
+            log.LogLevel);
+        Assert.Equal(
+            LogEventIds.AuthenticationEmailProviderRejectedMessage,
+            log.EventId.Id);
+        Assert.DoesNotContain(
+            "member@example.fr",
+            log.Message,
+            StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(
+            "token=value",
+            log.Message,
+            StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -230,13 +263,129 @@ public class GmailAuthenticationEmailSenderTests
                 source.Token));
     }
 
-    private static GmailAuthenticationEmailSender CreateSender(IGmailApiClient client)
+    [Fact]
+    public async Task SendEmailChangeConfirmationAsync_WhenCalled_CreatesDedicatedConfirmationMessage()
+    {
+        // Arrange
+        var client = new CapturingGmailClient();
+        var logger = new RecordingLogger<GmailAuthenticationEmailSender>();
+        var sender = CreateSender(
+            client,
+            logger);
+        var confirmationUrl = new Uri(
+            "https://mon-kado.fr/confirm-email-change#requestId=request&token=a-b_c");
+        var message = new AuthenticationEmailMessage(
+            Guid.CreateVersion7(),
+            "new@example.fr",
+            confirmationUrl);
+
+        // Act
+        var result = await sender.SendEmailChangeConfirmationAsync(
+            message,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(
+            "gmail-message-id",
+            result.ProviderMessageId);
+        var mime = await DecodeAsync(client.RawMessage ?? string.Empty);
+        Assert.Equal(
+            "new@example.fr",
+            mime.To.Mailboxes.Single().Address);
+        Assert.Contains(
+            "nouvelle adresse",
+            mime.Subject,
+            StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(
+            confirmationUrl.AbsoluteUri,
+            mime.TextBody,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            confirmationUrl.AbsoluteUri.Replace(
+                "&",
+                "&amp;",
+                StringComparison.Ordinal),
+            mime.HtmlBody,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            "tracking",
+            mime.HtmlBody,
+            StringComparison.OrdinalIgnoreCase);
+        var log = Assert.Single(logger.Entries);
+        Assert.Equal(
+            LogEventIds.MemberEmailChangeConfirmationSent,
+            log.EventId.Id);
+    }
+
+    [Theory]
+    [InlineData("new@example.fr", "n***@e***.fr")]
+    [InlineData("new@example", "n***@e***")]
+    [InlineData("invalid", "***")]
+    public async Task SendEmailChangeSecurityNotificationAsync_WhenCalled_MasksRequestedAddress(
+        string requestedAddress,
+        string expectedMaskedAddress)
+    {
+        // Arrange
+        var client = new CapturingGmailClient();
+        var logger = new RecordingLogger<GmailAuthenticationEmailSender>();
+        var sender = CreateSender(
+            client,
+            logger);
+        var message = new AuthenticationEmailSecurityNotification(
+            Guid.CreateVersion7(),
+            "old@example.fr",
+            requestedAddress);
+
+        // Act
+        var result = await sender.SendEmailChangeSecurityNotificationAsync(
+            message,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(
+            "gmail-message-id",
+            result.ProviderMessageId);
+        var mime = await DecodeAsync(client.RawMessage ?? string.Empty);
+        Assert.Equal(
+            "old@example.fr",
+            mime.To.Mailboxes.Single().Address);
+        Assert.Contains(
+            expectedMaskedAddress,
+            mime.TextBody,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            expectedMaskedAddress,
+            mime.HtmlBody,
+            StringComparison.Ordinal);
+
+        if (requestedAddress != "invalid")
+        {
+            Assert.DoesNotContain(
+                requestedAddress,
+                mime.TextBody,
+                StringComparison.Ordinal);
+            Assert.DoesNotContain(
+                requestedAddress,
+                mime.HtmlBody,
+                StringComparison.Ordinal);
+        }
+
+        var log = Assert.Single(logger.Entries);
+        Assert.Equal(
+            LogEventIds.MemberEmailChangeSecurityNotificationSent,
+            log.EventId.Id);
+    }
+
+    private static GmailAuthenticationEmailSender CreateSender(
+        IGmailApiClient client,
+        ILogger<GmailAuthenticationEmailSender>? logger = null)
     {
 
         return new(
             client,
             Microsoft.Extensions.Options.Options.Create(
-                new GmailOptions { SenderAddress = "monkado.app@gmail.com" }));
+                new GmailOptions { SenderAddress = "monkado.app@gmail.com" }),
+            logger ?? NullLogger<GmailAuthenticationEmailSender>.Instance);
     }
 
     private static AuthenticationEmailMessage CreateMessage()

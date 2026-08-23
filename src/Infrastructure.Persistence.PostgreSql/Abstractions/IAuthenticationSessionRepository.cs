@@ -34,4 +34,16 @@ public interface IAuthenticationSessionRepository
         DateTime cutoff,
         int batchSize,
         CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Revokes every active refresh session for a member.
+    /// </summary>
+    /// <param name="userId">The member identifier.</param>
+    /// <param name="revokedAt">The revocation date and time.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The number of revoked sessions.</returns>
+    Task<int> RevokeAllForUserAsync(
+        Guid userId,
+        DateTime revokedAt,
+        CancellationToken cancellationToken);
 }

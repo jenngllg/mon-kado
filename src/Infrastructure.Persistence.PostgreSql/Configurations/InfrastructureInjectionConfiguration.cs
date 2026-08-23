@@ -83,7 +83,13 @@ public static class InfrastructureInjectionConfiguration
             })
             .AddRoles<IdentityRole<Guid>>()
             .AddEntityFrameworkStores<MonKadoDbContext>()
+            .AddDefaultTokenProviders()
             .AddPasswordValidator<MaximumPasswordLengthValidator<MonKadoUser>>();
+        services.RemoveAll<ILookupNormalizer>();
+        services.AddSingleton<UpperInvariantLookupNormalizer>();
+        services.AddSingleton<ILookupNormalizer>(provider =>
+            new InvariantFallbackLookupNormalizer(
+                provider.GetRequiredService<UpperInvariantLookupNormalizer>()));
         services.Configure<PasswordHasherOptions>(options => options.IterationCount = 220_000);
 
         services.AddScoped<IUnitOfWork>(provider =>
@@ -92,6 +98,7 @@ public static class InfrastructureInjectionConfiguration
         services.AddScoped<IMemberRepository, MemberRepository>();
         services.AddScoped<IAuthenticationEmailOutboxRepository, AuthenticationEmailOutboxRepository>();
         services.AddScoped<IAuthenticationSessionRepository, AuthenticationSessionRepository>();
+        services.AddScoped<IMemberEmailChangeRequestRepository, MemberEmailChangeRequestRepository>();
         services.AddScoped<IAccountRegistrationService, AccountRegistrationService>();
         services.AddScoped<IEmailConfirmationService, EmailConfirmationService>();
         services.AddScoped<IExpiredAccountCleanup, ExpiredAccountCleanup>();
@@ -100,7 +107,11 @@ public static class InfrastructureInjectionConfiguration
         services.AddScoped<IAccountSessionService, AccountSessionService>();
         services.AddScoped<ICurrentSessionService, CurrentSessionService>();
         services.AddScoped<IMemberProfileService, MemberProfileService>();
+        services.AddScoped<IMemberEmailChangeService, MemberEmailChangeService>();
         services.AddScoped<IExpiredAuthenticationSessionCleanup, ExpiredAuthenticationSessionCleanup>();
+        services.AddScoped<
+            IExpiredMemberEmailChangeRequestCleanup,
+            ExpiredMemberEmailChangeRequestCleanup>();
 
         return services;
     }

@@ -47,6 +47,18 @@ public interface IAuthenticationEmailOutboxRepository
         CancellationToken cancellationToken);
 
     /// <summary>
+    /// Marks pending messages for a member email change request as processed.
+    /// </summary>
+    /// <param name="requestId">The member email change request identifier.</param>
+    /// <param name="processedAt">The UTC processing date and time.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    Task MarkPendingEmailChangeMessagesProcessedAsync(
+        Guid requestId,
+        DateTime processedAt,
+        CancellationToken cancellationToken);
+
+    /// <summary>
     /// Determines whether a pending confirmation message exists for a user.
     /// </summary>
     /// <param name="userId">The user identifier.</param>

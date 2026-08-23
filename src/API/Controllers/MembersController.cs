@@ -4,12 +4,14 @@ using JennGllg.Fr.MonKado.Back.Api.Authorization;
 using JennGllg.Fr.MonKado.Back.Api.Contracts.Requests;
 using JennGllg.Fr.MonKado.Back.Api.Contracts.Responses;
 using JennGllg.Fr.MonKado.Back.Api.Errors;
+using JennGllg.Fr.MonKado.Back.Api.Extensions;
 using JennGllg.Fr.MonKado.Back.Application.Commands;
 
 using MediatR;
 
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Net.Http.Headers;
 
 using System.IdentityModel.Tokens.Jwt;
@@ -68,5 +70,48 @@ public class MembersController(
         Response.Headers.CacheControl = "no-store";
 
         return Ok(response);
+    }
+
+    /// <summary>
+    /// Requests a change to the current authenticated member email address.
+    /// </summary>
+    /// <param name="request">The member email change request.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>An accepted response when the request has been processed.</returns>
+    [HttpPut("current/email")]
+    [EntityTag(isRequired: true, returnsEntityTag: false)]
+    [NoStoreResponse(StatusCodes.Status202Accepted)]
+    [EnableRateLimiting(AuthenticationRateLimitingExtensions.EmailChangeRequestPolicy)]
+    [RequestSizeLimit(MaximumRequestBodySize)]
+    [Consumes("application/json")]
+    [ProducesResponseType(StatusCodes.Status202Accepted)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status403Forbidden, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status409Conflict, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status412PreconditionFailed, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status413PayloadTooLarge, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status415UnsupportedMediaType, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status428PreconditionRequired, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status429TooManyRequests, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status503ServiceUnavailable, "application/json")]
+    public async Task<IActionResult> UpdateEmailAsync(
+        UpdateMemberEmailRequest request,
+        CancellationToken cancellationToken)
+    {
+        var subject = User.FindFirstValue(JwtRegisteredClaimNames.Sub);
+        _ = Guid.TryParse(
+            subject,
+            out var memberId);
+        var expectedVersion = entityTagService.Parse(Request.Headers.IfMatch);
+        await sender.Send(
+            new RequestMemberEmailChangeCommand(
+                memberId,
+                request.Email,
+                request.CurrentPassword,
+                expectedVersion),
+            cancellationToken);
+        Response.Headers.CacheControl = "no-store";
+
+        return Accepted();
     }
 }

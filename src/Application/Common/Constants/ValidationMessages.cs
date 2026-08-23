@@ -24,4 +24,8 @@ public static class ValidationMessages
     /// Identifies invalid email confirmation link.
     /// </summary>
     public const string InvalidEmailConfirmationLink = "The email confirmation link is invalid.";
+    /// <summary>
+    /// Identifies an invalid member email change confirmation link.
+    /// </summary>
+    public const string InvalidEmailChangeConfirmationLink = "The email change confirmation link is invalid.";
 }

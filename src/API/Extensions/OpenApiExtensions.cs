@@ -68,6 +68,11 @@ public static class OpenApiExtensions
                 if (DeletesRefreshTokenCookie(metadata))
                     AddDeletedRefreshTokenResponseHeaders(operation);
 
+                foreach (var noStoreResponse in metadata.OfType<NoStoreResponseAttribute>())
+                    AddNoStoreResponseHeader(
+                        operation,
+                        noStoreResponse.StatusCode);
+
                 var entityTag = metadata
                     .OfType<EntityTagAttribute>()
                     .SingleOrDefault();
@@ -75,7 +80,8 @@ public static class OpenApiExtensions
                 if (entityTag is not null)
                     AddEntityTagContract(
                         operation,
-                        entityTag.IsRequired);
+                        entityTag.IsRequired,
+                        entityTag.ReturnsEntityTag);
 
                 return Task.CompletedTask;
             });
@@ -208,27 +214,50 @@ public static class OpenApiExtensions
             HeaderNames.CacheControl,
             new OpenApiHeader
             {
-                Description = "Always no-store for logout responses.",
+                Description = "Always no-store for successful responses that delete the refresh cookie.",
+                Schema = new OpenApiSchema { Type = JsonSchemaType.String }
+            });
+    }
+
+    private static void AddNoStoreResponseHeader(
+        OpenApiOperation operation,
+        int statusCode)
+    {
+        ArgumentNullException.ThrowIfNull(operation.Responses);
+        var response = operation.Responses[
+            statusCode.ToString(System.Globalization.CultureInfo.InvariantCulture)];
+        var mutableResponse = (OpenApiResponse)response;
+        mutableResponse.Headers = AddOrReplace(
+            mutableResponse.Headers,
+            HeaderNames.CacheControl,
+            new OpenApiHeader
+            {
+                Description = "Always no-store for this response.",
                 Schema = new OpenApiSchema { Type = JsonSchemaType.String }
             });
     }
 
     private static void AddEntityTagContract(
         OpenApiOperation operation,
-        bool isRequired)
+        bool isRequired,
+        bool returnsEntityTag)
     {
         ArgumentNullException.ThrowIfNull(operation.Responses);
-        var response = operation.Responses[
-            StatusCodes.Status200OK.ToString(System.Globalization.CultureInfo.InvariantCulture)];
-        var mutableResponse = (OpenApiResponse)response;
-        mutableResponse.Headers = AddOrReplace(
-            mutableResponse.Headers,
-            HeaderNames.ETag,
-            new OpenApiHeader
-            {
-                Description = "Strong entity tag representing the current member profile version.",
-                Schema = new OpenApiSchema { Type = JsonSchemaType.String }
-            });
+
+        if (returnsEntityTag)
+        {
+            var response = operation.Responses[
+                StatusCodes.Status200OK.ToString(System.Globalization.CultureInfo.InvariantCulture)];
+            var mutableResponse = (OpenApiResponse)response;
+            mutableResponse.Headers = AddOrReplace(
+                mutableResponse.Headers,
+                HeaderNames.ETag,
+                new OpenApiHeader
+                {
+                    Description = "Strong entity tag representing the current member profile version.",
+                    Schema = new OpenApiSchema { Type = JsonSchemaType.String }
+                });
+        }
 
         if (!isRequired)
             return;

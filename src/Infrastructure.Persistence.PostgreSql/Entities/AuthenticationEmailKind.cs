@@ -8,5 +8,15 @@ public enum AuthenticationEmailKind
     /// <summary>
     /// Indicates email confirmation.
     /// </summary>
-    EmailConfirmation
+    EmailConfirmation,
+
+    /// <summary>
+    /// Indicates a member email change confirmation sent to the new address.
+    /// </summary>
+    EmailChangeConfirmation,
+
+    /// <summary>
+    /// Indicates a member email change security notification sent to the current address.
+    /// </summary>
+    EmailChangeSecurityNotification
 }

@@ -27,6 +27,8 @@ public class RegistrationApiFactory(
 
     public RecordingMemberProfileService MemberProfileService { get; } = new();
 
+    public RecordingMemberEmailChangeService MemberEmailChangeService { get; } = new();
+
     public RecordingAccountSessionService SessionService { get; } = new();
 
     public IReadOnlyCollection<string> LogMessages => _logProvider.Messages;
@@ -70,6 +72,8 @@ public class RegistrationApiFactory(
             services.AddSingleton<ICurrentSessionService>(CurrentSessionService);
             services.RemoveAll<IMemberProfileService>();
             services.AddSingleton<IMemberProfileService>(MemberProfileService);
+            services.RemoveAll<IMemberEmailChangeService>();
+            services.AddSingleton<IMemberEmailChangeService>(MemberEmailChangeService);
             services.AddSingleton<IEmailConfirmationService>(EmailConfirmationService);
         });
     }
