@@ -158,4 +158,50 @@ public static partial class ApplicationLogMessages
     public static partial void MemberPasswordChanged(
         ILogger logger,
         Guid memberId);
+
+    /// <summary>
+    /// Logs the start of a password reset email request.
+    /// </summary>
+    /// <param name="logger">The logger.</param>
+    [LoggerMessage(
+        EventId = LogEventIds.PasswordResetRequestStarted,
+        Level = LogLevel.Debug,
+        Message = "Requesting a password reset email.")]
+    public static partial void PasswordResetRequestStarted(ILogger logger);
+
+    /// <summary>
+    /// Logs an accepted password reset email request.
+    /// </summary>
+    /// <param name="logger">The logger.</param>
+    [LoggerMessage(
+        EventId = LogEventIds.PasswordResetRequested,
+        Level = LogLevel.Information,
+        Message = "Password reset email request accepted.")]
+    public static partial void PasswordResetRequested(ILogger logger);
+
+    /// <summary>
+    /// Logs the start of an account password reset.
+    /// </summary>
+    /// <param name="logger">The logger.</param>
+    /// <param name="memberId">The account identifier.</param>
+    [LoggerMessage(
+        EventId = LogEventIds.PasswordResetStarted,
+        Level = LogLevel.Debug,
+        Message = "Resetting the password for member {MemberId}.")]
+    public static partial void PasswordResetStarted(
+        ILogger logger,
+        Guid memberId);
+
+    /// <summary>
+    /// Logs a completed account password reset.
+    /// </summary>
+    /// <param name="logger">The logger.</param>
+    /// <param name="memberId">The account identifier.</param>
+    [LoggerMessage(
+        EventId = LogEventIds.PasswordResetCompleted,
+        Level = LogLevel.Information,
+        Message = "Password reset completed for member {MemberId}.")]
+    public static partial void PasswordResetCompleted(
+        ILogger logger,
+        Guid memberId);
 }

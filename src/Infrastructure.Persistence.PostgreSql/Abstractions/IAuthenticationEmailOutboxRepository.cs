@@ -59,12 +59,48 @@ public interface IAuthenticationEmailOutboxRepository
         CancellationToken cancellationToken);
 
     /// <summary>
+    /// Marks pending password reset messages for a member as processed.
+    /// </summary>
+    /// <param name="userId">The member identifier.</param>
+    /// <param name="processedAt">The UTC processing date and time.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    Task MarkPendingPasswordResetMessagesProcessedAsync(
+        Guid userId,
+        DateTime processedAt,
+        CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Marks expired pending password reset messages for a member as processed.
+    /// </summary>
+    /// <param name="userId">The member identifier.</param>
+    /// <param name="expirationCutoff">The inclusive UTC expiration cutoff.</param>
+    /// <param name="processedAt">The UTC processing date and time.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A task that represents the asynchronous operation.</returns>
+    Task MarkExpiredPasswordResetMessagesProcessedAsync(
+        Guid userId,
+        DateTime expirationCutoff,
+        DateTime processedAt,
+        CancellationToken cancellationToken);
+
+    /// <summary>
     /// Determines whether a pending confirmation message exists for a user.
     /// </summary>
     /// <param name="userId">The user identifier.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns><see langword="true" /> when a pending message exists; otherwise, <see langword="false" />.</returns>
     Task<bool> HasPendingConfirmationMessageAsync(
+        Guid userId,
+        CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Determines whether a pending password reset message exists for a member.
+    /// </summary>
+    /// <param name="userId">The member identifier.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns><see langword="true" /> when a pending message exists; otherwise, <see langword="false" />.</returns>
+    Task<bool> HasPendingPasswordResetMessageAsync(
         Guid userId,
         CancellationToken cancellationToken);
 
@@ -76,6 +112,18 @@ public interface IAuthenticationEmailOutboxRepository
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>The statistics when requests exist; otherwise, <see langword="null" />.</returns>
     Task<EmailRequestStatistics?> GetConfirmationRequestStatisticsAsync(
+        Guid userId,
+        DateTime windowStart,
+        CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Gets password-reset request statistics for a member and time window.
+    /// </summary>
+    /// <param name="userId">The member identifier.</param>
+    /// <param name="windowStart">The inclusive UTC beginning of the window.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The statistics when requests exist; otherwise, <see langword="null" />.</returns>
+    Task<EmailRequestStatistics?> GetPasswordResetRequestStatisticsAsync(
         Guid userId,
         DateTime windowStart,
         CancellationToken cancellationToken);

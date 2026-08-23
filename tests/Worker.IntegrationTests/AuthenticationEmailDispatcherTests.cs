@@ -533,6 +533,240 @@ public class AuthenticationEmailDispatcherTests(PostgreSqlWorkerFixture fixture)
     }
 
     [Fact]
+    public async Task ExecuteAsync_WhenPasswordResetIsEligible_SendsValidSnapshotLink()
+    {
+        // Arrange
+        var sender = new FakeEmailSender();
+        var now = new DateTimeOffset(
+            2026,
+            8,
+            23,
+            10,
+            0,
+            0,
+            TimeSpan.Zero);
+        await using var provider = await CreateProviderAsync(
+            sender,
+            now);
+        var messageId = await CreatePasswordResetAsync(
+            provider,
+            now);
+
+        // Act
+        await DispatchAsync(provider);
+
+        // Assert
+        var delivery = Assert.Single(sender.PasswordResetMessages);
+        Assert.Equal(
+            messageId,
+            delivery.OutboxMessageId);
+        Assert.Equal(
+            "member@example.fr",
+            delivery.RecipientAddress);
+        Assert.Equal(
+            "/reset-password",
+            delivery.ResetUrl.AbsolutePath);
+        var fragment = GetFragmentValues(delivery.ResetUrl);
+        var userId = Guid.Parse(fragment["userId"]);
+        var token = DecodeBase64Url(fragment["token"]);
+        await using var scope = provider.CreateAsyncScope();
+        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<MonKadoUser>>();
+        var user = await userManager.FindByIdAsync(userId.ToString("D"))
+            ?? throw new InvalidOperationException("The member does not exist.");
+        Assert.True(await userManager.VerifyUserTokenAsync(
+            user,
+            PasswordResetTokenProviderOptions.ProviderName,
+            UserManager<MonKadoUser>.ResetPasswordTokenPurpose,
+            token));
+    }
+
+    [Theory]
+    [InlineData("expired")]
+    [InlineData("unconfirmed")]
+    [InlineData("changed-email")]
+    [InlineData("changed-security-stamp")]
+    [InlineData("missing-member")]
+    public async Task ExecuteAsync_WhenPasswordResetSnapshotIsStale_ClosesWithoutSending(
+        string scenario)
+    {
+        // Arrange
+        var sender = new FakeEmailSender();
+        var now = new DateTimeOffset(
+            2026,
+            8,
+            23,
+            10,
+            0,
+            0,
+            TimeSpan.Zero);
+        await using var provider = await CreateProviderAsync(
+            sender,
+            now);
+        await CreatePasswordResetAsync(
+            provider,
+            now);
+        await using (var setupScope = provider.CreateAsyncScope())
+        {
+            var context = setupScope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
+
+            if (scenario == "expired")
+                await context.AuthenticationEmailOutboxMessages.ExecuteUpdateAsync(
+                    setters => setters
+                        .SetProperty(
+                            message => message.CreatedAt,
+                            now.UtcDateTime.AddHours(-1))
+                        .SetProperty(
+                            message => message.AvailableAt,
+                            now.UtcDateTime.AddHours(-1)),
+                    TestContext.Current.CancellationToken);
+
+            if (scenario == "unconfirmed")
+                await context.Users.ExecuteUpdateAsync(
+                    setters => setters.SetProperty(
+                        user => user.EmailConfirmed,
+                        false),
+                    TestContext.Current.CancellationToken);
+
+            if (scenario == "changed-email")
+                await context.Users.ExecuteUpdateAsync(
+                    setters => setters.SetProperty(
+                        user => user.Email,
+                        "changed@example.fr"),
+                    TestContext.Current.CancellationToken);
+
+            if (scenario == "changed-security-stamp")
+                await context.Users.ExecuteUpdateAsync(
+                    setters => setters.SetProperty(
+                        user => user.SecurityStamp,
+                        "changed-security-stamp"),
+                    TestContext.Current.CancellationToken);
+
+            if (scenario == "missing-member")
+            {
+                await context.Database.ExecuteSqlRawAsync(
+                    "ALTER TABLE public.authentication_email_outbox " +
+                    "DROP CONSTRAINT fk_authentication_email_outbox_users_user_id;",
+                    TestContext.Current.CancellationToken);
+                await context.Users.ExecuteDeleteAsync(TestContext.Current.CancellationToken);
+            }
+        }
+
+        // Act
+        await DispatchAsync(provider);
+
+        // Assert
+        Assert.Empty(sender.PasswordResetMessages);
+        await using var assertionScope = provider.CreateAsyncScope();
+        var message = await assertionScope.ServiceProvider
+            .GetRequiredService<MonKadoDbContext>()
+            .AuthenticationEmailOutboxMessages
+            .AsNoTracking()
+            .SingleAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(
+            now.UtcDateTime,
+            message.ProcessedAt);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_WhenPasswordResetExpiresDuringPreparation_ClosesWithoutTokenGeneration()
+    {
+        // Arrange
+        var sender = new FakeEmailSender();
+        var now = new DateTimeOffset(
+            2026,
+            8,
+            23,
+            10,
+            0,
+            0,
+            TimeSpan.Zero);
+        var timeProvider = new StepTimeProvider(now);
+        await using var provider = await CreateProviderAsync(
+            sender,
+            now,
+            timeProvider);
+        await CreatePasswordResetAsync(
+            provider,
+            now);
+        // Claiming the auditable outbox message consumes two clock reads before delivery begins.
+        timeProvider.AdvanceOnRead(
+            4,
+            TimeSpan.FromHours(1));
+
+        // Act
+        await DispatchAsync(provider);
+
+        // Assert
+        Assert.Empty(sender.PasswordResetMessages);
+        await using var scope = provider.CreateAsyncScope();
+        var message = await scope.ServiceProvider
+            .GetRequiredService<MonKadoDbContext>()
+            .AuthenticationEmailOutboxMessages
+            .AsNoTracking()
+            .SingleAsync(TestContext.Current.CancellationToken);
+        Assert.NotNull(message.ProcessedAt);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ExecuteAsync_WhenPasswordResetSnapshotIsIncomplete_ClosesWithoutSending(
+        bool removesRecipient)
+    {
+        // Arrange
+        var sender = new FakeEmailSender();
+        var now = new DateTimeOffset(
+            2026,
+            8,
+            23,
+            10,
+            0,
+            0,
+            TimeSpan.Zero);
+        await using var provider = await CreateProviderAsync(
+            sender,
+            now);
+        await CreatePasswordResetAsync(
+            provider,
+            now);
+        await using (var setupScope = provider.CreateAsyncScope())
+        {
+            var context = setupScope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
+            await context.Database.ExecuteSqlRawAsync(
+                "ALTER TABLE public.authentication_email_outbox " +
+                "DROP CONSTRAINT ck_authentication_email_outbox_email_change_fields_consistent;",
+                TestContext.Current.CancellationToken);
+
+            if (removesRecipient)
+                await context.AuthenticationEmailOutboxMessages.ExecuteUpdateAsync(
+                    setters => setters.SetProperty(
+                        message => message.RecipientEmail,
+                        (string?)null),
+                    TestContext.Current.CancellationToken);
+
+            if (!removesRecipient)
+                await context.AuthenticationEmailOutboxMessages.ExecuteUpdateAsync(
+                    setters => setters.SetProperty(
+                        message => message.SecurityStampSnapshot,
+                        (string?)null),
+                    TestContext.Current.CancellationToken);
+        }
+
+        // Act
+        await DispatchAsync(provider);
+
+        // Assert
+        Assert.Empty(sender.PasswordResetMessages);
+        await using var assertionScope = provider.CreateAsyncScope();
+        var message = await assertionScope.ServiceProvider
+            .GetRequiredService<MonKadoDbContext>()
+            .AuthenticationEmailOutboxMessages
+            .AsNoTracking()
+            .SingleAsync(TestContext.Current.CancellationToken);
+        Assert.NotNull(message.ProcessedAt);
+    }
+
+    [Fact]
     public async Task ExecuteAsync_WhenPasswordChangedNotificationHasNoRecipient_ClosesWithoutSending()
     {
         // Arrange
@@ -826,6 +1060,53 @@ public class AuthenticationEmailDispatcherTests(PostgreSqlWorkerFixture fixture)
         Assert.True(isValid);
     }
 
+    [Fact]
+    public async Task ExecuteAsync_WhenSeparateInstanceSharingKeys_CanResetPasswordFromGeneratedLink()
+    {
+        // Arrange
+        var sender = new FakeEmailSender();
+        var now = new DateTimeOffset(
+            2026,
+            8,
+            23,
+            10,
+            0,
+            0,
+            TimeSpan.Zero);
+        await using var sendingProvider = await CreateProviderAsync(
+            sender,
+            now);
+        await CreatePasswordResetAsync(
+            sendingProvider,
+            now);
+        await DispatchAsync(sendingProvider);
+        var delivery = Assert.Single(sender.PasswordResetMessages);
+        var fragment = GetFragmentValues(delivery.ResetUrl);
+        var userId = Guid.Parse(fragment["userId"]);
+        var token = fragment["token"];
+        await using var validatingProvider = BuildProvider(
+            new FakeEmailSender(),
+            now);
+        await using var scope = validatingProvider.CreateAsyncScope();
+        var service = scope.ServiceProvider.GetRequiredService<IPasswordResetService>();
+
+        // Act
+        var reset = await service.ResetAsync(
+            userId.ToString("D"),
+            token,
+            "a long replacement password",
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.True(reset);
+        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<MonKadoUser>>();
+        var user = await userManager.FindByIdAsync(userId.ToString("D"))
+            ?? throw new InvalidOperationException("The member does not exist.");
+        Assert.True(await userManager.CheckPasswordAsync(
+            user,
+            "a long replacement password"));
+    }
+
     public void Dispose()
     {
 
@@ -839,11 +1120,13 @@ public class AuthenticationEmailDispatcherTests(PostgreSqlWorkerFixture fixture)
 
     private async Task<ServiceProvider> CreateProviderAsync(
         FakeEmailSender sender,
-        DateTimeOffset now)
+        DateTimeOffset now,
+        TimeProvider? timeProvider = null)
     {
         var provider = BuildProvider(
             sender,
-            now);
+            now,
+            timeProvider);
         await using var scope = provider.CreateAsyncScope();
         var context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
         await context.Database.EnsureDeletedAsync(TestContext.Current.CancellationToken);
@@ -854,14 +1137,16 @@ public class AuthenticationEmailDispatcherTests(PostgreSqlWorkerFixture fixture)
 
     private ServiceProvider BuildProvider(
         FakeEmailSender sender,
-        DateTimeOffset now)
+        DateTimeOffset now,
+        TimeProvider? timeProvider = null)
     {
         Directory.CreateDirectory(_keysPath);
         var configuration = new ConfigurationManager();
         configuration["ConnectionStrings:PostgreSql"] = fixture.Container.GetConnectionString();
         configuration["DataProtection:KeysPath"] = _keysPath;
         var services = new ServiceCollection();
-        services.AddSingleton<TimeProvider>(new FixedTimeProvider(now));
+        services.AddSingleton<TimeProvider>(
+            timeProvider ?? new FixedTimeProvider(now));
         services.AddSingleton<IAuthenticationEmailSender>(sender);
         services.ConfigureDataProtection(
             configuration,
@@ -884,6 +1169,23 @@ public class AuthenticationEmailDispatcherTests(PostgreSqlWorkerFixture fixture)
             '=');
 
         return Encoding.UTF8.GetString(Convert.FromBase64String(base64));
+    }
+
+    private static Dictionary<string, string> GetFragmentValues(Uri uri)
+    {
+
+        return uri.Fragment
+            .TrimStart('#')
+            .Split(
+                '&',
+                StringSplitOptions.RemoveEmptyEntries)
+            .Select(part => part.Split(
+                '=',
+                2))
+            .ToDictionary(
+                parts => parts[0],
+                parts => parts[1],
+                StringComparer.Ordinal);
     }
 
     private static async Task<Guid> CreateUnconfirmedAccountAsync(
@@ -978,6 +1280,38 @@ public class AuthenticationEmailDispatcherTests(PostgreSqlWorkerFixture fixture)
                 user.Id,
                 "member@example.fr",
                 now.UtcDateTime);
+        var context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
+        context.AuthenticationEmailOutboxMessages.Add(message);
+        await context.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        return message.Id;
+    }
+
+    private static async Task<Guid> CreatePasswordResetAsync(
+        ServiceProvider provider,
+        DateTimeOffset now)
+    {
+        await using var scope = provider.CreateAsyncScope();
+        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<MonKadoUser>>();
+        var user = new MonKadoUser
+        {
+            Id = Guid.CreateVersion7(now),
+            Email = "member@example.fr",
+            UserName = "member@example.fr",
+            EmailConfirmed = true,
+            DisplayName = "Member"
+        };
+        var result = await userManager.CreateAsync(
+            user,
+            "a valid member password");
+        Assert.True(result.Succeeded);
+        var securityStamp = user.SecurityStamp
+            ?? throw new InvalidOperationException("The member security stamp is missing.");
+        var message = AuthenticationEmailOutboxMessage.CreatePasswordReset(
+            user.Id,
+            "member@example.fr",
+            securityStamp,
+            now.UtcDateTime);
         var context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
         context.AuthenticationEmailOutboxMessages.Add(message);
         await context.SaveChangesAsync(TestContext.Current.CancellationToken);

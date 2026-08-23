@@ -15,6 +15,8 @@ internal class FakeEmailSender(
 {
     public ConcurrentQueue<AuthenticationEmailMessage> Messages { get; } = new();
 
+    public ConcurrentQueue<AuthenticationPasswordResetMessage> PasswordResetMessages { get; } = new();
+
     public ConcurrentQueue<AuthenticationEmailMessage> EmailChangeConfirmations { get; } = new();
 
     public ConcurrentQueue<AuthenticationEmailSecurityNotification> EmailChangeNotifications { get; } = new();
@@ -37,6 +39,15 @@ internal class FakeEmailSender(
                 failureCategory,
                 retryAfter)
             : new AuthenticationEmailSendResult("fake-provider-id");
+    }
+
+    public async Task<AuthenticationEmailSendResult> SendPasswordResetAsync(
+        AuthenticationPasswordResetMessage message,
+        CancellationToken cancellationToken)
+    {
+        PasswordResetMessages.Enqueue(message);
+
+        return await CompleteAsync(cancellationToken);
     }
 
     public async Task<AuthenticationEmailSendResult> SendEmailChangeConfirmationAsync(

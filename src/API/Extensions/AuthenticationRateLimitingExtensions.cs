@@ -43,6 +43,14 @@ public static class AuthenticationRateLimitingExtensions
     /// Identifies the member password change policy.
     /// </summary>
     public const string PasswordChangePolicy = "PasswordChange";
+    /// <summary>
+    /// Identifies the password reset email request policy.
+    /// </summary>
+    public const string PasswordResetRequestPolicy = "PasswordResetRequest";
+    /// <summary>
+    /// Identifies the password reset policy.
+    /// </summary>
+    public const string PasswordResetPolicy = "PasswordReset";
 
     private static readonly TimeSpan _window = TimeSpan.FromMinutes(1);
     /// <summary>
@@ -95,6 +103,16 @@ public static class AuthenticationRateLimitingExtensions
                 context => CreateLimiter(
                     context,
                     5));
+            options.AddPolicy(
+                PasswordResetRequestPolicy,
+                context => CreateLimiter(
+                    context,
+                    5));
+            options.AddPolicy(
+                PasswordResetPolicy,
+                context => CreateLimiter(
+                    context,
+                    10));
 
             options.OnRejected = async (
                 rejectionContext,

@@ -96,6 +96,52 @@ public class AuthenticationEmailOutboxRepository(MonKadoDbContext context)
     }
 
     /// <inheritdoc />
+    public async Task MarkPendingPasswordResetMessagesProcessedAsync(
+        Guid userId,
+        DateTime processedAt,
+        CancellationToken cancellationToken)
+    {
+        await context.AuthenticationEmailOutboxMessages
+            .Where(message =>
+                message.UserId == userId &&
+                message.Kind == AuthenticationEmailKind.PasswordReset &&
+                message.ProcessedAt == null)
+            .ExecuteUpdateAsync(
+                setters => setters
+                    .SetProperty(
+                        message => message.ProcessedAt,
+                        processedAt)
+                    .SetProperty(
+                        message => message.LockedUntil,
+                        (DateTime?)null),
+                cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public async Task MarkExpiredPasswordResetMessagesProcessedAsync(
+        Guid userId,
+        DateTime expirationCutoff,
+        DateTime processedAt,
+        CancellationToken cancellationToken)
+    {
+        await context.AuthenticationEmailOutboxMessages
+            .Where(message =>
+                message.UserId == userId &&
+                message.Kind == AuthenticationEmailKind.PasswordReset &&
+                message.CreatedAt <= expirationCutoff &&
+                message.ProcessedAt == null)
+            .ExecuteUpdateAsync(
+                setters => setters
+                    .SetProperty(
+                        message => message.ProcessedAt,
+                        processedAt)
+                    .SetProperty(
+                        message => message.LockedUntil,
+                        (DateTime?)null),
+                cancellationToken);
+    }
+
+    /// <inheritdoc />
     public Task<bool> HasPendingConfirmationMessageAsync(
         Guid userId,
         CancellationToken cancellationToken)
@@ -105,6 +151,20 @@ public class AuthenticationEmailOutboxRepository(MonKadoDbContext context)
             message =>
                 message.UserId == userId &&
                 message.Kind == AuthenticationEmailKind.EmailConfirmation &&
+                message.ProcessedAt == null,
+            cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public Task<bool> HasPendingPasswordResetMessageAsync(
+        Guid userId,
+        CancellationToken cancellationToken)
+    {
+
+        return context.AuthenticationEmailOutboxMessages.AnyAsync(
+            message =>
+                message.UserId == userId &&
+                message.Kind == AuthenticationEmailKind.PasswordReset &&
                 message.ProcessedAt == null,
             cancellationToken);
     }
@@ -120,6 +180,25 @@ public class AuthenticationEmailOutboxRepository(MonKadoDbContext context)
             .Where(message =>
                 message.UserId == userId &&
                 message.Kind == AuthenticationEmailKind.EmailConfirmation &&
+                message.CreatedAt >= windowStart)
+            .GroupBy(_ => 1)
+            .Select(group => new EmailRequestStatistics(
+                group.Count(),
+                group.Max(message => message.CreatedAt)))
+            .SingleOrDefaultAsync(cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public Task<EmailRequestStatistics?> GetPasswordResetRequestStatisticsAsync(
+        Guid userId,
+        DateTime windowStart,
+        CancellationToken cancellationToken)
+    {
+
+        return context.AuthenticationEmailOutboxMessages
+            .Where(message =>
+                message.UserId == userId &&
+                message.Kind == AuthenticationEmailKind.PasswordReset &&
                 message.CreatedAt >= windowStart)
             .GroupBy(_ => 1)
             .Select(group => new EmailRequestStatistics(

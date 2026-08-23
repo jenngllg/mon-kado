@@ -76,6 +76,10 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
             migration => Assert.EndsWith(
                 "_AddMemberPasswordChanges",
                 migration,
+                StringComparison.Ordinal),
+            migration => Assert.EndsWith(
+                "_AddMemberPasswordResets",
+                migration,
                 StringComparison.Ordinal));
         Assert.False(context.Database.HasPendingModelChanges());
 
@@ -187,6 +191,9 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
         Assert.Contains(
             "recipient_email",
             columns);
+        Assert.Contains(
+            "security_stamp_snapshot",
+            columns);
         Assert.Equal(
             [
                 "confirmed_at",
@@ -273,6 +280,11 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
             AuthenticationEmailOutboxMessage.CreatePasswordChangedSecurityNotification(
                 member.Id,
                 email,
+                now),
+            AuthenticationEmailOutboxMessage.CreatePasswordReset(
+                member.Id,
+                email,
+                "security-stamp",
                 now));
         await context.SaveChangesAsync(cancellationToken);
         IReadOnlyList<string> remainingKinds;

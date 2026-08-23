@@ -92,6 +92,84 @@ public class GmailAuthenticationEmailSenderTests
             StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public async Task SendPasswordResetAsync_WhenCalled_CreatesDedicatedResetMessage()
+    {
+        // Arrange
+        var client = new CapturingGmailClient();
+        var logger = new RecordingLogger<GmailAuthenticationEmailSender>();
+        var sender = CreateSender(
+            client,
+            logger);
+        var outboxMessageId = Guid.CreateVersion7();
+        var resetUrl = new Uri(
+            "https://mon-kado.fr/reset-password#userId=019c52dd-56c1-7cc6-8a95-243f3a032e04&token=a-b_c");
+        var message = new AuthenticationPasswordResetMessage(
+            outboxMessageId,
+            "member@example.fr",
+            resetUrl);
+
+        // Act
+        var result = await sender.SendPasswordResetAsync(
+            message,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(
+            "gmail-message-id",
+            result.ProviderMessageId);
+        var mime = await DecodeAsync(client.RawMessage ?? string.Empty);
+        Assert.Equal(
+            "member@example.fr",
+            mime.To.Mailboxes.Single().Address);
+        Assert.Contains(
+            "réinitialisez votre mot de passe",
+            mime.Subject,
+            StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(
+            resetUrl.AbsoluteUri,
+            mime.TextBody,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            resetUrl.AbsoluteUri.Replace(
+                "&",
+                "&amp;",
+                StringComparison.Ordinal),
+            mime.HtmlBody,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "1 heure",
+            mime.TextBody,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "1 heure",
+            mime.HtmlBody,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            "tracking",
+            mime.HtmlBody,
+            StringComparison.OrdinalIgnoreCase);
+        var log = Assert.Single(logger.Entries);
+        Assert.Equal(
+            LogLevel.Information,
+            log.LogLevel);
+        Assert.Equal(
+            LogEventIds.AccountPasswordResetEmailSent,
+            log.EventId.Id);
+        Assert.Contains(
+            outboxMessageId.ToString(),
+            log.Message,
+            StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(
+            message.RecipientAddress,
+            log.Message,
+            StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(
+            "a-b_c",
+            log.Message,
+            StringComparison.Ordinal);
+    }
+
     [Theory]
     [InlineData(
         HttpStatusCode.BadRequest,

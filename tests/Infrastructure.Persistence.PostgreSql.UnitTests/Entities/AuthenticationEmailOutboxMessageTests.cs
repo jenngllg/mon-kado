@@ -95,5 +95,44 @@ public class AuthenticationEmailOutboxMessageTests
             _now,
             message.AvailableAt);
         Assert.Null(message.MemberEmailChangeRequestId);
+        Assert.Null(message.SecurityStampSnapshot);
+    }
+
+    [Fact]
+    public void CreatePasswordReset_WhenCalled_CreatesSecuritySnapshotMessage()
+    {
+        // Arrange
+        var userId = Guid.CreateVersion7();
+
+        // Act
+        var message = AuthenticationEmailOutboxMessage.CreatePasswordReset(
+            userId,
+            "member@example.fr",
+            "security-stamp",
+            _now);
+
+        // Assert
+        Assert.Equal(
+            7,
+            message.Id.Version);
+        Assert.Equal(
+            userId,
+            message.UserId);
+        Assert.Equal(
+            "member@example.fr",
+            message.RecipientEmail);
+        Assert.Equal(
+            "security-stamp",
+            message.SecurityStampSnapshot);
+        Assert.Equal(
+            AuthenticationEmailKind.PasswordReset,
+            message.Kind);
+        Assert.Equal(
+            _now,
+            message.CreatedAt);
+        Assert.Equal(
+            _now,
+            message.AvailableAt);
+        Assert.Null(message.MemberEmailChangeRequestId);
     }
 }

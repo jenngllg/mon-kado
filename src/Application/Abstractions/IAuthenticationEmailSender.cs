@@ -1,3 +1,4 @@
+using JennGllg.Fr.MonKado.Back.Application.Common.Exceptions;
 using JennGllg.Fr.MonKado.Back.Application.Models;
 
 namespace JennGllg.Fr.MonKado.Back.Application.Abstractions;
@@ -45,5 +46,16 @@ public interface IAuthenticationEmailSender
     /// <returns>The provider delivery result.</returns>
     Task<AuthenticationEmailSendResult> SendPasswordChangedSecurityNotificationAsync(
         AuthenticationPasswordChangedNotification message,
+        CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Sends a password reset link to an eligible account email address.
+    /// </summary>
+    /// <param name="message">The password reset message.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The provider delivery result.</returns>
+    /// <exception cref="AuthenticationEmailDeliveryException">Thrown when the external provider rejects delivery.</exception>
+    Task<AuthenticationEmailSendResult> SendPasswordResetAsync(
+        AuthenticationPasswordResetMessage message,
         CancellationToken cancellationToken);
 }

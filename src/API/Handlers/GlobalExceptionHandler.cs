@@ -54,6 +54,12 @@ public class GlobalExceptionHandler(
                 "The email confirmation link is invalid or expired.",
                 ErrorCodes.AccountEmailConfirmationInvalid,
                 null),
+            PasswordResetInvalidException => new ErrorResponse(
+                StatusCodes.Status400BadRequest,
+                "Password reset failed",
+                "The password reset link is invalid or expired.",
+                ErrorCodes.AccountPasswordResetInvalid,
+                null),
             RequestValidationException validationException => new ErrorResponse(
                 StatusCodes.Status400BadRequest,
                 "Validation failed",

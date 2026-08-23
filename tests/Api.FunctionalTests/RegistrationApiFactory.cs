@@ -3,6 +3,7 @@ using JennGllg.Fr.MonKado.Back.Application.Commands;
 using JennGllg.Fr.MonKado.Back.Application.Models;
 using JennGllg.Fr.MonKado.Back.Application.Validators;
 
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
@@ -30,6 +31,8 @@ public class RegistrationApiFactory(
     public RecordingMemberEmailChangeService MemberEmailChangeService { get; } = new();
 
     public RecordingMemberPasswordService MemberPasswordService { get; } = new();
+
+    public RecordingPasswordResetService PasswordResetService { get; } = new();
 
     public RecordingAccountSessionService SessionService { get; } = new();
 
@@ -62,9 +65,19 @@ public class RegistrationApiFactory(
                 "DataProtection:KeysPath",
                 dataProtectionKeysPath);
 
-        builder.ConfigureLogging(logging => logging.AddProvider(_logProvider));
+        builder.ConfigureLogging(logging =>
+        {
+            logging.ClearProviders();
+            logging.AddProvider(_logProvider);
+        });
         builder.ConfigureServices(services =>
         {
+
+            if (dataProtectionKeysPath is null)
+                services
+                    .AddDataProtection()
+                    .UseEphemeralDataProtectionProvider();
+
             services.RemoveAll<IAccountRegistrationService>();
             services.AddSingleton<IAccountRegistrationService>(RegistrationService);
             services.RemoveAll<IEmailConfirmationService>();
@@ -78,6 +91,8 @@ public class RegistrationApiFactory(
             services.AddSingleton<IMemberEmailChangeService>(MemberEmailChangeService);
             services.RemoveAll<IMemberPasswordService>();
             services.AddSingleton<IMemberPasswordService>(MemberPasswordService);
+            services.RemoveAll<IPasswordResetService>();
+            services.AddSingleton<IPasswordResetService>(PasswordResetService);
             services.AddSingleton<IEmailConfirmationService>(EmailConfirmationService);
         });
     }

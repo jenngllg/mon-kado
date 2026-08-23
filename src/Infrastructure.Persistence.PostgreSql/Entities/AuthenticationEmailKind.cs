@@ -21,6 +21,11 @@ public enum AuthenticationEmailKind
     EmailChangeSecurityNotification,
 
     /// <summary>
+    /// Indicates a member password reset link.
+    /// </summary>
+    PasswordReset,
+
+    /// <summary>
     /// Indicates a security notification sent after a member password change.
     /// </summary>
     PasswordChangedSecurityNotification

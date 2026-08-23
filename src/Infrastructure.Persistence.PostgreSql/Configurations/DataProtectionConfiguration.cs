@@ -49,15 +49,21 @@ public static class DataProtectionConfiguration
         {
             identity.Tokens.EmailConfirmationTokenProvider =
                 EmailConfirmationTokenProviderOptions.ProviderName;
+            identity.Tokens.PasswordResetTokenProvider =
+                PasswordResetTokenProviderOptions.ProviderName;
             identity.Tokens.ProviderMap[EmailConfirmationTokenProviderOptions.ProviderName] =
                 new TokenProviderDescriptor(typeof(EmailConfirmationTokenProvider<MonKadoUser>));
             identity.Tokens.ProviderMap[EmailChangeTokenProviderOptions.ProviderName] =
                 new TokenProviderDescriptor(typeof(EmailChangeTokenProvider<MonKadoUser>));
+            identity.Tokens.ProviderMap[PasswordResetTokenProviderOptions.ProviderName] =
+                new TokenProviderDescriptor(typeof(PasswordResetTokenProvider<MonKadoUser>));
         });
         services.Configure<EmailConfirmationTokenProviderOptions>(_ => { });
         services.Configure<EmailChangeTokenProviderOptions>(_ => { });
+        services.Configure<PasswordResetTokenProviderOptions>(_ => { });
         services.AddTransient<EmailConfirmationTokenProvider<MonKadoUser>>();
         services.AddTransient<EmailChangeTokenProvider<MonKadoUser>>();
+        services.AddTransient<PasswordResetTokenProvider<MonKadoUser>>();
 
         return services;
     }

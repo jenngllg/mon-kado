@@ -31,6 +31,7 @@ public class AuthenticationEmailDispatcher(
     TimeProvider timeProvider) : IAuthenticationEmailDispatcher
 {
     private static readonly TimeSpan _maximumRetryDelay = TimeSpan.FromHours(24);
+    private static readonly TimeSpan _passwordResetLifetime = TimeSpan.FromHours(1);
 
     /// <inheritdoc />
     public async Task<int> DispatchPendingAsync(
@@ -150,6 +151,15 @@ public class AuthenticationEmailDispatcher(
         await unitOfWork.SaveChangesAsync(cancellationToken);
     }
 
+    /// <summary>
+    /// Routes one claimed authentication message to its dedicated delivery flow.
+    /// </summary>
+    /// <param name="message">The claimed outbox message.</param>
+    /// <param name="frontendOrigin">The trusted frontend origin.</param>
+    /// <param name="now">The current UTC date and time.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The provider result, or <see langword="null" /> when the message is no longer eligible.</returns>
+    /// <exception cref="AuthenticationEmailDeliveryException">Thrown when the external provider rejects delivery.</exception>
     private async Task<AuthenticationEmailSendResult?> SendMessageAsync(
         AuthenticationEmailOutboxMessage message,
         Uri frontendOrigin,
@@ -177,8 +187,72 @@ public class AuthenticationEmailDispatcher(
                 now,
                 cancellationToken);
 
+        if (message.Kind == AuthenticationEmailKind.PasswordReset)
+            return await SendPasswordResetAsync(
+                message,
+                frontendOrigin,
+                now,
+                cancellationToken);
+
         return await SendPasswordChangedSecurityNotificationAsync(
             message,
+            cancellationToken);
+    }
+
+    /// <summary>
+    /// Sends a password reset link when the account still matches its request snapshot.
+    /// </summary>
+    /// <param name="message">The claimed outbox message.</param>
+    /// <param name="frontendOrigin">The trusted frontend origin.</param>
+    /// <param name="now">The current UTC date and time.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The provider result, or <see langword="null" /> when the request is no longer eligible.</returns>
+    /// <exception cref="AuthenticationEmailDeliveryException">Thrown when the external provider rejects delivery.</exception>
+    private async Task<AuthenticationEmailSendResult?> SendPasswordResetAsync(
+        AuthenticationEmailOutboxMessage message,
+        Uri frontendOrigin,
+        DateTime now,
+        CancellationToken cancellationToken)
+    {
+
+        if (message.RecipientEmail is not { } recipientEmail ||
+            message.SecurityStampSnapshot is not { } securityStampSnapshot ||
+            message.CreatedAt <= now.Subtract(_passwordResetLifetime))
+            return null;
+
+        var user = await userRepository.Query()
+            .SingleOrDefaultAsync(
+                candidate => candidate.Id == message.UserId,
+                cancellationToken);
+
+        if (user is null ||
+            !user.EmailConfirmed ||
+            !string.Equals(
+                user.Email,
+                recipientEmail,
+                StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(
+                user.SecurityStamp,
+                securityStampSnapshot,
+                StringComparison.Ordinal))
+            return null;
+
+        var tokenCreationTime = timeProvider.GetUtcNow().UtcDateTime;
+
+        if (message.CreatedAt <= tokenCreationTime.Subtract(_passwordResetLifetime))
+            return null;
+
+        var token = await userManager.GeneratePasswordResetTokenAsync(user);
+        var resetUrl = BuildPasswordResetUrl(
+            frontendOrigin,
+            user.Id,
+            token);
+
+        return await sender.SendPasswordResetAsync(
+            new AuthenticationPasswordResetMessage(
+                message.Id,
+                recipientEmail,
+                resetUrl),
             cancellationToken);
     }
 
@@ -368,6 +442,26 @@ public class AuthenticationEmailDispatcher(
 
         return new Uri(
             $"{origin}/confirm-email-change#requestId={requestId:D}&token={encodedToken}",
+            UriKind.Absolute);
+    }
+
+    /// <summary>
+    /// Builds the frontend password reset URL without exposing the Identity token in the query string.
+    /// </summary>
+    /// <param name="frontendOrigin">The configured frontend origin.</param>
+    /// <param name="userId">The member identifier.</param>
+    /// <param name="token">The Identity password reset token.</param>
+    /// <returns>The absolute frontend password reset URL.</returns>
+    private static Uri BuildPasswordResetUrl(
+        Uri frontendOrigin,
+        Guid userId,
+        string token)
+    {
+        var encodedToken = AuthenticationEmailTokenEncoding.Encode(token);
+        var origin = frontendOrigin.GetLeftPart(UriPartial.Authority);
+
+        return new Uri(
+            $"{origin}/reset-password#userId={userId:D}&token={encodedToken}",
             UriKind.Absolute);
     }
 
