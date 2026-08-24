@@ -34,6 +34,8 @@ public class RegistrationApiFactory(
 
     public RecordingPasswordResetService PasswordResetService { get; } = new();
 
+    public RecordingWishlistService WishlistService { get; } = new();
+
     public RecordingAccountSessionService SessionService { get; } = new();
 
     public IReadOnlyCollection<string> LogMessages => _logProvider.Messages;
@@ -93,6 +95,8 @@ public class RegistrationApiFactory(
             services.AddSingleton<IMemberPasswordService>(MemberPasswordService);
             services.RemoveAll<IPasswordResetService>();
             services.AddSingleton<IPasswordResetService>(PasswordResetService);
+            services.RemoveAll<IWishlistService>();
+            services.AddSingleton<IWishlistService>(WishlistService);
             services.AddSingleton<IEmailConfirmationService>(EmailConfirmationService);
         });
     }

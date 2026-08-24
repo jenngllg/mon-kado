@@ -1,4 +1,5 @@
 using JennGllg.Fr.MonKado.Back.Application.Abstractions;
+using JennGllg.Fr.MonKado.Back.Domain.Entities;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Abstractions;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Configurations;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Contexts;
@@ -38,6 +39,11 @@ public class MonKadoDbContext(DbContextOptions<MonKadoDbContext> options)
 
     public DbSet<MemberEmailChangeRequest> MemberEmailChangeRequests =>
         Set<MemberEmailChangeRequest>();
+
+    /// <summary>
+    /// Gets private wishlists.
+    /// </summary>
+    public DbSet<Wishlist> Wishlists => Set<Wishlist>();
 
     /// <inheritdoc />
     protected override void OnModelCreating(ModelBuilder builder)

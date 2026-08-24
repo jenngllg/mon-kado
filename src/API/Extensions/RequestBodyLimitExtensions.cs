@@ -31,6 +31,7 @@ public static class RequestBodyLimitExtensions
         new("/api/v1/members/current/email");
     private static readonly PathString _memberPasswordPath =
         new("/api/v1/members/current/password");
+    private static readonly PathString _wishlistsPath = new("/api/v1/wishlists");
 
     /// <summary>
     /// Enforces the request body limit for bounded JSON endpoints.
@@ -165,7 +166,8 @@ public static class RequestBodyLimitExtensions
                 MatchesPath(request.Path, _passwordResetPath) ||
                 MatchesPath(request.Path, _googleLinkPath) ||
                 MatchesPath(request.Path, _googleCallbackPath) ||
-                MatchesPath(request.Path, _loginPath))) ||
+                MatchesPath(request.Path, _loginPath) ||
+                MatchesPath(request.Path, _wishlistsPath))) ||
             (HttpMethods.IsPut(request.Method) &&
                 (MatchesPath(request.Path, _memberProfilePath) ||
                     MatchesPath(request.Path, _memberEmailPath) ||

@@ -90,6 +90,10 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
             migration => Assert.EndsWith(
                 "_AddAuthenticationEmailRetentionCleanupIndex",
                 migration,
+                StringComparison.Ordinal),
+            migration => Assert.EndsWith(
+                "_AddWishlists",
+                migration,
                 StringComparison.Ordinal));
         Assert.False(context.Database.HasPendingModelChanges());
 
@@ -108,7 +112,8 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
                 "user_logins",
                 "user_roles",
                 "user_tokens",
-                "users"
+                "users",
+                "wishlists"
             ],
             tables);
 
@@ -154,6 +159,18 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
         Assert.Contains(
             "fk_member_email_change_requests_users_user_id",
             constraints);
+        Assert.Contains(
+            "ck_wishlists_name_valid",
+            constraints);
+        Assert.Contains(
+            "ck_wishlists_occasion_valid",
+            constraints);
+        Assert.Contains(
+            "ck_wishlists_timestamps_consistent",
+            constraints);
+        Assert.Contains(
+            "fk_wishlists_users_owner_id",
+            constraints);
 
         var indexes = await GetPublicIndexesAsync(
             context,
@@ -193,6 +210,9 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
             indexes);
         Assert.Contains(
             "ux_user_logins_user_id_login_provider",
+            indexes);
+        Assert.Contains(
+            "ux_wishlists_owner_normalized_name",
             indexes);
 
         var columns = await GetAuthenticationEmailOutboxColumnsAsync(
@@ -245,6 +265,55 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
         Assert.False(await HasUserVersionColumnAsync(
             context,
             cancellationToken));
+    }
+
+    [Fact]
+    public async Task MigrateAsync_WhenWishlistMigrationIsRolledBack_RemovesAndRecreatesWishlistSchema()
+    {
+        // Arrange
+        const string PreviousMigration = "20260824160547_AddAuthenticationEmailRetentionCleanupIndex";
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var provider = CreateServiceProvider();
+        await using var scope = provider.CreateAsyncScope();
+        var context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
+        await context.Database.MigrateAsync(cancellationToken);
+        Assert.Contains(
+            "wishlists",
+            await GetPublicTablesAsync(
+                context,
+                cancellationToken));
+
+        // Act
+        await context.Database.MigrateAsync(
+            PreviousMigration,
+            cancellationToken);
+        var tablesAfterDown = await GetPublicTablesAsync(
+            context,
+            cancellationToken);
+        var indexesAfterDown = await GetPublicIndexesAsync(
+            context,
+            cancellationToken);
+        await context.Database.MigrateAsync(cancellationToken);
+        var tablesAfterUp = await GetPublicTablesAsync(
+            context,
+            cancellationToken);
+        var indexesAfterUp = await GetPublicIndexesAsync(
+            context,
+            cancellationToken);
+
+        // Assert
+        Assert.DoesNotContain(
+            "wishlists",
+            tablesAfterDown);
+        Assert.DoesNotContain(
+            "ux_wishlists_owner_normalized_name",
+            indexesAfterDown);
+        Assert.Contains(
+            "wishlists",
+            tablesAfterUp);
+        Assert.Contains(
+            "ux_wishlists_owner_normalized_name",
+            indexesAfterUp);
     }
 
     [Fact]
@@ -1095,7 +1164,9 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
         CancellationToken cancellationToken)
     {
         var connection = context.Database.GetDbConnection();
-        await connection.OpenAsync(cancellationToken);
+
+        if (connection.State != System.Data.ConnectionState.Open)
+            await connection.OpenAsync(cancellationToken);
 
         await using var command = connection.CreateCommand();
         command.CommandText =
