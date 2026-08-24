@@ -6,6 +6,8 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 
+using Npgsql.EntityFrameworkCore.PostgreSQL;
+
 namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Services;
 
 /// <summary>
@@ -33,6 +35,9 @@ public class AccountSessionService(
     IRefreshSessionService refreshSessionService,
     TimeProvider timeProvider) : IAccountSessionService
 {
+    private const int MaximumTransactionRetryCount = 3;
+    private static readonly TimeSpan _maximumTransactionRetryDelay = TimeSpan.FromSeconds(1);
+
     /// <summary>
     /// Authenticates an account and creates an independent refresh session.
     /// </summary>
@@ -66,15 +71,23 @@ public class AccountSessionService(
             }
 
             ArgumentNullException.ThrowIfNull(user.NormalizedEmail);
-            var executionStrategy = context.Database.CreateExecutionStrategy();
-            var result = await executionStrategy.ExecuteAsync(() =>
-                AuthenticateAndCreateSessionAsync(
-                    user.Id,
-                    user.NormalizedEmail,
-                    password,
-                    rememberMe,
-                    currentRefreshToken,
-                    cancellationToken));
+            var executionStrategy = CreateTransactionExecutionStrategy();
+            var executionState = new AccountLoginExecutionState(
+                Guid.CreateVersion7(timeProvider.GetUtcNow().UtcDateTime));
+            var result = await executionStrategy.ExecuteInTransactionAsync(
+                executionState,
+                (
+                    state,
+                    operationCancellationToken) => ExecuteLoginAttemptAsync(
+                        state,
+                        user.Id,
+                        user.NormalizedEmail,
+                        password,
+                        rememberMe,
+                        currentRefreshToken,
+                        operationCancellationToken),
+                WasLoginOperationCommittedAsync,
+                cancellationToken);
 
             return result;
         }
@@ -143,13 +156,19 @@ public class AccountSessionService(
 
         try
         {
-            var executionStrategy = context.Database.CreateExecutionStrategy();
+            var executionStrategy = CreateTransactionExecutionStrategy();
+            var executionState = new RefreshSessionExecutionState(sessionId);
 
-            return await executionStrategy.ExecuteAsync(() =>
-                RotateSessionAsync(
-                    sessionId,
-                    refreshToken,
-                    cancellationToken));
+            return await executionStrategy.ExecuteInTransactionAsync(
+                executionState,
+                (
+                    state,
+                    operationCancellationToken) => ExecuteRefreshAttemptAsync(
+                        state,
+                        refreshToken,
+                        operationCancellationToken),
+                WasRefreshOperationCommittedAsync,
+                cancellationToken);
         }
         catch (Exception exception) when (PostgreSqlFailureClassifier.IsUnavailable(exception))
         {
@@ -161,8 +180,47 @@ public class AccountSessionService(
     }
 
     /// <summary>
-    /// Authenticates an account and creates its session while holding the account lock.
+    /// Clears prior attempt markers and stages one password-login transaction attempt.
     /// </summary>
+    /// <param name="executionState">The password-login execution state.</param>
+    /// <param name="userId">The member identifier.</param>
+    /// <param name="normalizedEmail">The normalized email.</param>
+    /// <param name="password">The password.</param>
+    /// <param name="isPersistent">Whether the session has a fixed persistent lifetime.</param>
+    /// <param name="currentRefreshToken">The refresh token currently held by the browser.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The authentication result and its tokens when successful.</returns>
+    private async Task<AccountSessionLoginResult> ExecuteLoginAttemptAsync(
+        AccountLoginExecutionState executionState,
+        Guid userId,
+        string normalizedEmail,
+        string password,
+        bool isPersistent,
+        string? currentRefreshToken,
+        CancellationToken cancellationToken)
+    {
+        executionState.Reset();
+        var result = await AuthenticateAndCreateSessionAsync(
+            executionState,
+            userId,
+            normalizedEmail,
+            password,
+            isPersistent,
+            currentRefreshToken,
+            cancellationToken);
+
+        if (result.Tokens is { } tokens)
+            executionState.RecordSession(
+                userId,
+                tokens.RefreshToken);
+
+        return result;
+    }
+
+    /// <summary>
+    /// Authenticates an account and stages its session while holding the account lock.
+    /// </summary>
+    /// <param name="executionState">The password-login execution state.</param>
     /// <param name="userId">The member identifier.</param>
     /// <param name="normalizedEmail">The normalized email.</param>
     /// <param name="password">The password.</param>
@@ -171,6 +229,7 @@ public class AccountSessionService(
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>The authentication result and its tokens when successful.</returns>
     private async Task<AccountSessionLoginResult> AuthenticateAndCreateSessionAsync(
+        AccountLoginExecutionState executionState,
         Guid userId,
         string normalizedEmail,
         string password,
@@ -179,8 +238,6 @@ public class AccountSessionService(
         CancellationToken cancellationToken)
     {
         context.ChangeTracker.Clear();
-        await using var transaction =
-            await context.Database.BeginTransactionAsync(cancellationToken);
         var user = await userRepository.GetByIdForUpdateAsync(
             userId,
             normalizedEmail,
@@ -188,7 +245,6 @@ public class AccountSessionService(
 
         if (user is null)
         {
-            await transaction.CommitAsync(cancellationToken);
             PerformTimingEqualizationHash(password);
 
             return new AccountSessionLoginResult(
@@ -200,7 +256,6 @@ public class AccountSessionService(
 
         if (await userManager.IsLockedOutAsync(existingUser))
         {
-            await transaction.CommitAsync(cancellationToken);
             PerformTimingEqualizationHash(password);
 
             return new AccountSessionLoginResult(
@@ -210,7 +265,6 @@ public class AccountSessionService(
 
         if (existingUser.PasswordHash is null)
         {
-            await transaction.CommitAsync(cancellationToken);
             PerformTimingEqualizationHash(password);
 
             return new AccountSessionLoginResult(
@@ -228,7 +282,7 @@ public class AccountSessionService(
             EnsureIdentityUpdateSucceeded(
                 failureResult,
                 "record the failed login attempt");
-            await transaction.CommitAsync(cancellationToken);
+            executionState.RecordPasswordFailure();
 
             return new AccountSessionLoginResult(
                 AccountLoginResult.InvalidCredentials,
@@ -241,8 +295,6 @@ public class AccountSessionService(
             existingUser.UnconfirmedAccountExpiresAt is { } expiresAt &&
             expiresAt <= now)
         {
-            await transaction.CommitAsync(cancellationToken);
-
             return new AccountSessionLoginResult(
                 AccountLoginResult.InvalidCredentials,
                 null);
@@ -250,8 +302,6 @@ public class AccountSessionService(
 
         if (!existingUser.EmailConfirmed)
         {
-            await transaction.CommitAsync(cancellationToken);
-
             return new AccountSessionLoginResult(
                 AccountLoginResult.EmailNotConfirmed,
                 null);
@@ -271,14 +321,13 @@ public class AccountSessionService(
         var refreshSession = await refreshSessionService.CreateAsync(
             existingUser.Id,
             isPersistent,
-            null,
+            executionState.SessionId,
             currentSessionId,
             cancellationToken);
         var tokens = CreateTokens(
             existingUser.Id,
             refreshSession);
         await unitOfWork.SaveChangesAsync(cancellationToken);
-        await transaction.CommitAsync(cancellationToken);
 
         return new AccountSessionLoginResult(
             AccountLoginResult.Success,
@@ -347,44 +396,54 @@ public class AccountSessionService(
     }
 
     /// <summary>
+    /// Clears prior attempt markers and stages one refresh-session transaction attempt.
+    /// </summary>
+    /// <param name="executionState">The refresh-session execution state.</param>
+    /// <param name="currentRefreshToken">The current refresh token.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The rotated tokens when the session remains valid; otherwise, <see langword="null" />.</returns>
+    private async Task<AccountSessionTokens?> ExecuteRefreshAttemptAsync(
+        RefreshSessionExecutionState executionState,
+        string currentRefreshToken,
+        CancellationToken cancellationToken)
+    {
+        executionState.Reset();
+
+        return await RotateSessionAsync(
+            executionState,
+            currentRefreshToken,
+            cancellationToken);
+    }
+
+    /// <summary>
     /// Rotates a refresh session while holding its database lock.
     /// </summary>
-    /// <param name="sessionId">The session identifier.</param>
+    /// <param name="executionState">The refresh-session execution state.</param>
     /// <param name="currentRefreshToken">The current refresh token.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>The rotated tokens when the session remains valid; otherwise, <see langword="null" />.</returns>
     private async Task<AccountSessionTokens?> RotateSessionAsync(
-        Guid sessionId,
+        RefreshSessionExecutionState executionState,
         string currentRefreshToken,
         CancellationToken cancellationToken)
     {
         context.ChangeTracker.Clear();
-        await using var transaction =
-            await context.Database.BeginTransactionAsync(cancellationToken);
         var userId = await sessionRepository.GetUserIdAsync(
-            sessionId,
+            executionState.SessionId,
             cancellationToken);
 
         if (userId is not { } existingUserId)
-        {
-            await transaction.CommitAsync(cancellationToken);
-
             return null;
-        }
 
         var user = await userRepository.GetByIdForUpdateAsync(
             existingUserId,
             cancellationToken);
         var session = await sessionRepository.GetByIdForUpdateAsync(
-            sessionId,
+            executionState.SessionId,
             cancellationToken);
 
         if (session is null)
-        {
-            await transaction.CommitAsync(cancellationToken);
-
             return null;
-        }
 
         var now = timeProvider.GetUtcNow().UtcDateTime;
 
@@ -397,7 +456,7 @@ public class AccountSessionService(
         {
             session.Revoke(now);
             await unitOfWork.SaveChangesAsync(cancellationToken);
-            await transaction.CommitAsync(cancellationToken);
+            executionState.RecordRevocation();
 
             return null;
         }
@@ -419,9 +478,84 @@ public class AccountSessionService(
             user.Id,
             refreshSession);
         await unitOfWork.SaveChangesAsync(cancellationToken);
-        await transaction.CommitAsync(cancellationToken);
+        executionState.RecordRotation(
+            user.Id,
+            tokens.RefreshToken,
+            tokens.IsPersistent);
 
         return tokens;
+    }
+
+    /// <summary>
+    /// Verifies the exact session or terminates an ambiguous failed-password attempt without replaying it.
+    /// </summary>
+    /// <param name="executionState">The password-login execution state.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns><see langword="true" /> when the exact session was committed or a failed-password attempt must not be replayed.</returns>
+    private async Task<bool> WasLoginOperationCommittedAsync(
+        AccountLoginExecutionState executionState,
+        CancellationToken cancellationToken)
+    {
+        if (executionState.AttemptedSessionMemberId is { } memberId &&
+            executionState.AttemptedRefreshToken is { } refreshToken)
+        {
+            var session = await context.AuthenticationSessions
+                .AsNoTracking()
+                .SingleOrDefaultAsync(
+                    storedSession =>
+                        storedSession.Id == executionState.SessionId &&
+                        storedSession.UserId == memberId,
+                    cancellationToken);
+
+            if (session is null)
+                return false;
+
+            if (session.RevokedAt is null &&
+                refreshTokenService.Verify(
+                    refreshToken,
+                    session.RefreshTokenHash))
+                return true;
+
+            executionState.PrepareSessionRetry(
+                Guid.CreateVersion7(timeProvider.GetUtcNow().UtcDateTime));
+
+            return false;
+        }
+
+        return executionState.PasswordFailureWasRecorded;
+    }
+
+    /// <summary>
+    /// Verifies the exact rotation or a terminal revocation after an ambiguous refresh-session commit.
+    /// </summary>
+    /// <param name="executionState">The refresh-session execution state.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns><see langword="true" /> when the attempted refresh outcome is reflected in PostgreSQL.</returns>
+    private async Task<bool> WasRefreshOperationCommittedAsync(
+        RefreshSessionExecutionState executionState,
+        CancellationToken cancellationToken)
+    {
+        var session = await context.AuthenticationSessions
+            .AsNoTracking()
+            .SingleOrDefaultAsync(
+                storedSession => storedSession.Id == executionState.SessionId,
+                cancellationToken);
+
+        if (executionState.AttemptedSessionMemberId is { } memberId &&
+            executionState.AttemptedRefreshToken is { } refreshToken &&
+            executionState.AttemptedIsPersistent is { } isPersistent)
+            return session is
+            {
+                RevokedAt: null
+            } &&
+                session.UserId == memberId &&
+                session.IsPersistent == isPersistent &&
+                refreshTokenService.Verify(
+                    refreshToken,
+                    session.RefreshTokenHash);
+
+        return executionState.RevocationWasRecorded &&
+            (session is null || session.RevokedAt is not null);
     }
 
     /// <summary>
@@ -461,6 +595,19 @@ public class AccountSessionService(
             result.Errors.Select(error => error.Code));
 
         throw new InvalidOperationException($"Unable to {operation}: {errorCodes}.");
+    }
+
+    /// <summary>
+    /// Creates the retry strategy scoped exclusively to idempotent account-session transactions.
+    /// </summary>
+    /// <returns>The PostgreSQL retrying execution strategy.</returns>
+    private NpgsqlRetryingExecutionStrategy CreateTransactionExecutionStrategy()
+    {
+        return new NpgsqlRetryingExecutionStrategy(
+            context,
+            MaximumTransactionRetryCount,
+            _maximumTransactionRetryDelay,
+            errorCodesToAdd: null);
     }
 
     /// <summary>
