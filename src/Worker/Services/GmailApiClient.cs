@@ -20,7 +20,6 @@ namespace JennGllg.Fr.MonKado.Back.Worker.Services;
 /// </summary>
 public sealed class GmailApiClient : IGmailApiClient, IDisposable
 {
-    private static readonly TimeSpan _requestTimeout = TimeSpan.FromSeconds(15);
     private readonly HttpClient _httpClient;
     private readonly Uri _messagesEndpoint;
     private readonly GmailService? _ownedService;
@@ -51,7 +50,7 @@ public sealed class GmailApiClient : IGmailApiClient, IDisposable
             ApplicationName = "MonKado",
             HttpClientInitializer = credential
         });
-        service.HttpClient.Timeout = _requestTimeout;
+        service.HttpClient.Timeout = gmail.RequestTimeout;
         _httpClient = service.HttpClient;
         _messagesEndpoint = new Uri(
             new Uri(

@@ -381,6 +381,187 @@ public class AuthenticationEmailConfigurationTests
             descriptor => descriptor.ImplementationType == typeof(AuthenticationEmailDeliveryWorker));
     }
 
+    [Theory]
+    [InlineData("AuthenticationEmail:DeliveryBatchSize", "0")]
+    [InlineData("AuthenticationEmail:DeliveryBatchSize", "1001")]
+    [InlineData("AuthenticationEmail:MaximumDeliveryAttempts", "0")]
+    [InlineData("AuthenticationEmail:MaximumDeliveryAttempts", "101")]
+    public void Configure_WhenDeliveryIntegerIsOutsideAllowedRange_IsRejected(
+        string configurationKey,
+        string value)
+    {
+        // Arrange
+        var configuration = new ConfigurationManager();
+        configuration[configurationKey] = value;
+
+        // Act
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            new ServiceCollection().ConfigureAuthenticationEmailDelivery(
+                configuration,
+                new TestHostEnvironment("Local")));
+
+        // Assert
+        Assert.Contains(
+            "must be between",
+            exception.Message,
+            StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("AuthenticationEmail:DeliveryLeaseDuration", "00:00:00")]
+    [InlineData("AuthenticationEmail:PollInterval", "01:00:01")]
+    [InlineData("AuthenticationEmail:FailureRetryInterval", "00:00:00")]
+    [InlineData("AuthenticationEmail:FirstRetryDelay", "00:00:00")]
+    [InlineData("AuthenticationEmail:MaximumRetryDelay", "8.00:00:00")]
+    public void Configure_WhenDeliveryDurationIsOutsideAllowedRange_IsRejected(
+        string configurationKey,
+        string value)
+    {
+        // Arrange
+        var configuration = new ConfigurationManager();
+        configuration[configurationKey] = value;
+
+        // Act
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            new ServiceCollection().ConfigureAuthenticationEmailDelivery(
+                configuration,
+                new TestHostEnvironment("Local")));
+
+        // Assert
+        Assert.Contains(
+            "must be between",
+            exception.Message,
+            StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("AuthenticationEmail:FirstRetryDelay", "00:06:00")]
+    [InlineData("AuthenticationEmail:SecondRetryDelay", "00:16:00")]
+    [InlineData("AuthenticationEmail:ThirdRetryDelay", "01:01:00")]
+    [InlineData("AuthenticationEmail:FourthRetryDelay", "07:00:00")]
+    public void Configure_WhenTransientRetryDelaysAreNotOrdered_IsRejected(
+        string configurationKey,
+        string value)
+    {
+        // Arrange
+        var configuration = new ConfigurationManager();
+        configuration[configurationKey] = value;
+
+        // Act
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            new ServiceCollection().ConfigureAuthenticationEmailDelivery(
+                configuration,
+                new TestHostEnvironment("Local")));
+
+        // Assert
+        Assert.Contains(
+            "ordered",
+            exception.Message,
+            StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("AuthenticationEmail:SubsequentRetryDelay", "1.01:00:00")]
+    [InlineData("AuthenticationEmail:SlowRetryDelay", "1.01:00:00")]
+    public void Configure_WhenMaximumRetryDelayDoesNotCoverConfiguredDelay_IsRejected(
+        string configurationKey,
+        string value)
+    {
+        // Arrange
+        var configuration = new ConfigurationManager();
+        configuration[configurationKey] = value;
+
+        // Act
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            new ServiceCollection().ConfigureAuthenticationEmailDelivery(
+                configuration,
+                new TestHostEnvironment("Local")));
+
+        // Assert
+        Assert.Contains(
+            "MaximumRetryDelay",
+            exception.Message,
+            StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("00:00:00")]
+    [InlineData("00:05:01")]
+    public void Configure_WhenGmailRequestTimeoutIsOutsideAllowedRange_IsRejected(string timeout)
+    {
+        // Arrange
+        var configuration = CreateGmailConfiguration("https://example.test");
+        configuration["Gmail:RequestTimeout"] = timeout;
+
+        // Act
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            new ServiceCollection().ConfigureAuthenticationEmailDelivery(
+                configuration,
+                new TestHostEnvironment("Production")));
+
+        // Assert
+        Assert.Contains(
+            "Gmail:RequestTimeout",
+            exception.Message,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ConfigureAuthenticationCleanup_WhenConfigurationIsValid_BindsOptions()
+    {
+        // Arrange
+        var configuration = new ConfigurationManager();
+        configuration["AuthenticationCleanup:BatchSize"] = "42";
+        configuration["AuthenticationCleanup:Interval"] = "02:00:00";
+        configuration["AuthenticationCleanup:FailureRetryInterval"] = "00:03:00";
+        var services = new ServiceCollection();
+
+        // Act
+        var result = services.ConfigureAuthenticationCleanup(configuration);
+        using var provider = services.BuildServiceProvider();
+        var options = provider.GetRequiredService<IOptions<AuthenticationCleanupOptions>>();
+
+        // Assert
+        Assert.Same(
+            services,
+            result);
+        Assert.Equal(
+            42,
+            options.Value.BatchSize);
+        Assert.Equal(
+            TimeSpan.FromHours(2),
+            options.Value.Interval);
+        Assert.Equal(
+            TimeSpan.FromMinutes(3),
+            options.Value.FailureRetryInterval);
+    }
+
+    [Theory]
+    [InlineData("AuthenticationCleanup:BatchSize", "0")]
+    [InlineData("AuthenticationCleanup:BatchSize", "10001")]
+    [InlineData("AuthenticationCleanup:Interval", "00:00:00")]
+    [InlineData("AuthenticationCleanup:Interval", "8.00:00:00")]
+    [InlineData("AuthenticationCleanup:FailureRetryInterval", "00:00:00")]
+    [InlineData("AuthenticationCleanup:FailureRetryInterval", "2.00:00:00")]
+    public void ConfigureAuthenticationCleanup_WhenValueIsOutsideAllowedRange_IsRejected(
+        string configurationKey,
+        string value)
+    {
+        // Arrange
+        var configuration = new ConfigurationManager();
+        configuration[configurationKey] = value;
+
+        // Act
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            new ServiceCollection().ConfigureAuthenticationCleanup(configuration));
+
+        // Assert
+        Assert.Contains(
+            "AuthenticationCleanup",
+            exception.Message,
+            StringComparison.Ordinal);
+    }
+
     private static ConfigurationManager CreateGmailConfiguration(string frontendOrigin)
     {
         var configuration = new ConfigurationManager();

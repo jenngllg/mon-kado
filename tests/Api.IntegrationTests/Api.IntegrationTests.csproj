@@ -26,6 +26,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\API\Api.csproj" />
     <ProjectReference Include="..\..\src\Infrastructure.Persistence.PostgreSql\Infrastructure.Persistence.PostgreSql.csproj" />
+    <ProjectReference Include="..\Tests.Common\Tests.Common.csproj" />
   </ItemGroup>
 
   <ItemGroup>

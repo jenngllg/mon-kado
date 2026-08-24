@@ -30,28 +30,23 @@ public class AuthenticationEmailDispatcher(
     IAuthenticationEmailSender sender,
     TimeProvider timeProvider) : IAuthenticationEmailDispatcher
 {
-    private static readonly TimeSpan _maximumRetryDelay = TimeSpan.FromHours(24);
     private static readonly TimeSpan _passwordResetLifetime = TimeSpan.FromHours(1);
 
     /// <inheritdoc />
     public async Task<int> DispatchPendingAsync(
         Uri frontendOrigin,
-        int batchSize,
-        TimeSpan leaseDuration,
+        AuthenticationEmailDeliveryPolicy policy,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(frontendOrigin);
-        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(batchSize);
-        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(
-            leaseDuration,
-            TimeSpan.Zero);
+        ArgumentNullException.ThrowIfNull(policy);
 
         var claimedCount = 0;
-        while (claimedCount < batchSize)
+        while (claimedCount < policy.BatchSize)
         {
             var messageId = await ClaimPendingMessageAsync(
                 timeProvider.GetUtcNow().UtcDateTime,
-                leaseDuration,
+                policy.LeaseDuration,
                 cancellationToken);
 
             if (messageId is null)
@@ -60,6 +55,7 @@ public class AuthenticationEmailDispatcher(
             await DeliverMessageAsync(
                 messageId.Value,
                 frontendOrigin,
+                policy,
                 cancellationToken);
             claimedCount++;
         }
@@ -111,6 +107,7 @@ public class AuthenticationEmailDispatcher(
     private async Task DeliverMessageAsync(
         Guid messageId,
         Uri frontendOrigin,
+        AuthenticationEmailDeliveryPolicy policy,
         CancellationToken cancellationToken)
     {
         context.ChangeTracker.Clear();
@@ -139,13 +136,25 @@ public class AuthenticationEmailDispatcher(
         catch (AuthenticationEmailDeliveryException exception)
         {
             var failedAt = timeProvider.GetUtcNow().UtcDateTime;
-            var retryDelay = GetRetryDelay(
-                deliverableMessage.AttemptCount,
-                exception.Category,
-                exception.RetryAfter);
-            deliverableMessage.ScheduleRetry(
-                failedAt.Add(retryDelay),
-                exception.Category.ToString().ToUpperInvariant());
+            var failureCategory = exception.Category.ToString().ToUpperInvariant();
+
+            if (deliverableMessage.AttemptCount >= policy.MaximumAttempts)
+            {
+                deliverableMessage.MarkFailed(
+                    failedAt,
+                    failureCategory);
+            }
+            else
+            {
+                var retryDelay = GetRetryDelay(
+                    deliverableMessage.AttemptCount,
+                    exception.Category,
+                    exception.RetryAfter,
+                    policy);
+                deliverableMessage.ScheduleRetry(
+                    failedAt.Add(retryDelay),
+                    failureCategory);
+            }
         }
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
@@ -473,7 +482,8 @@ public class AuthenticationEmailDispatcher(
     private static TimeSpan GetRetryDelay(
         int attemptCount,
         AuthenticationEmailFailureCategory category,
-        TimeSpan? providerRetryAfter)
+        TimeSpan? providerRetryAfter,
+        AuthenticationEmailDeliveryPolicy policy)
     {
         var slowRetry = category is
             AuthenticationEmailFailureCategory.Authentication or
@@ -481,21 +491,21 @@ public class AuthenticationEmailDispatcher(
             AuthenticationEmailFailureCategory.InvalidRequest or
             AuthenticationEmailFailureCategory.Unknown;
         var configuredDelay = slowRetry
-            ? TimeSpan.FromHours(6)
+            ? policy.SlowRetryDelay
             : attemptCount switch
             {
-                <= 1 => TimeSpan.FromMinutes(1),
-                2 => TimeSpan.FromMinutes(5),
-                3 => TimeSpan.FromMinutes(15),
-                4 => TimeSpan.FromHours(1),
-                _ => TimeSpan.FromHours(6)
+                <= 1 => policy.FirstRetryDelay,
+                2 => policy.SecondRetryDelay,
+                3 => policy.ThirdRetryDelay,
+                4 => policy.FourthRetryDelay,
+                _ => policy.SubsequentRetryDelay
             };
         var requestedDelay = providerRetryAfter is { } retryAfter && retryAfter > configuredDelay
             ? retryAfter
             : configuredDelay;
 
-        return requestedDelay > _maximumRetryDelay
-            ? _maximumRetryDelay
+        return requestedDelay > policy.MaximumRetryDelay
+            ? policy.MaximumRetryDelay
             : requestedDelay;
     }
 }

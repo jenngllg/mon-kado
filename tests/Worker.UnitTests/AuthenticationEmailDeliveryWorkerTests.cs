@@ -61,12 +61,16 @@ public class AuthenticationEmailDeliveryWorkerTests
         Assert.Equal(
             _frontendOrigin,
             dispatcher.FrontendOrigin);
+        Assert.NotNull(dispatcher.Policy);
         Assert.Equal(
             20,
-            dispatcher.BatchSize);
+            dispatcher.Policy.BatchSize);
         Assert.Equal(
             TimeSpan.FromMinutes(2),
-            dispatcher.LeaseDuration);
+            dispatcher.Policy.LeaseDuration);
+        Assert.Equal(
+            10,
+            dispatcher.Policy.MaximumAttempts);
     }
 
     [Fact]

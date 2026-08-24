@@ -239,6 +239,7 @@ public class ProcessedAuthenticationEmailCleanupWorkerTests
             provider.GetRequiredService<IServiceScopeFactory>(),
             timeProvider ?? new FixedTimeProvider(_now),
             options,
+            Microsoft.Extensions.Options.Options.Create(new AuthenticationCleanupOptions()),
             logger ?? NullLogger<ProcessedAuthenticationEmailCleanupWorker>.Instance);
     }
 

@@ -2,9 +2,12 @@ using JennGllg.Fr.MonKado.Back.Application.Abstractions;
 using JennGllg.Fr.MonKado.Back.Application.Common.Behaviors;
 using JennGllg.Fr.MonKado.Back.Application.Common.Exceptions;
 using JennGllg.Fr.MonKado.Back.Application.Common.Models;
+using JennGllg.Fr.MonKado.Back.Application.Logging;
 using JennGllg.Fr.MonKado.Back.Application.Models;
 
 using MediatR;
+
+using Microsoft.Extensions.Logging;
 
 namespace JennGllg.Fr.MonKado.Back.Application.Commands;
 
@@ -34,7 +37,10 @@ public class RefreshSessionCommand(string? refreshToken)
 /// Handles authentication session rotations.
 /// </summary>
 /// <param name="sessionService">The account session service.</param>
-public class RefreshSessionCommandHandler(IAccountSessionService sessionService)
+/// <param name="logger">The logger.</param>
+public class RefreshSessionCommandHandler(
+    IAccountSessionService sessionService,
+    ILogger<RefreshSessionCommandHandler> logger)
     : IRequestHandler<RefreshSessionCommand, AccountSessionTokens>
 {
     /// <summary>
@@ -48,10 +54,16 @@ public class RefreshSessionCommandHandler(IAccountSessionService sessionService)
         RefreshSessionCommand request,
         CancellationToken cancellationToken)
     {
+        ApplicationLogMessages.RefreshSessionStarted(logger);
         var tokens = await sessionService.RefreshAsync(
             request.RefreshToken!,
             cancellationToken);
 
-        return tokens ?? throw new InvalidAuthenticationSessionException();
+        if (tokens is null)
+            throw new InvalidAuthenticationSessionException();
+
+        ApplicationLogMessages.RefreshSessionCompleted(logger);
+
+        return tokens;
     }
 }

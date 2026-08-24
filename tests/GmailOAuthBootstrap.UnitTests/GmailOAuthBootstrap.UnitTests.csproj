@@ -22,7 +22,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="../../tools/GmailOAuthBootstrap/GmailOAuthBootstrap.csproj" />
+    <ProjectReference Include="../../src/Tools.GmailOAuthBootstrap/Tools.GmailOAuthBootstrap.csproj" />
   </ItemGroup>
 
   <ItemGroup>

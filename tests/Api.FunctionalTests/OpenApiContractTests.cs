@@ -575,6 +575,42 @@ public class OpenApiContractTests(UnavailablePostgreSqlApiFactory factory) : ICl
             "400");
     }
 
+    [Fact]
+    public async Task GetAsync_WhenAuthenticationJsonEndpointsAreDocumented_ExposesErrorSchemasForContentFailures()
+    {
+        // Arrange
+        using var client = _factory.CreateClient();
+
+        // Act
+        using var document = await client.GetFromJsonAsync<JsonDocument>(
+            "/openapi/v1.json",
+            TestContext.Current.CancellationToken)
+            ?? throw new InvalidOperationException("The OpenAPI response body is empty.");
+        var paths = document.RootElement.GetProperty("paths");
+        JsonElement[] operations =
+        [
+            paths.GetProperty("/api/v1/auth/registrations").GetProperty("post"),
+            paths.GetProperty("/api/v1/auth/sessions").GetProperty("post"),
+            paths.GetProperty("/api/v1/auth/email-confirmations").GetProperty("post"),
+            paths.GetProperty("/api/v1/auth/email-confirmation-requests").GetProperty("post")
+        ];
+
+        // Assert
+
+        foreach (var operation in operations)
+        {
+            var responses = operation.GetProperty("responses");
+            AssertErrorResponseSchema(
+                document.RootElement,
+                responses,
+                "413");
+            AssertErrorResponseSchema(
+                document.RootElement,
+                responses,
+                "415");
+        }
+    }
+
     private static void AssertErrorResponseSchema(
         JsonElement document,
         JsonElement responses,

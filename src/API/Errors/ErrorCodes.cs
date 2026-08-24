@@ -121,10 +121,6 @@ public static class ErrorCodes
     /// </summary>
     public const string TechnicalDependencyUnavailable = "TECHNICAL_DEPENDENCY_UNAVAILABLE";
     /// <summary>
-    /// Identifies technical internal server error.
-    /// </summary>
-    public const string TechnicalInternalServerError = "TECHNICAL_INTERNAL_SERVER_ERROR";
-    /// <summary>
     /// Identifies technical service unavailable.
     /// </summary>
     public const string TechnicalServiceUnavailable = "TECHNICAL_SERVICE_UNAVAILABLE";

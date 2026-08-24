@@ -1,4 +1,5 @@
 using JennGllg.Fr.MonKado.Back.Application.Abstractions;
+using JennGllg.Fr.MonKado.Back.Application.Models;
 
 namespace JennGllg.Fr.MonKado.Back.Worker.UnitTests;
 
@@ -17,12 +18,7 @@ internal class RecordingDispatcher(Exception? exception = null) : IAuthenticatio
         get; private set;
     }
 
-    public int BatchSize
-    {
-        get; private set;
-    }
-
-    public TimeSpan LeaseDuration
+    public AuthenticationEmailDeliveryPolicy? Policy
     {
         get; private set;
     }
@@ -34,13 +30,11 @@ internal class RecordingDispatcher(Exception? exception = null) : IAuthenticatio
 
     public Task<int> DispatchPendingAsync(
         Uri frontendOrigin,
-        int batchSize,
-        TimeSpan leaseDuration,
+        AuthenticationEmailDeliveryPolicy policy,
         CancellationToken cancellationToken)
     {
         FrontendOrigin = frontendOrigin;
-        BatchSize = batchSize;
-        LeaseDuration = leaseDuration;
+        Policy = policy;
         _callCount++;
         OnCall?.Invoke(_callCount);
         Called.TrySetResult();

@@ -14,12 +14,10 @@ namespace JennGllg.Fr.MonKado.Back.Worker.Workers;
 /// </summary>
 public sealed class ProcessedAuthenticationEmailCleanupWorker : BackgroundService
 {
-    private const int BatchSize = 500;
-    private static readonly TimeSpan _normalInterval = TimeSpan.FromHours(24);
-    private static readonly TimeSpan _failureRetryInterval = TimeSpan.FromMinutes(15);
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly TimeProvider _timeProvider;
     private readonly ILogger<ProcessedAuthenticationEmailCleanupWorker> _logger;
+    private readonly AuthenticationCleanupOptions _cleanupOptions;
     private readonly TimeSpan _retention;
 
     /// <summary>
@@ -28,16 +26,19 @@ public sealed class ProcessedAuthenticationEmailCleanupWorker : BackgroundServic
     /// <param name="scopeFactory">The service scope factory.</param>
     /// <param name="timeProvider">The time provider.</param>
     /// <param name="options">The authentication email options.</param>
+    /// <param name="cleanupOptions">The shared cleanup options.</param>
     /// <param name="logger">The logger.</param>
     public ProcessedAuthenticationEmailCleanupWorker(
         IServiceScopeFactory scopeFactory,
         TimeProvider timeProvider,
         IOptions<AuthenticationEmailOptions> options,
+        IOptions<AuthenticationCleanupOptions> cleanupOptions,
         ILogger<ProcessedAuthenticationEmailCleanupWorker> logger)
     {
         _scopeFactory = scopeFactory;
         _timeProvider = timeProvider;
         _logger = logger;
+        _cleanupOptions = cleanupOptions.Value;
         _retention = TimeSpan.FromDays(options.Value.ProcessedRetentionDays);
     }
 
@@ -48,7 +49,13 @@ public sealed class ProcessedAuthenticationEmailCleanupWorker : BackgroundServic
         {
             try
             {
-                var nextDelay = await CleanupOnceAsync(stoppingToken);
+                TimeSpan nextDelay;
+                using (WorkerLogScope.Begin(
+                    _logger,
+                    "ProcessedAuthenticationEmailCleanup"))
+                {
+                    nextDelay = await CleanupOnceAsync(stoppingToken);
+                }
                 await Task.Delay(
                     nextDelay,
                     _timeProvider,
@@ -79,7 +86,7 @@ public sealed class ProcessedAuthenticationEmailCleanupWorker : BackgroundServic
                     deletedCount);
             }
 
-            return _normalInterval;
+            return _cleanupOptions.Interval;
         }
         catch (OperationCanceledException)
         {
@@ -93,7 +100,7 @@ public sealed class ProcessedAuthenticationEmailCleanupWorker : BackgroundServic
                 exception.GetType().Name,
                 exception);
 
-            return _failureRetryInterval;
+            return _cleanupOptions.FailureRetryInterval;
         }
     }
 
@@ -115,11 +122,11 @@ public sealed class ProcessedAuthenticationEmailCleanupWorker : BackgroundServic
                 .GetRequiredService<IProcessedAuthenticationEmailCleanup>();
             deletedInBatch = await cleanup.DeleteProcessedEmailsAsync(
                 cutoff,
-                BatchSize,
+                _cleanupOptions.BatchSize,
                 cancellationToken);
             totalDeleted += deletedInBatch;
         }
-        while (deletedInBatch == BatchSize);
+        while (deletedInBatch == _cleanupOptions.BatchSize);
 
         return totalDeleted;
     }

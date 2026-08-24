@@ -3,6 +3,8 @@ using JennGllg.Fr.MonKado.Back.Application.Commands;
 using JennGllg.Fr.MonKado.Back.Application.Common.Exceptions;
 using JennGllg.Fr.MonKado.Back.Application.Models;
 
+using Microsoft.Extensions.Logging.Abstractions;
+
 using Moq;
 
 namespace JennGllg.Fr.MonKado.Back.Application.UnitTests.Handlers;
@@ -15,7 +17,9 @@ public class RefreshSessionCommandHandlerTests
     public RefreshSessionCommandHandlerTests()
     {
         _sessionServiceMock = new Mock<IAccountSessionService>(MockBehavior.Strict);
-        _handler = new RefreshSessionCommandHandler(_sessionServiceMock.Object);
+        _handler = new RefreshSessionCommandHandler(
+            _sessionServiceMock.Object,
+            NullLogger<RefreshSessionCommandHandler>.Instance);
     }
 
     [Fact]

@@ -2,8 +2,11 @@ using JennGllg.Fr.MonKado.Back.Application.Abstractions;
 using JennGllg.Fr.MonKado.Back.Application.Common.Behaviors;
 using JennGllg.Fr.MonKado.Back.Application.Common.Exceptions;
 using JennGllg.Fr.MonKado.Back.Application.Common.Models;
+using JennGllg.Fr.MonKado.Back.Application.Logging;
 
 using MediatR;
+
+using Microsoft.Extensions.Logging;
 
 namespace JennGllg.Fr.MonKado.Back.Application.Commands;
 
@@ -41,7 +44,10 @@ public class ConfirmEmailCommand(
 /// Handles email confirmation commands.
 /// </summary>
 /// <param name="confirmationService">The email confirmation service.</param>
-public class ConfirmEmailCommandHandler(IEmailConfirmationService confirmationService)
+/// <param name="logger">The logger.</param>
+public class ConfirmEmailCommandHandler(
+    IEmailConfirmationService confirmationService,
+    ILogger<ConfirmEmailCommandHandler> logger)
     : IRequestHandler<ConfirmEmailCommand>
 {
     /// <summary>
@@ -55,6 +61,7 @@ public class ConfirmEmailCommandHandler(IEmailConfirmationService confirmationSe
         ConfirmEmailCommand request,
         CancellationToken cancellationToken)
     {
+        ApplicationLogMessages.EmailConfirmationStarted(logger);
         var confirmed = await confirmationService.ConfirmAsync(
             request.UserId!,
             request.Token!,
@@ -62,5 +69,7 @@ public class ConfirmEmailCommandHandler(IEmailConfirmationService confirmationSe
 
         if (!confirmed)
             throw new EmailConfirmationInvalidException();
+
+        ApplicationLogMessages.EmailConfirmationCompleted(logger);
     }
 }

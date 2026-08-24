@@ -512,6 +512,87 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
     }
 
     [Fact]
+    public async Task MigrateAsync_WhenAuditableMemberHasNullUpdatedAt_BackfillsValueBeforeRollback()
+    {
+        // Arrange
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var provider = CreateServiceProvider();
+        await using var scope = provider.CreateAsyncScope();
+        var context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
+        await context.Database.MigrateAsync(
+            "20260821115421_AddAuditableUtcDates",
+            cancellationToken);
+        var userId = Guid.CreateVersion7();
+        var createdAt = new DateTime(
+            2026,
+            8,
+            21,
+            12,
+            0,
+            0,
+            DateTimeKind.Utc);
+        await context.Database.ExecuteSqlInterpolatedAsync(
+            $"""
+            INSERT INTO public.users (
+                id,
+                display_name,
+                created_at,
+                version,
+                user_name,
+                normalized_user_name,
+                email,
+                normalized_email,
+                email_confirmed,
+                phone_number_confirmed,
+                two_factor_enabled,
+                lockout_enabled,
+                access_failed_count)
+            VALUES (
+                {userId},
+                {"Migration test"},
+                {createdAt},
+                {1},
+                {"rollback@example.test"},
+                {"ROLLBACK@EXAMPLE.TEST"},
+                {"rollback@example.test"},
+                {"ROLLBACK@EXAMPLE.TEST"},
+                {true},
+                {false},
+                {false},
+                {true},
+                {0});
+            """,
+            cancellationToken);
+
+        // Act
+        DateTime updatedAt;
+
+        try
+        {
+            await context.Database.MigrateAsync(
+                "20260813171453_AddAuthenticationSessions",
+                cancellationToken);
+            updatedAt = await GetUserUpdatedAtAsync(
+                context,
+                userId,
+                cancellationToken);
+        }
+        finally
+        {
+            await context.Database.MigrateAsync(cancellationToken);
+        }
+        var hasNoDefault = await HasNoUserUpdatedAtDefaultAsync(
+            context,
+            cancellationToken);
+
+        // Assert
+        Assert.Equal(
+            createdAt,
+            updatedAt);
+        Assert.True(hasNoDefault);
+    }
+
+    [Fact]
     public async Task MigrateAsync_WhenExistingMember_BackfillsAndRemovesMemberRole()
     {
         // Arrange
@@ -1105,6 +1186,55 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
         command.CommandText =
             """
             SELECT is_nullable = 'YES'
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'users'
+              AND column_name = 'updated_at';
+            """;
+
+        return (bool)(await command.ExecuteScalarAsync(cancellationToken)
+            ?? throw new InvalidOperationException("The users.updated_at column is missing."));
+    }
+
+    private static async Task<DateTime> GetUserUpdatedAtAsync(
+        MonKadoDbContext context,
+        Guid userId,
+        CancellationToken cancellationToken)
+    {
+        var connection = context.Database.GetDbConnection();
+
+        if (connection.State != System.Data.ConnectionState.Open)
+            await connection.OpenAsync(cancellationToken);
+
+        await using var command = connection.CreateCommand();
+        command.CommandText =
+            """
+            SELECT updated_at
+            FROM public.users
+            WHERE id = @user_id;
+            """;
+        var parameter = command.CreateParameter();
+        parameter.ParameterName = "user_id";
+        parameter.Value = userId;
+        command.Parameters.Add(parameter);
+
+        return (DateTime)(await command.ExecuteScalarAsync(cancellationToken)
+            ?? throw new InvalidOperationException("The migration test user is missing."));
+    }
+
+    private static async Task<bool> HasNoUserUpdatedAtDefaultAsync(
+        MonKadoDbContext context,
+        CancellationToken cancellationToken)
+    {
+        var connection = context.Database.GetDbConnection();
+
+        if (connection.State != System.Data.ConnectionState.Open)
+            await connection.OpenAsync(cancellationToken);
+
+        await using var command = connection.CreateCommand();
+        command.CommandText =
+            """
+            SELECT column_default IS NULL
             FROM information_schema.columns
             WHERE table_schema = 'public'
               AND table_name = 'users'

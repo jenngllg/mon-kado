@@ -1,6 +1,9 @@
 using JennGllg.Fr.MonKado.Back.Application.Abstractions;
+using JennGllg.Fr.MonKado.Back.Application.Logging;
 
 using MediatR;
+
+using Microsoft.Extensions.Logging;
 
 namespace JennGllg.Fr.MonKado.Back.Application.Commands;
 
@@ -20,7 +23,10 @@ public class RequestEmailConfirmationCommand(string? email) : IRequest
 /// Handles email confirmation request commands.
 /// </summary>
 /// <param name="confirmationService">The email confirmation service.</param>
-public class RequestEmailConfirmationCommandHandler(IEmailConfirmationService confirmationService)
+/// <param name="logger">The logger.</param>
+public class RequestEmailConfirmationCommandHandler(
+    IEmailConfirmationService confirmationService,
+    ILogger<RequestEmailConfirmationCommandHandler> logger)
     : IRequestHandler<RequestEmailConfirmationCommand>
 {
     /// <summary>
@@ -33,8 +39,10 @@ public class RequestEmailConfirmationCommandHandler(IEmailConfirmationService co
         RequestEmailConfirmationCommand request,
         CancellationToken cancellationToken)
     {
+        ApplicationLogMessages.EmailConfirmationRequestStarted(logger);
         await confirmationService.RequestAsync(
             request.Email!.Trim(),
             cancellationToken);
+        ApplicationLogMessages.EmailConfirmationRequested(logger);
     }
 }

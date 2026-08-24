@@ -38,6 +38,7 @@ public static class AuthenticationEmailDeliveryConfiguration
         ValidateEmailOptions(
             email,
             environment);
+        ValidateDeliveryOptions(email);
         services.Configure<AuthenticationEmailOptions>(emailSection);
 
         if (email.IsEnabled)
@@ -105,6 +106,105 @@ public static class AuthenticationEmailDeliveryConfiguration
 
             throw new InvalidOperationException(
                 "'Gmail:ClientId', 'Gmail:ClientSecret', and 'Gmail:RefreshToken' are required.");
+        }
+
+        ValidateDuration(
+            options.RequestTimeout,
+            TimeSpan.FromSeconds(1),
+            TimeSpan.FromMinutes(5),
+            "Gmail:RequestTimeout");
+    }
+
+    private static void ValidateDeliveryOptions(AuthenticationEmailOptions options)
+    {
+        ValidateRange(
+            options.DeliveryBatchSize,
+            1,
+            1000,
+            "AuthenticationEmail:DeliveryBatchSize");
+        ValidateRange(
+            options.MaximumDeliveryAttempts,
+            1,
+            100,
+            "AuthenticationEmail:MaximumDeliveryAttempts");
+        ValidateDuration(
+            options.DeliveryLeaseDuration,
+            TimeSpan.FromSeconds(1),
+            TimeSpan.FromHours(1),
+            "AuthenticationEmail:DeliveryLeaseDuration");
+        ValidateDuration(
+            options.PollInterval,
+            TimeSpan.FromSeconds(1),
+            TimeSpan.FromHours(1),
+            "AuthenticationEmail:PollInterval");
+        ValidateDuration(
+            options.FailureRetryInterval,
+            TimeSpan.FromSeconds(1),
+            TimeSpan.FromHours(1),
+            "AuthenticationEmail:FailureRetryInterval");
+
+        TimeSpan[] retryDelays =
+        [
+            options.FirstRetryDelay,
+            options.SecondRetryDelay,
+            options.ThirdRetryDelay,
+            options.FourthRetryDelay,
+            options.SubsequentRetryDelay,
+            options.SlowRetryDelay,
+            options.MaximumRetryDelay
+        ];
+
+        foreach (var retryDelay in retryDelays)
+        {
+            ValidateDuration(
+                retryDelay,
+                TimeSpan.FromSeconds(1),
+                TimeSpan.FromDays(7),
+                "AuthenticationEmail retry delays");
+        }
+
+        if (options.FirstRetryDelay > options.SecondRetryDelay ||
+            options.SecondRetryDelay > options.ThirdRetryDelay ||
+            options.ThirdRetryDelay > options.FourthRetryDelay ||
+            options.FourthRetryDelay > options.SubsequentRetryDelay)
+        {
+            throw new InvalidOperationException(
+                "Authentication e-mail transient retry delays must be ordered from shortest to longest.");
+        }
+
+        if (options.MaximumRetryDelay < options.SubsequentRetryDelay ||
+            options.MaximumRetryDelay < options.SlowRetryDelay)
+        {
+            throw new InvalidOperationException(
+                "'AuthenticationEmail:MaximumRetryDelay' must cover every configured retry delay.");
+        }
+    }
+
+    private static void ValidateRange(
+        int value,
+        int minimum,
+        int maximum,
+        string configurationKey)
+    {
+
+        if (value < minimum || value > maximum)
+        {
+            throw new InvalidOperationException(
+                $"'{configurationKey}' must be between {minimum} and {maximum}.");
+        }
+    }
+
+    private static void ValidateDuration(
+        TimeSpan value,
+        TimeSpan minimum,
+        TimeSpan maximum,
+        string configurationKey)
+    {
+
+        if (value < minimum || value > maximum)
+        {
+            throw new InvalidOperationException(
+                $"'{configurationKey}' must be between {minimum} and {maximum}.");
         }
     }
 

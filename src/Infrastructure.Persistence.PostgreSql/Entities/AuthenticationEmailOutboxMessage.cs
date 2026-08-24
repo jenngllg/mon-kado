@@ -282,6 +282,16 @@ public class AuthenticationEmailOutboxMessage
         LastError = lastError;
     }
 
+    internal void MarkFailed(
+        DateTime failedAt,
+        string lastError)
+    {
+        ProcessedAt = failedAt;
+        LockedUntil = null;
+        LastError = lastError;
+        ProviderMessageId = null;
+    }
+
     private static AuthenticationEmailOutboxMessage CreateEmailChangeMessage(
         Guid requestId,
         Guid userId,

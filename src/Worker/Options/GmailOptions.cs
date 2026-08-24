@@ -8,6 +8,8 @@ namespace JennGllg.Fr.MonKado.Back.Worker.Options;
 [ExcludeFromCodeCoverage]
 public class GmailOptions
 {
+    private static readonly TimeSpan _defaultRequestTimeout = TimeSpan.FromSeconds(15);
+
     /// <summary>
     /// Identifies section name.
     /// </summary>
@@ -44,4 +46,9 @@ public class GmailOptions
     {
         get; init;
     }
+
+    /// <summary>
+    /// Gets the timeout applied to one Gmail API request.
+    /// </summary>
+    public TimeSpan RequestTimeout { get; init; } = _defaultRequestTimeout;
 }

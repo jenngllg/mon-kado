@@ -1,6 +1,8 @@
 using JennGllg.Fr.MonKado.Back.Application.Abstractions;
 using JennGllg.Fr.MonKado.Back.Application.Commands;
 
+using Microsoft.Extensions.Logging.Abstractions;
+
 using Moq;
 
 namespace JennGllg.Fr.MonKado.Back.Application.UnitTests.Handlers;
@@ -13,7 +15,9 @@ public class RequestEmailConfirmationCommandHandlerTests
     public RequestEmailConfirmationCommandHandlerTests()
     {
         _confirmationServiceMock = new Mock<IEmailConfirmationService>(MockBehavior.Strict);
-        _handler = new RequestEmailConfirmationCommandHandler(_confirmationServiceMock.Object);
+        _handler = new RequestEmailConfirmationCommandHandler(
+            _confirmationServiceMock.Object,
+            NullLogger<RequestEmailConfirmationCommandHandler>.Instance);
     }
 
     [Fact]
@@ -33,12 +37,12 @@ public class RequestEmailConfirmationCommandHandlerTests
             command,
             cancellationToken);
 
+        // Assert
         _confirmationServiceMock.Verify(
             service => service.RequestAsync(
                 "Lea@example.fr",
                 cancellationToken),
             Times.Once);
         _confirmationServiceMock.VerifyNoOtherCalls();
-        // Assert
     }
 }

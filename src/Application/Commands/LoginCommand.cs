@@ -1,8 +1,11 @@
 using JennGllg.Fr.MonKado.Back.Application.Abstractions;
 using JennGllg.Fr.MonKado.Back.Application.Common.Exceptions;
+using JennGllg.Fr.MonKado.Back.Application.Logging;
 using JennGllg.Fr.MonKado.Back.Application.Models;
 
 using MediatR;
+
+using Microsoft.Extensions.Logging;
 
 namespace JennGllg.Fr.MonKado.Back.Application.Commands;
 
@@ -44,7 +47,10 @@ public class LoginCommand(
 /// Handles account login commands.
 /// </summary>
 /// <param name="sessionService">The account session service.</param>
-public class LoginCommandHandler(IAccountSessionService sessionService)
+/// <param name="logger">The logger.</param>
+public class LoginCommandHandler(
+    IAccountSessionService sessionService,
+    ILogger<LoginCommandHandler> logger)
     : IRequestHandler<LoginCommand, AccountSessionTokens>
 {
     /// <summary>
@@ -59,6 +65,7 @@ public class LoginCommandHandler(IAccountSessionService sessionService)
         LoginCommand request,
         CancellationToken cancellationToken)
     {
+        ApplicationLogMessages.PasswordLoginStarted(logger);
         var result = await sessionService.LoginAsync(
             request.Email!.Trim(),
             request.Password!,
@@ -72,7 +79,10 @@ public class LoginCommandHandler(IAccountSessionService sessionService)
         if (result.Result != AccountLoginResult.Success)
             throw new InvalidCredentialsException();
 
-        return result.Tokens ?? throw new InvalidOperationException(
+        var tokens = result.Tokens ?? throw new InvalidOperationException(
             "A successful login must return session tokens.");
+        ApplicationLogMessages.PasswordLoginCompleted(logger);
+
+        return tokens;
     }
 }

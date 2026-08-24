@@ -14,7 +14,7 @@ on:
       - Dockerfile
       - compose.yaml
       - compose.local.yaml
-      - deploy/caddy/**
+      - deployments/caddy/**
       - global.json
       - src/**
   push:
@@ -30,7 +30,7 @@ on:
       - Dockerfile
       - compose.yaml
       - compose.local.yaml
-      - deploy/caddy/**
+      - deployments/caddy/**
       - global.json
       - src/**
   workflow_dispatch:

@@ -30,7 +30,7 @@ Two direct dependencies are deliberately pinned and therefore appear in outdated
 
 ## Continuous integration
 
-GitHub Actions validates every pull request and push targeting `develop` or `main`. The required `CI / quality` check runs the complete .NET test and quality baseline, including PostgreSQL Testcontainers, package audits, EF migration checks, and both Compose configurations.
+GitHub Actions validates every pull request and push targeting `develop` or `main`. The required `CI / quality` check scans the complete Git history for secrets and runs the .NET quality baseline, including PostgreSQL Testcontainers, package audits, EF migration checks, and both Compose configurations.
 
 The conditional `Containers / verify` workflow runs only when application or container files change. It builds but never publishes the images, exercises the isolated stack, verifies failure behavior, and scans the images for fixable high or critical vulnerabilities.
 
@@ -144,11 +144,11 @@ Production clients must call the API only through Caddy's public HTTPS endpoint.
 
 Local HTTP is allowed only on loopback development addresses and must never be exposed to another device. Do not submit real credentials to a local development instance.
 
-New accounts and their minimal outbox request are committed atomically. The outbox contains only the user identifier and message metadata; #764 will generate and deliver the confirmation token later. Unconfirmed accounts expire after 30 days and the Worker removes them in bounded batches. This retention period must appear in the privacy policy before production launch.
+New accounts and their minimal outbox request are committed atomically. The outbox contains only the user identifier and message metadata; the Worker generates the confirmation token immediately before delivery. Unconfirmed accounts expire after 30 days and the Worker removes them in bounded batches. This retention period must appear in the privacy policy before production launch.
 
 ## E-mail confirmation contract
 
-Ticket #764 will build confirmation links from the configured, trusted frontend origin. The link uses a URL fragment:
+The Worker builds confirmation links from the configured, trusted frontend origin. The link uses a URL fragment:
 
 ```text
 https://<frontend>/confirm-email#userId=<uuid>&token=<base64url>
@@ -158,7 +158,7 @@ The fragment is not sent in HTTP requests and must never be copied into server l
 remove it from browser history, keep its values only in memory, fetch `GET /security/csrf-token`, then send both values
 in the JSON body of `POST /api/v1/auth/email-confirmations`. It displays the same failure message for every invalid,
 expired, altered or unknown confirmation link. A successful confirmation creates no authenticated session; the user
-must continue to the future sign-in flow.
+must then sign in explicitly.
 
 Confirmation tokens are protected by ASP.NET Core Data Protection, use the dedicated
 `MonKadoEmailConfirmation` provider and remain valid for at most 24 hours. An unconfirmed account's 30-day retention
@@ -374,13 +374,16 @@ mailbox content. Messages contain plain-text and HTML alternatives, no tracking,
 
 Delivery uses the transactional outbox created with the account. Workers claim bounded batches with PostgreSQL
 `FOR UPDATE SKIP LOCKED`, apply a two-minute lease, and retry failures after 1 minute, 5 minutes, 15 minutes, 1 hour,
-then every 6 hours. A longer Gmail `Retry-After` value is honored up to 24 hours. Delivery is at least once: a rare
+then every 6 hours. A longer Gmail `Retry-After` value is honored up to 24 hours. All these values are configurable
+and validated at startup. A message becomes terminal after 10 failed provider calls by default; its non-sensitive
+failure category is retained with the processed outbox metadata until the normal retention cleanup. Delivery is at least once: a rare
 duplicate is possible if Gmail accepts a message but its response or the database update is lost. The deterministic
 RFC `Message-ID` improves traceability but does not guarantee recipient-side deduplication.
 
 Processed authentication-email outbox metadata becomes eligible for deletion after 30 days by default and is then
 removed by the daily cleanup in bounded batches. The retention threshold is configurable from 1 through 365 days.
-Pending delivery and retry messages are never removed by this cleanup. Email-change messages may disappear earlier
+Pending delivery and retry messages are never removed by this cleanup. Terminal failures are removed by the same
+retention policy as successful messages. Email-change messages may disappear earlier
 when their parent request is deleted after its own retention period.
 
 Local Compose disables delivery by default and leaves outbox messages untouched. To exercise Gmail explicitly,
@@ -392,7 +395,7 @@ use real OAuth credentials in automated tests.
 1. Create a Google Cloud project, enable the Gmail API, and configure an OAuth client for a desktop application.
 2. Add only the `https://www.googleapis.com/auth/gmail.send` scope.
 3. Set `GMAIL_CLIENT_ID` and `GMAIL_CLIENT_SECRET` in the current shell process.
-4. Run `dotnet run --project tools/GmailOAuthBootstrap/GmailOAuthBootstrap.csproj`.
+4. Run `dotnet run --project src/Tools.GmailOAuthBootstrap/Tools.GmailOAuthBootstrap.csproj`.
 5. Authorize the dedicated Gmail account and immediately store the printed refresh token as a secret.
 
 The bootstrap tool keeps OAuth state only in memory and writes no token to disk. Do not paste the refresh token,
@@ -422,10 +425,16 @@ Local defaults allow `http://localhost:5173` and the `localhost` API host. Produ
 | Google backchannel timeout | `GOOGLE_AUTHENTICATION_BACKCHANNEL_TIMEOUT_SECONDS` | `15` seconds (allowed: `1` through `60`) |
 | Authentication e-mail provider | `AUTHENTICATION_EMAIL_PROVIDER` | `Gmail` |
 | Processed authentication e-mail retention | `AUTHENTICATION_EMAIL_PROCESSED_RETENTION_DAYS` | `30` days (allowed: `1` through `365`) |
+| Authentication e-mail delivery batch | `AUTHENTICATION_EMAIL_DELIVERY_BATCH_SIZE` | `20` messages |
+| Authentication e-mail lease | `AUTHENTICATION_EMAIL_DELIVERY_LEASE_DURATION` | `00:02:00` |
+| Authentication e-mail maximum attempts | `AUTHENTICATION_EMAIL_MAXIMUM_DELIVERY_ATTEMPTS` | `10` provider calls |
+| Authentication cleanup batch | `AUTHENTICATION_CLEANUP_BATCH_SIZE` | `500` rows |
+| Authentication cleanup interval | `AUTHENTICATION_CLEANUP_INTERVAL` | `1.00:00:00` |
 | Gmail sender | `GMAIL_SENDER_ADDRESS` | `monkado.app@gmail.com` |
 | Gmail OAuth client ID | `GMAIL_CLIENT_ID` | Secret value |
 | Gmail OAuth client secret | `GMAIL_CLIENT_SECRET` | Secret value |
 | Gmail OAuth refresh token | `GMAIL_REFRESH_TOKEN` | Secret value |
+| Gmail request timeout | `GMAIL_REQUEST_TIMEOUT` | `00:00:15` |
 
 Compose maps the dedicated edge network to `ReverseProxy:KnownNetworks`. ASP.NET Core accepts forwarded client IP and scheme values only from that network, with a single forwarded hop. Change `EDGE_NETWORK_CIDR` if it conflicts with an existing Docker network. Never configure trusted proxies with `0.0.0.0/0` or `::/0`, and never configure `AllowedHosts` or CORS with `*`.
 
