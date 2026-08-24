@@ -9,7 +9,7 @@
     <PackageVersion Include="EFCore.NamingConventions" Version="10.0.1" />
     <PackageVersion Include="FluentValidation" Version="12.1.1" />
     <PackageVersion Include="FluentValidation.DependencyInjectionExtensions" Version="12.1.1" />
-    <PackageVersion Include="Google.Apis.Auth" Version="1.75.0" />
+    <PackageVersion Include="Google.Apis.Auth" Version="1.76.0" />
     <PackageVersion Include="Google.Apis.Gmail.v1" Version="1.75.0.4225" />
     <!-- MediatR 12.5.0 is the last Apache-2.0 release without the commercial license mechanism. -->
     <PackageVersion Include="MediatR" Version="12.5.0" />
