@@ -10,6 +10,7 @@ IdentityModelEventSource.ShowPII = false;
 IdentityModelEventSource.LogCompleteSecurityArtifact = false;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Configuration.ConfigureLocalUserSecrets(builder.Environment);
 
 builder.WebHost.ConfigureKestrel(options => options.AddServerHeader = false);
 builder.Logging.AddFilter(

@@ -22,6 +22,7 @@ public sealed class PostgreSqlApiFactory(
 {
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
+        builder.UseEnvironment("Local");
         builder.UseSetting(
             "ConnectionStrings:PostgreSql",
             connectionString);
