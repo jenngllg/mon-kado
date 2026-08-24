@@ -296,7 +296,8 @@ public class AuthenticationEmailDispatcher(
     {
 
         if (message.MemberEmailChangeRequestId is not { } requestId ||
-            message.RecipientEmail is not { } recipientEmail)
+            message.RecipientEmail is not { } recipientEmail ||
+            message.SecurityStampSnapshot is not { } securityStampSnapshot)
             return null;
 
         var request = await emailChangeRequestRepository.GetByIdAsync(
@@ -317,7 +318,11 @@ public class AuthenticationEmailDispatcher(
             !string.Equals(
                 recipientEmail,
                 request.NewEmail,
-                StringComparison.OrdinalIgnoreCase))
+                StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(
+                user.SecurityStamp,
+                securityStampSnapshot,
+                StringComparison.Ordinal))
             return null;
 
         var purpose = MemberEmailChangeTokenPurpose.Create(

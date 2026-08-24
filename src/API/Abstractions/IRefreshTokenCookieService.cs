@@ -24,6 +24,15 @@ public interface IRefreshTokenCookieService
         AccountSessionTokens tokens);
 
     /// <summary>
+    /// Appends a refresh-only session cookie after a browser callback.
+    /// </summary>
+    /// <param name="context">The HTTP context.</param>
+    /// <param name="session">The refresh-only session.</param>
+    void Append(
+        HttpContext context,
+        AccountRefreshSession session);
+
+    /// <summary>
     /// Deletes the refresh token cookie.
     /// </summary>
     /// <param name="context">The HTTP context.</param>

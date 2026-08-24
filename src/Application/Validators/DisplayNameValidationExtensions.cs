@@ -13,7 +13,10 @@ namespace JennGllg.Fr.MonKado.Back.Application.Validators;
 /// </summary>
 public static class DisplayNameValidationExtensions
 {
-    private const int MaximumDisplayNameLength = 80;
+    /// <summary>
+    /// Identifies the maximum display-name length in Unicode scalar values.
+    /// </summary>
+    public const int MaximumLength = 80;
 
     /// <summary>
     /// Applies all display name validation rules.
@@ -34,7 +37,7 @@ public static class DisplayNameValidationExtensions
             .Must(value => IsWellFormed(value!))
             .WithMessage("The display name must contain valid Unicode characters.")
             .Must(value => IsWithinMaximumLength(value!))
-            .WithMessage($"The display name must not exceed {MaximumDisplayNameLength} characters.")
+            .WithMessage($"The display name must not exceed {MaximumLength} characters.")
             .Must(value => DoesNotContainControlCharacters(value!))
             .WithMessage("The display name must not contain control characters.");
     }
@@ -68,7 +71,7 @@ public static class DisplayNameValidationExtensions
     private static bool IsWithinMaximumLength(string value)
     {
 
-        return value.Trim().EnumerateRunes().Count() <= MaximumDisplayNameLength;
+        return value.Trim().EnumerateRunes().Count() <= MaximumLength;
     }
 
     private static bool DoesNotContainControlCharacters(string value)

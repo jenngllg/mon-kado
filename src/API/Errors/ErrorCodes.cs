@@ -30,14 +30,30 @@ public static class ErrorCodes
     /// Identifies an invalid account password reset link.
     /// </summary>
     public const string AccountPasswordResetInvalid = "ACCOUNT_PASSWORD_RESET_INVALID";
+    #endregion
+
+    #region Google
+
     /// <summary>
-    /// Identifies request validation error.
+    /// Identifies an invalid or expired Google authentication flow.
     /// </summary>
+    public const string GoogleAuthenticationFailed = "GOOGLE_AUTHENTICATION_FAILED";
+    /// <summary>
+    /// Identifies a failed explicit Google account link proof.
+    /// </summary>
+    public const string GoogleAccountLinkFailed = "GOOGLE_ACCOUNT_LINK_FAILED";
+    /// <summary>
+    /// Identifies a concurrent or ambiguous Google account link.
+    /// </summary>
+    public const string GoogleAccountLinkConflict = "GOOGLE_ACCOUNT_LINK_CONFLICT";
 
     #endregion
 
     #region Request
 
+    /// <summary>
+    /// Identifies request validation error.
+    /// </summary>
     public const string RequestValidationError = "REQUEST_VALIDATION_ERROR";
     /// <summary>
     /// Identifies request rate limit exceeded.

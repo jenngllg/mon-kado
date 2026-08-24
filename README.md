@@ -95,6 +95,9 @@ The local launch profile listens on `http://localhost:7000` and uses the `Local`
 | `POST /api/v1/auth/password-resets` | Replaces a forgotten password from a user identifier and Base64URL token |
 | `POST /api/v1/auth/sessions` | Authenticates an account and creates a refresh session |
 | `POST /api/v1/auth/sessions/refresh` | Rotates the browser refresh token and returns a new access token |
+| `GET /api/v1/auth/google` | Starts Google OpenID Connect authentication |
+| `POST /api/v1/auth/google/callback` | Receives the Google OpenID Connect `form_post` callback |
+| `POST /api/v1/auth/google/link?flow=<opaque-binding>` | Links a verified Google identity after local password confirmation |
 | `GET /api/v1/auth/sessions/current` | Returns the current member identity and profile ETag |
 | `DELETE /api/v1/auth/sessions/current` | Ends the current browser refresh session |
 | `PUT /api/v1/members/current/profile` | Updates the current member display name with optimistic concurrency |
@@ -108,7 +111,9 @@ The OpenAPI contract is available in every environment. No interactive Swagger o
 
 ## Browser security contract
 
-The production frontend and API use separate origins under the same registrable domain, for example `https://example.fr` and `https://api.example.fr`. Only exact origins configured under `WebSecurity:AllowedOrigins` receive credentialed CORS headers. Wildcards are rejected, and Production accepts HTTPS origins only.
+The production frontend and API use HTTPS origins under the same registrable domain, for example `https://www.example.fr` and `https://api.example.fr`. This is required by the host-only `SameSite=Strict` refresh cookie used by login, refresh, Google sign-in, and logout. A frontend on `<account>.github.io` and an API on another registrable domain are not supported by this architecture; configure a custom frontend domain instead. Do not weaken the cookie to `SameSite=None` without redesigning and reviewing the complete browser authentication model.
+
+Only exact origins configured under `WebSecurity:AllowedOrigins` receive credentialed CORS headers. Wildcards are rejected, and Production accepts HTTPS origins only.
 
 The frontend must initialize and refresh CSRF protection after login and logout:
 
@@ -253,13 +258,113 @@ secure `__Host-MonKado.Refresh` name; local development uses `MonKado.Refresh` f
 it is a browser-session cookie backed by an eight-hour sliding server session. With `rememberMe`, its absolute expiry
 is fixed at 30 days. PostgreSQL stores only the SHA-256 hash of the 256-bit refresh secret. Every successful refresh
 locks and atomically rotates its session; reuse of an older token revokes that entire session. Separate browsers and
-devices keep independent sessions. Signing in again revokes the session identified by the current browser cookie,
-including when that cookie contains an older rotated token, without affecting sessions on other devices.
+devices keep independent sessions. Signing in again replaces only an active session whose current refresh secret is
+proved by the browser cookie; an older or altered token revokes no session, and sessions on other devices are not
+affected.
 
 Missing, invalid, expired, revoked, or reused refresh tokens return the standard `401` `ErrorResponse` and delete the
 refresh cookie. PostgreSQL unavailability returns `503` without deleting it. Token responses use `Cache-Control:
 no-store`. The Worker removes expired refresh sessions in bounded batches. The migration intentionally deletes all
 legacy opaque sessions, so existing users must sign in again.
+
+## Google sign-in
+
+Google authentication uses a confidential OpenID Connect Authorization Code flow in the API. The browser starts with
+a top-level navigation to `GET /api/v1/auth/google`; the API applies PKCE S256, state, nonce, correlation protection,
+and `prompt=select_account`, then Google returns through an HTTPS `form_post` to the exact registered callback. This
+keeps the one-shot authorization code out of the URL, browser history, and request-target logs:
+
+```text
+https://<api-host>/api/v1/auth/google/callback
+```
+
+After validating that callback, the API generates a callback-specific opaque binding and redirects internally to
+`/api/v1/auth/google/completion?flow=<opaque-binding>`. The value contains no token, claim, member identifier, or
+refresh-session identifier.
+
+Create a Google Cloud OAuth client of type **Web application** for this callback. It must be different from the Gmail
+Desktop client used for transactional e-mail. Give the sign-in client only the `openid`, `email`, and `profile` scopes;
+do not enable Gmail scopes, offline access, or Google refresh tokens. Use separate clients and exact callback URIs for
+local development and production.
+
+The API validates the Google identity and stores the Google `sub` needed to identify the external login. When a member
+is first created, the validated e-mail address and Google display name become ordinary MonKado profile data and are
+never synchronized automatically afterward. The API does not persist Google authorization codes, ID tokens, access
+tokens, refresh tokens, or unused claims, and never logs e-mail addresses, names, tokens, codes, or the Google `sub`.
+A MonKado access token is never placed in a redirect URL.
+
+On automatic completion, the callback creates the HTTP-only MonKado refresh cookie and redirects to an allowlisted
+frontend route. The frontend then obtains an antiforgery token, calls `POST /api/v1/auth/sessions/refresh` with
+`credentials: "include"`, and keeps the returned JWT only in memory. If a safe automatic link is not possible, the
+frontend redirect fragment contains a 256-bit opaque `flow` binding. The frontend keeps this binding only in the
+fragment or memory, asks for the current MonKado password, and calls
+`POST /api/v1/auth/google/link?flow=<opaque-binding>`. The binding is required together with antiforgery protection;
+it is not a Google token, MonKado token, member identifier, or session identifier, and it is never logged. The
+validated Google identity remains only in a short-lived protected cookie. A third-party Google Account for which
+Google is not authoritative must complete the additional MonKado verification flow before it can be linked.
+
+An existing confirmed MonKado account is linked automatically only for a matching `@gmail.com` address. A Google
+Workspace address can be reassigned by its organization, so a matching confirmed account requires the current
+MonKado password; a previously unused Workspace address can create a new passwordless account. Every first automatic
+link safely reclaims the local credentials: MonKado removes the prior password and lockout state, renews the security
+stamp, revokes the existing refresh sessions, and closes any pending e-mail change. As elsewhere in the current
+stateless JWT architecture, an access token already issued before that reclaim remains cryptographically valid for at
+most its remaining 15-minute lifetime.
+A confirmed Gmail account keeps its local profile; an unconfirmed Gmail or Workspace registration instead uses the
+validated Google display name or the generic fallback. Each protected Google flow has one Guid v7 that becomes its
+refresh-session identifier, allowing PostgreSQL to accept at most one successful
+completion even when the temporary cookie is submitted concurrently. A separate opaque binding ties the completion
+and explicit-link requests to the exact validated callback so concurrent tabs, including callbacks reusing the same
+remote state, cannot consume each other's external identity cookie.
+
+The temporary Google completion cookie is encrypted, HTTP-only, host-only, and `SameSite=Lax` so that it survives the
+single top-level redirect whose chain began on `accounts.google.com`; it expires after five minutes and is deleted when
+the flow ends. This narrow exception does not change the long-lived MonKado refresh cookie, which remains
+`SameSite=Strict`.
+
+A Google-only member has no local password initially. The existing password-reset flow may establish a first password,
+after which both authentication methods remain available. MonKado logout revokes only the current MonKado refresh
+session; it neither signs the browser out of Google nor revokes Google consent because MonKado stores no Google token.
+
+### Configure the Google Web client
+
+The provider is disabled by default. For direct local development, trust the ASP.NET Core development certificate,
+register `https://localhost:7001/api/v1/auth/google/callback` as an authorized redirect URI, and store the credentials
+with .NET User Secrets:
+
+```powershell
+dotnet dev-certs https --trust
+dotnet user-secrets set "GoogleAuthentication:Enabled" "true" --project src/API/Api.csproj
+dotnet user-secrets set "GoogleAuthentication:ClientId" "<web-client-id>" --project src/API/Api.csproj
+dotnet user-secrets set "GoogleAuthentication:ClientSecret" "<web-client-secret>" --project src/API/Api.csproj
+dotnet user-secrets set "GoogleAuthentication:FrontendOrigin" "https://localhost:5173" --project src/API/Api.csproj
+dotnet user-secrets set "WebSecurity:AllowedOrigins:0" "https://localhost:5173" --project src/API/Api.csproj
+dotnet run --project src/API/Api.csproj --urls "https://localhost:7001"
+```
+
+Serve the local frontend over HTTPS on `https://localhost:5173` as well. Modern browsers calculate cookie sites using
+the scheme, so mixing an HTTP frontend with the HTTPS API would prevent the `SameSite=Strict` refresh cookie from
+supporting the complete sign-in, refresh, and logout flow.
+
+The committed local Compose override exposes Caddy over HTTP and therefore keeps Google authentication disabled. Do
+not register or use an HTTP callback. A local HTTPS Compose flow requires a trusted local Caddy certificate and an
+explicit HTTPS hostname before enabling `GOOGLE_AUTHENTICATION_ENABLED`.
+
+For production, register only the exact public HTTPS URI, for example
+`https://api.example.fr/api/v1/auth/google/callback`. Set `GOOGLE_AUTHENTICATION_ENABLED=true`, the two Google Web
+client variables, and the same-site `FRONTEND_ORIGIN` in the protected VPS `.env`. The Google discovery, key retrieval,
+and token exchange timeout defaults to 15 seconds and accepts values from 1 through 60 seconds. Never reuse
+`GMAIL_CLIENT_ID`/`GMAIL_CLIENT_SECRET`, and never commit either client secret.
+
+Run the production smoke test in a private browser window: start Google sign-in, verify that the account selector is
+shown, complete the callback, confirm that no token or Google claim appears in the final URL, exchange the refresh
+cookie for the in-memory JWT, load the current session, and log out. Inspect the browser cookie attributes and verify
+that refresh and logout work from the custom frontend domain. Automated CI keeps the provider disabled and never uses
+real Google credentials.
+
+Before production launch, the privacy information must identify Google as an identity provider, explain why the
+initial e-mail and display name are read, state that the Google subject is retained until account deletion, state that
+Google tokens are not retained, and explain that deleting the member also removes the external login.
 
 ## Authentication e-mail delivery
 
@@ -306,6 +411,10 @@ Local defaults allow `http://localhost:5173` and the `localhost` API host. Produ
 | Dedicated Caddy network | `EDGE_NETWORK_CIDR` | `172.30.0.0/24` |
 | Data Protection key path | `DataProtection__KeysPath` | `/var/lib/mon-kado/data-protection-keys` |
 | JWT HS256 signing key | `JWT_SIGNING_KEY` | Base64 encoding of at least 32 random bytes |
+| Google sign-in enabled | `GOOGLE_AUTHENTICATION_ENABLED` | `false` until the Web client is configured |
+| Google Web client ID | `GOOGLE_AUTHENTICATION_CLIENT_ID` | OAuth client identifier |
+| Google Web client secret | `GOOGLE_AUTHENTICATION_CLIENT_SECRET` | Secret value |
+| Google backchannel timeout | `GOOGLE_AUTHENTICATION_BACKCHANNEL_TIMEOUT_SECONDS` | `15` seconds (allowed: `1` through `60`) |
 | Authentication e-mail provider | `AUTHENTICATION_EMAIL_PROVIDER` | `Gmail` |
 | Gmail sender | `GMAIL_SENDER_ADDRESS` | `monkado.app@gmail.com` |
 | Gmail OAuth client ID | `GMAIL_CLIENT_ID` | Secret value |
@@ -364,7 +473,8 @@ $jwtSigningKey = [Convert]::ToBase64String([Security.Cryptography.RandomNumberGe
 ```
 
 Put `$postgresPassword` in `POSTGRES_PASSWORD` and `$jwtSigningKey` in `JWT_SIGNING_KEY` inside `.env` before
-starting the stack. The committed defaults expose Caddy at `http://localhost:8080`. The explicit local override
+starting the stack. Leave `GOOGLE_AUTHENTICATION_ENABLED=false` because the committed local stack does not expose an
+HTTPS callback. The committed defaults expose Caddy at `http://localhost:8080`. The explicit local override
 additionally exposes PostgreSQL only on `127.0.0.1:5432` for development tools:
 
 ```powershell
@@ -416,6 +526,10 @@ POSTGRES_DB=mon_kado
 POSTGRES_USER=mon_kado
 POSTGRES_PASSWORD=<generated-hexadecimal-value>
 JWT_SIGNING_KEY=<generated-base64-value>
+GOOGLE_AUTHENTICATION_ENABLED=true
+GOOGLE_AUTHENTICATION_CLIENT_ID=<google-web-client-id>
+GOOGLE_AUTHENTICATION_CLIENT_SECRET=<google-web-client-secret>
+GOOGLE_AUTHENTICATION_BACKCHANNEL_TIMEOUT_SECONDS=15
 IMAGE_TAG=local
 AUTHENTICATION_EMAIL_PROVIDER=Gmail
 GMAIL_SENDER_ADDRESS=monkado.app@gmail.com

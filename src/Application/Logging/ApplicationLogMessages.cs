@@ -204,4 +204,56 @@ public static partial class ApplicationLogMessages
     public static partial void PasswordResetCompleted(
         ILogger logger,
         Guid memberId);
+
+    /// <summary>
+    /// Logs a passwordless member created from Google.
+    /// </summary>
+    /// <param name="logger">The logger.</param>
+    /// <param name="memberId">The member identifier.</param>
+    [LoggerMessage(
+        EventId = LogEventIds.GoogleMemberCreated,
+        Level = LogLevel.Information,
+        Message = "Passwordless member {MemberId} created from Google authentication.")]
+    public static partial void GoogleMemberCreated(
+        ILogger logger,
+        Guid memberId);
+
+    /// <summary>
+    /// Logs a member found through an existing Google subject.
+    /// </summary>
+    /// <param name="logger">The logger.</param>
+    /// <param name="memberId">The member identifier.</param>
+    [LoggerMessage(
+        EventId = LogEventIds.GoogleMemberFound,
+        Level = LogLevel.Information,
+        Message = "Member {MemberId} found through an existing Google login.")]
+    public static partial void GoogleMemberFound(
+        ILogger logger,
+        Guid memberId);
+
+    /// <summary>
+    /// Logs Google linked to an existing member.
+    /// </summary>
+    /// <param name="logger">The logger.</param>
+    /// <param name="memberId">The member identifier.</param>
+    [LoggerMessage(
+        EventId = LogEventIds.GoogleAccountLinked,
+        Level = LogLevel.Information,
+        Message = "Google login linked to member {MemberId}.")]
+    public static partial void GoogleAccountLinked(
+        ILogger logger,
+        Guid memberId);
+
+    /// <summary>
+    /// Logs a MonKado session created after Google authentication.
+    /// </summary>
+    /// <param name="logger">The logger.</param>
+    /// <param name="memberId">The member identifier.</param>
+    [LoggerMessage(
+        EventId = LogEventIds.GoogleSessionCreated,
+        Level = LogLevel.Information,
+        Message = "Google authentication session created for member {MemberId}.")]
+    public static partial void GoogleSessionCreated(
+        ILogger logger,
+        Guid memberId);
 }

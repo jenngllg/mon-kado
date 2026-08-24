@@ -68,10 +68,10 @@ public class OpenApiContractTests(UnavailablePostgreSqlApiFactory factory) : ICl
             .GetProperty("post");
         AssertTokenOperation(
             login,
-            expectsRefreshCookie: false);
+            isRefreshCookieRequired: false);
         AssertTokenOperation(
             refresh,
-            expectsRefreshCookie: true);
+            isRefreshCookieRequired: true);
     }
 
     [Fact]
@@ -606,34 +606,30 @@ public class OpenApiContractTests(UnavailablePostgreSqlApiFactory factory) : ICl
 
     private static void AssertTokenOperation(
         JsonElement operation,
-        bool expectsRefreshCookie)
+        bool isRefreshCookieRequired)
     {
         var parameters = operation.GetProperty("parameters").EnumerateArray().ToArray();
         Assert.Contains(
             parameters,
             parameter => parameter.GetProperty("name").GetString() == "X-CSRF-TOKEN");
 
-        if (expectsRefreshCookie)
-        {
-            var refreshCookie = Assert.Single(
-                parameters,
-                parameter => parameter.GetProperty("name").GetString() ==
-                    "__Host-MonKado.Refresh");
-            Assert.Equal(
-                "cookie",
-                refreshCookie.GetProperty("in").GetString());
-            Assert.True(refreshCookie.GetProperty("required").GetBoolean());
-            Assert.Contains(
-                "MonKado.Refresh",
-                refreshCookie.GetProperty("description").GetString(),
-                StringComparison.Ordinal);
-        }
-        else
-        {
-            Assert.DoesNotContain(
-                parameters,
-                parameter => parameter.GetProperty("in").GetString() == "cookie");
-        }
+        var refreshCookie = Assert.Single(
+            parameters,
+            parameter => parameter.GetProperty("name").GetString() ==
+                "__Host-MonKado.Refresh");
+        Assert.Equal(
+            "cookie",
+            refreshCookie.GetProperty("in").GetString());
+        var isRequired = refreshCookie.TryGetProperty(
+            "required",
+            out var required) && required.GetBoolean();
+        Assert.Equal(
+            isRefreshCookieRequired,
+            isRequired);
+        Assert.Contains(
+            "MonKado.Refresh",
+            refreshCookie.GetProperty("description").GetString(),
+            StringComparison.Ordinal);
 
         var responses = operation.GetProperty("responses");
         Assert.True(responses.TryGetProperty(

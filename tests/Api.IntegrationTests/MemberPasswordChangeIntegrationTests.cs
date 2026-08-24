@@ -953,6 +953,12 @@ public class MemberPasswordChangeIntegrationTests(PostgreSqlContainerFixture fix
         await using var scope = factory.Services.CreateAsyncScope();
         var context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
         var now = _referenceTime.UtcDateTime;
+        var securityStamp = await context.Users
+            .AsNoTracking()
+            .Where(member => member.Id == memberId)
+            .Select(member => member.SecurityStamp)
+            .SingleAsync(TestContext.Current.CancellationToken);
+        Assert.NotNull(securityStamp);
         var request = MemberEmailChangeRequest.Create(
             memberId,
             "member@example.fr",
@@ -966,6 +972,7 @@ public class MemberPasswordChangeIntegrationTests(PostgreSqlContainerFixture fix
                 request.Id,
                 memberId,
                 request.NewEmail,
+                securityStamp,
                 now),
             AuthenticationEmailOutboxMessage.CreateEmailChangeSecurityNotification(
                 request.Id,

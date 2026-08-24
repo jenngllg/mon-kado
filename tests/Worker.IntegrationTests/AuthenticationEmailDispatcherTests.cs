@@ -1232,6 +1232,7 @@ public class AuthenticationEmailDispatcherTests(PostgreSqlWorkerFixture fixture)
         };
         var result = await userManager.CreateAsync(user);
         Assert.True(result.Succeeded);
+        var securityStamp = Assert.IsType<string>(user.SecurityStamp);
         var request = MemberEmailChangeRequest.Create(
             user.Id,
             "member@example.fr",
@@ -1243,6 +1244,7 @@ public class AuthenticationEmailDispatcherTests(PostgreSqlWorkerFixture fixture)
             request.Id,
             user.Id,
             request.NewEmail,
+            securityStamp,
             now.UtcDateTime);
         var notification = AuthenticationEmailOutboxMessage.CreateEmailChangeSecurityNotification(
             request.Id,

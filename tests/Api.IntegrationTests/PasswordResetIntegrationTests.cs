@@ -1,5 +1,6 @@
 using JennGllg.Fr.MonKado.Back.Application.Abstractions;
 using JennGllg.Fr.MonKado.Back.Application.Common.Exceptions;
+using JennGllg.Fr.MonKado.Back.Application.Models;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Abstractions;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Contexts;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Entities;
@@ -517,6 +518,89 @@ public class PasswordResetIntegrationTests(PostgreSqlContainerFixture fixture)
             member.Email,
             notification.RecipientEmail);
         Assert.Null(notification.ProcessedAt);
+    }
+
+    [Fact]
+    public async Task ResetAsync_WhenGoogleMemberHasNoPassword_EstablishesFirstPassword()
+    {
+        // Arrange
+        await using var factory = await CreateFactoryAsync();
+        var authenticationContext = new GoogleAuthenticationContext(
+            new GoogleIdentity(
+                "passwordless-subject",
+                "passwordless@gmail.com",
+                true,
+                null,
+                "Passwordless member"),
+            false,
+            "/",
+            Guid.CreateVersion7(_referenceTime),
+            null,
+            null);
+        await using var googleScope = factory.Services.CreateAsyncScope();
+        var googleService =
+            googleScope.ServiceProvider.GetRequiredService<IGoogleAccountSessionService>();
+        var googleResult = await googleService.CompleteAsync(
+            authenticationContext,
+            TestContext.Current.CancellationToken);
+        var memberId = googleResult.MemberId ?? throw new InvalidOperationException(
+            "The passwordless Google member was not created.");
+        var googleContext = googleScope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
+        Assert.Null(await googleContext.Users
+            .AsNoTracking()
+            .Where(member => member.Id == memberId)
+            .Select(member => member.PasswordHash)
+            .SingleAsync(TestContext.Current.CancellationToken));
+
+        var token = await GenerateResetTokenAsync(
+            factory,
+            memberId);
+
+        // Act
+        var reset = await ResetPasswordAsync(
+            factory,
+            memberId,
+            token,
+            NewPassword);
+        await using var scope = factory.Services.CreateAsyncScope();
+        var sessionService = scope.ServiceProvider.GetRequiredService<IAccountSessionService>();
+        var successfulLogin = await sessionService.LoginAsync(
+            "passwordless@gmail.com",
+            NewPassword,
+            false,
+            null,
+            TestContext.Current.CancellationToken);
+        var invalidLogin = await sessionService.LoginAsync(
+            "passwordless@gmail.com",
+            "wrong password",
+            false,
+            null,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.True(reset);
+        Assert.Equal(
+            AccountLoginResult.Success,
+            successfulLogin.Result);
+        Assert.NotNull(successfulLogin.Tokens);
+        Assert.Equal(
+            AccountLoginResult.InvalidCredentials,
+            invalidLogin.Result);
+        var storedMember = await scope.ServiceProvider
+            .GetRequiredService<MonKadoDbContext>()
+            .Users
+            .AsNoTracking()
+            .SingleAsync(
+                member => member.Id == memberId,
+                TestContext.Current.CancellationToken);
+        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<MonKadoUser>>();
+        Assert.True(await userManager.CheckPasswordAsync(
+            storedMember,
+            NewPassword));
+        Assert.Equal(
+            1,
+            storedMember.AccessFailedCount);
+        Assert.Null(storedMember.LockoutEnd);
     }
 
     [Fact]
@@ -1068,6 +1152,7 @@ public class PasswordResetIntegrationTests(PostgreSqlContainerFixture fixture)
             _referenceTime.UtcDateTime,
             _referenceTime.UtcDateTime.AddHours(24));
         context.MemberEmailChangeRequests.Add(request);
+        var securityStamp = Assert.IsType<string>(member.SecurityStamp);
         context.AuthenticationEmailOutboxMessages.AddRange(
             AuthenticationEmailOutboxMessage.CreatePasswordReset(
                 member.Id,
@@ -1078,6 +1163,7 @@ public class PasswordResetIntegrationTests(PostgreSqlContainerFixture fixture)
                 request.Id,
                 member.Id,
                 request.NewEmail,
+                securityStamp,
                 _referenceTime.UtcDateTime),
             AuthenticationEmailOutboxMessage.CreateEmailChangeSecurityNotification(
                 request.Id,

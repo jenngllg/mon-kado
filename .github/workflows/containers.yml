@@ -48,6 +48,7 @@ env:
   HTTP_PORT: "18080"
   HTTPS_PORT: "18443"
   FRONTEND_ORIGIN: http://localhost:5173
+  GOOGLE_AUTHENTICATION_ENABLED: "false"
   API_ALLOWED_HOST: localhost
   POSTGRES_DB: mon_kado
   POSTGRES_USER: mon_kado

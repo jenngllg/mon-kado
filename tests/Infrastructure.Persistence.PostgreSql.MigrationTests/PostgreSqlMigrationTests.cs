@@ -9,6 +9,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
+using Npgsql;
+
 using System.Data.Common;
 
 namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.MigrationTests;
@@ -79,6 +81,10 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
                 StringComparison.Ordinal),
             migration => Assert.EndsWith(
                 "_AddMemberPasswordResets",
+                migration,
+                StringComparison.Ordinal),
+            migration => Assert.EndsWith(
+                "_AddGoogleExternalLogins",
                 migration,
                 StringComparison.Ordinal));
         Assert.False(context.Database.HasPendingModelChanges());
@@ -178,6 +184,9 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
         Assert.Contains(
             "ux_member_email_change_requests_active_user",
             indexes);
+        Assert.Contains(
+            "ux_user_logins_user_id_login_provider",
+            indexes);
 
         var columns = await GetAuthenticationEmailOutboxColumnsAsync(
             context,
@@ -254,7 +263,14 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
         };
         context.Users.Add(member);
         await context.SaveChangesAsync(cancellationToken);
-        var now = DateTime.UtcNow;
+        var now = new DateTime(
+            2030,
+            1,
+            1,
+            0,
+            0,
+            0,
+            DateTimeKind.Utc);
         var request = MemberEmailChangeRequest.Create(
             member.Id,
             email,
@@ -271,6 +287,7 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
                 request.Id,
                 member.Id,
                 request.NewEmail,
+                "security-stamp",
                 now),
             AuthenticationEmailOutboxMessage.CreateEmailChangeSecurityNotification(
                 request.Id,
@@ -308,6 +325,104 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
         Assert.Equal(
             ["EMAIL_CONFIRMATION"],
             remainingKinds);
+    }
+
+    [Fact]
+    public async Task MigrateAsync_WhenPendingEmailChangePredatesGoogleMigration_BackfillsAndRemovesSecurityStampAcrossUpAndDown()
+    {
+        // Arrange
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var provider = CreateServiceProvider();
+        await using var scope = provider.CreateAsyncScope();
+        var context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
+        await context.Database.MigrateAsync(
+            "20260823172356_AddMemberPasswordResets",
+            cancellationToken);
+        var now = new DateTime(
+            2030,
+            1,
+            1,
+            0,
+            0,
+            0,
+            DateTimeKind.Utc);
+        var memberId = Guid.CreateVersion7(now);
+        var securityStamp = "migration-security-stamp";
+        var member = new MonKadoUser
+        {
+            Id = memberId,
+            DisplayName = "Migration member",
+            Email = "migration-email-change@example.test",
+            NormalizedEmail = "MIGRATION-EMAIL-CHANGE@EXAMPLE.TEST",
+            UserName = "migration-email-change@example.test",
+            NormalizedUserName = "MIGRATION-EMAIL-CHANGE@EXAMPLE.TEST",
+            EmailConfirmed = true,
+            SecurityStamp = securityStamp
+        };
+        var request = MemberEmailChangeRequest.Create(
+            memberId,
+            "migration-email-change@example.test",
+            "new-migration-email-change@example.test",
+            "NEW-MIGRATION-EMAIL-CHANGE@EXAMPLE.TEST",
+            now,
+            now.AddHours(24));
+        context.Users.Add(member);
+        context.MemberEmailChangeRequests.Add(request);
+        await context.SaveChangesAsync(cancellationToken);
+        var messageId = Guid.CreateVersion7(now.AddMilliseconds(1));
+        await context.Database.ExecuteSqlInterpolatedAsync(
+            $"""
+            INSERT INTO public.authentication_email_outbox (
+                id,
+                user_id,
+                member_email_change_request_id,
+                recipient_email,
+                kind,
+                created_at,
+                available_at,
+                attempt_count)
+            VALUES (
+                {messageId},
+                {memberId},
+                {request.Id},
+                {request.NewEmail},
+                'EMAIL_CHANGE_CONFIRMATION',
+                {now},
+                {now},
+                {0});
+            """,
+            cancellationToken);
+        string? snapshotAfterUp;
+        string? snapshotAfterDown;
+
+        try
+        {
+            // Act
+            await context.Database.MigrateAsync(cancellationToken);
+            snapshotAfterUp = await context.AuthenticationEmailOutboxMessages
+                .AsNoTracking()
+                .Where(message => message.Id == messageId)
+                .Select(message => message.SecurityStampSnapshot)
+                .SingleAsync(cancellationToken);
+            await context.Database.MigrateAsync(
+                "20260823172356_AddMemberPasswordResets",
+                cancellationToken);
+            snapshotAfterDown = await context.AuthenticationEmailOutboxMessages
+                .AsNoTracking()
+                .Where(message => message.Id == messageId)
+                .Select(message => message.SecurityStampSnapshot)
+                .SingleAsync(cancellationToken);
+        }
+        finally
+        {
+            await context.Database.MigrateAsync(cancellationToken);
+        }
+
+        // Assert
+        Assert.Equal(
+            securityStamp,
+            snapshotAfterUp);
+        Assert.Null(snapshotAfterDown);
     }
 
     [Fact]
@@ -483,6 +598,185 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
             .ToArrayAsync(cancellationToken));
     }
 
+    [Fact]
+    public async Task MigrateAsync_WhenGoogleLoginDataExists_PreservesDataAcrossUpAndDown()
+    {
+        // Arrange
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var provider = CreateServiceProvider();
+        await using var scope = provider.CreateAsyncScope();
+        var context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
+        await context.Database.MigrateAsync(
+            "20260823172356_AddMemberPasswordResets",
+            cancellationToken);
+        var memberId = Guid.CreateVersion7();
+        var email = $"google-migration-{memberId:N}@example.test";
+        var normalizedEmail = email.ToUpperInvariant();
+        var createdAt = new DateTime(
+            2026,
+            8,
+            23,
+            12,
+            0,
+            0,
+            DateTimeKind.Utc);
+        var subject = new string(
+            'S',
+            128);
+        await context.Database.ExecuteSqlInterpolatedAsync(
+            $"""
+            INSERT INTO public.users (
+                id,
+                display_name,
+                created_at,
+                user_name,
+                normalized_user_name,
+                email,
+                normalized_email,
+                email_confirmed,
+                phone_number_confirmed,
+                two_factor_enabled,
+                lockout_enabled,
+                access_failed_count)
+            VALUES (
+                {memberId},
+                {"Google migration"},
+                {createdAt},
+                {email},
+                {normalizedEmail},
+                {email},
+                {normalizedEmail},
+                {true},
+                {false},
+                {false},
+                {true},
+                {0});
+            """,
+            cancellationToken);
+        await context.Database.ExecuteSqlInterpolatedAsync(
+            $"""
+            INSERT INTO public.user_logins (
+                login_provider,
+                provider_key,
+                provider_display_name,
+                user_id)
+            VALUES (
+                {"Google"},
+                {subject},
+                {"Google"},
+                {memberId});
+            """,
+            cancellationToken);
+
+        try
+        {
+            // Act
+            await context.Database.MigrateAsync(cancellationToken);
+            var subjectAfterUp = await GetGoogleSubjectAsync(
+                context,
+                memberId,
+                cancellationToken);
+            await context.Database.MigrateAsync(
+                "20260823172356_AddMemberPasswordResets",
+                cancellationToken);
+            var subjectAfterDown = await GetGoogleSubjectAsync(
+                context,
+                memberId,
+                cancellationToken);
+
+            // Assert
+            Assert.Equal(
+                subject,
+                subjectAfterUp);
+            Assert.Equal(
+                subject,
+                subjectAfterDown);
+        }
+        finally
+        {
+            await context.Database.MigrateAsync(cancellationToken);
+        }
+    }
+
+    [Fact]
+    public async Task MigrateAsync_WhenGoogleSubjectUsesMaximumLength_AcceptsSubjectAndRejectsSecondProviderLogin()
+    {
+        // Arrange
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var provider = CreateServiceProvider();
+        await using var scope = provider.CreateAsyncScope();
+        var context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
+        await context.Database.MigrateAsync(cancellationToken);
+        var member = new MonKadoUser
+        {
+            Id = Guid.CreateVersion7(),
+            DisplayName = "Google constraint test",
+            Email = "google-constraint@example.test",
+            NormalizedEmail = "GOOGLE-CONSTRAINT@EXAMPLE.TEST",
+            UserName = "google-constraint@example.test",
+            NormalizedUserName = "GOOGLE-CONSTRAINT@EXAMPLE.TEST",
+            EmailConfirmed = true
+        };
+        context.Users.Add(member);
+        await context.SaveChangesAsync(cancellationToken);
+        context.UserLogins.Add(new Microsoft.AspNetCore.Identity.IdentityUserLogin<Guid>
+        {
+            LoginProvider = "Google",
+            ProviderKey = new string(
+                'S',
+                255),
+            ProviderDisplayName = "Google",
+            UserId = member.Id
+        });
+        await context.SaveChangesAsync(cancellationToken);
+        context.ChangeTracker.Clear();
+        context.UserLogins.Add(new Microsoft.AspNetCore.Identity.IdentityUserLogin<Guid>
+        {
+            LoginProvider = "Google",
+            ProviderKey = "different-subject",
+            ProviderDisplayName = "Google",
+            UserId = member.Id
+        });
+
+        // Act
+        Task action() => context.SaveChangesAsync(cancellationToken);
+
+        // Assert
+        await Assert.ThrowsAsync<DbUpdateException>(action);
+        context.ChangeTracker.Clear();
+        Assert.Equal(
+            255,
+            await context.UserLogins
+                .AsNoTracking()
+                .Select(login => login.ProviderKey.Length)
+                .SingleAsync(
+                    loginLength => loginLength == 255,
+                    cancellationToken));
+        Task rollbackAction() => context.Database.MigrateAsync(
+            "20260823172356_AddMemberPasswordResets",
+            cancellationToken);
+        var rollbackException = await Assert.ThrowsAsync<PostgresException>(rollbackAction);
+        Assert.Contains(
+            "provider_key contains values longer than 128 characters",
+            rollbackException.MessageText,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            await context.Database.GetAppliedMigrationsAsync(cancellationToken),
+            migration => migration.EndsWith(
+                "_AddGoogleExternalLogins",
+                StringComparison.Ordinal));
+        Assert.Equal(
+            255,
+            await context.UserLogins
+                .AsNoTracking()
+                .Where(login => login.UserId == member.Id)
+                .Select(login => login.ProviderKey.Length)
+                .SingleAsync(cancellationToken));
+        await context.Users
+            .Where(user => user.Id == member.Id)
+            .ExecuteDeleteAsync(cancellationToken);
+    }
+
     private static async Task<IReadOnlyList<string>> GetAuthenticationEmailOutboxColumnsAsync(
         MonKadoDbContext context,
         CancellationToken cancellationToken)
@@ -509,6 +803,19 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
         }
 
         return columns;
+    }
+
+    private static async Task<string> GetGoogleSubjectAsync(
+        MonKadoDbContext context,
+        Guid memberId,
+        CancellationToken cancellationToken)
+    {
+
+        return await context.UserLogins
+            .AsNoTracking()
+            .Where(login => login.UserId == memberId && login.LoginProvider == "Google")
+            .Select(login => login.ProviderKey)
+            .SingleAsync(cancellationToken);
     }
 
     private static async Task<IReadOnlyList<string>> GetAuthenticationEmailOutboxKindsAsync(

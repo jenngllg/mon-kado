@@ -43,7 +43,7 @@ public class AuthenticationEmailOutboxMessage
         get; private set;
     }
     /// <summary>
-    /// Gets the immutable security stamp used to validate a password reset request.
+    /// Gets the immutable security stamp used to validate a password reset or email change confirmation.
     /// </summary>
 
     public string? SecurityStampSnapshot
@@ -162,12 +162,14 @@ public class AuthenticationEmailOutboxMessage
     /// <param name="requestId">The member email change request identifier.</param>
     /// <param name="userId">The member identifier.</param>
     /// <param name="recipientEmail">The new email address.</param>
+    /// <param name="securityStampSnapshot">The member security stamp at request time.</param>
     /// <param name="createdAt">The creation date and time.</param>
     /// <returns>The created outbox message.</returns>
     public static AuthenticationEmailOutboxMessage CreateEmailChangeConfirmation(
         Guid requestId,
         Guid userId,
         string recipientEmail,
+        string securityStampSnapshot,
         DateTime createdAt)
     {
 
@@ -175,6 +177,7 @@ public class AuthenticationEmailOutboxMessage
             requestId,
             userId,
             recipientEmail,
+            securityStampSnapshot,
             AuthenticationEmailKind.EmailChangeConfirmation,
             createdAt);
     }
@@ -198,6 +201,7 @@ public class AuthenticationEmailOutboxMessage
             requestId,
             userId,
             recipientEmail,
+            null,
             AuthenticationEmailKind.EmailChangeSecurityNotification,
             createdAt);
     }
@@ -282,6 +286,7 @@ public class AuthenticationEmailOutboxMessage
         Guid requestId,
         Guid userId,
         string recipientEmail,
+        string? securityStampSnapshot,
         AuthenticationEmailKind kind,
         DateTime createdAt)
     {
@@ -292,6 +297,7 @@ public class AuthenticationEmailOutboxMessage
             UserId = userId,
             MemberEmailChangeRequestId = requestId,
             RecipientEmail = recipientEmail,
+            SecurityStampSnapshot = securityStampSnapshot,
             Kind = kind,
             CreatedAt = createdAt,
             AvailableAt = createdAt

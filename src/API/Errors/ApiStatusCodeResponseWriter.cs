@@ -11,24 +11,26 @@ public static class ApiStatusCodeResponseWriter
     /// Executes the write async operation.
     /// </summary>
     /// <param name="context">The context.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>A task that represents the asynchronous operation.</returns>
-    public static async Task WriteAsync(HttpContext context)
+    /// <exception cref="OperationCanceledException">The operation is canceled.</exception>
+    public static async Task WriteAsync(
+        HttpContext context,
+        CancellationToken cancellationToken)
     {
         var response = ApiStatusCodeResponseFactory.Create(context.Response.StatusCode);
         var loggerFactory = context.RequestServices.GetRequiredService<ILoggerFactory>();
         var logger = loggerFactory.CreateLogger(typeof(ApiStatusCodeResponseWriter));
 
         if (response.ErrorCode is not null)
-        {
             ApiLogMessages.ExpectedHttpError(
                 logger,
                 response.StatusCode,
                 response.ErrorCode);
-        }
 
         context.Response.Headers.CacheControl = "no-store";
         await context.Response.WriteAsJsonAsync(
             response,
-            context.RequestAborted);
+            cancellationToken);
     }
 }

@@ -20,10 +20,24 @@ public class AuthenticationSessionRepository(MonKadoDbContext context)
     }
 
     /// <inheritdoc />
+    public Task<AuthenticationSession?> GetByIdAsync(
+        Guid sessionId,
+        CancellationToken cancellationToken)
+    {
+
+        return context.AuthenticationSessions
+            .AsNoTracking()
+            .SingleOrDefaultAsync(
+                session => session.Id == sessionId,
+                cancellationToken);
+    }
+
+    /// <inheritdoc />
     public Task<AuthenticationSession?> GetByIdForUpdateAsync(
         Guid sessionId,
         CancellationToken cancellationToken)
     {
+
         return context.AuthenticationSessions
             .FromSqlInterpolated(
                 $"SELECT * FROM public.authentication_sessions WHERE id = {sessionId} FOR UPDATE")
@@ -35,6 +49,7 @@ public class AuthenticationSessionRepository(MonKadoDbContext context)
         Guid sessionId,
         CancellationToken cancellationToken)
     {
+
         return context.AuthenticationSessions
             .AsNoTracking()
             .Where(session => session.Id == sessionId)
