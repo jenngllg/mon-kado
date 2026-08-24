@@ -131,13 +131,52 @@ public static class LogEventIds
     /// </summary>
     public const int PasswordResetCompleted = 1073;
     /// <summary>
-    /// Identifies expected http error.
+    /// Identifies the start of a Google authentication challenge.
     /// </summary>
-
+    public const int GoogleAuthenticationChallengeStarted = 1080;
+    /// <summary>
+    /// Identifies a Google identity accepted by the OpenID Connect middleware.
+    /// </summary>
+    public const int GoogleIdentityValidated = 1081;
+    /// <summary>
+    /// Identifies a failed Google OpenID Connect protocol exchange.
+    /// </summary>
+    public const int GoogleAuthenticationProtocolFailed = 1082;
+    /// <summary>
+    /// Identifies a Google expected-member resolution that failed because PostgreSQL was unavailable.
+    /// </summary>
+    public const int GoogleExpectedMemberResolutionUnavailable = 1083;
+    /// <summary>
+    /// Identifies a passwordless member created from Google.
+    /// </summary>
+    public const int GoogleMemberCreated = 1084;
+    /// <summary>
+    /// Identifies a member found through an existing Google subject.
+    /// </summary>
+    public const int GoogleMemberFound = 1085;
+    /// <summary>
+    /// Identifies Google linked to an existing member.
+    /// </summary>
+    public const int GoogleAccountLinked = 1086;
+    /// <summary>
+    /// Identifies a MonKado session created after Google authentication.
+    /// </summary>
+    public const int GoogleSessionCreated = 1087;
+    /// <summary>
+    /// Identifies a rejected Google authentication completion.
+    /// </summary>
+    public const int GoogleAuthenticationCompletionFailed = 1088;
+    /// <summary>
+    /// Identifies unavailable Google OpenID Connect discovery or signing keys.
+    /// </summary>
+    public const int GoogleAuthenticationProviderUnavailable = 1089;
     #endregion
 
     #region Technical
 
+    /// <summary>
+    /// Identifies expected http error.
+    /// </summary>
     public const int ExpectedHttpError = 9000;
     /// <summary>
     /// Identifies dependency unavailable.
@@ -147,6 +186,10 @@ public static class LogEventIds
     /// Identifies unhandled exception.
     /// </summary>
     public const int UnhandledException = 9002;
+    /// <summary>
+    /// Identifies a completed HTTP request logged without query-string values.
+    /// </summary>
+    public const int HttpRequestCompleted = 9003;
 
     #endregion
 }

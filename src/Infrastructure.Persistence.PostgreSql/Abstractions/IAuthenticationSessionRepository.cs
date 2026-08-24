@@ -14,6 +14,16 @@ public interface IAuthenticationSessionRepository
     void Add(AuthenticationSession session);
 
     /// <summary>
+    /// Gets a session without tracking it.
+    /// </summary>
+    /// <param name="sessionId">The session identifier.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The session when found; otherwise, <see langword="null" />.</returns>
+    Task<AuthenticationSession?> GetByIdAsync(
+        Guid sessionId,
+        CancellationToken cancellationToken);
+
+    /// <summary>
     /// Gets and locks a session for update.
     /// </summary>
     /// <param name="sessionId">The session identifier.</param>

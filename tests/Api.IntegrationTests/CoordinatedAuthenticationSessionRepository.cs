@@ -13,6 +13,16 @@ public class CoordinatedAuthenticationSessionRepository(
         repository.Add(session);
     }
 
+    public Task<AuthenticationSession?> GetByIdAsync(
+        Guid sessionId,
+        CancellationToken cancellationToken)
+    {
+
+        return repository.GetByIdAsync(
+            sessionId,
+            cancellationToken);
+    }
+
     public async Task<AuthenticationSession?> GetByIdForUpdateAsync(
         Guid sessionId,
         CancellationToken cancellationToken)
@@ -42,6 +52,7 @@ public class CoordinatedAuthenticationSessionRepository(
         int batchSize,
         CancellationToken cancellationToken)
     {
+
         return repository.DeleteExpiredAsync(
             cutoff,
             batchSize,
@@ -53,6 +64,7 @@ public class CoordinatedAuthenticationSessionRepository(
         DateTime revokedAt,
         CancellationToken cancellationToken)
     {
+
         return repository.RevokeAllForUserAsync(
             userId,
             revokedAt,

@@ -28,7 +28,10 @@ internal sealed class AuthenticationEmailOutboxMessageConfiguration
                 "ck_authentication_email_outbox_email_change_fields_consistent",
                 "(kind = 'EMAIL_CONFIRMATION' AND member_email_change_request_id IS NULL " +
                 "AND recipient_email IS NULL AND security_stamp_snapshot IS NULL) OR " +
-                "(kind IN ('EMAIL_CHANGE_CONFIRMATION', 'EMAIL_CHANGE_SECURITY_NOTIFICATION') " +
+                "(kind = 'EMAIL_CHANGE_CONFIRMATION' " +
+                "AND member_email_change_request_id IS NOT NULL AND recipient_email IS NOT NULL " +
+                "AND security_stamp_snapshot IS NOT NULL) OR " +
+                "(kind = 'EMAIL_CHANGE_SECURITY_NOTIFICATION' " +
                 "AND member_email_change_request_id IS NOT NULL AND recipient_email IS NOT NULL " +
                 "AND security_stamp_snapshot IS NULL) OR " +
                 "(kind = 'PASSWORD_RESET' AND member_email_change_request_id IS NULL " +

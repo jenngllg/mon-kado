@@ -251,11 +251,12 @@ public class LoginIntegrationTests(PostgreSqlContainerFixture fixture)
     [Theory]
     [InlineData("invalid", false)]
     [InlineData("unknown", false)]
-    [InlineData("altered", true)]
+    [InlineData("altered", false)]
+    [InlineData("expired", false)]
     [InlineData("revoked", true)]
-    public async Task LoginAsync_WhenCurrentBrowserTokenIsProvided_RevokesIdentifiedSession(
+    public async Task LoginAsync_WhenCurrentBrowserTokenCannotBeProven_PreservesPriorSessionState(
         string scenario,
-        bool expectsRevocation)
+        bool wasPreviouslyRevoked)
     {
         // Arrange
         var timeProvider = new FixedTimeProvider(_now);
@@ -288,6 +289,9 @@ public class LoginIntegrationTests(PostgreSqlContainerFixture fixture)
                 TestContext.Current.CancellationToken);
             firstSessionId = session.Id;
 
+            if (scenario == "expired")
+                timeProvider.UtcNow = _now.AddHours(9);
+
             if (scenario == "revoked")
             {
                 session.Revoke(_now.UtcDateTime);
@@ -300,6 +304,7 @@ public class LoginIntegrationTests(PostgreSqlContainerFixture fixture)
             "invalid" => "invalid",
             "unknown" => new RefreshTokenService().Create(Guid.CreateVersion7()).Value,
             "altered" => new RefreshTokenService().Create(firstSessionId).Value,
+            "expired" => firstRefreshToken,
             "revoked" => firstRefreshToken,
             _ => throw new InvalidOperationException($"Unknown test scenario '{scenario}'.")
         };
@@ -329,18 +334,18 @@ public class LoginIntegrationTests(PostgreSqlContainerFixture fixture)
             sessions.Length);
         var revokedAt = sessions.Single(value => value.Id == firstSessionId).RevokedAt;
 
-        if (expectsRevocation)
-        {
-            Assert.NotNull(revokedAt);
-            AssertTimestampClose(
-                _now.UtcDateTime,
-                revokedAt.Value,
-                TimeSpan.FromMilliseconds(1));
-        }
-        else
+        if (!wasPreviouslyRevoked)
         {
             Assert.Null(revokedAt);
+
+            return;
         }
+
+        Assert.NotNull(revokedAt);
+        AssertTimestampClose(
+            _now.UtcDateTime,
+            revokedAt.Value,
+            TimeSpan.FromMilliseconds(1));
     }
 
     [Fact]

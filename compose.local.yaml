@@ -6,6 +6,7 @@ services:
   api:
     environment:
       ASPNETCORE_ENVIRONMENT: Local
+      GoogleAuthentication__Enabled: "false"
 
   worker:
     environment:

@@ -13,6 +13,12 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Reposit
 public class MonKadoUserRepository(MonKadoDbContext context) : IMonKadoUserRepository
 {
     /// <inheritdoc />
+    public void Add(MonKadoUser user)
+    {
+        context.Users.Add(user);
+    }
+
+    /// <inheritdoc />
     public IQueryable<MonKadoUser> Query()
     {
 

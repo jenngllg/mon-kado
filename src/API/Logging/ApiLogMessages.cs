@@ -51,4 +51,21 @@ public static partial class ApiLogMessages
     public static partial void UnhandledException(
         ILogger logger,
         Exception exception);
+
+    /// <summary>
+    /// Logs a completed HTTP request using only its developer-defined route template.
+    /// </summary>
+    /// <param name="logger">The logger.</param>
+    /// <param name="method">The HTTP method.</param>
+    /// <param name="routePattern">The developer-defined route pattern or a fixed unmatched marker.</param>
+    /// <param name="statusCode">The response status code.</param>
+    [LoggerMessage(
+        EventId = LogEventIds.HttpRequestCompleted,
+        Level = LogLevel.Information,
+        Message = "HTTP {Method} {RoutePattern} completed with status {StatusCode}.")]
+    public static partial void HttpRequestCompleted(
+        ILogger logger,
+        string method,
+        string routePattern,
+        int statusCode);
 }

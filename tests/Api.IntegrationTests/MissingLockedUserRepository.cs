@@ -5,8 +5,15 @@ namespace JennGllg.Fr.MonKado.Back.Api.IntegrationTests;
 
 public class MissingLockedUserRepository : IMonKadoUserRepository
 {
+    public void Add(MonKadoUser user)
+    {
+
+        throw new NotSupportedException();
+    }
+
     public IQueryable<MonKadoUser> Query()
     {
+
         throw new NotSupportedException();
     }
 
@@ -14,6 +21,7 @@ public class MissingLockedUserRepository : IMonKadoUserRepository
         Guid userId,
         CancellationToken cancellationToken)
     {
+
         throw new NotSupportedException();
     }
 
@@ -22,6 +30,7 @@ public class MissingLockedUserRepository : IMonKadoUserRepository
         string normalizedEmail,
         CancellationToken cancellationToken)
     {
+
         return Task.FromResult<MonKadoUser?>(null);
     }
 
@@ -29,6 +38,7 @@ public class MissingLockedUserRepository : IMonKadoUserRepository
         string normalizedEmail,
         CancellationToken cancellationToken)
     {
+
         throw new NotSupportedException();
     }
 
@@ -37,6 +47,7 @@ public class MissingLockedUserRepository : IMonKadoUserRepository
         int batchSize,
         CancellationToken cancellationToken)
     {
+
         throw new NotSupportedException();
     }
 }

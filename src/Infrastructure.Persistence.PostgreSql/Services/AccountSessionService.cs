@@ -19,6 +19,7 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Service
 /// <param name="passwordHasher">The password hasher.</param>
 /// <param name="accessTokenService">The access token service.</param>
 /// <param name="refreshTokenService">The refresh token service.</param>
+/// <param name="refreshSessionService">The refresh session service.</param>
 /// <param name="timeProvider">The time provider.</param>
 public class AccountSessionService(
     MonKadoDbContext context,
@@ -29,11 +30,9 @@ public class AccountSessionService(
     IPasswordHasher<MonKadoUser> passwordHasher,
     IAccessTokenService accessTokenService,
     IRefreshTokenService refreshTokenService,
+    IRefreshSessionService refreshSessionService,
     TimeProvider timeProvider) : IAccountSessionService
 {
-    private static readonly TimeSpan _sessionLifetime = TimeSpan.FromHours(8);
-    private static readonly TimeSpan _persistentSessionLifetime = TimeSpan.FromDays(30);
-
     /// <summary>
     /// Authenticates an account and creates an independent refresh session.
     /// </summary>
@@ -81,6 +80,7 @@ public class AccountSessionService(
         }
         catch (Exception exception) when (PostgreSqlFailureClassifier.IsUnavailable(exception))
         {
+
             throw new DependencyUnavailableException(
                 "PostgreSQL",
                 exception);
@@ -116,6 +116,7 @@ public class AccountSessionService(
         }
         catch (Exception exception) when (PostgreSqlFailureClassifier.IsUnavailable(exception))
         {
+
             throw new DependencyUnavailableException(
                 "PostgreSQL",
                 exception);
@@ -152,6 +153,7 @@ public class AccountSessionService(
         }
         catch (Exception exception) when (PostgreSqlFailureClassifier.IsUnavailable(exception))
         {
+
             throw new DependencyUnavailableException(
                 "PostgreSQL",
                 exception);
@@ -197,6 +199,16 @@ public class AccountSessionService(
         var existingUser = user;
 
         if (await userManager.IsLockedOutAsync(existingUser))
+        {
+            await transaction.CommitAsync(cancellationToken);
+            PerformTimingEqualizationHash(password);
+
+            return new AccountSessionLoginResult(
+                AccountLoginResult.InvalidCredentials,
+                null);
+        }
+
+        if (existingUser.PasswordHash is null)
         {
             await transaction.CommitAsync(cancellationToken);
             PerformTimingEqualizationHash(password);
@@ -253,62 +265,24 @@ public class AccountSessionService(
                 "reset the failed login count");
         }
 
-        var tokens = await CreateSessionAsync(
-            existingUser.Id,
-            isPersistent,
+        var currentSessionId = await refreshSessionService.ProveCurrentSessionAsync(
             currentRefreshToken,
             cancellationToken);
+        var refreshSession = await refreshSessionService.CreateAsync(
+            existingUser.Id,
+            isPersistent,
+            null,
+            currentSessionId,
+            cancellationToken);
+        var tokens = CreateTokens(
+            existingUser.Id,
+            refreshSession);
+        await unitOfWork.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 
         return new AccountSessionLoginResult(
             AccountLoginResult.Success,
             tokens);
-    }
-
-    /// <summary>
-    /// Creates and persists an authentication session in the current transaction.
-    /// </summary>
-    /// <param name="userId">The member identifier.</param>
-    /// <param name="isPersistent">Whether the session has a fixed persistent lifetime.</param>
-    /// <param name="currentRefreshToken">The refresh token currently held by the browser.</param>
-    /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>The created session tokens.</returns>
-    private async Task<AccountSessionTokens> CreateSessionAsync(
-        Guid userId,
-        bool isPersistent,
-        string? currentRefreshToken,
-        CancellationToken cancellationToken)
-    {
-        var now = timeProvider.GetUtcNow().UtcDateTime;
-
-        await RevokeCurrentSessionAsync(
-            currentRefreshToken,
-            now,
-            cancellationToken);
-
-        var sessionId = Guid.CreateVersion7(now);
-        var refreshToken = refreshTokenService.Create(sessionId);
-        var expiresAt = now.Add(
-            isPersistent
-                ? _persistentSessionLifetime
-                : _sessionLifetime);
-        var session = AuthenticationSession.Create(
-            sessionId,
-            userId,
-            refreshToken.Hash,
-            isPersistent,
-            now,
-            expiresAt);
-        var tokens = CreateTokens(
-            userId,
-            refreshToken.Value,
-            expiresAt,
-            isPersistent);
-
-        sessionRepository.Add(session);
-        await unitOfWork.SaveChangesAsync(cancellationToken);
-
-        return tokens;
     }
 
     /// <summary>
@@ -337,15 +311,18 @@ public class AccountSessionService(
             return;
         }
 
-        var now = timeProvider.GetUtcNow().UtcDateTime;
-        // Preserve fixed-time verification before revoking both current and reused token variants.
-        _ = refreshTokenService.Verify(
+        if (!refreshTokenService.Verify(
             refreshToken,
-            session.RefreshTokenHash);
+            session.RefreshTokenHash))
+        {
+            await transaction.CommitAsync(cancellationToken);
+
+            return;
+        }
 
         await RevokeSessionAndCommitAsync(
             session,
-            now,
+            timeProvider.GetUtcNow().UtcDateTime,
             transaction,
             cancellationToken);
     }
@@ -426,18 +403,21 @@ public class AccountSessionService(
         }
 
         var rotatedRefreshToken = refreshTokenService.Create(session.Id);
-        var expiresAt = session.IsPersistent
-            ? session.ExpiresAt
-            : now.Add(_sessionLifetime);
+        var expiresAt = RefreshSessionPolicy.GetRotatedExpiration(
+            now,
+            session.ExpiresAt,
+            session.IsPersistent);
         session.Rotate(
             rotatedRefreshToken.Hash,
             now,
             expiresAt);
-        var tokens = CreateTokens(
-            user.Id,
+        var refreshSession = new AccountRefreshSession(
             rotatedRefreshToken.Value,
             expiresAt,
             session.IsPersistent);
+        var tokens = CreateTokens(
+            user.Id,
+            refreshSession);
         await unitOfWork.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 
@@ -445,58 +425,34 @@ public class AccountSessionService(
     }
 
     /// <summary>
-    /// Revokes the previous refresh session held by the current browser.
-    /// </summary>
-    /// <param name="currentRefreshToken">The refresh token currently held by the browser.</param>
-    /// <param name="revokedAt">The revocation date.</param>
-    /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>A task that represents the asynchronous operation.</returns>
-    private async Task RevokeCurrentSessionAsync(
-        string? currentRefreshToken,
-        DateTime revokedAt,
-        CancellationToken cancellationToken)
-    {
-        if (string.IsNullOrWhiteSpace(currentRefreshToken) ||
-            !refreshTokenService.TryGetSessionId(
-                currentRefreshToken,
-                out var sessionId))
-            return;
-
-        var session = await sessionRepository.GetByIdForUpdateAsync(
-            sessionId,
-            cancellationToken);
-
-        if (session is null || session.RevokedAt is not null)
-            return;
-
-        session.Revoke(revokedAt);
-    }
-
-    /// <summary>
     /// Creates the access and refresh token response for a session.
     /// </summary>
     /// <param name="userId">The member identifier.</param>
-    /// <param name="refreshToken">The refresh token.</param>
-    /// <param name="refreshTokenExpiresAt">The refresh token expiration.</param>
-    /// <param name="isPersistent">Whether the session is persistent.</param>
+    /// <param name="refreshSession">The refresh-only session material.</param>
     /// <returns>The session tokens.</returns>
     private AccountSessionTokens CreateTokens(
         Guid userId,
-        string refreshToken,
-        DateTime refreshTokenExpiresAt,
-        bool isPersistent)
+        AccountRefreshSession refreshSession)
     {
+
         return new AccountSessionTokens(
             accessTokenService.Create(userId),
-            refreshToken,
-            refreshTokenExpiresAt,
-            isPersistent);
+            refreshSession.RefreshToken,
+            refreshSession.RefreshTokenExpiresAt,
+            refreshSession.IsPersistent);
     }
 
+    /// <summary>
+    /// Ensures that an Identity persistence mutation succeeded.
+    /// </summary>
+    /// <param name="result">The Identity result.</param>
+    /// <param name="operation">The operation description used by the technical exception.</param>
+    /// <exception cref="InvalidOperationException">The Identity mutation failed.</exception>
     private static void EnsureIdentityUpdateSucceeded(
         IdentityResult result,
         string operation)
     {
+
         if (result.Succeeded)
             return;
 

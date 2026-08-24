@@ -8,7 +8,8 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Configu
 
 internal static class IdentityModelConfiguration
 {
-    private const int MaximumProviderKeyLength = 128;
+    private const int MaximumLoginProviderLength = 128;
+    private const int MaximumProviderKeyLength = 255;
     /// <summary>
     /// Executes the configure operation.
     /// </summary>
@@ -40,8 +41,15 @@ internal static class IdentityModelConfiguration
 
         builder.Entity<IdentityUserLogin<Guid>>(login =>
         {
-            login.Property(value => value.LoginProvider).HasMaxLength(MaximumProviderKeyLength);
+            login.Property(value => value.LoginProvider).HasMaxLength(MaximumLoginProviderLength);
             login.Property(value => value.ProviderKey).HasMaxLength(MaximumProviderKeyLength);
+            login.HasIndex(value => new
+            {
+                value.UserId,
+                value.LoginProvider
+            })
+                .HasDatabaseName("ux_user_logins_user_id_login_provider")
+                .IsUnique();
             login.HasOne<MonKadoUser>()
                 .WithMany()
                 .HasForeignKey(value => value.UserId)
@@ -68,8 +76,8 @@ internal static class IdentityModelConfiguration
 
         builder.Entity<IdentityUserToken<Guid>>(token =>
         {
-            token.Property(value => value.LoginProvider).HasMaxLength(MaximumProviderKeyLength);
-            token.Property(value => value.Name).HasMaxLength(MaximumProviderKeyLength);
+            token.Property(value => value.LoginProvider).HasMaxLength(MaximumLoginProviderLength);
+            token.Property(value => value.Name).HasMaxLength(MaximumLoginProviderLength);
             token.HasOne<MonKadoUser>()
                 .WithMany()
                 .HasForeignKey(value => value.UserId)

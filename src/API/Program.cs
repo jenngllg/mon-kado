@@ -4,9 +4,17 @@ using JennGllg.Fr.MonKado.Back.Application.Configurations;
 using JennGllg.Fr.MonKado.Back.Domain.Configurations;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Configurations;
 
+using Microsoft.IdentityModel.Logging;
+
+IdentityModelEventSource.ShowPII = false;
+IdentityModelEventSource.LogCompleteSecurityArtifact = false;
+
 var builder = WebApplication.CreateBuilder(args);
 
 builder.WebHost.ConfigureKestrel(options => options.AddServerHeader = false);
+builder.Logging.AddFilter(
+    "Microsoft.AspNetCore.Hosting.Diagnostics",
+    LogLevel.None);
 
 builder.Services.ConfigureDomainInjection();
 builder.Services.ConfigureApplicationInjection();
@@ -19,11 +27,12 @@ var app = builder.Build();
 
 app.UseTrustedReverseProxy();
 app.UseCorrelationId();
+app.UseSafeHttpRequestLogging();
 app.UseApiErrorHandling();
 app.UseWebSecurity();
-app.UseJwtAuthentication();
-app.UseRequestBodyLimits();
 app.UseRateLimiter();
+app.UseRequestBodyLimits();
+app.UseJwtAuthentication();
 
 app.MapControllers();
 app.MapApiHealthChecks();

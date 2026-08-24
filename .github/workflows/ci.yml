@@ -152,6 +152,7 @@ jobs:
           HTTP_PORT=80
           HTTPS_PORT=443
           FRONTEND_ORIGIN=https://example.test
+          GOOGLE_AUTHENTICATION_ENABLED=false
           API_ALLOWED_HOST=api.example.test
           POSTGRES_DB=mon_kado
           POSTGRES_USER=mon_kado
@@ -167,6 +168,7 @@ jobs:
           HTTP_PORT=18080
           HTTPS_PORT=18443
           FRONTEND_ORIGIN=http://localhost:5173
+          GOOGLE_AUTHENTICATION_ENABLED=false
           API_ALLOWED_HOST=localhost
           POSTGRES_DB=mon_kado
           POSTGRES_USER=mon_kado

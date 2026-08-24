@@ -14,12 +14,13 @@ public class AuthenticationEmailOutboxMessageTests
         DateTimeKind.Utc);
 
     [Theory]
-    [InlineData(true, AuthenticationEmailKind.EmailChangeConfirmation, "new@example.fr")]
-    [InlineData(false, AuthenticationEmailKind.EmailChangeSecurityNotification, "old@example.fr")]
+    [InlineData(true, AuthenticationEmailKind.EmailChangeConfirmation, "new@example.fr", "security-stamp")]
+    [InlineData(false, AuthenticationEmailKind.EmailChangeSecurityNotification, "old@example.fr", null)]
     public void CreateEmailChange_WhenCalled_CreatesRequestSpecificMessage(
         bool confirmation,
         AuthenticationEmailKind expectedKind,
-        string recipientEmail)
+        string recipientEmail,
+        string? expectedSecurityStamp)
     {
         // Arrange
         var requestId = Guid.CreateVersion7();
@@ -31,6 +32,7 @@ public class AuthenticationEmailOutboxMessageTests
                 requestId,
                 userId,
                 recipientEmail,
+                "security-stamp",
                 _now)
             : AuthenticationEmailOutboxMessage.CreateEmailChangeSecurityNotification(
                 requestId,
@@ -51,6 +53,9 @@ public class AuthenticationEmailOutboxMessageTests
         Assert.Equal(
             recipientEmail,
             message.RecipientEmail);
+        Assert.Equal(
+            expectedSecurityStamp,
+            message.SecurityStampSnapshot);
         Assert.Equal(
             expectedKind,
             message.Kind);

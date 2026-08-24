@@ -16,7 +16,9 @@ public static class ApiErrorHandlingExtensions
     {
         application.UseExceptionHandler();
         application.UseStatusCodePages(statusCodeContext =>
-            ApiStatusCodeResponseWriter.WriteAsync(statusCodeContext.HttpContext));
+            ApiStatusCodeResponseWriter.WriteAsync(
+                statusCodeContext.HttpContext,
+                statusCodeContext.HttpContext.RequestAborted));
 
         return application;
     }

@@ -20,7 +20,14 @@ namespace JennGllg.Fr.MonKado.Back.Api.IntegrationTests;
 public class LogoutIntegrationTests(PostgreSqlContainerFixture fixture)
 {
     private const string Password = "  a long secure password  ";
-    private static readonly DateTimeOffset _now = DateTimeOffset.UtcNow;
+    private static readonly DateTimeOffset _now = new(
+        2030,
+        1,
+        1,
+        0,
+        0,
+        0,
+        TimeSpan.Zero);
 
     [Fact]
     public async Task LogoutAsync_WhenSessionIsValid_RevokesRefreshAndLeavesAccessTokenValid()
@@ -216,7 +223,7 @@ public class LogoutIntegrationTests(PostgreSqlContainerFixture fixture)
     }
 
     [Fact]
-    public async Task LogoutAsync_WhenTokenIsAltered_RevokesIdentifiedSession()
+    public async Task LogoutAsync_WhenTokenIsAltered_PreservesIdentifiedSession()
     {
         // Arrange
         await using var factory = await CreateMigratedFactoryAsync(new FixedTimeProvider(_now));
@@ -244,9 +251,7 @@ public class LogoutIntegrationTests(PostgreSqlContainerFixture fixture)
         var session = await context.AuthenticationSessions
             .AsNoTracking()
             .SingleAsync(TestContext.Current.CancellationToken);
-        AssertTimestampClose(
-            _now.UtcDateTime,
-            session.RevokedAt);
+        Assert.Null(session.RevokedAt);
     }
 
     [Fact]
@@ -310,6 +315,9 @@ public class LogoutIntegrationTests(PostgreSqlContainerFixture fixture)
         await Task.WhenAll(
             refreshTask,
             logoutTask);
+        _ = await refreshService.RefreshAsync(
+            refreshToken,
+            TestContext.Current.CancellationToken);
 
         // Assert
         await using var verificationScope = factory.Services.CreateAsyncScope();
