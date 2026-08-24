@@ -114,6 +114,20 @@ public static class ErrorCodes
 
     #endregion
 
+    #region Wishlist
+
+    /// <summary>
+    /// Identifies a private wishlist that is unavailable to the current member.
+    /// </summary>
+    public const string WishlistNotFound = "WISHLIST_NOT_FOUND";
+
+    /// <summary>
+    /// Identifies an owner-scoped wishlist name conflict.
+    /// </summary>
+    public const string WishlistNameAlreadyExists = "WISHLIST_NAME_ALREADY_EXISTS";
+
+    #endregion
+
     #region Technical
 
     /// <summary>

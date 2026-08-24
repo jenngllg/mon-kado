@@ -16,4 +16,13 @@ public static class AuthorizationPolicies
     public const string CurrentSession = "CurrentSession";
 
     #endregion
+
+    #region Wishlist
+
+    /// <summary>
+    /// Identifies the policy for managing an owned private wishlist.
+    /// </summary>
+    public const string ManageWishlist = "ManageWishlist";
+
+    #endregion
 }

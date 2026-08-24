@@ -356,4 +356,64 @@ public static partial class ApplicationLogMessages
         Level = LogLevel.Information,
         Message = "Authentication refresh session rotated.")]
     public static partial void RefreshSessionCompleted(ILogger logger);
+
+    /// <summary>
+    /// Logs the start of a wishlist creation.
+    /// </summary>
+    /// <param name="logger">The logger.</param>
+    /// <param name="memberId">The owner member identifier.</param>
+    /// <param name="wishlistId">The generated wishlist identifier.</param>
+    [LoggerMessage(
+        EventId = LogEventIds.WishlistCreationStarted,
+        Level = LogLevel.Debug,
+        Message = "Creating wishlist {WishlistId} for member {MemberId}.")]
+    public static partial void WishlistCreationStarted(
+        ILogger logger,
+        Guid memberId,
+        Guid wishlistId);
+
+    /// <summary>
+    /// Logs a created wishlist.
+    /// </summary>
+    /// <param name="logger">The logger.</param>
+    /// <param name="memberId">The owner member identifier.</param>
+    /// <param name="wishlistId">The wishlist identifier.</param>
+    [LoggerMessage(
+        EventId = LogEventIds.WishlistCreated,
+        Level = LogLevel.Information,
+        Message = "Wishlist {WishlistId} created for member {MemberId}.")]
+    public static partial void WishlistCreated(
+        ILogger logger,
+        Guid memberId,
+        Guid wishlistId);
+
+    /// <summary>
+    /// Logs the start of a private wishlist retrieval.
+    /// </summary>
+    /// <param name="logger">The logger.</param>
+    /// <param name="memberId">The owner member identifier.</param>
+    /// <param name="wishlistId">The wishlist identifier.</param>
+    [LoggerMessage(
+        EventId = LogEventIds.WishlistRetrievalStarted,
+        Level = LogLevel.Debug,
+        Message = "Retrieving wishlist {WishlistId} for member {MemberId}.")]
+    public static partial void WishlistRetrievalStarted(
+        ILogger logger,
+        Guid memberId,
+        Guid wishlistId);
+
+    /// <summary>
+    /// Logs a retrieved private wishlist.
+    /// </summary>
+    /// <param name="logger">The logger.</param>
+    /// <param name="memberId">The owner member identifier.</param>
+    /// <param name="wishlistId">The wishlist identifier.</param>
+    [LoggerMessage(
+        EventId = LogEventIds.WishlistRetrieved,
+        Level = LogLevel.Information,
+        Message = "Wishlist {WishlistId} retrieved for member {MemberId}.")]
+    public static partial void WishlistRetrieved(
+        ILogger logger,
+        Guid memberId,
+        Guid wishlistId);
 }

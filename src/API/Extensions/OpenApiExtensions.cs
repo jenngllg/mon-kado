@@ -88,6 +88,9 @@ public static class OpenApiExtensions
                 if (ReturnsRedirect(metadata))
                     AddRedirectResponseHeaders(operation);
 
+                if (CreatesResource(metadata))
+                    AddCreatedResourceResponseHeaders(operation);
+
                 if (ReturnsGoogleExternalCookie(metadata))
                     AddGoogleExternalCookieResponseHeaders(operation);
 
@@ -224,6 +227,33 @@ public static class OpenApiExtensions
         return metadata
             .OfType<ProducesResponseTypeAttribute>()
             .Any(attribute => attribute.StatusCode == StatusCodes.Status302Found);
+    }
+
+    private static bool CreatesResource(IEnumerable<object> metadata)
+    {
+        return metadata
+            .OfType<ProducesResponseTypeAttribute>()
+            .Any(attribute => attribute.StatusCode == StatusCodes.Status201Created);
+    }
+
+    private static void AddCreatedResourceResponseHeaders(OpenApiOperation operation)
+    {
+        ArgumentNullException.ThrowIfNull(operation.Responses);
+        var response = operation.Responses[
+            StatusCodes.Status201Created.ToString(System.Globalization.CultureInfo.InvariantCulture)];
+        var mutableResponse = (OpenApiResponse)response;
+        mutableResponse.Headers = AddOrReplace(
+            mutableResponse.Headers,
+            HeaderNames.Location,
+            new OpenApiHeader
+            {
+                Description = "URL of the created resource.",
+                Schema = new OpenApiSchema
+                {
+                    Format = "uri",
+                    Type = JsonSchemaType.String
+                }
+            });
     }
 
     private static bool ReturnsGoogleExternalCookie(IEnumerable<object> metadata)
@@ -377,15 +407,18 @@ public static class OpenApiExtensions
 
         if (returnsEntityTag)
         {
-            var response = operation.Responses[
-                StatusCodes.Status200OK.ToString(System.Globalization.CultureInfo.InvariantCulture)];
+            var response = operation.Responses
+                .Where(response => response.Key.StartsWith('2'))
+                .OrderBy(response => response.Key)
+                .Select(response => response.Value)
+                .First();
             var mutableResponse = (OpenApiResponse)response;
             mutableResponse.Headers = AddOrReplace(
                 mutableResponse.Headers,
                 HeaderNames.ETag,
                 new OpenApiHeader
                 {
-                    Description = "Strong entity tag representing the current member profile version.",
+                    Description = "Strong entity tag representing the current resource version.",
                     Schema = new OpenApiSchema { Type = JsonSchemaType.String }
                 });
         }

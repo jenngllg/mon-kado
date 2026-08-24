@@ -100,6 +100,7 @@ public static class InfrastructureInjectionConfiguration
         services.AddScoped<IAuthenticationSessionRepository, AuthenticationSessionRepository>();
         services.AddScoped<IGoogleAccountRepository, GoogleAccountRepository>();
         services.AddScoped<IMemberEmailChangeRequestRepository, MemberEmailChangeRequestRepository>();
+        services.AddScoped<IWishlistRepository, WishlistRepository>();
         services.AddScoped<IAccountRegistrationService, AccountRegistrationService>();
         services.AddScoped<IEmailConfirmationService, EmailConfirmationService>();
         services.AddScoped<IExpiredAccountCleanup, ExpiredAccountCleanup>();
@@ -115,6 +116,7 @@ public static class InfrastructureInjectionConfiguration
         services.AddScoped<IPasswordResetService, PasswordResetService>();
         services.AddScoped<IExpiredAuthenticationSessionCleanup, ExpiredAuthenticationSessionCleanup>();
         services.AddScoped<IProcessedAuthenticationEmailCleanup, ProcessedAuthenticationEmailCleanup>();
+        services.AddScoped<IWishlistService, WishlistService>();
         services.AddScoped<
             IExpiredMemberEmailChangeRequestCleanup,
             ExpiredMemberEmailChangeRequestCleanup>();

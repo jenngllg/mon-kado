@@ -119,6 +119,18 @@ public class GlobalExceptionHandler(
                 "The email change confirmation link is invalid or expired.",
                 ErrorCodes.MemberEmailChangeInvalid,
                 null),
+            WishlistNotFoundException => new ErrorResponse(
+                StatusCodes.Status404NotFound,
+                "Wishlist not found",
+                "The wishlist was not found.",
+                ErrorCodes.WishlistNotFound,
+                null),
+            WishlistNameAlreadyExistsException => new ErrorResponse(
+                StatusCodes.Status409Conflict,
+                "Wishlist name unavailable",
+                "A wishlist with this name already exists.",
+                ErrorCodes.WishlistNameAlreadyExists,
+                null),
             PreconditionRequiredException => new ErrorResponse(
                 StatusCodes.Status428PreconditionRequired,
                 "Precondition required",

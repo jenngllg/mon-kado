@@ -46,6 +46,14 @@ public static class JwtAuthenticationExtensions
                 policy.AddAuthenticationSchemes(JwtBearerDefaults.AuthenticationScheme);
                 policy.RequireAuthenticatedUser();
             }));
+        services.AddAuthorization(options => options.AddPolicy(
+            AuthorizationPolicies.ManageWishlist,
+            policy =>
+            {
+                policy.AddAuthenticationSchemes(JwtBearerDefaults.AuthenticationScheme);
+                policy.RequireAuthenticatedUser();
+                policy.AddRequirements(new WishlistOwnerRequirement());
+            }));
 
         return services;
     }

@@ -220,6 +220,30 @@ public static class LogEventIds
     public const int RefreshSessionCompleted = 1109;
     #endregion
 
+    #region Wishlist
+
+    /// <summary>
+    /// Identifies the start of a wishlist creation.
+    /// </summary>
+    public const int WishlistCreationStarted = 2000;
+
+    /// <summary>
+    /// Identifies a created wishlist.
+    /// </summary>
+    public const int WishlistCreated = 2001;
+
+    /// <summary>
+    /// Identifies the start of a private wishlist retrieval.
+    /// </summary>
+    public const int WishlistRetrievalStarted = 2002;
+
+    /// <summary>
+    /// Identifies a retrieved private wishlist.
+    /// </summary>
+    public const int WishlistRetrieved = 2003;
+
+    #endregion
+
     #region Technical
 
     /// <summary>
