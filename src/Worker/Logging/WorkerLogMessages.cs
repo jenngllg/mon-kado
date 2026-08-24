@@ -192,4 +192,32 @@ public static partial class WorkerLogMessages
         ILogger logger,
         string exceptionType,
         Exception exception);
+
+    /// <summary>
+    /// Logs deleted processed authentication emails.
+    /// </summary>
+    /// <param name="logger">The logger.</param>
+    /// <param name="deletedEmailCount">The deleted email count.</param>
+    [LoggerMessage(
+        EventId = LogEventIds.ProcessedAuthenticationEmailsDeleted,
+        Level = LogLevel.Information,
+        Message = "Deleted {DeletedEmailCount} processed authentication email messages.")]
+    public static partial void ProcessedAuthenticationEmailsDeleted(
+        ILogger logger,
+        int deletedEmailCount);
+
+    /// <summary>
+    /// Logs a processed authentication email cleanup failure.
+    /// </summary>
+    /// <param name="logger">The logger.</param>
+    /// <param name="exceptionType">The exception type.</param>
+    /// <param name="exception">The cleanup exception.</param>
+    [LoggerMessage(
+        EventId = LogEventIds.ProcessedAuthenticationEmailCleanupFailed,
+        Level = LogLevel.Error,
+        Message = "Processed authentication email cleanup failed and will be retried. Exception type: {ExceptionType}")]
+    public static partial void ProcessedAuthenticationEmailCleanupFailed(
+        ILogger logger,
+        string exceptionType,
+        Exception exception);
 }

@@ -101,6 +101,14 @@ internal sealed class AuthenticationEmailOutboxMessageConfiguration
                 false,
                 false,
                 true);
+
+        builder.HasIndex(message => new
+        {
+            message.ProcessedAt,
+            message.Id
+        })
+            .HasDatabaseName("ix_authentication_email_outbox_processed_cleanup")
+            .HasFilter("processed_at IS NOT NULL");
     }
 
     private static string ConvertKindToDatabase(AuthenticationEmailKind kind)

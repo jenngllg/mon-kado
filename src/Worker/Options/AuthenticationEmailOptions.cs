@@ -6,6 +6,10 @@ namespace JennGllg.Fr.MonKado.Back.Worker.Options;
 public class AuthenticationEmailOptions
 {
     /// <summary>
+    /// Gets the default processed email retention in days.
+    /// </summary>
+    public const int DefaultProcessedRetentionDays = 30;
+    /// <summary>
     /// Identifies section name.
     /// </summary>
     public const string SectionName = "AuthenticationEmail";
@@ -30,6 +34,10 @@ public class AuthenticationEmailOptions
     {
         get; init;
     }
+    /// <summary>
+    /// Gets the age in days after which processed authentication emails become eligible for deletion.
+    /// </summary>
+    public int ProcessedRetentionDays { get; init; } = DefaultProcessedRetentionDays;
     /// <summary>
     /// Gets is enabled.
     /// </summary>

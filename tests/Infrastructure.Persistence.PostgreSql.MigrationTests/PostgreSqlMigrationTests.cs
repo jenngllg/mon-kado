@@ -86,6 +86,10 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
             migration => Assert.EndsWith(
                 "_AddGoogleExternalLogins",
                 migration,
+                StringComparison.Ordinal),
+            migration => Assert.EndsWith(
+                "_AddAuthenticationEmailRetentionCleanupIndex",
+                migration,
                 StringComparison.Ordinal));
         Assert.False(context.Database.HasPendingModelChanges());
 
@@ -168,6 +172,9 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
             indexes);
         Assert.Contains(
             "ix_authentication_email_outbox_user_kind_created_at",
+            indexes);
+        Assert.Contains(
+            "ix_authentication_email_outbox_processed_cleanup",
             indexes);
         Assert.Contains(
             "ix_authentication_sessions_expires_at",
@@ -696,6 +703,97 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
         {
             await context.Database.MigrateAsync(cancellationToken);
         }
+    }
+
+    [Fact]
+    public async Task MigrateAsync_WhenProcessedAuthenticationEmailExists_PreservesDataAcrossIndexUpAndDown()
+    {
+        // Arrange
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var provider = CreateServiceProvider();
+        await using var scope = provider.CreateAsyncScope();
+        var context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
+        const string previousMigration = "20260823220140_AddGoogleExternalLogins";
+        await context.Database.MigrateAsync(
+            previousMigration,
+            cancellationToken);
+        var member = new MonKadoUser
+        {
+            Id = Guid.CreateVersion7(),
+            DisplayName = "Retention migration test",
+            Email = "retention-migration@example.test",
+            NormalizedEmail = "RETENTION-MIGRATION@EXAMPLE.TEST",
+            UserName = "retention-migration@example.test",
+            NormalizedUserName = "RETENTION-MIGRATION@EXAMPLE.TEST",
+            EmailConfirmed = true
+        };
+        var createdAt = new DateTime(
+            2026,
+            7,
+            1,
+            0,
+            0,
+            0,
+            DateTimeKind.Utc);
+        var message = AuthenticationEmailOutboxMessage.CreatePasswordChangedSecurityNotification(
+            member.Id,
+            member.Email,
+            createdAt);
+        context.Users.Add(member);
+        context.AuthenticationEmailOutboxMessages.Add(message);
+        await context.SaveChangesAsync(cancellationToken);
+        await context.AuthenticationEmailOutboxMessages
+            .Where(value => value.Id == message.Id)
+            .ExecuteUpdateAsync(
+                setters => setters.SetProperty(
+                    value => value.ProcessedAt,
+                    createdAt.AddMinutes(1)),
+                cancellationToken);
+        bool rowExistsAfterUp;
+        bool rowExistsAfterDown;
+        bool indexExistsAfterUp;
+        bool indexExistsAfterDown;
+
+        try
+        {
+            // Act
+            await context.Database.MigrateAsync(cancellationToken);
+            rowExistsAfterUp = await context.AuthenticationEmailOutboxMessages
+                .AsNoTracking()
+                .AnyAsync(
+                    value => value.Id == message.Id,
+                    cancellationToken);
+            var indexesAfterUp = await GetPublicIndexesAsync(
+                context,
+                cancellationToken);
+            indexExistsAfterUp = indexesAfterUp.Contains(
+                "ix_authentication_email_outbox_processed_cleanup",
+                StringComparer.Ordinal);
+            await context.Database.MigrateAsync(
+                previousMigration,
+                cancellationToken);
+            rowExistsAfterDown = await context.AuthenticationEmailOutboxMessages
+                .AsNoTracking()
+                .AnyAsync(
+                    value => value.Id == message.Id,
+                    cancellationToken);
+            var indexesAfterDown = await GetPublicIndexesAsync(
+                context,
+                cancellationToken);
+            indexExistsAfterDown = indexesAfterDown.Contains(
+                "ix_authentication_email_outbox_processed_cleanup",
+                StringComparer.Ordinal);
+        }
+        finally
+        {
+            await context.Database.MigrateAsync(cancellationToken);
+        }
+
+        // Assert
+        Assert.True(rowExistsAfterUp);
+        Assert.True(rowExistsAfterDown);
+        Assert.True(indexExistsAfterUp);
+        Assert.False(indexExistsAfterDown);
     }
 
     [Fact]

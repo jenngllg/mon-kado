@@ -29,6 +29,7 @@ public static class WorkerInjectionConfiguration
         services.AddHostedService<UnconfirmedAccountCleanupWorker>();
         services.AddHostedService<ExpiredAuthenticationSessionCleanupWorker>();
         services.AddHostedService<ExpiredMemberEmailChangeRequestCleanupWorker>();
+        services.AddHostedService<ProcessedAuthenticationEmailCleanupWorker>();
 
         return services;
     }

@@ -11,6 +11,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
 
 namespace JennGllg.Fr.MonKado.Back.Worker.UnitTests;
 
@@ -62,6 +63,60 @@ public class AuthenticationEmailConfigurationTests
             services,
             descriptor => descriptor.ImplementationType ==
                 typeof(ExpiredAuthenticationSessionCleanupWorker));
+        Assert.Contains(
+            services,
+            descriptor => descriptor.ImplementationType ==
+                typeof(ProcessedAuthenticationEmailCleanupWorker));
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(366)]
+    public void Configure_WhenProcessedRetentionIsOutsideAllowedRange_IsRejected(
+        int retentionDays)
+    {
+        // Arrange
+        var configuration = new ConfigurationManager();
+        configuration["AuthenticationEmail:ProcessedRetentionDays"] = retentionDays.ToString(
+            System.Globalization.CultureInfo.InvariantCulture);
+        var services = new ServiceCollection();
+
+        // Act
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            services.ConfigureAuthenticationEmailDelivery(
+                configuration,
+                new TestHostEnvironment("Local")));
+
+        // Assert
+        Assert.Contains(
+            "between 1 and 365",
+            exception.Message,
+            StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(365)]
+    public void Configure_WhenProcessedRetentionIsAtAllowedBoundary_BindsValue(
+        int retentionDays)
+    {
+        // Arrange
+        var configuration = new ConfigurationManager();
+        configuration["AuthenticationEmail:ProcessedRetentionDays"] = retentionDays.ToString(
+            System.Globalization.CultureInfo.InvariantCulture);
+        var services = new ServiceCollection();
+        services.ConfigureAuthenticationEmailDelivery(
+            configuration,
+            new TestHostEnvironment("Local"));
+        using var provider = services.BuildServiceProvider();
+
+        // Act
+        var options = provider.GetRequiredService<IOptions<AuthenticationEmailOptions>>();
+
+        // Assert
+        Assert.Equal(
+            retentionDays,
+            options.Value.ProcessedRetentionDays);
     }
 
     [Fact]
