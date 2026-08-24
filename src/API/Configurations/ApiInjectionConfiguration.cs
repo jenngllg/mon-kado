@@ -32,6 +32,9 @@ public static class ApiInjectionConfiguration
         IWebHostEnvironment environment)
     {
         services.AddJwtAuthentication(configuration);
+        services.AddGoogleAuthentication(
+            configuration,
+            environment);
         services.AddSingleton<IRefreshTokenCookieService, RefreshTokenCookieService>();
         services.AddSingleton<IEntityTagService, EntityTagService>();
         services.ConfigureDataProtection(

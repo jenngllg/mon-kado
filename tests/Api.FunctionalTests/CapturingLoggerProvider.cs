@@ -13,7 +13,9 @@ internal sealed class CapturingLoggerProvider : ILoggerProvider
     public ILogger CreateLogger(string categoryName)
     {
 
-        return new CapturingLogger(_messages);
+        return new CapturingLogger(
+            _messages,
+            categoryName);
     }
 
     public void Dispose()

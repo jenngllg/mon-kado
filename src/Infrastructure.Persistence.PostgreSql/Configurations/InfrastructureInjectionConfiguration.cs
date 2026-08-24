@@ -98,13 +98,16 @@ public static class InfrastructureInjectionConfiguration
         services.AddScoped<IMemberRepository, MemberRepository>();
         services.AddScoped<IAuthenticationEmailOutboxRepository, AuthenticationEmailOutboxRepository>();
         services.AddScoped<IAuthenticationSessionRepository, AuthenticationSessionRepository>();
+        services.AddScoped<IGoogleAccountRepository, GoogleAccountRepository>();
         services.AddScoped<IMemberEmailChangeRequestRepository, MemberEmailChangeRequestRepository>();
         services.AddScoped<IAccountRegistrationService, AccountRegistrationService>();
         services.AddScoped<IEmailConfirmationService, EmailConfirmationService>();
         services.AddScoped<IExpiredAccountCleanup, ExpiredAccountCleanup>();
         services.AddSingleton<IAccessTokenService, JwtAccessTokenService>();
         services.AddSingleton<IRefreshTokenService, RefreshTokenService>();
+        services.AddScoped<IRefreshSessionService, RefreshSessionService>();
         services.AddScoped<IAccountSessionService, AccountSessionService>();
+        services.AddScoped<IGoogleAccountSessionService, GoogleAccountSessionService>();
         services.AddScoped<ICurrentSessionService, CurrentSessionService>();
         services.AddScoped<IMemberProfileService, MemberProfileService>();
         services.AddScoped<IMemberEmailChangeService, MemberEmailChangeService>();

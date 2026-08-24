@@ -8,6 +8,12 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Abstrac
 public interface IMonKadoUserRepository
 {
     /// <summary>
+    /// Adds a user to the current unit of work.
+    /// </summary>
+    /// <param name="user">The user.</param>
+    void Add(MonKadoUser user);
+
+    /// <summary>
     /// Returns an untracked query for users.
     /// </summary>
     /// <returns>An untracked user query.</returns>

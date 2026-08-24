@@ -1,4 +1,5 @@
 using JennGllg.Fr.MonKado.Back.Api.Attributes;
+using JennGllg.Fr.MonKado.Back.Api.Constants;
 using JennGllg.Fr.MonKado.Back.Api.Contracts.Responses;
 using JennGllg.Fr.MonKado.Back.Api.Options;
 using JennGllg.Fr.MonKado.Back.Api.Services;
@@ -7,6 +8,8 @@ using JennGllg.Fr.MonKado.Back.Api.Transformers;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Net.Http.Headers;
 using Microsoft.OpenApi;
+
+using System.Text.Json.Nodes;
 
 namespace JennGllg.Fr.MonKado.Back.Api.Extensions;
 /// <summary>
@@ -53,6 +56,8 @@ public static class OpenApiExtensions
                 if (RequiresAntiforgeryToken(metadata))
                     AddAntiforgeryParameter(operation);
 
+                AddRememberMeDefault(operation);
+
                 var refreshTokenCookie = metadata
                     .OfType<RefreshTokenCookieAttribute>()
                     .SingleOrDefault();
@@ -62,11 +67,29 @@ public static class OpenApiExtensions
                         operation,
                         refreshTokenCookie.IsRequired);
 
+                var googleExternalCookie = metadata
+                    .OfType<GoogleExternalCookieAttribute>()
+                    .SingleOrDefault();
+
+                if (googleExternalCookie is not null)
+                    AddGoogleExternalCookieParameter(
+                        operation,
+                        googleExternalCookie.IsRequired);
+
+                if (metadata.OfType<GoogleFlowBindingAttribute>().Any())
+                    AddGoogleFlowBindingParameter(operation);
+
                 if (ReturnsAccessToken(metadata))
                     AddAccessTokenResponseHeaders(operation);
 
                 if (DeletesRefreshTokenCookie(metadata))
                     AddDeletedRefreshTokenResponseHeaders(operation);
+
+                if (ReturnsRedirect(metadata))
+                    AddRedirectResponseHeaders(operation);
+
+                if (ReturnsGoogleExternalCookie(metadata))
+                    AddGoogleExternalCookieResponseHeaders(operation);
 
                 foreach (var noStoreResponse in metadata.OfType<NoStoreResponseAttribute>())
                     AddNoStoreResponseHeader(
@@ -171,9 +194,79 @@ public static class OpenApiExtensions
             });
     }
 
+    private static void AddRememberMeDefault(OpenApiOperation operation)
+    {
+        var parameter = operation.Parameters?
+            .OfType<OpenApiParameter>()
+            .SingleOrDefault(parameter =>
+                parameter.In == ParameterLocation.Query &&
+                string.Equals(
+                    parameter.Name,
+                    "rememberMe",
+                    StringComparison.Ordinal));
+
+        if (parameter?.Schema is not OpenApiSchema schema)
+            return;
+
+        parameter.Required = false;
+        schema.Default = JsonValue.Create(false);
+    }
+
     private static bool DeletesRefreshTokenCookie(IEnumerable<object> metadata)
     {
+
         return metadata.OfType<DeletesRefreshTokenCookieAttribute>().Any();
+    }
+
+    private static bool ReturnsRedirect(IEnumerable<object> metadata)
+    {
+
+        return metadata
+            .OfType<ProducesResponseTypeAttribute>()
+            .Any(attribute => attribute.StatusCode == StatusCodes.Status302Found);
+    }
+
+    private static bool ReturnsGoogleExternalCookie(IEnumerable<object> metadata)
+    {
+
+        return metadata.OfType<ReturnsGoogleExternalCookieAttribute>().Any();
+    }
+
+    private static void AddRedirectResponseHeaders(OpenApiOperation operation)
+    {
+        ArgumentNullException.ThrowIfNull(operation.Responses);
+        var response = operation.Responses[
+            StatusCodes.Status302Found.ToString(System.Globalization.CultureInfo.InvariantCulture)];
+        var mutableResponse = (OpenApiResponse)response;
+        mutableResponse.Headers = AddOrReplace(
+            mutableResponse.Headers,
+            HeaderNames.Location,
+            new OpenApiHeader
+            {
+                Description =
+                    "Redirect destination for the provider challenge or callback completion/failure route. " +
+                    "A successful callback completion route includes only an opaque flow binding. " +
+                    "It never contains an access token, refresh token or identity claim.",
+                Schema = new OpenApiSchema { Type = JsonSchemaType.String }
+            });
+    }
+
+    private static void AddGoogleExternalCookieResponseHeaders(OpenApiOperation operation)
+    {
+        ArgumentNullException.ThrowIfNull(operation.Responses);
+        var response = operation.Responses[
+            StatusCodes.Status302Found.ToString(System.Globalization.CultureInfo.InvariantCulture)];
+        var mutableResponse = (OpenApiResponse)response;
+        mutableResponse.Headers = AddOrReplace(
+            mutableResponse.Headers,
+            HeaderNames.SetCookie,
+            new OpenApiHeader
+            {
+                Description =
+                    "Issues a five-minute HttpOnly, Secure, SameSite=Lax and host-only Google external cookie. " +
+                    "It contains no Google token, MonKado token or unprotected identity claim.",
+                Schema = new OpenApiSchema { Type = JsonSchemaType.String }
+            });
     }
 
     private static void AddRefreshTokenCookieParameter(
@@ -192,6 +285,44 @@ public static class OpenApiExtensions
                     "local development uses MonKado.Refresh.",
                 Schema = new OpenApiSchema { Type = JsonSchemaType.String }
             });
+    }
+
+    private static void AddGoogleExternalCookieParameter(
+        OpenApiOperation operation,
+        bool isRequired)
+    {
+        operation.Parameters = AddItem(
+            operation.Parameters,
+            new OpenApiParameter
+            {
+                Name = GoogleAuthenticationConstants.ProductionExternalCookieName,
+                In = ParameterLocation.Cookie,
+                Required = isRequired,
+                Description = string.Concat(
+                    "Short-lived Data Protection cookie containing only validated Google identity claims and protected flow state. ",
+                    "It is HttpOnly, Secure, SameSite=Lax, host-only and expires after five minutes. Local development uses ",
+                    GoogleAuthenticationConstants.LocalExternalCookieName,
+                    ". It never contains Google or MonKado tokens."),
+                Schema = new OpenApiSchema { Type = JsonSchemaType.String }
+            });
+    }
+
+    private static void AddGoogleFlowBindingParameter(OpenApiOperation operation)
+    {
+        ArgumentNullException.ThrowIfNull(operation.Parameters);
+        var parameter = operation.Parameters
+            .OfType<OpenApiParameter>()
+            .Single(parameter =>
+                parameter.In == ParameterLocation.Query &&
+                string.Equals(
+                    parameter.Name,
+                    GoogleAuthenticationConstants.FlowBindingParameter,
+                    StringComparison.Ordinal));
+
+        parameter.Required = true;
+        parameter.Description =
+            "Opaque five-minute browser-flow binding returned in the frontend redirect fragment. " +
+            "It is required to prevent concurrent Google flows from being crossed and is not an access, refresh or Google token.";
     }
 
     private static void AddDeletedRefreshTokenResponseHeaders(OpenApiOperation operation)

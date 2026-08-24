@@ -44,6 +44,7 @@ public class AuthSessionsController(
     [HttpPost]
     [ValidateAntiForgeryToken]
     [EnableRateLimiting(AuthenticationRateLimitingExtensions.LoginPolicy)]
+    [RefreshTokenCookie(isRequired: false)]
     [RequestSizeLimit(MaximumRequestBodySize)]
     [Consumes("application/json")]
     [ProducesResponseType(typeof(AccessTokenResponse), StatusCodes.Status200OK, "application/json")]
@@ -159,8 +160,14 @@ public class AuthSessionsController(
         return NoContent();
     }
 
+    /// <summary>
+    /// Creates the public access token response from issued session tokens.
+    /// </summary>
+    /// <param name="tokens">The issued session tokens.</param>
+    /// <returns>The public bearer token response.</returns>
     internal static AccessTokenResponse CreateResponse(AccountSessionTokens tokens)
     {
+
         return new AccessTokenResponse(
             tokens.AccessToken.Value,
             "Bearer",

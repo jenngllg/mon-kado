@@ -51,6 +51,26 @@ public static class AuthenticationRateLimitingExtensions
     /// Identifies the password reset policy.
     /// </summary>
     public const string PasswordResetPolicy = "PasswordReset";
+    /// <summary>
+    /// Identifies the Google authentication challenge policy.
+    /// </summary>
+    public const string GoogleChallengePolicy = "GoogleChallenge";
+    /// <summary>
+    /// Identifies the Google provider callback policy.
+    /// </summary>
+    public const string GoogleCallbackPolicy = "GoogleCallback";
+    /// <summary>
+    /// Identifies the Google authentication completion policy.
+    /// </summary>
+    public const string GoogleCompletionPolicy = "GoogleCompletion";
+    /// <summary>
+    /// Identifies the explicit Google account link policy.
+    /// </summary>
+    public const string GoogleLinkPolicy = "GoogleLink";
+    /// <summary>
+    /// Gets the per-minute Google callback and completion limit for one remote address.
+    /// </summary>
+    public const int GoogleTransientFlowPermitLimit = 10;
 
     private static readonly TimeSpan _window = TimeSpan.FromMinutes(1);
     /// <summary>
@@ -113,6 +133,26 @@ public static class AuthenticationRateLimitingExtensions
                 context => CreateLimiter(
                     context,
                     10));
+            options.AddPolicy(
+                GoogleChallengePolicy,
+                context => CreateLimiter(
+                    context,
+                    10));
+            options.AddPolicy(
+                GoogleCallbackPolicy,
+                context => CreateLimiter(
+                    context,
+                    GoogleTransientFlowPermitLimit));
+            options.AddPolicy(
+                GoogleCompletionPolicy,
+                context => CreateLimiter(
+                    context,
+                    GoogleTransientFlowPermitLimit));
+            options.AddPolicy(
+                GoogleLinkPolicy,
+                context => CreateLimiter(
+                    context,
+                    5));
 
             options.OnRejected = async (
                 rejectionContext,

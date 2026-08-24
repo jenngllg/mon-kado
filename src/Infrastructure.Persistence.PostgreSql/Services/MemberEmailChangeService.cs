@@ -199,6 +199,7 @@ public class MemberEmailChangeService(
         }
 
         ArgumentNullException.ThrowIfNull(member.Email);
+        ArgumentNullException.ThrowIfNull(member.SecurityStamp);
         var request = MemberEmailChangeRequest.Create(
             member.Id,
             member.Email,
@@ -211,6 +212,7 @@ public class MemberEmailChangeService(
             request.Id,
             member.Id,
             email,
+            member.SecurityStamp,
             now));
         outboxRepository.Add(AuthenticationEmailOutboxMessage.CreateEmailChangeSecurityNotification(
             request.Id,

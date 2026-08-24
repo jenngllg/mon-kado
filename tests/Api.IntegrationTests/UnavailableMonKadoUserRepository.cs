@@ -5,15 +5,23 @@ namespace JennGllg.Fr.MonKado.Back.Api.IntegrationTests;
 
 public class UnavailableMonKadoUserRepository : IMonKadoUserRepository
 {
+    public void Add(MonKadoUser user)
+    {
+
+        throw new TimeoutException("PostgreSQL is unavailable.");
+    }
+
     public IQueryable<MonKadoUser> Query()
     {
-        throw new NotSupportedException();
+
+        throw new TimeoutException("PostgreSQL is unavailable.");
     }
 
     public Task<MonKadoUser?> GetByIdForUpdateAsync(
         Guid userId,
         CancellationToken cancellationToken)
     {
+
         throw new TimeoutException("PostgreSQL is unavailable.");
     }
 
@@ -22,6 +30,7 @@ public class UnavailableMonKadoUserRepository : IMonKadoUserRepository
         string normalizedEmail,
         CancellationToken cancellationToken)
     {
+
         throw new NotSupportedException();
     }
 
@@ -29,6 +38,7 @@ public class UnavailableMonKadoUserRepository : IMonKadoUserRepository
         string normalizedEmail,
         CancellationToken cancellationToken)
     {
+
         throw new TimeoutException("PostgreSQL is unavailable.");
     }
 
@@ -37,6 +47,7 @@ public class UnavailableMonKadoUserRepository : IMonKadoUserRepository
         int batchSize,
         CancellationToken cancellationToken)
     {
+
         throw new NotSupportedException();
     }
 }

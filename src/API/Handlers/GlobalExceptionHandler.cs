@@ -11,10 +11,12 @@ namespace JennGllg.Fr.MonKado.Back.Api.Handlers;
 /// </summary>
 /// <param name="logger">The logger.</param>
 /// <param name="refreshTokenCookieService">The refresh token cookie service.</param>
+/// <param name="googleExternalAuthenticationService">The protected Google external cookie service.</param>
 
 public class GlobalExceptionHandler(
     ILogger<GlobalExceptionHandler> logger,
-    IRefreshTokenCookieService refreshTokenCookieService) : IExceptionHandler
+    IRefreshTokenCookieService refreshTokenCookieService,
+    IGoogleExternalAuthenticationService googleExternalAuthenticationService) : IExceptionHandler
 {
     /// <summary>
     /// Executes the try handle async operation.
@@ -23,6 +25,7 @@ public class GlobalExceptionHandler(
     /// <param name="exception">The exception.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>A task that represents the asynchronous operation.</returns>
+    /// <exception cref="OperationCanceledException">The request is canceled.</exception>
     public async ValueTask<bool> TryHandleAsync(
         HttpContext httpContext,
         Exception exception,
@@ -48,6 +51,24 @@ public class GlobalExceptionHandler(
                 "The authentication session is invalid or expired.",
                 ErrorCodes.AccountAuthenticationSessionInvalid,
                 null),
+            GoogleAuthenticationFailedException => new ErrorResponse(
+                StatusCodes.Status401Unauthorized,
+                "Google authentication failed",
+                "The Google authentication flow is invalid or expired.",
+                ErrorCodes.GoogleAuthenticationFailed,
+                null),
+            GoogleAccountLinkFailedException => new ErrorResponse(
+                StatusCodes.Status401Unauthorized,
+                "Google account link failed",
+                "The Google account could not be linked.",
+                ErrorCodes.GoogleAccountLinkFailed,
+                null),
+            GoogleAccountLinkConflictException => new ErrorResponse(
+                StatusCodes.Status409Conflict,
+                "Google account link conflict",
+                "The Google account link conflicts with the current account state.",
+                ErrorCodes.GoogleAccountLinkConflict,
+                null),
             EmailConfirmationInvalidException => new ErrorResponse(
                 StatusCodes.Status400BadRequest,
                 "Email confirmation failed",
@@ -66,6 +87,14 @@ public class GlobalExceptionHandler(
                 "One or more fields are invalid.",
                 ErrorCodes.RequestValidationError,
                 validationException.ValidationErrors),
+            BadHttpRequestException badRequestException
+                when badRequestException.StatusCode == StatusCodes.Status413PayloadTooLarge =>
+                new ErrorResponse(
+                    StatusCodes.Status413PayloadTooLarge,
+                    "Payload too large",
+                    "The request body is too large.",
+                    ErrorCodes.RequestPayloadTooLarge,
+                    null),
             MemberProfileVersionConflictException => new ErrorResponse(
                 StatusCodes.Status412PreconditionFailed,
                 "Profile update conflict",
@@ -117,6 +146,11 @@ public class GlobalExceptionHandler(
         if (exception is InvalidAuthenticationSessionException)
             refreshTokenCookieService.Delete(httpContext);
 
+        if (exception is GoogleAuthenticationFailedException or GoogleAccountLinkConflictException)
+            await googleExternalAuthenticationService.DeleteAsync(
+                httpContext,
+                cancellationToken);
+
         httpContext.Response.StatusCode = response.StatusCode;
         httpContext.Response.Headers.CacheControl = "no-store";
         await httpContext.Response.WriteAsJsonAsync(
@@ -126,6 +160,11 @@ public class GlobalExceptionHandler(
         return true;
     }
 
+    /// <summary>
+    /// Logs the classified response without sensitive request data.
+    /// </summary>
+    /// <param name="response">The classified error response.</param>
+    /// <param name="exception">The handled exception.</param>
     private void LogException(
         ErrorResponse response,
         Exception exception)
@@ -156,7 +195,12 @@ public class GlobalExceptionHandler(
             response.ErrorCode);
     }
 
-    internal static string GetDependencyName(DependencyUnavailableException exception)
+    /// <summary>
+    /// Returns only the bounded exception type used to classify a dependency outage.
+    /// </summary>
+    /// <param name="exception">The dependency exception.</param>
+    /// <returns>The dependency exception type name.</returns>
+    private static string GetDependencyName(DependencyUnavailableException exception)
     {
 
         return exception.InnerException?.GetType().Name ?? exception.GetType().Name;

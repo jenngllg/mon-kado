@@ -29,6 +29,7 @@ public class RefreshTokenCookieService(IWebHostEnvironment environment)
     /// <returns>The refresh token when present.</returns>
     public string? GetValue(HttpRequest request)
     {
+
         return request.Cookies[GetCookieName()];
     }
 
@@ -41,17 +42,23 @@ public class RefreshTokenCookieService(IWebHostEnvironment environment)
         HttpContext context,
         AccountSessionTokens tokens)
     {
-        var options = CreateCookieOptions(
-            context.Request.IsHttps,
-            tokens.IsPersistent
-                ? new DateTimeOffset(
-                    tokens.RefreshTokenExpiresAt,
-                    TimeSpan.Zero)
-                : null);
-        context.Response.Cookies.Append(
-            GetCookieName(),
+        Append(
+            context,
             tokens.RefreshToken,
-            options);
+            tokens.RefreshTokenExpiresAt,
+            tokens.IsPersistent);
+    }
+
+    /// <inheritdoc />
+    public void Append(
+        HttpContext context,
+        AccountRefreshSession session)
+    {
+        Append(
+            context,
+            session.RefreshToken,
+            session.RefreshTokenExpiresAt,
+            session.IsPersistent);
     }
 
     /// <summary>
@@ -67,6 +74,12 @@ public class RefreshTokenCookieService(IWebHostEnvironment environment)
                 null));
     }
 
+    /// <summary>
+    /// Creates the shared hardened refresh cookie options.
+    /// </summary>
+    /// <param name="requestIsHttps">Whether the current request uses HTTPS.</param>
+    /// <param name="expires">The optional persistent expiration.</param>
+    /// <returns>The configured cookie options.</returns>
     [SuppressMessage(
         "Security",
         "S2092:Cookies should be sent over SSL/TLS",
@@ -75,6 +88,7 @@ public class RefreshTokenCookieService(IWebHostEnvironment environment)
         bool requestIsHttps,
         DateTimeOffset? expires)
     {
+
         return new CookieOptions
         {
             Expires = expires,
@@ -86,10 +100,41 @@ public class RefreshTokenCookieService(IWebHostEnvironment environment)
         };
     }
 
+    /// <summary>
+    /// Gets the environment-specific refresh cookie name.
+    /// </summary>
+    /// <returns>The refresh cookie name.</returns>
     private string GetCookieName()
     {
+
         return environment.IsProduction()
             ? ProductionCookieName
             : LocalCookieName;
+    }
+
+    /// <summary>
+    /// Appends refresh material with the shared hardened cookie policy.
+    /// </summary>
+    /// <param name="context">The HTTP context.</param>
+    /// <param name="refreshToken">The refresh token.</param>
+    /// <param name="refreshTokenExpiresAt">The refresh token expiration.</param>
+    /// <param name="isPersistent">Whether the browser cookie is persistent.</param>
+    private void Append(
+        HttpContext context,
+        string refreshToken,
+        DateTime refreshTokenExpiresAt,
+        bool isPersistent)
+    {
+        var options = CreateCookieOptions(
+            context.Request.IsHttps,
+            isPersistent
+                ? new DateTimeOffset(
+                    refreshTokenExpiresAt,
+                    TimeSpan.Zero)
+                : null);
+        context.Response.Cookies.Append(
+            GetCookieName(),
+            refreshToken,
+            options);
     }
 }
