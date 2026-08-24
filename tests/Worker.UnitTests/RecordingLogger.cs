@@ -9,10 +9,22 @@ public class RecordingLogger<TCategory> : ILogger<TCategory>
         get;
     } = [];
 
+    public List<IReadOnlyDictionary<string, object>> Scopes
+    {
+        get;
+    } = [];
+
     public IDisposable? BeginScope<TState>(TState state)
         where TState : notnull
     {
-        return null;
+        var properties = Assert.IsAssignableFrom<IEnumerable<KeyValuePair<string, object>>>(state)
+            .ToDictionary(
+                property => property.Key,
+                property => property.Value,
+                StringComparer.Ordinal);
+        Scopes.Add(properties);
+
+        return new RecordingLogScope();
     }
 
     public bool IsEnabled(LogLevel logLevel)

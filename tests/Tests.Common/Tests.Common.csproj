@@ -10,4 +10,8 @@
     <PackageReference Include="AutoFixture" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="../../src/Application/Application.csproj" />
+  </ItemGroup>
+
 </Project>

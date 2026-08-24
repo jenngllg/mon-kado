@@ -1,9 +1,11 @@
 using JennGllg.Fr.MonKado.Back.Application.Abstractions;
 using JennGllg.Fr.MonKado.Back.Worker.Logging;
+using JennGllg.Fr.MonKado.Back.Worker.Options;
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace JennGllg.Fr.MonKado.Back.Worker.Workers;
 
@@ -13,11 +15,10 @@ namespace JennGllg.Fr.MonKado.Back.Worker.Workers;
 public sealed class ExpiredMemberEmailChangeRequestCleanupWorker(
     IServiceScopeFactory scopeFactory,
     TimeProvider timeProvider,
+    IOptions<AuthenticationCleanupOptions> options,
     ILogger<ExpiredMemberEmailChangeRequestCleanupWorker> logger) : BackgroundService
 {
-    private const int BatchSize = 500;
-    private static readonly TimeSpan _normalInterval = TimeSpan.FromHours(24);
-    private static readonly TimeSpan _failureRetryInterval = TimeSpan.FromMinutes(15);
+    private readonly AuthenticationCleanupOptions _options = options.Value;
 
     /// <inheritdoc />
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -26,7 +27,13 @@ public sealed class ExpiredMemberEmailChangeRequestCleanupWorker(
         {
             try
             {
-                var nextDelay = await CleanupOnceAsync(stoppingToken);
+                TimeSpan nextDelay;
+                using (WorkerLogScope.Begin(
+                    logger,
+                    "ExpiredMemberEmailChangeRequestCleanup"))
+                {
+                    nextDelay = await CleanupOnceAsync(stoppingToken);
+                }
                 await Task.Delay(
                     nextDelay,
                     timeProvider,
@@ -52,7 +59,7 @@ public sealed class ExpiredMemberEmailChangeRequestCleanupWorker(
                     deletedCount);
             }
 
-            return _normalInterval;
+            return _options.Interval;
         }
         catch (OperationCanceledException)
         {
@@ -66,7 +73,7 @@ public sealed class ExpiredMemberEmailChangeRequestCleanupWorker(
                 exception.GetType().Name,
                 exception);
 
-            return _failureRetryInterval;
+            return _options.FailureRetryInterval;
         }
     }
 
@@ -82,11 +89,11 @@ public sealed class ExpiredMemberEmailChangeRequestCleanupWorker(
                 .GetRequiredService<IExpiredMemberEmailChangeRequestCleanup>();
             deletedInBatch = await cleanup.DeleteExpiredRequestsAsync(
                 timeProvider.GetUtcNow().UtcDateTime,
-                BatchSize,
+                _options.BatchSize,
                 cancellationToken);
             totalDeleted += deletedInBatch;
         }
-        while (deletedInBatch == BatchSize);
+        while (deletedInBatch == _options.BatchSize);
 
         return totalDeleted;
     }

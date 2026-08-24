@@ -2,6 +2,8 @@ using JennGllg.Fr.MonKado.Back.Application.Abstractions;
 using JennGllg.Fr.MonKado.Back.Application.Commands;
 using JennGllg.Fr.MonKado.Back.Application.Common.Exceptions;
 
+using Microsoft.Extensions.Logging.Abstractions;
+
 using Moq;
 
 namespace JennGllg.Fr.MonKado.Back.Application.UnitTests.Handlers;
@@ -14,7 +16,9 @@ public class ConfirmEmailCommandHandlerTests
     public ConfirmEmailCommandHandlerTests()
     {
         _confirmationServiceMock = new Mock<IEmailConfirmationService>(MockBehavior.Strict);
-        _handler = new ConfirmEmailCommandHandler(_confirmationServiceMock.Object);
+        _handler = new ConfirmEmailCommandHandler(
+            _confirmationServiceMock.Object,
+            NullLogger<ConfirmEmailCommandHandler>.Instance);
     }
 
     [Fact]
@@ -39,6 +43,7 @@ public class ConfirmEmailCommandHandlerTests
             command,
             cancellationToken);
 
+        // Assert
         _confirmationServiceMock.Verify(
             service => service.ConfirmAsync(
                 userId,
@@ -46,7 +51,6 @@ public class ConfirmEmailCommandHandlerTests
                 cancellationToken),
             Times.Once);
         _confirmationServiceMock.VerifyNoOtherCalls();
-        // Assert
     }
 
     [Fact]

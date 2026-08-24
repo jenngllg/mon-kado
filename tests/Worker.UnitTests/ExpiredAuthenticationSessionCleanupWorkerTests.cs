@@ -2,6 +2,7 @@ using JennGllg.Fr.MonKado.Back.Application.Abstractions;
 using JennGllg.Fr.MonKado.Back.Application.Commands;
 using JennGllg.Fr.MonKado.Back.Application.Models;
 using JennGllg.Fr.MonKado.Back.Application.Validators;
+using JennGllg.Fr.MonKado.Back.Worker.Options;
 using JennGllg.Fr.MonKado.Back.Worker.Workers;
 
 using Microsoft.Extensions.DependencyInjection;
@@ -175,6 +176,7 @@ public class ExpiredAuthenticationSessionCleanupWorkerTests
         return new(
             provider.GetRequiredService<IServiceScopeFactory>(),
             timeProvider ?? new FixedTimeProvider(_now),
+            Microsoft.Extensions.Options.Options.Create(new AuthenticationCleanupOptions()),
             logger ?? NullLogger<ExpiredAuthenticationSessionCleanupWorker>.Instance);
     }
 

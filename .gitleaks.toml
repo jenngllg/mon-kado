@@ -1,0 +1,10 @@
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Deterministic non-secret test vectors"
+regexTarget = "secret"
+regexes = [
+  '''AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA=''',
+  '''c2Vuc2l0aXZlLXJlc2V0LXRva2Vu'''
+]

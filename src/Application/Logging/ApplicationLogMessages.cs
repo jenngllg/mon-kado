@@ -256,4 +256,104 @@ public static partial class ApplicationLogMessages
     public static partial void GoogleSessionCreated(
         ILogger logger,
         Guid memberId);
+
+    /// <summary>
+    /// Logs the start of an account registration.
+    /// </summary>
+    /// <param name="logger">The logger.</param>
+    [LoggerMessage(
+        EventId = LogEventIds.AccountRegistrationStarted,
+        Level = LogLevel.Debug,
+        Message = "Registering an account.")]
+    public static partial void AccountRegistrationStarted(ILogger logger);
+
+    /// <summary>
+    /// Logs an accepted account registration.
+    /// </summary>
+    /// <param name="logger">The logger.</param>
+    [LoggerMessage(
+        EventId = LogEventIds.AccountRegistrationAccepted,
+        Level = LogLevel.Information,
+        Message = "Account registration accepted.")]
+    public static partial void AccountRegistrationAccepted(ILogger logger);
+
+    /// <summary>
+    /// Logs the start of an e-mail confirmation.
+    /// </summary>
+    /// <param name="logger">The logger.</param>
+    [LoggerMessage(
+        EventId = LogEventIds.EmailConfirmationStarted,
+        Level = LogLevel.Debug,
+        Message = "Confirming an account e-mail address.")]
+    public static partial void EmailConfirmationStarted(ILogger logger);
+
+    /// <summary>
+    /// Logs a completed e-mail confirmation.
+    /// </summary>
+    /// <param name="logger">The logger.</param>
+    [LoggerMessage(
+        EventId = LogEventIds.EmailConfirmationCompleted,
+        Level = LogLevel.Information,
+        Message = "Account e-mail address confirmed.")]
+    public static partial void EmailConfirmationCompleted(ILogger logger);
+
+    /// <summary>
+    /// Logs the start of an e-mail confirmation request.
+    /// </summary>
+    /// <param name="logger">The logger.</param>
+    [LoggerMessage(
+        EventId = LogEventIds.EmailConfirmationRequestStarted,
+        Level = LogLevel.Debug,
+        Message = "Requesting an account e-mail confirmation.")]
+    public static partial void EmailConfirmationRequestStarted(ILogger logger);
+
+    /// <summary>
+    /// Logs an accepted e-mail confirmation request.
+    /// </summary>
+    /// <param name="logger">The logger.</param>
+    [LoggerMessage(
+        EventId = LogEventIds.EmailConfirmationRequested,
+        Level = LogLevel.Information,
+        Message = "Account e-mail confirmation request accepted.")]
+    public static partial void EmailConfirmationRequested(ILogger logger);
+
+    /// <summary>
+    /// Logs the start of a password login.
+    /// </summary>
+    /// <param name="logger">The logger.</param>
+    [LoggerMessage(
+        EventId = LogEventIds.PasswordLoginStarted,
+        Level = LogLevel.Debug,
+        Message = "Authenticating an account with a password.")]
+    public static partial void PasswordLoginStarted(ILogger logger);
+
+    /// <summary>
+    /// Logs a successful password login.
+    /// </summary>
+    /// <param name="logger">The logger.</param>
+    [LoggerMessage(
+        EventId = LogEventIds.PasswordLoginCompleted,
+        Level = LogLevel.Information,
+        Message = "Password authentication completed.")]
+    public static partial void PasswordLoginCompleted(ILogger logger);
+
+    /// <summary>
+    /// Logs the start of a refresh-session rotation.
+    /// </summary>
+    /// <param name="logger">The logger.</param>
+    [LoggerMessage(
+        EventId = LogEventIds.RefreshSessionStarted,
+        Level = LogLevel.Debug,
+        Message = "Rotating an authentication refresh session.")]
+    public static partial void RefreshSessionStarted(ILogger logger);
+
+    /// <summary>
+    /// Logs a successful refresh-session rotation.
+    /// </summary>
+    /// <param name="logger">The logger.</param>
+    [LoggerMessage(
+        EventId = LogEventIds.RefreshSessionCompleted,
+        Level = LogLevel.Information,
+        Message = "Authentication refresh session rotated.")]
+    public static partial void RefreshSessionCompleted(ILogger logger);
 }

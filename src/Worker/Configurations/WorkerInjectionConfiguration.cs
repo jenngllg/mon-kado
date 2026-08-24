@@ -23,6 +23,7 @@ public static class WorkerInjectionConfiguration
         IConfiguration configuration,
         IHostEnvironment environment)
     {
+        services.ConfigureAuthenticationCleanup(configuration);
         services.ConfigureAuthenticationEmailDelivery(
             configuration,
             environment);

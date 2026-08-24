@@ -19,11 +19,17 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Migrati
                 nullable: true,
                 oldClrType: typeof(DateTimeOffset),
                 oldType: "timestamp with time zone");
+
+            migrationBuilder.Sql(
+                "ALTER TABLE public.users ALTER COLUMN updated_at DROP DEFAULT;");
         }
 
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
+            migrationBuilder.Sql(
+                "UPDATE public.users SET updated_at = created_at WHERE updated_at IS NULL;");
+
             migrationBuilder.AlterColumn<DateTimeOffset>(
                 name: "updated_at",
                 schema: "public",

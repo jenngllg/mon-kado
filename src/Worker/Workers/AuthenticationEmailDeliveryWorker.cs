@@ -1,4 +1,5 @@
 using JennGllg.Fr.MonKado.Back.Application.Abstractions;
+using JennGllg.Fr.MonKado.Back.Application.Models;
 using JennGllg.Fr.MonKado.Back.Worker.Logging;
 using JennGllg.Fr.MonKado.Back.Worker.Options;
 
@@ -18,11 +19,18 @@ public sealed class AuthenticationEmailDeliveryWorker(
     TimeProvider timeProvider,
     ILogger<AuthenticationEmailDeliveryWorker> logger) : BackgroundService
 {
-    private const int BatchSize = 20;
-    private static readonly TimeSpan _leaseDuration = TimeSpan.FromMinutes(2);
-    private static readonly TimeSpan _pollInterval = TimeSpan.FromSeconds(10);
-    private static readonly TimeSpan _failureInterval = TimeSpan.FromMinutes(1);
     private readonly AuthenticationEmailOptions _emailOptions = options.Value;
+    private readonly AuthenticationEmailDeliveryPolicy _deliveryPolicy = new(
+        options.Value.DeliveryBatchSize,
+        options.Value.DeliveryLeaseDuration,
+        options.Value.MaximumDeliveryAttempts,
+        options.Value.FirstRetryDelay,
+        options.Value.SecondRetryDelay,
+        options.Value.ThirdRetryDelay,
+        options.Value.FourthRetryDelay,
+        options.Value.SubsequentRetryDelay,
+        options.Value.SlowRetryDelay,
+        options.Value.MaximumRetryDelay);
 
     /// <inheritdoc />
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -30,6 +38,9 @@ public sealed class AuthenticationEmailDeliveryWorker(
 
         if (!_emailOptions.IsEnabled)
         {
+            using var logScope = WorkerLogScope.Begin(
+                logger,
+                "AuthenticationEmailDeliveryDisabled");
             WorkerLogMessages.AuthenticationEmailDeliveryDisabled(logger);
 
             return;
@@ -43,9 +54,15 @@ public sealed class AuthenticationEmailDeliveryWorker(
         {
             try
             {
-                var nextDelay = await DispatchOnceAsync(
-                    frontendOrigin,
-                    stoppingToken);
+                TimeSpan nextDelay;
+                using (WorkerLogScope.Begin(
+                    logger,
+                    "AuthenticationEmailDelivery"))
+                {
+                    nextDelay = await DispatchOnceAsync(
+                        frontendOrigin,
+                        stoppingToken);
+                }
                 await Task.Delay(
                     nextDelay,
                     timeProvider,
@@ -71,11 +88,10 @@ public sealed class AuthenticationEmailDeliveryWorker(
                 scope.ServiceProvider.GetRequiredService<IAuthenticationEmailDispatcher>();
             await dispatcher.DispatchPendingAsync(
                 frontendOrigin,
-                BatchSize,
-                _leaseDuration,
+                _deliveryPolicy,
                 cancellationToken);
 
-            nextDelay = _pollInterval;
+            nextDelay = _emailOptions.PollInterval;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -89,7 +105,7 @@ public sealed class AuthenticationEmailDeliveryWorker(
                 exception.GetType().Name,
                 exception);
 
-            nextDelay = _failureInterval;
+            nextDelay = _emailOptions.FailureRetryInterval;
         }
 
         return nextDelay;

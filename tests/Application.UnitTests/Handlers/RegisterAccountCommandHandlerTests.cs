@@ -1,6 +1,8 @@
 using JennGllg.Fr.MonKado.Back.Application.Abstractions;
 using JennGllg.Fr.MonKado.Back.Application.Commands;
 
+using Microsoft.Extensions.Logging.Abstractions;
+
 using Moq;
 
 namespace JennGllg.Fr.MonKado.Back.Application.UnitTests.Handlers;
@@ -13,7 +15,9 @@ public class RegisterAccountCommandHandlerTests
     public RegisterAccountCommandHandlerTests()
     {
         _registrationServiceMock = new Mock<IAccountRegistrationService>(MockBehavior.Strict);
-        _handler = new RegisterAccountCommandHandler(_registrationServiceMock.Object);
+        _handler = new RegisterAccountCommandHandler(
+            _registrationServiceMock.Object,
+            NullLogger<RegisterAccountCommandHandler>.Instance);
     }
 
     [Fact]
@@ -39,6 +43,7 @@ public class RegisterAccountCommandHandlerTests
             command,
             cancellationToken);
 
+        // Assert
         _registrationServiceMock.Verify(
             service => service.RegisterAsync(
                 "Lea@example.fr",
@@ -47,6 +52,5 @@ public class RegisterAccountCommandHandlerTests
                 cancellationToken),
             Times.Once);
         _registrationServiceMock.VerifyNoOtherCalls();
-        // Assert
     }
 }

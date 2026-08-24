@@ -1,4 +1,5 @@
 using JennGllg.Fr.MonKado.Back.Application.Abstractions;
+using JennGllg.Fr.MonKado.Back.Worker.Options;
 using JennGllg.Fr.MonKado.Back.Worker.Workers;
 
 using Microsoft.Extensions.DependencyInjection;
@@ -176,6 +177,7 @@ public class ExpiredMemberEmailChangeRequestCleanupWorkerTests
         return new ExpiredMemberEmailChangeRequestCleanupWorker(
             provider.GetRequiredService<IServiceScopeFactory>(),
             timeProvider ?? new FixedTimeProvider(_now),
+            Microsoft.Extensions.Options.Options.Create(new AuthenticationCleanupOptions()),
             logger ?? NullLogger<ExpiredMemberEmailChangeRequestCleanupWorker>.Instance);
     }
 

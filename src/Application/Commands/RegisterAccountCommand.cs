@@ -1,6 +1,9 @@
 using JennGllg.Fr.MonKado.Back.Application.Abstractions;
+using JennGllg.Fr.MonKado.Back.Application.Logging;
 
 using MediatR;
+
+using Microsoft.Extensions.Logging;
 
 namespace JennGllg.Fr.MonKado.Back.Application.Commands;
 
@@ -35,7 +38,10 @@ public class RegisterAccountCommand(
 /// Handles account registration commands.
 /// </summary>
 /// <param name="registrationService">The account registration service.</param>
-public class RegisterAccountCommandHandler(IAccountRegistrationService registrationService)
+/// <param name="logger">The logger.</param>
+public class RegisterAccountCommandHandler(
+    IAccountRegistrationService registrationService,
+    ILogger<RegisterAccountCommandHandler> logger)
     : IRequestHandler<RegisterAccountCommand>
 {
     /// <summary>
@@ -48,10 +54,12 @@ public class RegisterAccountCommandHandler(IAccountRegistrationService registrat
         RegisterAccountCommand request,
         CancellationToken cancellationToken)
     {
+        ApplicationLogMessages.AccountRegistrationStarted(logger);
         await registrationService.RegisterAsync(
             request.Email!.Trim(),
             request.Password!,
             request.DisplayName!.Trim(),
             cancellationToken);
+        ApplicationLogMessages.AccountRegistrationAccepted(logger);
     }
 }

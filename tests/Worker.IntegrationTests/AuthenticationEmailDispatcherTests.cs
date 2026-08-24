@@ -11,6 +11,7 @@ using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Entities;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Models;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Options;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Services;
+using JennGllg.Fr.MonKado.Back.Tests.Common;
 
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -112,6 +113,53 @@ public class AuthenticationEmailDispatcherTests(PostgreSqlWorkerFixture fixture)
             message.LastError);
         Assert.Null(message.LockedUntil);
         Assert.Null(message.ProcessedAt);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_WhenMaximumAttemptsIsReached_ClosesMessageWithoutRetrying()
+    {
+        // Arrange
+        var sender = new FakeEmailSender(fail: true);
+        var now = new DateTimeOffset(
+            2026,
+            8,
+            13,
+            12,
+            0,
+            0,
+            TimeSpan.Zero);
+        await using var provider = await CreateProviderAsync(
+            sender,
+            now);
+        await CreateUnconfirmedAccountAsync(
+            provider,
+            now);
+        var policy = AuthenticationEmailTestPolicy.CreateTerminalFailure();
+
+        // Act
+        await DispatchAsync(
+            provider,
+            policy);
+        await DispatchAsync(
+            provider,
+            policy);
+
+        // Assert
+        await using var scope = provider.CreateAsyncScope();
+        var message = await scope.ServiceProvider
+            .GetRequiredService<MonKadoDbContext>()
+            .AuthenticationEmailOutboxMessages.SingleAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(
+            1,
+            message.AttemptCount);
+        Assert.Equal(
+            now.UtcDateTime,
+            message.ProcessedAt);
+        Assert.Equal(
+            "TRANSIENT",
+            message.LastError);
+        Assert.Null(message.LockedUntil);
+        Assert.Null(message.ProviderMessageId);
     }
 
     [Fact]
@@ -1321,15 +1369,24 @@ public class AuthenticationEmailDispatcherTests(PostgreSqlWorkerFixture fixture)
         return message.Id;
     }
 
-    private static async Task DispatchAsync(ServiceProvider provider)
+    private static Task DispatchAsync(ServiceProvider provider)
+    {
+
+        return DispatchAsync(
+            provider,
+            AuthenticationEmailTestPolicy.CreateDefault());
+    }
+
+    private static async Task DispatchAsync(
+        ServiceProvider provider,
+        AuthenticationEmailDeliveryPolicy policy)
     {
         await using var scope = provider.CreateAsyncScope();
         var dispatcher =
             scope.ServiceProvider.GetRequiredService<IAuthenticationEmailDispatcher>();
         await dispatcher.DispatchPendingAsync(
             new Uri("https://mon-kado.fr"),
-            20,
-            TimeSpan.FromMinutes(2),
+            policy,
             TestContext.Current.CancellationToken);
     }
 
@@ -1341,8 +1398,7 @@ public class AuthenticationEmailDispatcherTests(PostgreSqlWorkerFixture fixture)
 
         return await dispatcher.DispatchPendingAsync(
             new Uri("https://mon-kado.fr"),
-            1,
-            TimeSpan.FromMinutes(2),
+            AuthenticationEmailTestPolicy.CreateSingleMessage(),
             TestContext.Current.CancellationToken);
     }
 

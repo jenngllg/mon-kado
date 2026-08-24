@@ -178,6 +178,46 @@ public static class LogEventIds
     /// Identifies a processed authentication email cleanup failure.
     /// </summary>
     public const int ProcessedAuthenticationEmailCleanupFailed = 1091;
+    /// <summary>
+    /// Identifies the start of an account registration.
+    /// </summary>
+    public const int AccountRegistrationStarted = 1100;
+    /// <summary>
+    /// Identifies an accepted account registration.
+    /// </summary>
+    public const int AccountRegistrationAccepted = 1101;
+    /// <summary>
+    /// Identifies the start of an e-mail confirmation.
+    /// </summary>
+    public const int EmailConfirmationStarted = 1102;
+    /// <summary>
+    /// Identifies a completed e-mail confirmation.
+    /// </summary>
+    public const int EmailConfirmationCompleted = 1103;
+    /// <summary>
+    /// Identifies the start of an e-mail confirmation request.
+    /// </summary>
+    public const int EmailConfirmationRequestStarted = 1104;
+    /// <summary>
+    /// Identifies an accepted e-mail confirmation request.
+    /// </summary>
+    public const int EmailConfirmationRequested = 1105;
+    /// <summary>
+    /// Identifies the start of a password login.
+    /// </summary>
+    public const int PasswordLoginStarted = 1106;
+    /// <summary>
+    /// Identifies a successful password login.
+    /// </summary>
+    public const int PasswordLoginCompleted = 1107;
+    /// <summary>
+    /// Identifies the start of a refresh-session rotation.
+    /// </summary>
+    public const int RefreshSessionStarted = 1108;
+    /// <summary>
+    /// Identifies a successful refresh-session rotation.
+    /// </summary>
+    public const int RefreshSessionCompleted = 1109;
     #endregion
 
     #region Technical

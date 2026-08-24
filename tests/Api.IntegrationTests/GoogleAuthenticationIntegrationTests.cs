@@ -8,6 +8,7 @@ using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Contexts;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Entities;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Options;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Services;
+using JennGllg.Fr.MonKado.Back.Tests.Common;
 
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -1676,8 +1677,7 @@ public class GoogleAuthenticationIntegrationTests(PostgreSqlContainerFixture fix
         // Act
         var dispatchTask = dispatcher.DispatchPendingAsync(
             new Uri("https://frontend.example"),
-            10,
-            TimeSpan.FromMinutes(1),
+            AuthenticationEmailTestPolicy.CreateGoogleConcurrency(),
             TestContext.Current.CancellationToken);
         var requestReadTask = coordinator.WaitUntilRequestReadAsync(
             TestContext.Current.CancellationToken);
