@@ -31,7 +31,7 @@
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.9.0" />
     <PackageVersion Include="Moq" Version="4.20.72" />
     <!-- ASP.NET Core 10.0.11 requires Microsoft.OpenApi >= 2.7.5 and < 3.0.0. -->
-    <PackageVersion Include="Microsoft.OpenApi" Version="2.12.0" />
+    <PackageVersion Include="Microsoft.OpenApi" Version="2.12.2" />
     <PackageVersion Include="MimeKit" Version="4.17.0" />
     <PackageVersion Include="Npgsql" Version="10.0.3" />
     <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
