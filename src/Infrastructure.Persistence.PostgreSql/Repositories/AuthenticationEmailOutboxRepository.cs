@@ -21,6 +21,31 @@ public class AuthenticationEmailOutboxRepository(MonKadoDbContext context)
     }
 
     /// <inheritdoc />
+    public Task<int> DeleteProcessedAsync(
+        DateTime cutoff,
+        int batchSize,
+        CancellationToken cancellationToken)
+    {
+
+        return context.Database.ExecuteSqlInterpolatedAsync(
+            $"""
+            WITH candidates AS (
+                SELECT id
+                FROM public.authentication_email_outbox
+                WHERE processed_at IS NOT NULL
+                  AND processed_at <= {cutoff}
+                ORDER BY processed_at, id
+                LIMIT {batchSize}
+                FOR UPDATE SKIP LOCKED
+            )
+            DELETE FROM public.authentication_email_outbox AS message
+            USING candidates
+            WHERE message.id = candidates.id
+            """,
+            cancellationToken);
+    }
+
+    /// <inheritdoc />
     public Task<AuthenticationEmailOutboxMessage?> GetNextForUpdateAsync(
         DateTime now,
         CancellationToken cancellationToken)

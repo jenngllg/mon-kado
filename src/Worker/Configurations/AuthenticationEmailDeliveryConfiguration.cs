@@ -60,6 +60,13 @@ public static class AuthenticationEmailDeliveryConfiguration
         AuthenticationEmailOptions options,
         IHostEnvironment environment)
     {
+        if (options.ProcessedRetentionDays is < 1 or > 365)
+        {
+
+            throw new InvalidOperationException(
+                "'AuthenticationEmail:ProcessedRetentionDays' must be between 1 and 365.");
+        }
+
         var knownProvider = options.Provider.Equals(
             AuthenticationEmailOptions.DisabledProvider,
             StringComparison.Ordinal) ||

@@ -378,6 +378,11 @@ then every 6 hours. A longer Gmail `Retry-After` value is honored up to 24 hours
 duplicate is possible if Gmail accepts a message but its response or the database update is lost. The deterministic
 RFC `Message-ID` improves traceability but does not guarantee recipient-side deduplication.
 
+Processed authentication-email outbox metadata becomes eligible for deletion after 30 days by default and is then
+removed by the daily cleanup in bounded batches. The retention threshold is configurable from 1 through 365 days.
+Pending delivery and retry messages are never removed by this cleanup. Email-change messages may disappear earlier
+when their parent request is deleted after its own retention period.
+
 Local Compose disables delivery by default and leaves outbox messages untouched. To exercise Gmail explicitly,
 remove that override and provide the configuration through user secrets or an uncommitted environment file. Never
 use real OAuth credentials in automated tests.
@@ -416,6 +421,7 @@ Local defaults allow `http://localhost:5173` and the `localhost` API host. Produ
 | Google Web client secret | `GOOGLE_AUTHENTICATION_CLIENT_SECRET` | Secret value |
 | Google backchannel timeout | `GOOGLE_AUTHENTICATION_BACKCHANNEL_TIMEOUT_SECONDS` | `15` seconds (allowed: `1` through `60`) |
 | Authentication e-mail provider | `AUTHENTICATION_EMAIL_PROVIDER` | `Gmail` |
+| Processed authentication e-mail retention | `AUTHENTICATION_EMAIL_PROCESSED_RETENTION_DAYS` | `30` days (allowed: `1` through `365`) |
 | Gmail sender | `GMAIL_SENDER_ADDRESS` | `monkado.app@gmail.com` |
 | Gmail OAuth client ID | `GMAIL_CLIENT_ID` | Secret value |
 | Gmail OAuth client secret | `GMAIL_CLIENT_SECRET` | Secret value |
@@ -532,6 +538,7 @@ GOOGLE_AUTHENTICATION_CLIENT_SECRET=<google-web-client-secret>
 GOOGLE_AUTHENTICATION_BACKCHANNEL_TIMEOUT_SECONDS=15
 IMAGE_TAG=local
 AUTHENTICATION_EMAIL_PROVIDER=Gmail
+AUTHENTICATION_EMAIL_PROCESSED_RETENTION_DAYS=30
 GMAIL_SENDER_ADDRESS=monkado.app@gmail.com
 GMAIL_CLIENT_ID=<oauth-client-id>
 GMAIL_CLIENT_SECRET=<oauth-client-secret>

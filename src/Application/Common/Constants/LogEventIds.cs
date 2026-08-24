@@ -170,6 +170,14 @@ public static class LogEventIds
     /// Identifies unavailable Google OpenID Connect discovery or signing keys.
     /// </summary>
     public const int GoogleAuthenticationProviderUnavailable = 1089;
+    /// <summary>
+    /// Identifies deleted processed authentication emails.
+    /// </summary>
+    public const int ProcessedAuthenticationEmailsDeleted = 1090;
+    /// <summary>
+    /// Identifies a processed authentication email cleanup failure.
+    /// </summary>
+    public const int ProcessedAuthenticationEmailCleanupFailed = 1091;
     #endregion
 
     #region Technical

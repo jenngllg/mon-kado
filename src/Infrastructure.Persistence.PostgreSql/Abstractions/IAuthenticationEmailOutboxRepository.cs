@@ -15,6 +15,18 @@ public interface IAuthenticationEmailOutboxRepository
     void Add(AuthenticationEmailOutboxMessage message);
 
     /// <summary>
+    /// Deletes a bounded batch of processed messages up to an inclusive cutoff.
+    /// </summary>
+    /// <param name="cutoff">The inclusive UTC processing cutoff.</param>
+    /// <param name="batchSize">The maximum number of messages to delete.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The number of deleted messages.</returns>
+    Task<int> DeleteProcessedAsync(
+        DateTime cutoff,
+        int batchSize,
+        CancellationToken cancellationToken);
+
+    /// <summary>
     /// Gets and locks the next deliverable outbox message.
     /// </summary>
     /// <param name="now">The current UTC date and time.</param>

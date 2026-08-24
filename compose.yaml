@@ -108,6 +108,7 @@ services:
       DOTNET_ENVIRONMENT: Production
       AuthenticationEmail__Provider: ${AUTHENTICATION_EMAIL_PROVIDER:-Gmail}
       AuthenticationEmail__FrontendOrigin: ${FRONTEND_ORIGIN:?Set FRONTEND_ORIGIN in .env}
+      AuthenticationEmail__ProcessedRetentionDays: ${AUTHENTICATION_EMAIL_PROCESSED_RETENTION_DAYS:-30}
       Gmail__SenderAddress: ${GMAIL_SENDER_ADDRESS:-}
       Gmail__ClientId: ${GMAIL_CLIENT_ID:-}
       Gmail__ClientSecret: ${GMAIL_CLIENT_SECRET:-}

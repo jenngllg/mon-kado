@@ -114,6 +114,7 @@ public static class InfrastructureInjectionConfiguration
         services.AddScoped<IMemberPasswordService, MemberPasswordService>();
         services.AddScoped<IPasswordResetService, PasswordResetService>();
         services.AddScoped<IExpiredAuthenticationSessionCleanup, ExpiredAuthenticationSessionCleanup>();
+        services.AddScoped<IProcessedAuthenticationEmailCleanup, ProcessedAuthenticationEmailCleanup>();
         services.AddScoped<
             IExpiredMemberEmailChangeRequestCleanup,
             ExpiredMemberEmailChangeRequestCleanup>();
