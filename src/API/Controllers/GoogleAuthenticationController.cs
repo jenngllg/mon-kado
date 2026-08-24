@@ -97,6 +97,8 @@ public class GoogleAuthenticationController(
     [ProducesResponseType(StatusCodes.Status302Found)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status429TooManyRequests, "application/json")]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status413PayloadTooLarge, "application/json")]
+    // The OIDC middleware validates one-time state, nonce, correlation and PKCE before this fallback can run.
+    // codeql[cs/web/missing-token-validation]
     public IActionResult Callback([FromForm] GoogleOpenIdConnectCallbackRequest? request)
     {
         _ = request;
@@ -121,6 +123,8 @@ public class GoogleAuthenticationController(
         CancellationToken cancellationToken)
     {
 
+        // An insecure or disabled request is rejected before the protected external ticket is read or mutated.
+        // codeql[cs/user-controlled-bypass]
         if (!_options.Enabled || !Request.IsHttps)
             return RedirectFlowMismatch("DisabledOrInsecureRequest");
 
