@@ -187,6 +187,330 @@ public class LoginIntegrationTests(PostgreSqlContainerFixture fixture)
     }
 
     [Fact]
+    public async Task LoginAsync_WhenCommitAcknowledgementIsLost_ReturnsOriginalRefreshSecretOnce()
+    {
+        // Arrange
+        var interceptor = new AmbiguousCommitInterceptor();
+        await using var factory = await CreateMigratedFactoryAsync(
+            new FixedTimeProvider(_now),
+            services =>
+            {
+                services.AddSingleton(interceptor);
+                services.AddDbContextPool<MonKadoDbContext>((
+                    _,
+                    options) => options.AddInterceptors(interceptor));
+            });
+        var user = await CreateUserAsync(
+            factory,
+            "ambiguous-login@example.fr",
+            emailConfirmed: true);
+        interceptor.Arm();
+
+        // Act
+        var result = await LoginInNewScopeAsync(
+            factory,
+            "ambiguous-login@example.fr",
+            Password);
+
+        // Assert
+        Assert.Equal(
+            AccountLoginResult.Success,
+            result.Result);
+        Assert.NotNull(result.Tokens);
+        await using var scope = factory.Services.CreateAsyncScope();
+        var context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
+        var session = await context.AuthenticationSessions
+            .AsNoTracking()
+            .SingleAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(
+            user.Id,
+            session.UserId);
+        Assert.Null(session.RevokedAt);
+        Assert.Equal(
+            SHA256.HashData(Encoding.UTF8.GetBytes(result.Tokens.RefreshToken)),
+            session.RefreshTokenHash);
+    }
+
+    [Fact]
+    public async Task LoginAsync_WhenInvalidPasswordCommitAcknowledgementIsLost_IncrementsFailureOnlyOnce()
+    {
+        // Arrange
+        var interceptor = new AmbiguousCommitInterceptor();
+        await using var factory = await CreateMigratedFactoryAsync(
+            new FixedTimeProvider(_now),
+            services =>
+            {
+                services.AddSingleton(interceptor);
+                services.AddDbContextPool<MonKadoDbContext>((
+                    _,
+                    options) => options.AddInterceptors(interceptor));
+            });
+        await CreateUserAsync(
+            factory,
+            "ambiguous-failure@example.fr",
+            emailConfirmed: true);
+        interceptor.Arm();
+
+        // Act
+        var result = await LoginInNewScopeAsync(
+            factory,
+            "ambiguous-failure@example.fr",
+            "wrong password");
+
+        // Assert
+        Assert.Equal(
+            AccountLoginResult.InvalidCredentials,
+            result.Result);
+        Assert.Null(result.Tokens);
+        await using var scope = factory.Services.CreateAsyncScope();
+        var context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
+        var user = await context.Users
+            .AsNoTracking()
+            .SingleAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(
+            1,
+            user.AccessFailedCount);
+        Assert.Null(user.LockoutEnd);
+        Assert.Empty(await context.AuthenticationSessions
+            .AsNoTracking()
+            .ToArrayAsync(TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task LoginAsync_WhenConcurrentInvalidPasswordCommitsBeforeAmbiguousResult_DoesNotReplayFirstFailure()
+    {
+        // Arrange
+        var interceptor = new CoordinatedAmbiguousCommitInterceptor();
+        await using var factory = await CreateMigratedFactoryAsync(
+            new FixedTimeProvider(_now),
+            services =>
+            {
+                services.AddSingleton(interceptor);
+                services.AddDbContextPool<MonKadoDbContext>((
+                    _,
+                    options) => options.AddInterceptors(interceptor));
+            });
+        await CreateUserAsync(
+            factory,
+            "concurrent-failure@example.fr",
+            emailConfirmed: true);
+        interceptor.Arm();
+        var ambiguousAttempt = LoginInNewScopeAsync(
+            factory,
+            "concurrent-failure@example.fr",
+            "first wrong password");
+        await interceptor.WaitForFirstCommitAsync(
+            TestContext.Current.CancellationToken);
+
+        // Act
+        var concurrentResult = await LoginInNewScopeAsync(
+            factory,
+            "concurrent-failure@example.fr",
+            "second wrong password");
+        interceptor.ReleaseFailure();
+        var ambiguousResult = await ambiguousAttempt;
+
+        // Assert
+        Assert.Equal(
+            AccountLoginResult.InvalidCredentials,
+            concurrentResult.Result);
+        Assert.Equal(
+            AccountLoginResult.InvalidCredentials,
+            ambiguousResult.Result);
+        await using var scope = factory.Services.CreateAsyncScope();
+        var context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
+        var user = await context.Users
+            .AsNoTracking()
+            .SingleAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(
+            2,
+            user.AccessFailedCount);
+        Assert.Null(user.LockoutEnd);
+        Assert.Empty(await context.AuthenticationSessions
+            .AsNoTracking()
+            .ToArrayAsync(TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task LoginAsync_WhenCommittedSessionIsRevokedBeforeVerification_CreatesUsableReplacementSession()
+    {
+        // Arrange
+        var interceptor = new CoordinatedAmbiguousCommitInterceptor();
+        await using var factory = await CreateMigratedFactoryAsync(
+            new FixedTimeProvider(_now),
+            services =>
+            {
+                services.AddSingleton(interceptor);
+                services.AddDbContextPool<MonKadoDbContext>((
+                    _,
+                    options) => options.AddInterceptors(interceptor));
+            });
+        await CreateUserAsync(
+            factory,
+            "revoked-ambiguous-login@example.fr",
+            emailConfirmed: true);
+        interceptor.Arm();
+        var ambiguousAttempt = LoginInNewScopeAsync(
+            factory,
+            "revoked-ambiguous-login@example.fr",
+            Password);
+        await interceptor.WaitForFirstCommitAsync(
+            TestContext.Current.CancellationToken);
+
+        await using (var revocationScope = factory.Services.CreateAsyncScope())
+        {
+            var context = revocationScope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
+            var session = await context.AuthenticationSessions
+                .SingleAsync(TestContext.Current.CancellationToken);
+            session.Revoke(_now.UtcDateTime);
+            await context.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        // Act
+        interceptor.ReleaseFailure();
+        var result = await ambiguousAttempt;
+
+        // Assert
+        Assert.Equal(
+            AccountLoginResult.Success,
+            result.Result);
+        Assert.NotNull(result.Tokens);
+        await using var scope = factory.Services.CreateAsyncScope();
+        var verificationContext = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
+        var sessions = await verificationContext.AuthenticationSessions
+            .AsNoTracking()
+            .OrderBy(session => session.CreatedAt)
+            .ToArrayAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(
+            2,
+            sessions.Length);
+        Assert.Single(
+            sessions,
+            session => session.RevokedAt is not null);
+        var activeSession = Assert.Single(
+            sessions,
+            session => session.RevokedAt is null);
+        Assert.Equal(
+            SHA256.HashData(Encoding.UTF8.GetBytes(result.Tokens.RefreshToken)),
+            activeSession.RefreshTokenHash);
+    }
+
+    [Fact]
+    public async Task LoginAsync_WhenCommittedSessionIsDeletedBeforeVerification_CreatesUsableSession()
+    {
+        // Arrange
+        var interceptor = new CoordinatedAmbiguousCommitInterceptor();
+        await using var factory = await CreateMigratedFactoryAsync(
+            new FixedTimeProvider(_now),
+            services =>
+            {
+                services.AddSingleton(interceptor);
+                services.AddDbContextPool<MonKadoDbContext>((
+                    _,
+                    options) => options.AddInterceptors(interceptor));
+            });
+        await CreateUserAsync(
+            factory,
+            "deleted-ambiguous-login@example.fr",
+            emailConfirmed: true);
+        interceptor.Arm();
+        var ambiguousAttempt = LoginInNewScopeAsync(
+            factory,
+            "deleted-ambiguous-login@example.fr",
+            Password);
+        await interceptor.WaitForFirstCommitAsync(
+            TestContext.Current.CancellationToken);
+
+        await using (var deletionScope = factory.Services.CreateAsyncScope())
+        {
+            var context = deletionScope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
+            await context.AuthenticationSessions
+                .ExecuteDeleteAsync(TestContext.Current.CancellationToken);
+        }
+
+        // Act
+        interceptor.ReleaseFailure();
+        var result = await ambiguousAttempt;
+
+        // Assert
+        Assert.Equal(
+            AccountLoginResult.Success,
+            result.Result);
+        Assert.NotNull(result.Tokens);
+        await using var scope = factory.Services.CreateAsyncScope();
+        var verificationContext = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
+        var session = await verificationContext.AuthenticationSessions
+            .AsNoTracking()
+            .SingleAsync(TestContext.Current.CancellationToken);
+        Assert.Null(session.RevokedAt);
+        Assert.Equal(
+            SHA256.HashData(Encoding.UTF8.GetBytes(result.Tokens.RefreshToken)),
+            session.RefreshTokenHash);
+    }
+
+    [Fact]
+    public async Task LoginAsync_WhenCommittedSessionHashChangesBeforeVerification_CreatesUsableReplacementSession()
+    {
+        // Arrange
+        var interceptor = new CoordinatedAmbiguousCommitInterceptor();
+        await using var factory = await CreateMigratedFactoryAsync(
+            new FixedTimeProvider(_now),
+            services =>
+            {
+                services.AddSingleton(interceptor);
+                services.AddDbContextPool<MonKadoDbContext>((
+                    _,
+                    options) => options.AddInterceptors(interceptor));
+            });
+        await CreateUserAsync(
+            factory,
+            "changed-ambiguous-login@example.fr",
+            emailConfirmed: true);
+        interceptor.Arm();
+        var ambiguousAttempt = LoginInNewScopeAsync(
+            factory,
+            "changed-ambiguous-login@example.fr",
+            Password);
+        await interceptor.WaitForFirstCommitAsync(
+            TestContext.Current.CancellationToken);
+
+        await using (var rotationScope = factory.Services.CreateAsyncScope())
+        {
+            var context = rotationScope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
+            var session = await context.AuthenticationSessions
+                .SingleAsync(TestContext.Current.CancellationToken);
+            var concurrentToken = new RefreshTokenService().Create(session.Id);
+            session.Rotate(
+                concurrentToken.Hash,
+                _now.UtcDateTime,
+                session.ExpiresAt);
+            await context.SaveChangesAsync(TestContext.Current.CancellationToken);
+        }
+
+        // Act
+        interceptor.ReleaseFailure();
+        var result = await ambiguousAttempt;
+
+        // Assert
+        Assert.Equal(
+            AccountLoginResult.Success,
+            result.Result);
+        Assert.NotNull(result.Tokens);
+        await using var scope = factory.Services.CreateAsyncScope();
+        var verificationContext = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
+        var sessions = await verificationContext.AuthenticationSessions
+            .AsNoTracking()
+            .ToArrayAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(
+            2,
+            sessions.Length);
+        Assert.Single(
+            sessions,
+            session => SHA256.HashData(Encoding.UTF8.GetBytes(result.Tokens.RefreshToken))
+                .SequenceEqual(session.RefreshTokenHash));
+    }
+
+    [Fact]
     public async Task RefreshAsync_WhenAccessTokenCreationFails_PreservesCurrentSessionToken()
     {
         // Arrange
@@ -246,6 +570,287 @@ public class LoginIntegrationTests(PostgreSqlContainerFixture fixture)
             session.ExpiresAt,
             TimeSpan.FromMilliseconds(1));
         Assert.Null(session.RevokedAt);
+    }
+
+    [Fact]
+    public async Task RefreshAsync_WhenCommitAcknowledgementIsLost_ReturnsOriginalRefreshSecret()
+    {
+        // Arrange
+        var interceptor = new AmbiguousCommitInterceptor();
+        await using var factory = await CreateMigratedFactoryAsync(
+            new FixedTimeProvider(_now),
+            services =>
+            {
+                services.AddSingleton(interceptor);
+                services.AddDbContextPool<MonKadoDbContext>((
+                    _,
+                    options) => options.AddInterceptors(interceptor));
+            });
+        await CreateUserAsync(
+            factory,
+            "ambiguous-refresh@example.fr",
+            emailConfirmed: true);
+        var loginResult = await LoginInNewScopeAsync(
+            factory,
+            "ambiguous-refresh@example.fr",
+            Password);
+        Assert.NotNull(loginResult.Tokens);
+        interceptor.Arm();
+
+        // Act
+        var result = await RefreshInNewScopeAsync(
+            factory,
+            loginResult.Tokens.RefreshToken);
+
+        // Assert
+        Assert.NotNull(result);
+        await using var scope = factory.Services.CreateAsyncScope();
+        var context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
+        var session = await context.AuthenticationSessions
+            .AsNoTracking()
+            .SingleAsync(TestContext.Current.CancellationToken);
+        Assert.Null(session.RevokedAt);
+        Assert.Equal(
+            SHA256.HashData(Encoding.UTF8.GetBytes(result.RefreshToken)),
+            session.RefreshTokenHash);
+    }
+
+    [Fact]
+    public async Task RefreshAsync_WhenCommittedRotationIsConcurrentlyRevoked_ReturnsInvalidSession()
+    {
+        // Arrange
+        var interceptor = new CoordinatedAmbiguousCommitInterceptor();
+        await using var factory = await CreateMigratedFactoryAsync(
+            new FixedTimeProvider(_now),
+            services =>
+            {
+                services.AddSingleton(interceptor);
+                services.AddDbContextPool<MonKadoDbContext>((
+                    _,
+                    options) => options.AddInterceptors(interceptor));
+            });
+        await CreateUserAsync(
+            factory,
+            "concurrent-refresh@example.fr",
+            emailConfirmed: true);
+        var loginResult = await LoginInNewScopeAsync(
+            factory,
+            "concurrent-refresh@example.fr",
+            Password);
+        Assert.NotNull(loginResult.Tokens);
+        var originalRefreshToken = loginResult.Tokens.RefreshToken;
+        interceptor.Arm();
+        var ambiguousAttempt = RefreshInNewScopeAsync(
+            factory,
+            originalRefreshToken);
+        await interceptor.WaitForFirstCommitAsync(
+            TestContext.Current.CancellationToken);
+
+        // Act
+        var concurrentResult = await RefreshInNewScopeAsync(
+            factory,
+            originalRefreshToken);
+        interceptor.ReleaseFailure();
+        var ambiguousResult = await ambiguousAttempt;
+
+        // Assert
+        Assert.Null(concurrentResult);
+        Assert.Null(ambiguousResult);
+        await using var scope = factory.Services.CreateAsyncScope();
+        var context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
+        var session = await context.AuthenticationSessions
+            .AsNoTracking()
+            .SingleAsync(TestContext.Current.CancellationToken);
+        Assert.NotNull(session.RevokedAt);
+    }
+
+    [Fact]
+    public async Task RefreshAsync_WhenRolledBackAttemptObservesConcurrentWinner_DoesNotReturnLosingRefreshSecret()
+    {
+        // Arrange
+        var interceptor = new ConcurrentWinnerCommitInterceptor();
+        await using var factory = await CreateMigratedFactoryAsync(
+            new FixedTimeProvider(_now),
+            services =>
+            {
+                services.AddSingleton(interceptor);
+                services.AddDbContextPool<MonKadoDbContext>((
+                    _,
+                    options) => options.AddInterceptors(interceptor));
+            });
+        await CreateUserAsync(
+            factory,
+            "winner-refresh@example.fr",
+            emailConfirmed: true);
+        var loginResult = await LoginInNewScopeAsync(
+            factory,
+            "winner-refresh@example.fr",
+            Password);
+        Assert.NotNull(loginResult.Tokens);
+        var originalRefreshToken = loginResult.Tokens.RefreshToken;
+        interceptor.Arm();
+        var losingAttempt = RefreshInNewScopeAsync(
+            factory,
+            originalRefreshToken);
+        await interceptor.WaitForFirstCommitAttemptAsync(
+            TestContext.Current.CancellationToken);
+
+        // Act
+        var winnerResult = await RefreshInNewScopeAsync(
+            factory,
+            originalRefreshToken);
+        interceptor.ReleaseVerification();
+        var losingResult = await losingAttempt;
+
+        // Assert
+        Assert.NotNull(winnerResult);
+        Assert.Null(losingResult);
+        await using var scope = factory.Services.CreateAsyncScope();
+        var context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
+        var session = await context.AuthenticationSessions
+            .AsNoTracking()
+            .SingleAsync(TestContext.Current.CancellationToken);
+        Assert.NotNull(session.RevokedAt);
+        Assert.Equal(
+            SHA256.HashData(Encoding.UTF8.GetBytes(winnerResult.RefreshToken)),
+            session.RefreshTokenHash);
+    }
+
+    [Fact]
+    public async Task RefreshAsync_WhenRevocationCommitAcknowledgementIsLost_ReturnsInvalidSession()
+    {
+        // Arrange
+        var interceptor = new AmbiguousCommitInterceptor();
+        await using var factory = await CreateMigratedFactoryAsync(
+            new FixedTimeProvider(_now),
+            services =>
+            {
+                services.AddSingleton(interceptor);
+                services.AddDbContextPool<MonKadoDbContext>((
+                    _,
+                    options) => options.AddInterceptors(interceptor));
+            });
+        await CreateUserAsync(
+            factory,
+            "ambiguous-revocation@example.fr",
+            emailConfirmed: true);
+        var loginResult = await LoginInNewScopeAsync(
+            factory,
+            "ambiguous-revocation@example.fr",
+            Password);
+        Assert.NotNull(loginResult.Tokens);
+        var sessionId = new RefreshTokenService()
+            .TryGetSessionId(
+                loginResult.Tokens.RefreshToken,
+                out var parsedSessionId)
+            ? parsedSessionId
+            : throw new InvalidOperationException("The login refresh token must be valid.");
+        var alteredToken = $"{sessionId:N}.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+        interceptor.Arm();
+
+        // Act
+        var result = await RefreshInNewScopeAsync(
+            factory,
+            alteredToken);
+
+        // Assert
+        Assert.Null(result);
+        await using var scope = factory.Services.CreateAsyncScope();
+        var context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
+        var session = await context.AuthenticationSessions
+            .AsNoTracking()
+            .SingleAsync(TestContext.Current.CancellationToken);
+        Assert.NotNull(session.RevokedAt);
+    }
+
+    [Fact]
+    public async Task RefreshAsync_WhenRevokedSessionIsDeletedBeforeAmbiguousVerification_ReturnsInvalidSession()
+    {
+        // Arrange
+        var interceptor = new CoordinatedAmbiguousCommitInterceptor();
+        await using var factory = await CreateMigratedFactoryAsync(
+            new FixedTimeProvider(_now),
+            services =>
+            {
+                services.AddSingleton(interceptor);
+                services.AddDbContextPool<MonKadoDbContext>((
+                    _,
+                    options) => options.AddInterceptors(interceptor));
+            });
+        await CreateUserAsync(
+            factory,
+            "deleted-revocation@example.fr",
+            emailConfirmed: true);
+        var loginResult = await LoginInNewScopeAsync(
+            factory,
+            "deleted-revocation@example.fr",
+            Password);
+        Assert.NotNull(loginResult.Tokens);
+        var sessionId = new RefreshTokenService()
+            .TryGetSessionId(
+                loginResult.Tokens.RefreshToken,
+                out var parsedSessionId)
+            ? parsedSessionId
+            : throw new InvalidOperationException("The login refresh token must be valid.");
+        var alteredToken = $"{sessionId:N}.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+        interceptor.Arm();
+        var ambiguousAttempt = RefreshInNewScopeAsync(
+            factory,
+            alteredToken);
+        await interceptor.WaitForFirstCommitAsync(
+            TestContext.Current.CancellationToken);
+
+        await using (var deletionScope = factory.Services.CreateAsyncScope())
+        {
+            var context = deletionScope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
+            await context.AuthenticationSessions
+                .Where(session => session.Id == sessionId)
+                .ExecuteDeleteAsync(TestContext.Current.CancellationToken);
+        }
+
+        // Act
+        interceptor.ReleaseFailure();
+        var result = await ambiguousAttempt;
+
+        // Assert
+        Assert.Null(result);
+        await using var scope = factory.Services.CreateAsyncScope();
+        var verificationContext = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
+        Assert.Empty(await verificationContext.AuthenticationSessions
+            .AsNoTracking()
+            .ToArrayAsync(TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task RefreshAsync_WhenUnknownSessionCommitAcknowledgementIsLost_ReturnsInvalidSession()
+    {
+        // Arrange
+        var interceptor = new AmbiguousCommitInterceptor();
+        await using var factory = await CreateMigratedFactoryAsync(
+            new FixedTimeProvider(_now),
+            services =>
+            {
+                services.AddSingleton(interceptor);
+                services.AddDbContextPool<MonKadoDbContext>((
+                    _,
+                    options) => options.AddInterceptors(interceptor));
+            });
+        var refreshToken = new RefreshTokenService()
+            .Create(Guid.CreateVersion7(_now.UtcDateTime));
+        interceptor.Arm();
+
+        // Act
+        var result = await RefreshInNewScopeAsync(
+            factory,
+            refreshToken.Value);
+
+        // Assert
+        Assert.Null(result);
+        await using var scope = factory.Services.CreateAsyncScope();
+        var context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
+        Assert.Empty(await context.AuthenticationSessions
+            .AsNoTracking()
+            .ToArrayAsync(TestContext.Current.CancellationToken));
     }
 
     [Theory]
@@ -1298,6 +1903,34 @@ public class LoginIntegrationTests(PostgreSqlContainerFixture fixture)
         Task gate)
     {
         await gate;
+
+        return await service.RefreshAsync(
+            refreshToken,
+            TestContext.Current.CancellationToken);
+    }
+
+    private static async Task<AccountSessionLoginResult> LoginInNewScopeAsync(
+        PostgreSqlApiFactory factory,
+        string email,
+        string password)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var service = scope.ServiceProvider.GetRequiredService<IAccountSessionService>();
+
+        return await service.LoginAsync(
+            email,
+            password,
+            rememberMe: false,
+            currentRefreshToken: null,
+            TestContext.Current.CancellationToken);
+    }
+
+    private static async Task<AccountSessionTokens?> RefreshInNewScopeAsync(
+        PostgreSqlApiFactory factory,
+        string refreshToken)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var service = scope.ServiceProvider.GetRequiredService<IAccountSessionService>();
 
         return await service.RefreshAsync(
             refreshToken,
