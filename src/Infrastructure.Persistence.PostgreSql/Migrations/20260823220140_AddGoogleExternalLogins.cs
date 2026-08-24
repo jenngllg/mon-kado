@@ -7,6 +7,12 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Migrati
     /// <inheritdoc />
     public partial class AddGoogleExternalLogins : Migration
     {
+        private static readonly string[] _googleLoginUniqueIndexColumns =
+        [
+            "user_id",
+            "login_provider"
+        ];
+
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
@@ -51,7 +57,7 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Migrati
                 name: "ux_user_logins_user_id_login_provider",
                 schema: "public",
                 table: "user_logins",
-                columns: new[] { "user_id", "login_provider" },
+                columns: _googleLoginUniqueIndexColumns,
                 unique: true);
         }
 

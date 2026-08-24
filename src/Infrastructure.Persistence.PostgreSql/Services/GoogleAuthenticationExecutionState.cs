@@ -6,7 +6,7 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Service
 /// Carries the exact persistence markers produced by one Google authentication transaction attempt.
 /// </summary>
 /// <param name="authenticationContext">The protected Google authentication context.</param>
-internal class GoogleAuthenticationExecutionState(
+internal sealed class GoogleAuthenticationExecutionState(
     GoogleAuthenticationContext authenticationContext)
 {
     /// <summary>
