@@ -8,6 +8,12 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Migrati
     /// <inheritdoc />
     public partial class AddWishes : Migration
     {
+        private static readonly string[] _wishlistPositionIndexColumns =
+        [
+            "wishlist_id",
+            "position"
+        ];
+
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
@@ -69,7 +75,7 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Migrati
                 name: "ux_wishes_wishlist_position",
                 schema: "public",
                 table: "wishes",
-                columns: new[] { "wishlist_id", "position" },
+                columns: _wishlistPositionIndexColumns,
                 unique: true);
         }
 
