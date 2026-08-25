@@ -54,6 +54,18 @@ public class RecordingWishService : IWishService
     } = [];
 
     /// <summary>
+    /// Gets the recorded deletion calls.
+    /// </summary>
+    public List<(
+        Guid OwnerId,
+        Guid WishlistId,
+        Guid WishId,
+        uint ExpectedVersion)> Deletions
+    {
+        get;
+    } = [];
+
+    /// <summary>
     /// Gets the gift wishes returned by their nested identifiers.
     /// </summary>
     public Dictionary<(Guid WishlistId, Guid WishId), WishDetails> Wishes { get; } = [];
@@ -186,5 +198,29 @@ public class RecordingWishService : IWishService
         Wishes[(wishlistId, wishId)] = wish;
 
         return Task.FromResult<WishDetails?>(wish);
+    }
+
+    /// <inheritdoc />
+    public Task<bool> DeleteAsync(
+        Guid ownerId,
+        Guid wishlistId,
+        Guid wishId,
+        uint expectedVersion,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        Deletions.Add((
+            ownerId,
+            wishlistId,
+            wishId,
+            expectedVersion));
+
+        if (Exception is not null)
+            throw Exception;
+
+        if (!WishlistExists)
+            return Task.FromResult(false);
+
+        return Task.FromResult(Wishes.Remove((wishlistId, wishId)));
     }
 }

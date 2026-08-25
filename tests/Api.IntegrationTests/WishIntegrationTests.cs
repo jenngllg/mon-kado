@@ -554,6 +554,329 @@ public class WishIntegrationTests(PostgreSqlContainerFixture fixture)
     }
 
     [Fact]
+    public async Task DeleteAsync_WhenRequestIsValid_RemovesWishWithoutUpdatingParent()
+    {
+        // Arrange
+        await using var factory = await CreateFactoryAsync();
+        var owner = await CreateMemberAsync(factory);
+        var wishlist = await SeedWishlistAsync(
+            factory,
+            owner.Id,
+            "Liste suppression");
+        var parentVersion = wishlist.Version;
+        using var client = CreateAuthorizedClient(
+            factory,
+            owner.Id);
+        using var creationResponse = await CreateWishAsync(
+            client,
+            wishlist.Id,
+            "Cadeau supprimé");
+        var created = await creationResponse.Content.ReadFromJsonAsync<JsonElement>(
+            TestContext.Current.CancellationToken);
+        var wishId = created.GetProperty("id").GetGuid();
+
+        // Act
+        using var deletionResponse = await DeleteWishAsync(
+            client,
+            wishlist.Id,
+            wishId,
+            creationResponse.Headers.ETag?.Tag);
+        using var retrievalResponse = await client.GetAsync(
+            $"/api/v1/wishlists/{wishlist.Id}/wishes/{wishId}",
+            TestContext.Current.CancellationToken);
+        var storedWishes = await GetWishesAsync(
+            factory,
+            wishlist.Id);
+        var storedParent = await GetWishlistAsync(
+            factory,
+            wishlist.Id);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.NoContent,
+            deletionResponse.StatusCode);
+        Assert.True(deletionResponse.Headers.CacheControl?.NoStore);
+        Assert.Null(deletionResponse.Headers.ETag);
+        Assert.Equal(
+            string.Empty,
+            await deletionResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+        Assert.Equal(
+            HttpStatusCode.NotFound,
+            retrievalResponse.StatusCode);
+        Assert.Empty(storedWishes);
+        Assert.Equal(
+            parentVersion,
+            storedParent.Version);
+        Assert.Null(storedParent.UpdatedAt);
+    }
+
+    [Fact]
+    public async Task DeleteAsync_WhenRepeated_ReturnsWishNotFound()
+    {
+        // Arrange
+        await using var factory = await CreateFactoryAsync();
+        var owner = await CreateMemberAsync(factory);
+        var wishlist = await SeedWishlistAsync(
+            factory,
+            owner.Id,
+            "Liste double suppression");
+        using var client = CreateAuthorizedClient(
+            factory,
+            owner.Id);
+        using var creationResponse = await CreateWishAsync(
+            client,
+            wishlist.Id,
+            "Cadeau supprimé deux fois");
+        var created = await creationResponse.Content.ReadFromJsonAsync<JsonElement>(
+            TestContext.Current.CancellationToken);
+        var wishId = created.GetProperty("id").GetGuid();
+        using var firstResponse = await DeleteWishAsync(
+            client,
+            wishlist.Id,
+            wishId,
+            creationResponse.Headers.ETag?.Tag);
+
+        // Act
+        using var secondResponse = await DeleteWishAsync(
+            client,
+            wishlist.Id,
+            wishId,
+            creationResponse.Headers.ETag?.Tag);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.NoContent,
+            firstResponse.StatusCode);
+        Assert.Equal(
+            HttpStatusCode.NotFound,
+            secondResponse.StatusCode);
+        var error = await secondResponse.Content.ReadFromJsonAsync<ErrorResponse>(
+            TestContext.Current.CancellationToken);
+        Assert.NotNull(error);
+        Assert.Equal(
+            ErrorCodes.WishNotFound,
+            error.ErrorCode);
+    }
+
+    [Fact]
+    public async Task DeleteAsync_WhenEntityTagIsStale_ReturnsPreconditionFailedWithoutDeletingWish()
+    {
+        // Arrange
+        await using var factory = await CreateFactoryAsync();
+        var owner = await CreateMemberAsync(factory);
+        var wishlist = await SeedWishlistAsync(
+            factory,
+            owner.Id,
+            "Liste concurrence suppression");
+        using var client = CreateAuthorizedClient(
+            factory,
+            owner.Id);
+        using var creationResponse = await CreateWishAsync(
+            client,
+            wishlist.Id,
+            "Cadeau initial");
+        var created = await creationResponse.Content.ReadFromJsonAsync<JsonElement>(
+            TestContext.Current.CancellationToken);
+        var wishId = created.GetProperty("id").GetGuid();
+        var staleEntityTag = creationResponse.Headers.ETag?.Tag;
+        using var updateResponse = await UpdateWishAsync(
+            client,
+            wishlist.Id,
+            wishId,
+            new
+            {
+                name = "Cadeau modifié"
+            },
+            staleEntityTag);
+
+        // Act
+        using var deletionResponse = await DeleteWishAsync(
+            client,
+            wishlist.Id,
+            wishId,
+            staleEntityTag);
+        var storedWish = await GetWishAsync(
+            factory,
+            wishlist.Id,
+            wishId);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.OK,
+            updateResponse.StatusCode);
+        Assert.Equal(
+            HttpStatusCode.PreconditionFailed,
+            deletionResponse.StatusCode);
+        Assert.Equal(
+            "Cadeau modifié",
+            storedWish.Name);
+    }
+
+    [Fact]
+    public async Task DeleteAsync_WhenWishBelongsToDifferentOwnedParent_ReturnsWishNotFound()
+    {
+        // Arrange
+        await using var factory = await CreateFactoryAsync();
+        var owner = await CreateMemberAsync(factory);
+        var firstWishlist = await SeedWishlistAsync(
+            factory,
+            owner.Id,
+            "Première liste suppression");
+        var secondWishlist = await SeedWishlistAsync(
+            factory,
+            owner.Id,
+            "Deuxième liste suppression");
+        using var client = CreateAuthorizedClient(
+            factory,
+            owner.Id);
+        using var creationResponse = await CreateWishAsync(
+            client,
+            firstWishlist.Id,
+            "Cadeau privé");
+        var created = await creationResponse.Content.ReadFromJsonAsync<JsonElement>(
+            TestContext.Current.CancellationToken);
+        var wishId = created.GetProperty("id").GetGuid();
+
+        // Act
+        using var deletionResponse = await DeleteWishAsync(
+            client,
+            secondWishlist.Id,
+            wishId,
+            creationResponse.Headers.ETag?.Tag);
+        var storedWish = await GetWishAsync(
+            factory,
+            firstWishlist.Id,
+            wishId);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.NotFound,
+            deletionResponse.StatusCode);
+        var error = await deletionResponse.Content.ReadFromJsonAsync<ErrorResponse>(
+            TestContext.Current.CancellationToken);
+        Assert.NotNull(error);
+        Assert.Equal(
+            ErrorCodes.WishNotFound,
+            error.ErrorCode);
+        Assert.Equal(
+            "Cadeau privé",
+            storedWish.Name);
+    }
+
+    [Fact]
+    public async Task DeleteAsync_WhenMiddleWishIsRemoved_PreservesPositionsAndSequence()
+    {
+        // Arrange
+        await using var factory = await CreateFactoryAsync();
+        var owner = await CreateMemberAsync(factory);
+        var wishlist = await SeedWishlistAsync(
+            factory,
+            owner.Id,
+            "Liste positions");
+        using var client = CreateAuthorizedClient(
+            factory,
+            owner.Id);
+        using var firstResponse = await CreateWishAsync(
+            client,
+            wishlist.Id,
+            "Premier cadeau");
+        using var secondResponse = await CreateWishAsync(
+            client,
+            wishlist.Id,
+            "Deuxième cadeau");
+        using var thirdResponse = await CreateWishAsync(
+            client,
+            wishlist.Id,
+            "Troisième cadeau");
+        var second = await secondResponse.Content.ReadFromJsonAsync<JsonElement>(
+            TestContext.Current.CancellationToken);
+        var secondWishId = second.GetProperty("id").GetGuid();
+        using var deletionResponse = await DeleteWishAsync(
+            client,
+            wishlist.Id,
+            secondWishId,
+            secondResponse.Headers.ETag?.Tag);
+
+        // Act
+        using var fourthResponse = await CreateWishAsync(
+            client,
+            wishlist.Id,
+            "Quatrième cadeau");
+        var storedWishes = await GetWishesAsync(
+            factory,
+            wishlist.Id);
+        var nextPosition = await GetNextPositionAsync(
+            factory,
+            wishlist.Id);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.NoContent,
+            deletionResponse.StatusCode);
+        Assert.Equal(
+            HttpStatusCode.Created,
+            fourthResponse.StatusCode);
+        Assert.Equal(
+            [
+                1L,
+                3L,
+                4L
+            ],
+            storedWishes
+                .Select(wish => wish.Position)
+                .OrderBy(position => position));
+        Assert.Equal(
+            4,
+            nextPosition);
+    }
+
+    [Fact]
+    public async Task DeleteAsync_WhenCommitAcknowledgementIsLost_ReturnsNoContentAfterDeletion()
+    {
+        // Arrange
+        var interceptor = new AmbiguousCommitInterceptor();
+        await using var factory = await CreateFactoryAsync(services =>
+        {
+            services.AddSingleton(interceptor);
+            services.AddDbContextPool<MonKadoDbContext>((
+                _,
+                options) => options.AddInterceptors(interceptor));
+        });
+        var owner = await CreateMemberAsync(factory);
+        var wishlist = await SeedWishlistAsync(
+            factory,
+            owner.Id,
+            "Liste suppression ambiguë");
+        using var client = CreateAuthorizedClient(
+            factory,
+            owner.Id);
+        using var creationResponse = await CreateWishAsync(
+            client,
+            wishlist.Id,
+            "Cadeau ambigu");
+        var created = await creationResponse.Content.ReadFromJsonAsync<JsonElement>(
+            TestContext.Current.CancellationToken);
+        var wishId = created.GetProperty("id").GetGuid();
+        interceptor.Arm();
+
+        // Act
+        using var deletionResponse = await DeleteWishAsync(
+            client,
+            wishlist.Id,
+            wishId,
+            creationResponse.Headers.ETag?.Tag);
+        var storedWishes = await GetWishesAsync(
+            factory,
+            wishlist.Id);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.NoContent,
+            deletionResponse.StatusCode);
+        Assert.Empty(storedWishes);
+    }
+
+    [Fact]
     public async Task AllocatePositionAsync_WhenConnectionIsAlreadyOpen_KeepsConnectionOpen()
     {
         // Arrange
@@ -736,6 +1059,28 @@ public class WishIntegrationTests(PostgreSqlContainerFixture fixture)
         {
             Content = JsonContent.Create(body)
         };
+
+        if (entityTag is not null)
+        {
+            request.Headers.TryAddWithoutValidation(
+                "If-Match",
+                entityTag);
+        }
+
+        return await client.SendAsync(
+            request,
+            TestContext.Current.CancellationToken);
+    }
+
+    private static async Task<HttpResponseMessage> DeleteWishAsync(
+        HttpClient client,
+        Guid wishlistId,
+        Guid wishId,
+        string? entityTag)
+    {
+        using var request = new HttpRequestMessage(
+            HttpMethod.Delete,
+            $"/api/v1/wishlists/{wishlistId}/wishes/{wishId}");
 
         if (entityTag is not null)
         {

@@ -24,6 +24,12 @@ public interface IWishRepository
     void Add(Wish wish);
 
     /// <summary>
+    /// Removes a tracked gift wish from the current unit of work.
+    /// </summary>
+    /// <param name="wish">The wish to remove.</param>
+    void Remove(Wish wish);
+
+    /// <summary>
     /// Gets a gift wish under a specific parent wishlist without tracking it.
     /// </summary>
     /// <param name="wishlistId">The parent wishlist identifier.</param>

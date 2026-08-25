@@ -11,7 +11,7 @@ using Npgsql;
 namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Services;
 
 /// <summary>
-/// Creates, retrieves, and updates gift wishes in PostgreSQL.
+/// Creates, retrieves, updates, and deletes gift wishes in PostgreSQL.
 /// </summary>
 /// <param name="wishRepository">The wish repository.</param>
 /// <param name="wishlistRepository">The wishlist repository.</param>
@@ -176,6 +176,159 @@ public class WishService(
                 exception,
                 cancellationToken);
         }
+    }
+
+    /// <inheritdoc />
+    public async Task<bool> DeleteAsync(
+        Guid ownerId,
+        Guid wishlistId,
+        Guid wishId,
+        uint expectedVersion,
+        CancellationToken cancellationToken)
+    {
+        var saveAttempted = false;
+
+        try
+        {
+            var wish = await wishRepository.GetByIdForUpdateAsync(
+                wishlistId,
+                wishId,
+                cancellationToken);
+
+            if (wish is null)
+            {
+                var access = await GetAccessSafelyAsync(
+                    ownerId,
+                    wishlistId,
+                    cancellationToken);
+
+                if (access is WishlistAccess.MemberNotFound)
+                    throw new InvalidAuthenticationSessionException();
+
+                if (access is WishlistAccess.NotOwned)
+                    throw new WishlistNotFoundException();
+
+                return false;
+            }
+
+            if (wish.Version != expectedVersion)
+                throw new WishVersionConflictException();
+
+            wishRepository.Remove(wish);
+            saveAttempted = true;
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+
+            return true;
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return await ResolveConcurrentDeletionAsync(
+                ownerId,
+                wishlistId,
+                wishId,
+                cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            if (exception is DependencyUnavailableException ||
+                !PostgreSqlFailureClassifier.IsUnavailable(exception))
+                throw;
+
+            if (!saveAttempted)
+            {
+                throw new DependencyUnavailableException(
+                    "PostgreSQL",
+                    exception);
+            }
+
+            return await ResolveAmbiguousDeletionAsync(
+                ownerId,
+                wishlistId,
+                wishId,
+                exception,
+                cancellationToken);
+        }
+    }
+
+    /// <summary>
+    /// Resolves an optimistic concurrency failure while deleting a gift wish.
+    /// </summary>
+    /// <param name="ownerId">The authenticated owner identifier.</param>
+    /// <param name="wishlistId">The parent wishlist identifier.</param>
+    /// <param name="wishId">The wish identifier.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns><see langword="false" /> when the wish disappeared from an owned parent.</returns>
+    /// <exception cref="InvalidAuthenticationSessionException">The authenticated member disappeared.</exception>
+    /// <exception cref="WishlistNotFoundException">The parent wishlist is unavailable to the owner.</exception>
+    /// <exception cref="WishVersionConflictException">The wish still exists with another version.</exception>
+    private async Task<bool> ResolveConcurrentDeletionAsync(
+        Guid ownerId,
+        Guid wishlistId,
+        Guid wishId,
+        CancellationToken cancellationToken)
+    {
+        var access = await GetAccessSafelyAsync(
+            ownerId,
+            wishlistId,
+            cancellationToken);
+
+        if (access is WishlistAccess.MemberNotFound)
+            throw new InvalidAuthenticationSessionException();
+
+        if (access is WishlistAccess.NotOwned)
+            throw new WishlistNotFoundException();
+
+        var currentWish = await GetByIdSafelyAsync(
+            wishlistId,
+            wishId,
+            cancellationToken);
+
+        if (currentWish is null)
+            return false;
+
+        throw new WishVersionConflictException();
+    }
+
+    /// <summary>
+    /// Resolves whether a gift wish deletion committed after its acknowledgement was lost.
+    /// </summary>
+    /// <param name="ownerId">The authenticated owner identifier.</param>
+    /// <param name="wishlistId">The parent wishlist identifier.</param>
+    /// <param name="wishId">The wish identifier.</param>
+    /// <param name="originalException">The transient save exception.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns><see langword="true" /> when the wish is no longer available.</returns>
+    /// <exception cref="InvalidAuthenticationSessionException">The authenticated member disappeared.</exception>
+    /// <exception cref="DependencyUnavailableException">The attempted deletion cannot be confirmed.</exception>
+    private async Task<bool> ResolveAmbiguousDeletionAsync(
+        Guid ownerId,
+        Guid wishlistId,
+        Guid wishId,
+        Exception originalException,
+        CancellationToken cancellationToken)
+    {
+        var access = await GetAccessSafelyAsync(
+            ownerId,
+            wishlistId,
+            cancellationToken);
+
+        if (access is WishlistAccess.MemberNotFound)
+            throw new InvalidAuthenticationSessionException();
+
+        if (access is WishlistAccess.NotOwned)
+            return true;
+
+        var currentWish = await GetByIdSafelyAsync(
+            wishlistId,
+            wishId,
+            cancellationToken);
+
+        if (currentWish is null)
+            return true;
+
+        throw new DependencyUnavailableException(
+            "PostgreSQL",
+            originalException);
     }
 
     /// <summary>

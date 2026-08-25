@@ -69,6 +69,12 @@ public class WishRepository(MonKadoDbContext context) : IWishRepository
     }
 
     /// <inheritdoc />
+    public void Remove(Wish wish)
+    {
+        context.Wishes.Remove(wish);
+    }
+
+    /// <inheritdoc />
     public Task<Wish?> GetByIdAsync(
         Guid wishlistId,
         Guid wishId,

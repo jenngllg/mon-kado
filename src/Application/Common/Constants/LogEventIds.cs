@@ -302,6 +302,16 @@ public static class LogEventIds
     /// </summary>
     public const int WishUpdated = 2015;
 
+    /// <summary>
+    /// Identifies the start of a gift wish deletion.
+    /// </summary>
+    public const int WishDeletionStarted = 2016;
+
+    /// <summary>
+    /// Identifies a deleted gift wish.
+    /// </summary>
+    public const int WishDeleted = 2017;
+
     #endregion
 
     #region Technical

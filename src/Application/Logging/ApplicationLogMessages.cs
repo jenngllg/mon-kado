@@ -604,4 +604,38 @@ public static partial class ApplicationLogMessages
         Guid memberId,
         Guid wishlistId,
         Guid wishId);
+
+    /// <summary>
+    /// Logs the start of a gift wish deletion.
+    /// </summary>
+    /// <param name="logger">The logger.</param>
+    /// <param name="memberId">The authenticated member identifier.</param>
+    /// <param name="wishlistId">The parent wishlist identifier.</param>
+    /// <param name="wishId">The wish identifier.</param>
+    [LoggerMessage(
+        EventId = LogEventIds.WishDeletionStarted,
+        Level = LogLevel.Debug,
+        Message = "Deleting wish {WishId} from wishlist {WishlistId} for member {MemberId}.")]
+    public static partial void WishDeletionStarted(
+        ILogger logger,
+        Guid memberId,
+        Guid wishlistId,
+        Guid wishId);
+
+    /// <summary>
+    /// Logs a deleted gift wish.
+    /// </summary>
+    /// <param name="logger">The logger.</param>
+    /// <param name="memberId">The authenticated member identifier.</param>
+    /// <param name="wishlistId">The parent wishlist identifier.</param>
+    /// <param name="wishId">The wish identifier.</param>
+    [LoggerMessage(
+        EventId = LogEventIds.WishDeleted,
+        Level = LogLevel.Information,
+        Message = "Wish {WishId} deleted from wishlist {WishlistId} for member {MemberId}.")]
+    public static partial void WishDeleted(
+        ILogger logger,
+        Guid memberId,
+        Guid wishlistId,
+        Guid wishId);
 }
