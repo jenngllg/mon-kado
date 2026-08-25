@@ -115,4 +115,34 @@ public class Wish : IAuditableEntity
     {
         get; private set;
     }
+
+    /// <summary>
+    /// Replaces the editable gift wish values.
+    /// </summary>
+    /// <param name="name">The display name.</param>
+    /// <param name="note">The optional owner note.</param>
+    /// <param name="url">The optional product URL.</param>
+    /// <param name="price">The optional price in euros.</param>
+    /// <returns><see langword="true" /> when at least one value changed.</returns>
+    public bool Update(
+        string name,
+        string? note,
+        string? url,
+        decimal? price)
+    {
+        var hasChanged = Name != name ||
+            Note != note ||
+            Url != url ||
+            Price != price;
+
+        if (!hasChanged)
+            return false;
+
+        Name = name;
+        Note = note;
+        Url = url;
+        Price = price;
+
+        return true;
+    }
 }

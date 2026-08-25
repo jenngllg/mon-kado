@@ -11,7 +11,7 @@ using Npgsql;
 namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Services;
 
 /// <summary>
-/// Creates and retrieves gift wishes in PostgreSQL.
+/// Creates, retrieves, and updates gift wishes in PostgreSQL.
 /// </summary>
 /// <param name="wishRepository">The wish repository.</param>
 /// <param name="wishlistRepository">The wishlist repository.</param>
@@ -98,6 +98,228 @@ public class WishService(
         return wish is null
             ? null
             : CreateDetails(wish);
+    }
+
+    /// <inheritdoc />
+    public async Task<WishDetails?> UpdateAsync(
+        Guid ownerId,
+        Guid wishlistId,
+        Guid wishId,
+        string name,
+        string? note,
+        string? url,
+        decimal? price,
+        uint expectedVersion,
+        CancellationToken cancellationToken)
+    {
+        (Wish Attempted, Wish Original)? attemptedUpdate = null;
+
+        try
+        {
+            var wish = await wishRepository.GetByIdForUpdateAsync(
+                wishlistId,
+                wishId,
+                cancellationToken);
+
+            if (wish is null)
+                return await ResolveMissingWishAsync(
+                    ownerId,
+                    wishlistId,
+                    cancellationToken);
+
+            if (wish.Version != expectedVersion)
+                throw new WishVersionConflictException();
+
+            var originalWish = CopyClientState(wish);
+            var hasChanged = wish.Update(
+                name,
+                note,
+                url,
+                price);
+
+            if (!hasChanged)
+                return CreateDetails(wish);
+
+            attemptedUpdate = (
+                wish,
+                originalWish);
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+
+            return CreateDetails(wish);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return await ResolveConcurrentUpdateAsync(
+                ownerId,
+                wishlistId,
+                wishId,
+                cancellationToken);
+        }
+        catch (Exception exception)
+        {
+
+            if (exception is DependencyUnavailableException ||
+                !PostgreSqlFailureClassifier.IsUnavailable(exception))
+                throw;
+
+            if (attemptedUpdate is null)
+            {
+                throw new DependencyUnavailableException(
+                    "PostgreSQL",
+                    exception);
+            }
+
+            return await ResolveAmbiguousUpdateAsync(
+                ownerId,
+                attemptedUpdate.Value.Attempted,
+                attemptedUpdate.Value.Original,
+                exception,
+                cancellationToken);
+        }
+    }
+
+    /// <summary>
+    /// Resolves a missing wish without revealing an inaccessible parent wishlist.
+    /// </summary>
+    /// <param name="ownerId">The authenticated owner identifier.</param>
+    /// <param name="wishlistId">The parent wishlist identifier.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns><see langword="null" /> when the owned parent does not contain the wish.</returns>
+    /// <exception cref="InvalidAuthenticationSessionException">The authenticated member disappeared.</exception>
+    /// <exception cref="WishlistNotFoundException">The parent wishlist is unavailable to the owner.</exception>
+    private async Task<WishDetails?> ResolveMissingWishAsync(
+        Guid ownerId,
+        Guid wishlistId,
+        CancellationToken cancellationToken)
+    {
+        var access = await GetAccessSafelyAsync(
+            ownerId,
+            wishlistId,
+            cancellationToken);
+
+        if (access is WishlistAccess.MemberNotFound)
+            throw new InvalidAuthenticationSessionException();
+
+        if (access is WishlistAccess.NotOwned)
+            throw new WishlistNotFoundException();
+
+        return null;
+    }
+
+    /// <summary>
+    /// Resolves an optimistic concurrency failure against the current private resource state.
+    /// </summary>
+    /// <param name="ownerId">The authenticated owner identifier.</param>
+    /// <param name="wishlistId">The parent wishlist identifier.</param>
+    /// <param name="wishId">The wish identifier.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns><see langword="null" /> when the wish disappeared from an owned parent.</returns>
+    /// <exception cref="InvalidAuthenticationSessionException">The authenticated member disappeared.</exception>
+    /// <exception cref="WishlistNotFoundException">The parent wishlist is unavailable to the owner.</exception>
+    /// <exception cref="WishVersionConflictException">The wish still exists with a different version.</exception>
+    private async Task<WishDetails?> ResolveConcurrentUpdateAsync(
+        Guid ownerId,
+        Guid wishlistId,
+        Guid wishId,
+        CancellationToken cancellationToken)
+    {
+        var access = await GetAccessSafelyAsync(
+            ownerId,
+            wishlistId,
+            cancellationToken);
+
+        if (access is WishlistAccess.MemberNotFound)
+            throw new InvalidAuthenticationSessionException();
+
+        if (access is WishlistAccess.NotOwned)
+            throw new WishlistNotFoundException();
+
+        var currentWish = await GetByIdSafelyAsync(
+            wishlistId,
+            wishId,
+            cancellationToken);
+
+        if (currentWish is null)
+            return null;
+
+        throw new WishVersionConflictException();
+    }
+
+    /// <summary>
+    /// Resolves whether a gift wish update committed after its acknowledgement was lost.
+    /// </summary>
+    /// <param name="ownerId">The authenticated owner identifier.</param>
+    /// <param name="attemptedWish">The exact wish state whose save was attempted.</param>
+    /// <param name="originalWish">The exact wish state before the attempted update.</param>
+    /// <param name="originalException">The transient save exception.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The committed wish, or <see langword="null" /> when the wish disappeared.</returns>
+    /// <exception cref="InvalidAuthenticationSessionException">The authenticated member disappeared.</exception>
+    /// <exception cref="WishlistNotFoundException">The parent wishlist is unavailable to the owner.</exception>
+    /// <exception cref="WishVersionConflictException">A different wish state was committed.</exception>
+    /// <exception cref="DependencyUnavailableException">The attempted update cannot be verified.</exception>
+    private async Task<WishDetails?> ResolveAmbiguousUpdateAsync(
+        Guid ownerId,
+        Wish attemptedWish,
+        Wish originalWish,
+        Exception originalException,
+        CancellationToken cancellationToken)
+    {
+        var currentWish = await GetByIdSafelyAsync(
+            attemptedWish.WishlistId,
+            attemptedWish.Id,
+            cancellationToken);
+
+        if (currentWish is not null &&
+            HasSameClientValues(
+                currentWish,
+                attemptedWish))
+        {
+            return CreateDetails(currentWish);
+        }
+
+        if (currentWish is not null &&
+            HasSameClientValues(
+                currentWish,
+                originalWish))
+        {
+            throw new DependencyUnavailableException(
+                "PostgreSQL",
+                originalException);
+        }
+
+        var access = await GetAccessSafelyAsync(
+            ownerId,
+            attemptedWish.WishlistId,
+            cancellationToken);
+
+        if (access is WishlistAccess.MemberNotFound)
+            throw new InvalidAuthenticationSessionException();
+
+        if (access is WishlistAccess.NotOwned)
+            throw new WishlistNotFoundException();
+
+        if (currentWish is null)
+            return null;
+
+        throw new WishVersionConflictException();
+    }
+
+    /// <summary>
+    /// Copies the identifying and editable state needed to reconcile an ambiguous update.
+    /// </summary>
+    /// <param name="wish">The wish to copy.</param>
+    /// <returns>A detached copy of the client-controlled state.</returns>
+    private static Wish CopyClientState(Wish wish)
+    {
+        return new Wish(
+            wish.Id,
+            wish.WishlistId,
+            wish.Name,
+            wish.Note,
+            wish.Url,
+            wish.Price,
+            wish.Position);
     }
 
     /// <summary>

@@ -51,4 +51,66 @@ public class WishTests
             0u,
             wish.Version);
     }
+
+    [Fact]
+    public void Update_WhenValuesChange_ReplacesEditableValuesAndReturnsTrue()
+    {
+        // Arrange
+        var wish = CreateWish();
+
+        // Act
+        var result = wish.Update(
+            "Nouvelle console",
+            null,
+            "https://example.com/new-console",
+            399.99m);
+
+        // Assert
+        Assert.True(result);
+        Assert.Equal(
+            "Nouvelle console",
+            wish.Name);
+        Assert.Null(wish.Note);
+        Assert.Equal(
+            "https://example.com/new-console",
+            wish.Url);
+        Assert.Equal(
+            399.99m,
+            wish.Price);
+        Assert.Equal(
+            3,
+            wish.Position);
+    }
+
+    [Fact]
+    public void Update_WhenValuesAreUnchanged_ReturnsFalse()
+    {
+        // Arrange
+        var wish = CreateWish();
+
+        // Act
+        var result = wish.Update(
+            "Console",
+            "Édition blanche",
+            "https://example.com/console",
+            499.99m);
+
+        // Assert
+        Assert.False(result);
+        Assert.Equal(
+            "Console",
+            wish.Name);
+    }
+
+    private static Wish CreateWish()
+    {
+        return new Wish(
+            Guid.CreateVersion7(),
+            Guid.CreateVersion7(),
+            "Console",
+            "Édition blanche",
+            "https://example.com/console",
+            499.99m,
+            3);
+    }
 }

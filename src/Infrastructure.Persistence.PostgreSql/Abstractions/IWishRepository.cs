@@ -34,4 +34,16 @@ public interface IWishRepository
         Guid wishlistId,
         Guid wishId,
         CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Gets a tracked gift wish under a specific parent for an optimistic update.
+    /// </summary>
+    /// <param name="wishlistId">The parent wishlist identifier.</param>
+    /// <param name="wishId">The wish identifier.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The tracked wish when found under the parent; otherwise, <see langword="null" />.</returns>
+    Task<Wish?> GetByIdForUpdateAsync(
+        Guid wishlistId,
+        Guid wishId,
+        CancellationToken cancellationToken);
 }

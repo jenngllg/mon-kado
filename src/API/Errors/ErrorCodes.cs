@@ -136,6 +136,11 @@ public static class ErrorCodes
     /// </summary>
     public const string WishNotFound = "WISH_NOT_FOUND";
 
+    /// <summary>
+    /// Identifies an optimistic gift wish update conflict.
+    /// </summary>
+    public const string WishVersionConflict = "WISH_VERSION_CONFLICT";
+
     #endregion
 
     #region Technical

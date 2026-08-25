@@ -570,4 +570,38 @@ public static partial class ApplicationLogMessages
         Guid memberId,
         Guid wishlistId,
         Guid wishId);
+
+    /// <summary>
+    /// Logs the start of a gift wish update.
+    /// </summary>
+    /// <param name="logger">The logger.</param>
+    /// <param name="memberId">The authenticated member identifier.</param>
+    /// <param name="wishlistId">The parent wishlist identifier.</param>
+    /// <param name="wishId">The wish identifier.</param>
+    [LoggerMessage(
+        EventId = LogEventIds.WishUpdateStarted,
+        Level = LogLevel.Debug,
+        Message = "Updating wish {WishId} in wishlist {WishlistId} for member {MemberId}.")]
+    public static partial void WishUpdateStarted(
+        ILogger logger,
+        Guid memberId,
+        Guid wishlistId,
+        Guid wishId);
+
+    /// <summary>
+    /// Logs an updated gift wish.
+    /// </summary>
+    /// <param name="logger">The logger.</param>
+    /// <param name="memberId">The authenticated member identifier.</param>
+    /// <param name="wishlistId">The parent wishlist identifier.</param>
+    /// <param name="wishId">The wish identifier.</param>
+    [LoggerMessage(
+        EventId = LogEventIds.WishUpdated,
+        Level = LogLevel.Information,
+        Message = "Wish {WishId} updated in wishlist {WishlistId} for member {MemberId}.")]
+    public static partial void WishUpdated(
+        ILogger logger,
+        Guid memberId,
+        Guid wishlistId,
+        Guid wishId);
 }
