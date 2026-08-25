@@ -38,6 +38,23 @@ public class RecordingWishService : IWishService
     public List<(Guid WishlistId, Guid WishId)> Retrievals { get; } = [];
 
     /// <summary>
+    /// Gets the recorded collection retrieval calls.
+    /// </summary>
+    public List<(Guid OwnerId, Guid WishlistId)> CollectionRetrievals { get; } = [];
+
+    /// <summary>
+    /// Gets the recorded reorder calls.
+    /// </summary>
+    public List<(
+        Guid OwnerId,
+        Guid WishlistId,
+        IReadOnlyCollection<Guid> WishIds,
+        uint ExpectedVersion)> Reorders
+    {
+        get;
+    } = [];
+
+    /// <summary>
     /// Gets the recorded update calls.
     /// </summary>
     public List<(
@@ -84,6 +101,76 @@ public class RecordingWishService : IWishService
     public Exception? Exception
     {
         get; set;
+    }
+
+    /// <summary>
+    /// Gets or sets the collection version returned by the fake.
+    /// </summary>
+    public uint CollectionVersion
+    {
+        get; set;
+    } = 84;
+
+    /// <inheritdoc />
+    public Task<WishCollectionDetails> GetCollectionAsync(
+        Guid ownerId,
+        Guid wishlistId,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        CollectionRetrievals.Add((
+            ownerId,
+            wishlistId));
+
+        if (Exception is not null)
+            throw Exception;
+
+        var wishes = Wishes.Values
+            .Where(wish => wish.WishlistId == wishlistId)
+            .OrderBy(wish => wish.Position)
+            .ToArray();
+
+        return Task.FromResult(new WishCollectionDetails(
+            wishes,
+            CollectionVersion));
+    }
+
+    /// <inheritdoc />
+    public Task<WishOrderDetails> ReorderAsync(
+        Guid ownerId,
+        Guid wishlistId,
+        IReadOnlyCollection<Guid> wishIds,
+        uint expectedVersion,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        Reorders.Add((
+            ownerId,
+            wishlistId,
+            wishIds,
+            expectedVersion));
+
+        if (Exception is not null)
+            throw Exception;
+
+        var positions = Wishes.Values
+            .Where(wish => wish.WishlistId == wishlistId)
+            .Select(wish => wish.Position)
+            .Order()
+            .ToArray();
+        var items = wishIds
+            .Select((
+                wishId,
+                index) => new WishOrderItem(
+                    wishId,
+                    positions[index],
+                    100u + (uint)index))
+            .ToArray();
+        CollectionVersion++;
+
+        return Task.FromResult(new WishOrderDetails(
+            items,
+            CollectionVersion));
     }
 
     /// <inheritdoc />

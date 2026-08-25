@@ -149,6 +149,24 @@ public class GlobalExceptionHandler(
                 "The wish has changed. Retrieve it again before retrying.",
                 ErrorCodes.WishVersionConflict,
                 null),
+            WishOrderConflictException => new ErrorResponse(
+                StatusCodes.Status409Conflict,
+                "Wish order conflict",
+                "The requested order does not match the current wish collection.",
+                ErrorCodes.WishOrderConflict,
+                null),
+            WishOrderVersionConflictException => new ErrorResponse(
+                StatusCodes.Status412PreconditionFailed,
+                "Wish order version conflict",
+                "The wish collection has changed. Retrieve it again before retrying.",
+                ErrorCodes.WishOrderVersionConflict,
+                null),
+            WishLimitReachedException => new ErrorResponse(
+                StatusCodes.Status409Conflict,
+                "Wish limit reached",
+                "The wishlist already contains the maximum number of wishes.",
+                ErrorCodes.WishLimitReached,
+                null),
             PreconditionRequiredException => new ErrorResponse(
                 StatusCodes.Status428PreconditionRequired,
                 "Precondition required",

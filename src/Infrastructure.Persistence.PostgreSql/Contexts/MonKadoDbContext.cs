@@ -50,6 +50,11 @@ public class MonKadoDbContext(DbContextOptions<MonKadoDbContext> options)
     /// </summary>
     public DbSet<Wish> Wishes => Set<Wish>();
 
+    /// <summary>
+    /// Gets gift wish collection position sequences.
+    /// </summary>
+    public DbSet<WishPositionSequence> WishPositionSequences => Set<WishPositionSequence>();
+
     /// <inheritdoc />
     protected override void OnModelCreating(ModelBuilder builder)
     {

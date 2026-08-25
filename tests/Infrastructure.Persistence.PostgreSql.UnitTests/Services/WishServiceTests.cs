@@ -3,6 +3,7 @@ using JennGllg.Fr.MonKado.Back.Application.Common.Exceptions;
 using JennGllg.Fr.MonKado.Back.Application.Models;
 using JennGllg.Fr.MonKado.Back.Domain.Entities;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Abstractions;
+using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Entities;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Services;
 
 using Microsoft.EntityFrameworkCore;
@@ -10,6 +11,8 @@ using Microsoft.EntityFrameworkCore;
 using Moq;
 
 using Npgsql;
+
+using System.Data;
 
 namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.UnitTests.Services;
 
@@ -19,6 +22,7 @@ public class WishServiceTests
     private const string PositionWishlistForeignKeyName = "fk_wish_position_sequences_wishlists_wishlist_id";
 
     private readonly Mock<IUnitOfWork> _unitOfWorkMock;
+    private readonly Mock<IWishTransactionFactory> _wishTransactionFactoryMock;
     private readonly Mock<IWishlistRepository> _wishlistRepositoryMock;
     private readonly Mock<IWishRepository> _wishRepositoryMock;
     private readonly WishService _wishService;
@@ -28,10 +32,730 @@ public class WishServiceTests
         _wishRepositoryMock = new Mock<IWishRepository>(MockBehavior.Strict);
         _wishlistRepositoryMock = new Mock<IWishlistRepository>(MockBehavior.Strict);
         _unitOfWorkMock = new Mock<IUnitOfWork>(MockBehavior.Strict);
+        _wishTransactionFactoryMock = new Mock<IWishTransactionFactory>(MockBehavior.Strict);
         _wishService = new WishService(
             _wishRepositoryMock.Object,
             _wishlistRepositoryMock.Object,
-            _unitOfWorkMock.Object);
+            _unitOfWorkMock.Object,
+            _wishTransactionFactoryMock.Object);
+    }
+
+    [Fact]
+    public async Task GetCollectionAsync_WhenCollectionExists_ReturnsConsistentOrderedSnapshot()
+    {
+        // Arrange
+        var data = CreateData();
+        var transactionMock = CreateTransactionMock();
+        var firstWish = CreateWish(data);
+        var secondWish = new Wish(
+            Guid.CreateVersion7(),
+            data.WishlistId,
+            "Livre",
+            null,
+            null,
+            null,
+            3);
+        SetupOwnedAccess(data);
+        _wishTransactionFactoryMock
+            .Setup(factory => factory.BeginAsync(
+                IsolationLevel.RepeatableRead,
+                data.CancellationToken))
+            .ReturnsAsync(transactionMock.Object);
+        _wishRepositoryMock
+            .Setup(repository => repository.GetCollectionStateAsync(
+                data.WishlistId,
+                data.CancellationToken))
+            .ReturnsAsync(CreateSequence(data.WishlistId));
+        _wishRepositoryMock
+            .Setup(repository => repository.GetByWishlistIdAsync(
+                data.WishlistId,
+                data.CancellationToken))
+            .ReturnsAsync([
+                firstWish,
+                secondWish
+            ]);
+        transactionMock
+            .Setup(transaction => transaction.CommitAsync(data.CancellationToken))
+            .Returns(Task.CompletedTask);
+
+        // Act
+        var result = await _wishService.GetCollectionAsync(
+            data.OwnerId,
+            data.WishlistId,
+            data.CancellationToken);
+
+        // Assert
+        Assert.Equal(
+            42u,
+            result.Version);
+        Assert.Equal(
+            [firstWish.Id, secondWish.Id],
+            result.Wishes.Select(wish => wish.Id));
+        VerifyOwnedAccess(data);
+        _wishTransactionFactoryMock.Verify(
+            factory => factory.BeginAsync(
+                IsolationLevel.RepeatableRead,
+                data.CancellationToken),
+            Times.Once);
+        _wishRepositoryMock.Verify(
+            repository => repository.GetCollectionStateAsync(
+                data.WishlistId,
+                data.CancellationToken),
+            Times.Once);
+        _wishRepositoryMock.Verify(
+            repository => repository.GetByWishlistIdAsync(
+                data.WishlistId,
+                data.CancellationToken),
+            Times.Once);
+        transactionMock.Verify(
+            transaction => transaction.CommitAsync(data.CancellationToken),
+            Times.Once);
+        transactionMock.Verify(
+            transaction => transaction.DisposeAsync(),
+            Times.Once);
+        transactionMock.VerifyNoOtherCalls();
+        VerifyNoOtherCalls();
+    }
+
+    [Theory]
+    [InlineData(WishlistAccess.MemberNotFound, typeof(InvalidAuthenticationSessionException))]
+    [InlineData(WishlistAccess.NotOwned, typeof(WishlistNotFoundException))]
+    public async Task GetCollectionAsync_WhenWishlistIsUnavailable_ThrowsExpectedException(
+        WishlistAccess access,
+        Type expectedExceptionType)
+    {
+        // Arrange
+        var data = CreateData();
+        _wishlistRepositoryMock
+            .Setup(repository => repository.GetAccessAsync(
+                data.OwnerId,
+                data.WishlistId,
+                data.CancellationToken))
+            .ReturnsAsync(access);
+
+        // Act
+        var action = () => _wishService.GetCollectionAsync(
+            data.OwnerId,
+            data.WishlistId,
+            data.CancellationToken);
+
+        // Assert
+        await Assert.ThrowsAsync(
+            expectedExceptionType,
+            action);
+        VerifyOwnedAccess(data);
+        VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task GetCollectionAsync_WhenSequenceIsMissing_ThrowsWishlistNotFoundException()
+    {
+        // Arrange
+        var data = CreateData();
+        var transactionMock = CreateTransactionMock();
+        SetupOwnedAccess(data);
+        _wishTransactionFactoryMock
+            .Setup(factory => factory.BeginAsync(
+                IsolationLevel.RepeatableRead,
+                data.CancellationToken))
+            .ReturnsAsync(transactionMock.Object);
+        _wishRepositoryMock
+            .Setup(repository => repository.GetCollectionStateAsync(
+                data.WishlistId,
+                data.CancellationToken))
+            .ReturnsAsync((WishPositionSequence?)null);
+
+        // Act
+        var action = () => _wishService.GetCollectionAsync(
+            data.OwnerId,
+            data.WishlistId,
+            data.CancellationToken);
+
+        // Assert
+        await Assert.ThrowsAsync<WishlistNotFoundException>(action);
+        transactionMock.Verify(
+            transaction => transaction.DisposeAsync(),
+            Times.Once);
+        transactionMock.VerifyNoOtherCalls();
+        VerifyOwnedAccess(data);
+        _wishTransactionFactoryMock.Verify(
+            factory => factory.BeginAsync(
+                IsolationLevel.RepeatableRead,
+                data.CancellationToken),
+            Times.Once);
+        _wishRepositoryMock.Verify(
+            repository => repository.GetCollectionStateAsync(
+                data.WishlistId,
+                data.CancellationToken),
+            Times.Once);
+        VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task GetCollectionAsync_WhenPostgreSqlIsUnavailable_ThrowsDependencyUnavailableException()
+    {
+        // Arrange
+        var data = CreateData();
+        SetupOwnedAccess(data);
+        _wishTransactionFactoryMock
+            .Setup(factory => factory.BeginAsync(
+                IsolationLevel.RepeatableRead,
+                data.CancellationToken))
+            .ThrowsAsync(new TimeoutException());
+
+        // Act
+        var action = () => _wishService.GetCollectionAsync(
+            data.OwnerId,
+            data.WishlistId,
+            data.CancellationToken);
+
+        // Assert
+        var exception = await Assert.ThrowsAsync<DependencyUnavailableException>(action);
+        Assert.IsType<TimeoutException>(exception.InnerException);
+        VerifyOwnedAccess(data);
+        _wishTransactionFactoryMock.Verify(
+            factory => factory.BeginAsync(
+                IsolationLevel.RepeatableRead,
+                data.CancellationToken),
+            Times.Once);
+        VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task ReorderAsync_WhenOrderChanges_ReusesExistingPositionsAndReturnsUpdatedOrder()
+    {
+        // Arrange
+        var data = CreateData();
+        var transactionMock = CreateTransactionMock();
+        var firstWish = CreateWish(data);
+        var secondWish = new Wish(
+            Guid.CreateVersion7(),
+            data.WishlistId,
+            "Livre",
+            null,
+            null,
+            null,
+            3);
+        var thirdWish = new Wish(
+            Guid.CreateVersion7(),
+            data.WishlistId,
+            "Jeu",
+            null,
+            null,
+            null,
+            4);
+        var sequence = CreateSequence(data.WishlistId);
+        Guid[] requestedOrder =
+        [
+            firstWish.Id,
+            thirdWish.Id,
+            secondWish.Id
+        ];
+        SetupReorder(
+            data,
+            transactionMock,
+            sequence,
+            [
+                firstWish,
+                secondWish,
+                thirdWish
+            ]);
+        _unitOfWorkMock
+            .Setup(unitOfWork => unitOfWork.SaveChangesAsync(data.CancellationToken))
+            .ReturnsAsync(2);
+        _wishRepositoryMock
+            .Setup(repository => repository.ReloadCollectionStateAsync(
+                sequence,
+                data.CancellationToken))
+            .Returns(Task.CompletedTask);
+        transactionMock
+            .Setup(transaction => transaction.CommitAsync(data.CancellationToken))
+            .Returns(Task.CompletedTask);
+
+        // Act
+        var result = await _wishService.ReorderAsync(
+            data.OwnerId,
+            data.WishlistId,
+            requestedOrder,
+            42,
+            data.CancellationToken);
+
+        // Assert
+        Assert.Equal(
+            requestedOrder,
+            result.Wishes.Select(wish => wish.Id));
+        Assert.Equal(
+            [1L, 3L, 4L],
+            result.Wishes.Select(wish => wish.Position));
+        Assert.Equal(
+            3,
+            thirdWish.Position);
+        Assert.Equal(
+            4,
+            secondWish.Position);
+        _unitOfWorkMock.Verify(
+            unitOfWork => unitOfWork.SaveChangesAsync(data.CancellationToken),
+            Times.Exactly(2));
+        _wishRepositoryMock.Verify(
+            repository => repository.ReloadCollectionStateAsync(
+                sequence,
+                data.CancellationToken),
+            Times.Once);
+        transactionMock.Verify(
+            transaction => transaction.CommitAsync(data.CancellationToken),
+            Times.Once);
+        VerifyReorderSetup(
+            data,
+            transactionMock);
+    }
+
+    [Fact]
+    public async Task ReorderAsync_WhenOrderIsUnchanged_ReturnsWithoutWriting()
+    {
+        // Arrange
+        var data = CreateData();
+        var transactionMock = CreateTransactionMock();
+        var wish = CreateWish(data);
+        SetupReorder(
+            data,
+            transactionMock,
+            CreateSequence(data.WishlistId),
+            [wish]);
+
+        // Act
+        var result = await _wishService.ReorderAsync(
+            data.OwnerId,
+            data.WishlistId,
+            [wish.Id],
+            42,
+            data.CancellationToken);
+
+        // Assert
+        Assert.Equal(
+            42u,
+            result.Version);
+        Assert.Equal(
+            wish.Id,
+            Assert.Single(result.Wishes).Id);
+        VerifyReorderSetup(
+            data,
+            transactionMock);
+    }
+
+    [Fact]
+    public async Task ReorderAsync_WhenVersionIsStale_ThrowsWishOrderVersionConflictException()
+    {
+        // Arrange
+        var data = CreateData();
+        var transactionMock = CreateTransactionMock();
+        SetupOwnedAccess(data);
+        _wishTransactionFactoryMock
+            .Setup(factory => factory.BeginAsync(
+                IsolationLevel.ReadCommitted,
+                data.CancellationToken))
+            .ReturnsAsync(transactionMock.Object);
+        _wishRepositoryMock
+            .Setup(repository => repository.GetByWishlistIdForUpdateAsync(
+                data.WishlistId,
+                data.CancellationToken))
+            .ReturnsAsync([]);
+        _wishRepositoryMock
+            .Setup(repository => repository.GetCollectionStateForUpdateAsync(
+                data.WishlistId,
+                data.CancellationToken))
+            .ReturnsAsync(CreateSequence(data.WishlistId));
+
+        // Act
+        var action = () => _wishService.ReorderAsync(
+            data.OwnerId,
+            data.WishlistId,
+            [],
+            41,
+            data.CancellationToken);
+
+        // Assert
+        await Assert.ThrowsAsync<WishOrderVersionConflictException>(action);
+        transactionMock.Verify(
+            transaction => transaction.DisposeAsync(),
+            Times.Once);
+        transactionMock.VerifyNoOtherCalls();
+        VerifyOwnedAccess(data);
+        _wishTransactionFactoryMock.Verify(
+            factory => factory.BeginAsync(
+                IsolationLevel.ReadCommitted,
+                data.CancellationToken),
+            Times.Once);
+        _wishRepositoryMock.Verify(
+            repository => repository.GetByWishlistIdForUpdateAsync(
+                data.WishlistId,
+                data.CancellationToken),
+            Times.Once);
+        _wishRepositoryMock.Verify(
+            repository => repository.GetCollectionStateForUpdateAsync(
+                data.WishlistId,
+                data.CancellationToken),
+            Times.Once);
+        VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task ReorderAsync_WhenSequenceIsMissing_ThrowsWishlistNotFoundException()
+    {
+        // Arrange
+        var data = CreateData();
+        var transactionMock = CreateTransactionMock();
+        SetupOwnedAccess(data);
+        _wishTransactionFactoryMock
+            .Setup(factory => factory.BeginAsync(
+                IsolationLevel.ReadCommitted,
+                data.CancellationToken))
+            .ReturnsAsync(transactionMock.Object);
+        _wishRepositoryMock
+            .Setup(repository => repository.GetByWishlistIdForUpdateAsync(
+                data.WishlistId,
+                data.CancellationToken))
+            .ReturnsAsync([]);
+        _wishRepositoryMock
+            .Setup(repository => repository.GetCollectionStateForUpdateAsync(
+                data.WishlistId,
+                data.CancellationToken))
+            .ReturnsAsync((WishPositionSequence?)null);
+
+        // Act
+        var action = () => _wishService.ReorderAsync(
+            data.OwnerId,
+            data.WishlistId,
+            [],
+            42,
+            data.CancellationToken);
+
+        // Assert
+        await Assert.ThrowsAsync<WishlistNotFoundException>(action);
+        VerifyOwnedAccess(data);
+        _wishTransactionFactoryMock.Verify(
+            factory => factory.BeginAsync(
+                IsolationLevel.ReadCommitted,
+                data.CancellationToken),
+            Times.Once);
+        _wishRepositoryMock.Verify(
+            repository => repository.GetByWishlistIdForUpdateAsync(
+                data.WishlistId,
+                data.CancellationToken),
+            Times.Once);
+        _wishRepositoryMock.Verify(
+            repository => repository.GetCollectionStateForUpdateAsync(
+                data.WishlistId,
+                data.CancellationToken),
+            Times.Once);
+        transactionMock.Verify(
+            transaction => transaction.DisposeAsync(),
+            Times.Once);
+        transactionMock.VerifyNoOtherCalls();
+        VerifyNoOtherCalls();
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ReorderAsync_WhenMembershipDiffers_ThrowsWishOrderConflictException(
+        bool countDiffers)
+    {
+        // Arrange
+        var data = CreateData();
+        var transactionMock = CreateTransactionMock();
+        var wish = CreateWish(data);
+        SetupReorder(
+            data,
+            transactionMock,
+            CreateSequence(data.WishlistId),
+            [wish]);
+        IReadOnlyCollection<Guid> requestedOrder = countDiffers
+            ? []
+            : [Guid.CreateVersion7()];
+
+        // Act
+        var action = () => _wishService.ReorderAsync(
+            data.OwnerId,
+            data.WishlistId,
+            requestedOrder,
+            42,
+            data.CancellationToken);
+
+        // Assert
+        await Assert.ThrowsAsync<WishOrderConflictException>(action);
+        VerifyReorderSetup(
+            data,
+            transactionMock);
+    }
+
+    [Fact]
+    public async Task ReorderAsync_WhenPostgreSqlFailsBeforeCommit_ThrowsDependencyUnavailableException()
+    {
+        // Arrange
+        var data = CreateData();
+        SetupOwnedAccess(data);
+        _wishTransactionFactoryMock
+            .Setup(factory => factory.BeginAsync(
+                IsolationLevel.ReadCommitted,
+                data.CancellationToken))
+            .ThrowsAsync(new TimeoutException());
+        _wishRepositoryMock
+            .Setup(repository => repository.ClearTracking());
+
+        // Act
+        var action = () => _wishService.ReorderAsync(
+            data.OwnerId,
+            data.WishlistId,
+            [],
+            42,
+            data.CancellationToken);
+
+        // Assert
+        var exception = await Assert.ThrowsAsync<DependencyUnavailableException>(action);
+        Assert.IsType<TimeoutException>(exception.InnerException);
+        VerifyOwnedAccess(data);
+        _wishTransactionFactoryMock.Verify(
+            factory => factory.BeginAsync(
+                IsolationLevel.ReadCommitted,
+                data.CancellationToken),
+            Times.Once);
+        _wishRepositoryMock.Verify(
+            repository => repository.ClearTracking(),
+            Times.Once);
+        VerifyNoOtherCalls();
+    }
+
+    [Theory]
+    [InlineData(true, false, null)]
+    [InlineData(false, true, typeof(DependencyUnavailableException))]
+    [InlineData(false, false, typeof(WishOrderVersionConflictException))]
+    public async Task ReorderAsync_WhenCommitAcknowledgementIsLost_ResolvesPersistedOrder(
+        bool matchesRequestedOrder,
+        bool matchesOriginalOrder,
+        Type? expectedExceptionType)
+    {
+        // Arrange
+        var data = CreateData();
+        var reorderTransactionMock = CreateTransactionMock();
+        var verificationTransactionMock = CreateTransactionMock();
+        var firstWish = CreateWish(
+            Guid.CreateVersion7(),
+            data.WishlistId,
+            "Premier",
+            1);
+        var secondWish = CreateWish(
+            Guid.CreateVersion7(),
+            data.WishlistId,
+            "Deuxième",
+            3);
+        var thirdWish = CreateWish(
+            Guid.CreateVersion7(),
+            data.WishlistId,
+            "Troisième",
+            4);
+        Wish[] originalWishes =
+        [
+            firstWish,
+            secondWish,
+            thirdWish
+        ];
+        Guid[] requestedOrder =
+        [
+            thirdWish.Id,
+            firstWish.Id,
+            secondWish.Id
+        ];
+        var persistedWishes = matchesRequestedOrder
+            ? new[]
+            {
+                thirdWish,
+                firstWish,
+                secondWish
+            }
+            : CreatePersistedOrder(
+                data.WishlistId,
+                matchesOriginalOrder
+                    ? [firstWish.Id, secondWish.Id, thirdWish.Id]
+                    : [secondWish.Id, thirdWish.Id, firstWish.Id]);
+        var sequence = CreateSequence(data.WishlistId);
+        _wishlistRepositoryMock
+            .Setup(repository => repository.GetAccessAsync(
+                data.OwnerId,
+                data.WishlistId,
+                data.CancellationToken))
+            .ReturnsAsync(WishlistAccess.Owner);
+        _wishTransactionFactoryMock
+            .Setup(factory => factory.BeginAsync(
+                IsolationLevel.ReadCommitted,
+                data.CancellationToken))
+            .ReturnsAsync(reorderTransactionMock.Object);
+        _wishTransactionFactoryMock
+            .Setup(factory => factory.BeginAsync(
+                IsolationLevel.RepeatableRead,
+                data.CancellationToken))
+            .ReturnsAsync(verificationTransactionMock.Object);
+        _wishRepositoryMock
+            .Setup(repository => repository.GetCollectionStateForUpdateAsync(
+                data.WishlistId,
+                data.CancellationToken))
+            .ReturnsAsync(sequence);
+        _wishRepositoryMock
+            .Setup(repository => repository.GetByWishlistIdForUpdateAsync(
+                data.WishlistId,
+                data.CancellationToken))
+            .ReturnsAsync(originalWishes);
+        _unitOfWorkMock
+            .Setup(unitOfWork => unitOfWork.SaveChangesAsync(data.CancellationToken))
+            .ReturnsAsync(2);
+        _wishRepositoryMock
+            .Setup(repository => repository.ReloadCollectionStateAsync(
+                sequence,
+                data.CancellationToken))
+            .Returns(Task.CompletedTask);
+        reorderTransactionMock
+            .Setup(transaction => transaction.CommitAsync(data.CancellationToken))
+            .ThrowsAsync(new TimeoutException());
+        _wishRepositoryMock
+            .Setup(repository => repository.ClearTracking());
+        _wishRepositoryMock
+            .Setup(repository => repository.GetCollectionStateAsync(
+                data.WishlistId,
+                data.CancellationToken))
+            .ReturnsAsync(sequence);
+        _wishRepositoryMock
+            .Setup(repository => repository.GetByWishlistIdAsync(
+                data.WishlistId,
+                data.CancellationToken))
+            .ReturnsAsync(persistedWishes);
+        verificationTransactionMock
+            .Setup(transaction => transaction.CommitAsync(data.CancellationToken))
+            .Returns(Task.CompletedTask);
+
+        // Act
+        WishOrderDetails? result = null;
+        var action = async () => result = await _wishService.ReorderAsync(
+            data.OwnerId,
+            data.WishlistId,
+            requestedOrder,
+            42,
+            data.CancellationToken);
+
+        // Assert
+        if (expectedExceptionType is null)
+        {
+            await action();
+            Assert.NotNull(result);
+            Assert.Equal(
+                requestedOrder,
+                result.Wishes.Select(wish => wish.Id));
+        }
+        else
+        {
+            await Assert.ThrowsAsync(
+                expectedExceptionType,
+                action);
+        }
+
+        _wishlistRepositoryMock.Verify(
+            repository => repository.GetAccessAsync(
+                data.OwnerId,
+                data.WishlistId,
+                data.CancellationToken),
+            Times.Exactly(2));
+        _wishTransactionFactoryMock.Verify(
+            factory => factory.BeginAsync(
+                IsolationLevel.ReadCommitted,
+                data.CancellationToken),
+            Times.Once);
+        _wishTransactionFactoryMock.Verify(
+            factory => factory.BeginAsync(
+                IsolationLevel.RepeatableRead,
+                data.CancellationToken),
+            Times.Once);
+        _wishRepositoryMock.Verify(
+            repository => repository.GetCollectionStateForUpdateAsync(
+                data.WishlistId,
+                data.CancellationToken),
+            Times.Once);
+        _wishRepositoryMock.Verify(
+            repository => repository.GetByWishlistIdForUpdateAsync(
+                data.WishlistId,
+                data.CancellationToken),
+            Times.Once);
+        _unitOfWorkMock.Verify(
+            unitOfWork => unitOfWork.SaveChangesAsync(data.CancellationToken),
+            Times.Exactly(2));
+        _wishRepositoryMock.Verify(
+            repository => repository.ReloadCollectionStateAsync(
+                sequence,
+                data.CancellationToken),
+            Times.Once);
+        reorderTransactionMock.Verify(
+            transaction => transaction.CommitAsync(data.CancellationToken),
+            Times.Once);
+        reorderTransactionMock.Verify(
+            transaction => transaction.DisposeAsync(),
+            Times.Once);
+        reorderTransactionMock.VerifyNoOtherCalls();
+        _wishRepositoryMock.Verify(
+            repository => repository.ClearTracking(),
+            Times.Once);
+        _wishRepositoryMock.Verify(
+            repository => repository.GetCollectionStateAsync(
+                data.WishlistId,
+                data.CancellationToken),
+            Times.Once);
+        _wishRepositoryMock.Verify(
+            repository => repository.GetByWishlistIdAsync(
+                data.WishlistId,
+                data.CancellationToken),
+            Times.Once);
+        verificationTransactionMock.Verify(
+            transaction => transaction.CommitAsync(data.CancellationToken),
+            Times.Once);
+        verificationTransactionMock.Verify(
+            transaction => transaction.DisposeAsync(),
+            Times.Once);
+        verificationTransactionMock.VerifyNoOtherCalls();
+        VerifyNoOtherCalls();
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task CreateAsync_WhenWishLimitIsReached_ThrowsWishLimitReachedException(
+        bool directException)
+    {
+        // Arrange
+        var data = CreateData();
+        _wishRepositoryMock
+            .Setup(repository => repository.AllocatePositionAsync(
+                data.WishlistId,
+                data.CancellationToken))
+            .ReturnsAsync(1001);
+        _wishRepositoryMock
+            .Setup(repository => repository.Add(It.IsAny<Wish>()));
+        _unitOfWorkMock
+            .Setup(unitOfWork => unitOfWork.SaveChangesAsync(data.CancellationToken))
+            .ThrowsAsync(CreateWishLimitException(directException));
+
+        // Act
+        var action = () => CreateAsync(data);
+
+        // Assert
+        await Assert.ThrowsAsync<WishLimitReachedException>(action);
+        _wishRepositoryMock.Verify(
+            repository => repository.AllocatePositionAsync(
+                data.WishlistId,
+                data.CancellationToken),
+            Times.Once);
+        _wishRepositoryMock.Verify(
+            repository => repository.Add(It.IsAny<Wish>()),
+            Times.Once);
+        _unitOfWorkMock.Verify(
+            unitOfWork => unitOfWork.SaveChangesAsync(data.CancellationToken),
+            Times.Once);
+        VerifyNoOtherCalls();
     }
 
     [Fact]
@@ -1645,11 +2369,102 @@ public class WishServiceTests
         VerifyNoOtherCalls();
     }
 
+    private static Mock<IWishTransaction> CreateTransactionMock()
+    {
+        var transactionMock = new Mock<IWishTransaction>(MockBehavior.Strict);
+        transactionMock
+            .Setup(transaction => transaction.DisposeAsync())
+            .Returns(ValueTask.CompletedTask);
+
+        return transactionMock;
+    }
+
+    private static WishPositionSequence CreateSequence(Guid wishlistId)
+    {
+        return new WishPositionSequence(
+            wishlistId,
+            4,
+            3,
+            42);
+    }
+
+    private void SetupOwnedAccess(WishServiceTestData data)
+    {
+        _wishlistRepositoryMock
+            .Setup(repository => repository.GetAccessAsync(
+                data.OwnerId,
+                data.WishlistId,
+                data.CancellationToken))
+            .ReturnsAsync(WishlistAccess.Owner);
+    }
+
+    private void VerifyOwnedAccess(WishServiceTestData data)
+    {
+        _wishlistRepositoryMock.Verify(
+            repository => repository.GetAccessAsync(
+                data.OwnerId,
+                data.WishlistId,
+                data.CancellationToken),
+            Times.Once);
+    }
+
+    private void SetupReorder(
+        WishServiceTestData data,
+        Mock<IWishTransaction> transactionMock,
+        WishPositionSequence sequence,
+        IReadOnlyCollection<Wish> wishes)
+    {
+        SetupOwnedAccess(data);
+        _wishTransactionFactoryMock
+            .Setup(factory => factory.BeginAsync(
+                IsolationLevel.ReadCommitted,
+                data.CancellationToken))
+            .ReturnsAsync(transactionMock.Object);
+        _wishRepositoryMock
+            .Setup(repository => repository.GetCollectionStateForUpdateAsync(
+                data.WishlistId,
+                data.CancellationToken))
+            .ReturnsAsync(sequence);
+        _wishRepositoryMock
+            .Setup(repository => repository.GetByWishlistIdForUpdateAsync(
+                data.WishlistId,
+                data.CancellationToken))
+            .ReturnsAsync(wishes);
+    }
+
+    private void VerifyReorderSetup(
+        WishServiceTestData data,
+        Mock<IWishTransaction> transactionMock)
+    {
+        VerifyOwnedAccess(data);
+        _wishTransactionFactoryMock.Verify(
+            factory => factory.BeginAsync(
+                IsolationLevel.ReadCommitted,
+                data.CancellationToken),
+            Times.Once);
+        _wishRepositoryMock.Verify(
+            repository => repository.GetCollectionStateForUpdateAsync(
+                data.WishlistId,
+                data.CancellationToken),
+            Times.Once);
+        _wishRepositoryMock.Verify(
+            repository => repository.GetByWishlistIdForUpdateAsync(
+                data.WishlistId,
+                data.CancellationToken),
+            Times.Once);
+        transactionMock.Verify(
+            transaction => transaction.DisposeAsync(),
+            Times.Once);
+        transactionMock.VerifyNoOtherCalls();
+        VerifyNoOtherCalls();
+    }
+
     private void VerifyNoOtherCalls()
     {
         _wishRepositoryMock.VerifyNoOtherCalls();
         _wishlistRepositoryMock.VerifyNoOtherCalls();
         _unitOfWorkMock.VerifyNoOtherCalls();
+        _wishTransactionFactoryMock.VerifyNoOtherCalls();
     }
 
     private static WishServiceTestData CreateData()
@@ -1677,6 +2492,37 @@ public class WishServiceTests
             1);
     }
 
+    private static Wish CreateWish(
+        Guid id,
+        Guid wishlistId,
+        string name,
+        long position)
+    {
+        return new Wish(
+            id,
+            wishlistId,
+            name,
+            null,
+            null,
+            null,
+            position);
+    }
+
+    private static Wish[] CreatePersistedOrder(
+        Guid wishlistId,
+        IReadOnlyCollection<Guid> wishIds)
+    {
+        return wishIds
+            .Select((
+                wishId,
+                index) => CreateWish(
+                    wishId,
+                    wishlistId,
+                    $"Persisted {index}",
+                    index + 1))
+            .ToArray();
+    }
+
     private static Exception CreateForeignKeyException(
         string constraintName,
         bool directException)
@@ -1692,6 +2538,22 @@ public class WishServiceTests
             ? postgresException
             : new DbUpdateException(
                 "PostgreSQL constraint violation.",
+                postgresException);
+    }
+
+    private static Exception CreateWishLimitException(bool directException)
+    {
+        var postgresException = new PostgresException(
+            "Wishlist wish limit reached.",
+            "ERROR",
+            "ERROR",
+            PostgresErrorCodes.CheckViolation,
+            constraintName: "ck_wish_position_sequences_current_count_limit");
+
+        return directException
+            ? postgresException
+            : new DbUpdateException(
+                "Wishlist wish limit reached.",
                 postgresException);
     }
 

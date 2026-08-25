@@ -102,6 +102,7 @@ public static class InfrastructureInjectionConfiguration
         services.AddScoped<IMemberEmailChangeRequestRepository, MemberEmailChangeRequestRepository>();
         services.AddScoped<IWishlistRepository, WishlistRepository>();
         services.AddScoped<IWishRepository, WishRepository>();
+        services.AddScoped<IWishTransactionFactory, WishTransactionFactory>();
         services.AddScoped<IAccountRegistrationService, AccountRegistrationService>();
         services.AddScoped<IEmailConfirmationService, EmailConfirmationService>();
         services.AddScoped<IExpiredAccountCleanup, ExpiredAccountCleanup>();
