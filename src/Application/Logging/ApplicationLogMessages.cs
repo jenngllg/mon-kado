@@ -502,4 +502,72 @@ public static partial class ApplicationLogMessages
         ILogger logger,
         Guid memberId,
         Guid wishlistId);
+
+    /// <summary>
+    /// Logs the start of a manual gift wish creation.
+    /// </summary>
+    /// <param name="logger">The logger.</param>
+    /// <param name="memberId">The authenticated member identifier.</param>
+    /// <param name="wishlistId">The parent wishlist identifier.</param>
+    /// <param name="wishId">The generated wish identifier.</param>
+    [LoggerMessage(
+        EventId = LogEventIds.WishCreationStarted,
+        Level = LogLevel.Debug,
+        Message = "Creating wish {WishId} in wishlist {WishlistId} for member {MemberId}.")]
+    public static partial void WishCreationStarted(
+        ILogger logger,
+        Guid memberId,
+        Guid wishlistId,
+        Guid wishId);
+
+    /// <summary>
+    /// Logs a created gift wish.
+    /// </summary>
+    /// <param name="logger">The logger.</param>
+    /// <param name="memberId">The authenticated member identifier.</param>
+    /// <param name="wishlistId">The parent wishlist identifier.</param>
+    /// <param name="wishId">The wish identifier.</param>
+    [LoggerMessage(
+        EventId = LogEventIds.WishCreated,
+        Level = LogLevel.Information,
+        Message = "Wish {WishId} created in wishlist {WishlistId} for member {MemberId}.")]
+    public static partial void WishCreated(
+        ILogger logger,
+        Guid memberId,
+        Guid wishlistId,
+        Guid wishId);
+
+    /// <summary>
+    /// Logs the start of a private gift wish retrieval.
+    /// </summary>
+    /// <param name="logger">The logger.</param>
+    /// <param name="memberId">The authenticated member identifier.</param>
+    /// <param name="wishlistId">The parent wishlist identifier.</param>
+    /// <param name="wishId">The wish identifier.</param>
+    [LoggerMessage(
+        EventId = LogEventIds.WishRetrievalStarted,
+        Level = LogLevel.Debug,
+        Message = "Retrieving wish {WishId} from wishlist {WishlistId} for member {MemberId}.")]
+    public static partial void WishRetrievalStarted(
+        ILogger logger,
+        Guid memberId,
+        Guid wishlistId,
+        Guid wishId);
+
+    /// <summary>
+    /// Logs a retrieved private gift wish.
+    /// </summary>
+    /// <param name="logger">The logger.</param>
+    /// <param name="memberId">The authenticated member identifier.</param>
+    /// <param name="wishlistId">The parent wishlist identifier.</param>
+    /// <param name="wishId">The wish identifier.</param>
+    [LoggerMessage(
+        EventId = LogEventIds.WishRetrieved,
+        Level = LogLevel.Information,
+        Message = "Wish {WishId} retrieved from wishlist {WishlistId} for member {MemberId}.")]
+    public static partial void WishRetrieved(
+        ILogger logger,
+        Guid memberId,
+        Guid wishlistId,
+        Guid wishId);
 }

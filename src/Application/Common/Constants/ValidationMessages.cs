@@ -61,4 +61,24 @@ public static class ValidationMessages
     /// Identifies a wishlist event date earlier than the current date.
     /// </summary>
     public const string WishlistEventDateMustBeTodayOrLater = "The event date must be today or later.";
+
+    /// <summary>
+    /// Identifies an invalid gift wish name.
+    /// </summary>
+    public const string InvalidWishName = "The wish name must be a single line of at most 100 characters.";
+
+    /// <summary>
+    /// Identifies an invalid gift wish note.
+    /// </summary>
+    public const string InvalidWishNote = "The wish note must not exceed 500 characters or contain unsupported control characters.";
+
+    /// <summary>
+    /// Identifies an invalid gift wish URL.
+    /// </summary>
+    public const string InvalidWishUrl = "The wish URL must be an absolute HTTP or HTTPS URL of at most 2048 characters without embedded credentials.";
+
+    /// <summary>
+    /// Identifies an invalid gift wish price.
+    /// </summary>
+    public const string InvalidWishPrice = "The wish price must be greater than zero and contain at most two decimal places.";
 }

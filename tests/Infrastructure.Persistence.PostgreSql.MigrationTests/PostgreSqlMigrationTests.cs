@@ -94,6 +94,10 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
             migration => Assert.EndsWith(
                 "_AddWishlists",
                 migration,
+                StringComparison.Ordinal),
+            migration => Assert.EndsWith(
+                "_AddWishes",
+                migration,
                 StringComparison.Ordinal));
         Assert.False(context.Database.HasPendingModelChanges());
 
@@ -113,6 +117,8 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
                 "user_roles",
                 "user_tokens",
                 "users",
+                "wish_position_sequences",
+                "wishes",
                 "wishlists"
             ],
             tables);
@@ -171,6 +177,30 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
         Assert.Contains(
             "fk_wishlists_users_owner_id",
             constraints);
+        Assert.Contains(
+            "ck_wish_position_sequences_next_position_valid",
+            constraints);
+        Assert.Contains(
+            "fk_wish_position_sequences_wishlists_wishlist_id",
+            constraints);
+        Assert.Contains(
+            "ck_wishes_name_valid",
+            constraints);
+        Assert.Contains(
+            "ck_wishes_position_valid",
+            constraints);
+        Assert.Contains(
+            "ck_wishes_price_valid",
+            constraints);
+        Assert.Contains(
+            "ck_wishes_timestamps_consistent",
+            constraints);
+        Assert.Contains(
+            "ck_wishes_url_valid",
+            constraints);
+        Assert.Contains(
+            "fk_wishes_wishlists_wishlist_id",
+            constraints);
 
         var indexes = await GetPublicIndexesAsync(
             context,
@@ -213,6 +243,9 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
             indexes);
         Assert.Contains(
             "ux_wishlists_owner_normalized_name",
+            indexes);
+        Assert.Contains(
+            "ux_wishes_wishlist_position",
             indexes);
 
         var columns = await GetAuthenticationEmailOutboxColumnsAsync(
@@ -313,6 +346,56 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
             tablesAfterUp);
         Assert.Contains(
             "ux_wishlists_owner_normalized_name",
+            indexesAfterUp);
+    }
+
+    [Fact]
+    public async Task MigrateAsync_WhenWishMigrationIsRolledBack_RemovesAndRecreatesWishSchema()
+    {
+        // Arrange
+        const string PreviousMigration = "20260824222848_AddWishlists";
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var provider = CreateServiceProvider();
+        await using var scope = provider.CreateAsyncScope();
+        var context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
+        await context.Database.MigrateAsync(cancellationToken);
+
+        // Act
+        await context.Database.MigrateAsync(
+            PreviousMigration,
+            cancellationToken);
+        var tablesAfterDown = await GetPublicTablesAsync(
+            context,
+            cancellationToken);
+        var indexesAfterDown = await GetPublicIndexesAsync(
+            context,
+            cancellationToken);
+        await context.Database.MigrateAsync(cancellationToken);
+        var tablesAfterUp = await GetPublicTablesAsync(
+            context,
+            cancellationToken);
+        var indexesAfterUp = await GetPublicIndexesAsync(
+            context,
+            cancellationToken);
+
+        // Assert
+        Assert.DoesNotContain(
+            "wishes",
+            tablesAfterDown);
+        Assert.DoesNotContain(
+            "wish_position_sequences",
+            tablesAfterDown);
+        Assert.DoesNotContain(
+            "ux_wishes_wishlist_position",
+            indexesAfterDown);
+        Assert.Contains(
+            "wishes",
+            tablesAfterUp);
+        Assert.Contains(
+            "wish_position_sequences",
+            tablesAfterUp);
+        Assert.Contains(
+            "ux_wishes_wishlist_position",
             indexesAfterUp);
     }
 
