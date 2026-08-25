@@ -272,6 +272,26 @@ public static class LogEventIds
     /// </summary>
     public const int WishlistDeleted = 2009;
 
+    /// <summary>
+    /// Identifies the start of a gift wish creation.
+    /// </summary>
+    public const int WishCreationStarted = 2010;
+
+    /// <summary>
+    /// Identifies a created gift wish.
+    /// </summary>
+    public const int WishCreated = 2011;
+
+    /// <summary>
+    /// Identifies the start of a private gift wish retrieval.
+    /// </summary>
+    public const int WishRetrievalStarted = 2012;
+
+    /// <summary>
+    /// Identifies a retrieved private gift wish.
+    /// </summary>
+    public const int WishRetrieved = 2013;
+
     #endregion
 
     #region Technical

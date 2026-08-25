@@ -45,6 +45,11 @@ public class MonKadoDbContext(DbContextOptions<MonKadoDbContext> options)
     /// </summary>
     public DbSet<Wishlist> Wishlists => Set<Wishlist>();
 
+    /// <summary>
+    /// Gets gift wishes.
+    /// </summary>
+    public DbSet<Wish> Wishes => Set<Wish>();
+
     /// <inheritdoc />
     protected override void OnModelCreating(ModelBuilder builder)
     {

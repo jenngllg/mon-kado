@@ -167,7 +167,8 @@ public static class RequestBodyLimitExtensions
                 MatchesPath(request.Path, _googleLinkPath) ||
                 MatchesPath(request.Path, _googleCallbackPath) ||
                 MatchesPath(request.Path, _loginPath) ||
-                MatchesPath(request.Path, _wishlistsPath))) ||
+                MatchesPath(request.Path, _wishlistsPath) ||
+                MatchesWishCollectionPath(request.Path))) ||
             (HttpMethods.IsPut(request.Method) &&
                 (MatchesPath(request.Path, _memberProfilePath) ||
                     MatchesPath(request.Path, _memberEmailPath) ||
@@ -200,6 +201,42 @@ public static class RequestBodyLimitExtensions
 
         return !wishlistId.IsEmpty &&
             !wishlistId.Contains('/') &&
+            Guid.TryParse(
+                wishlistId,
+                out _);
+    }
+
+    /// <summary>
+    /// Matches a nested wish collection endpoint and its equivalent route with one trailing slash.
+    /// </summary>
+    /// <param name="requestPath">The request path.</param>
+    /// <returns><see langword="true" /> when the path identifies a wish collection.</returns>
+    private static bool MatchesWishCollectionPath(PathString requestPath)
+    {
+
+        if (!requestPath.StartsWithSegments(
+            _wishlistsPath,
+            out var remainingPath))
+        {
+            return false;
+        }
+
+        var nestedPath = remainingPath.Value.AsSpan(1);
+
+        if (nestedPath.EndsWith('/'))
+            nestedPath = nestedPath[..^1];
+
+        var separatorIndex = nestedPath.IndexOf('/');
+
+        if (separatorIndex <= 0)
+            return false;
+
+        var wishlistId = nestedPath[..separatorIndex];
+        var resourceName = nestedPath[(separatorIndex + 1)..];
+
+        return resourceName.Equals(
+                "wishes",
+                StringComparison.OrdinalIgnoreCase) &&
             Guid.TryParse(
                 wishlistId,
                 out _);

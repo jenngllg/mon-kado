@@ -131,6 +131,11 @@ public static class ErrorCodes
     /// </summary>
     public const string WishlistVersionConflict = "WISHLIST_VERSION_CONFLICT";
 
+    /// <summary>
+    /// Identifies a gift wish that is unavailable under its parent wishlist.
+    /// </summary>
+    public const string WishNotFound = "WISH_NOT_FOUND";
+
     #endregion
 
     #region Technical
