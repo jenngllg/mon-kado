@@ -1,12 +1,14 @@
 using JennGllg.Fr.MonKado.Back.Api.Errors;
 using JennGllg.Fr.MonKado.Back.Application.Abstractions;
 using JennGllg.Fr.MonKado.Back.Application.Common.Exceptions;
+using JennGllg.Fr.MonKado.Back.Application.Common.Models;
 using JennGllg.Fr.MonKado.Back.Application.Models;
 using JennGllg.Fr.MonKado.Back.Domain.Enums;
 
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Net.Http.Headers;
 
 using System.Net;
 using System.Net.Http.Headers;
@@ -228,6 +230,430 @@ public class WishlistTests
         Assert.Equal(
             ErrorCodes.TechnicalDependencyUnavailable,
             error.ErrorCode);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_WhenRequestIsValid_ReturnsExactUpdatedWishlistContractAndHeaders()
+    {
+        // Arrange
+        await using var factory = new RegistrationApiFactory();
+        var ownerId = Guid.CreateVersion7();
+        var wishlistId = Guid.CreateVersion7();
+        using var client = CreateAuthorizedClient(
+            factory,
+            ownerId);
+        using var request = CreateUpdateRequest(wishlistId);
+
+        // Act
+        using var response = await client.SendAsync(
+            request,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.OK,
+            response.StatusCode);
+        Assert.True(response.Headers.CacheControl?.NoStore);
+        Assert.Equal(
+            "\"0000002b\"",
+            response.Headers.ETag?.Tag);
+        Assert.Equal(
+            [(ownerId, wishlistId)],
+            factory.WishlistService.Accesses);
+        var update = Assert.Single(factory.WishlistService.Updates);
+        Assert.Equal(
+            (
+                ownerId,
+                wishlistId,
+                "Liste de Léa",
+                "LISTE DE LÉA",
+                WishlistOccasion.Wedding,
+                new DateOnly(
+                    2099,
+                    12,
+                    24),
+                "Merci beaucoup",
+                42u),
+            update);
+        using var document = await response.Content.ReadFromJsonAsync<JsonDocument>(
+            TestContext.Current.CancellationToken)
+            ?? throw new InvalidOperationException("The updated wishlist response is empty.");
+        Assert.Equal(
+            [
+                "id",
+                "name",
+                "occasion",
+                "eventDate",
+                "message",
+                "createdAt",
+                "updatedAt"
+            ],
+            document.RootElement
+                .EnumerateObject()
+                .Select(property => property.Name));
+        Assert.Equal(
+            wishlistId,
+            document.RootElement.GetProperty("id").GetGuid());
+        Assert.Equal(
+            "Liste de Léa",
+            document.RootElement.GetProperty("name").GetString());
+        Assert.Equal(
+            "wedding",
+            document.RootElement.GetProperty("occasion").GetString());
+        Assert.Equal(
+            "2099-12-24",
+            document.RootElement.GetProperty("eventDate").GetString());
+        Assert.Equal(
+            "Merci beaucoup",
+            document.RootElement.GetProperty("message").GetString());
+        Assert.Contains(
+            factory.LogMessages,
+            message => message.Contains(
+                $"Updating wishlist {wishlistId} for member {ownerId}",
+                StringComparison.Ordinal));
+        Assert.Contains(
+            factory.LogMessages,
+            message => message.Contains(
+                $"Wishlist {wishlistId} updated for member {ownerId}",
+                StringComparison.Ordinal));
+        Assert.DoesNotContain(
+            factory.LogMessages,
+            message => message.Contains(
+                "Merci beaucoup",
+                StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task UpdateAsync_WhenIfMatchIsMissing_ReturnsPreconditionRequiredAfterAuthorization()
+    {
+        // Arrange
+        await using var factory = new RegistrationApiFactory();
+        var ownerId = Guid.CreateVersion7();
+        var wishlistId = Guid.CreateVersion7();
+        using var client = CreateAuthorizedClient(
+            factory,
+            ownerId);
+        using var request = new HttpRequestMessage(
+            HttpMethod.Put,
+            $"/api/v1/wishlists/{wishlistId}")
+        {
+            Content = CreateUpdateContent()
+        };
+
+        // Act
+        using var response = await client.SendAsync(
+            request,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(
+            (HttpStatusCode)428,
+            response.StatusCode);
+        var error = await response.Content.ReadFromJsonAsync<ErrorResponse>(
+            TestContext.Current.CancellationToken);
+        Assert.NotNull(error);
+        Assert.Equal(
+            ErrorCodes.RequestPreconditionRequired,
+            error.ErrorCode);
+        Assert.Equal(
+            [(ownerId, wishlistId)],
+            factory.WishlistService.Accesses);
+        Assert.Empty(factory.WishlistService.Updates);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_WhenIfMatchIsMalformed_ReturnsValidationError()
+    {
+        // Arrange
+        await using var factory = new RegistrationApiFactory();
+        var wishlistId = Guid.CreateVersion7();
+        using var client = CreateAuthorizedClient(
+            factory,
+            Guid.CreateVersion7());
+        using var request = new HttpRequestMessage(
+            HttpMethod.Put,
+            $"/api/v1/wishlists/{wishlistId}")
+        {
+            Content = CreateUpdateContent()
+        };
+        request.Headers.TryAddWithoutValidation(
+            HeaderNames.IfMatch,
+            "invalid");
+
+        // Act
+        using var response = await client.SendAsync(
+            request,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.BadRequest,
+            response.StatusCode);
+        var error = await response.Content.ReadFromJsonAsync<ErrorResponse>(
+            TestContext.Current.CancellationToken);
+        Assert.NotNull(error);
+        Assert.Equal(
+            ErrorCodes.RequestValidationError,
+            error.ErrorCode);
+        var validationError = Assert.Single(error.ValidationErrors ?? []);
+        Assert.Equal(
+            "ifMatch",
+            validationError.PropertyName);
+        Assert.Empty(factory.WishlistService.Updates);
+    }
+
+    [Theory]
+    [InlineData(WishlistAccess.NotOwned, HttpStatusCode.NotFound, ErrorCodes.WishlistNotFound)]
+    [InlineData(WishlistAccess.MemberNotFound, HttpStatusCode.Unauthorized, ErrorCodes.AccountAuthenticationSessionInvalid)]
+    public async Task UpdateAsync_WhenAccessIsRejected_ReturnsPrivateResourceErrorBeforePrecondition(
+        WishlistAccess access,
+        HttpStatusCode expectedStatus,
+        string expectedErrorCode)
+    {
+        // Arrange
+        await using var factory = new RegistrationApiFactory();
+        factory.WishlistService.Access = access;
+        var wishlistId = Guid.CreateVersion7();
+        using var client = CreateAuthorizedClient(
+            factory,
+            Guid.CreateVersion7());
+        using var request = new HttpRequestMessage(
+            HttpMethod.Put,
+            $"/api/v1/wishlists/{wishlistId}")
+        {
+            Content = CreateUpdateContent()
+        };
+
+        // Act
+        using var response = await client.SendAsync(
+            request,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(
+            expectedStatus,
+            response.StatusCode);
+        var error = await response.Content.ReadFromJsonAsync<ErrorResponse>(
+            TestContext.Current.CancellationToken);
+        Assert.NotNull(error);
+        Assert.Equal(
+            expectedErrorCode,
+            error.ErrorCode);
+        Assert.Empty(factory.WishlistService.Updates);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_WhenWishlistDisappearsAfterAuthorization_ReturnsNotFound()
+    {
+        // Arrange
+        await using var factory = new RegistrationApiFactory();
+        factory.WishlistService.WishlistExistsForUpdate = false;
+        var wishlistId = Guid.CreateVersion7();
+        using var client = CreateAuthorizedClient(
+            factory,
+            Guid.CreateVersion7());
+        using var request = CreateUpdateRequest(wishlistId);
+
+        // Act
+        using var response = await client.SendAsync(
+            request,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.NotFound,
+            response.StatusCode);
+        var error = await response.Content.ReadFromJsonAsync<ErrorResponse>(
+            TestContext.Current.CancellationToken);
+        Assert.NotNull(error);
+        Assert.Equal(
+            ErrorCodes.WishlistNotFound,
+            error.ErrorCode);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_WhenRequestIsInvalid_ReturnsAllValidationErrors()
+    {
+        // Arrange
+        await using var factory = new RegistrationApiFactory();
+        var wishlistId = Guid.CreateVersion7();
+        using var client = CreateAuthorizedClient(
+            factory,
+            Guid.CreateVersion7());
+        using var request = new HttpRequestMessage(
+            HttpMethod.Put,
+            $"/api/v1/wishlists/{wishlistId}")
+        {
+            Content = JsonContent.Create(new
+            {
+                name = (string?)null,
+                occasion = (string?)null,
+                eventDate = (string?)null,
+                message = (string?)null
+            })
+        };
+        request.Headers.TryAddWithoutValidation(
+            HeaderNames.IfMatch,
+            "\"0000002a\"");
+
+        // Act
+        using var response = await client.SendAsync(
+            request,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.BadRequest,
+            response.StatusCode);
+        var error = await response.Content.ReadFromJsonAsync<ErrorResponse>(
+            TestContext.Current.CancellationToken);
+        Assert.NotNull(error);
+        Assert.Equal(
+            [
+                "name",
+                "occasion"
+            ],
+            error.ValidationErrors?
+                .Select(validation => validation.PropertyName)
+                .OrderBy(propertyName => propertyName));
+        Assert.Empty(factory.WishlistService.Updates);
+    }
+
+    [Theory]
+    [InlineData("version", HttpStatusCode.PreconditionFailed, ErrorCodes.WishlistVersionConflict)]
+    [InlineData("duplicate", HttpStatusCode.Conflict, ErrorCodes.WishlistNameAlreadyExists)]
+    [InlineData("validation", HttpStatusCode.BadRequest, ErrorCodes.RequestValidationError)]
+    [InlineData("database", HttpStatusCode.ServiceUnavailable, ErrorCodes.TechnicalDependencyUnavailable)]
+    public async Task UpdateAsync_WhenServiceRejectsUpdate_ReturnsStructuredError(
+        string scenario,
+        HttpStatusCode expectedStatus,
+        string expectedErrorCode)
+    {
+        // Arrange
+        await using var factory = new RegistrationApiFactory();
+        factory.WishlistService.Exception = scenario switch
+        {
+            "version" => new WishlistVersionConflictException(),
+            "duplicate" => new WishlistNameAlreadyExistsException(),
+            "validation" => new RequestValidationException(
+            [
+                new ValidationError(
+                    "eventDate",
+                    "The event date must be today or later.")
+            ]),
+            _ => new DependencyUnavailableException(
+                "PostgreSQL",
+                new TimeoutException())
+        };
+        using var client = CreateAuthorizedClient(
+            factory,
+            Guid.CreateVersion7());
+        using var request = CreateUpdateRequest(Guid.CreateVersion7());
+
+        // Act
+        using var response = await client.SendAsync(
+            request,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(
+            expectedStatus,
+            response.StatusCode);
+        var error = await response.Content.ReadFromJsonAsync<ErrorResponse>(
+            TestContext.Current.CancellationToken);
+        Assert.NotNull(error);
+        Assert.Equal(
+            expectedErrorCode,
+            error.ErrorCode);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_WhenBearerTokenIsMissing_ReturnsUnauthorized()
+    {
+        // Arrange
+        await using var factory = new RegistrationApiFactory();
+        using var client = factory.CreateClient();
+        using var request = CreateUpdateRequest(Guid.CreateVersion7());
+
+        // Act
+        using var response = await client.SendAsync(
+            request,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.Unauthorized,
+            response.StatusCode);
+        Assert.Empty(factory.WishlistService.Accesses);
+        Assert.Empty(factory.WishlistService.Updates);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_WhenContentTypeIsNotJson_ReturnsUnsupportedMediaType()
+    {
+        // Arrange
+        await using var factory = new RegistrationApiFactory();
+        using var client = CreateAuthorizedClient(
+            factory,
+            Guid.CreateVersion7());
+        using var request = new HttpRequestMessage(
+            HttpMethod.Put,
+            $"/api/v1/wishlists/{Guid.CreateVersion7()}")
+        {
+            Content = new StringContent(
+                "name=Liste",
+                Encoding.UTF8,
+                "text/plain")
+        };
+        request.Headers.TryAddWithoutValidation(
+            HeaderNames.IfMatch,
+            "\"0000002a\"");
+
+        // Act
+        using var response = await client.SendAsync(
+            request,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.UnsupportedMediaType,
+            response.StatusCode);
+        Assert.Empty(factory.WishlistService.Updates);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_WhenBodyExceedsMaximumSize_ReturnsPayloadTooLarge()
+    {
+        // Arrange
+        await using var factory = new RegistrationApiFactory();
+        using var client = CreateAuthorizedClient(
+            factory,
+            Guid.CreateVersion7());
+        using var request = new HttpRequestMessage(
+            HttpMethod.Put,
+            $"/api/v1/wishlists/{Guid.CreateVersion7()}")
+        {
+            Content = new StringContent(
+                "{\"name\":\"" + new string(
+                    'a',
+                    5 * 1024) + "\",\"occasion\":\"other\"}",
+                Encoding.UTF8,
+                "application/json")
+        };
+        request.Headers.TryAddWithoutValidation(
+            HeaderNames.IfMatch,
+            "\"0000002a\"");
+
+        // Act
+        using var response = await client.SendAsync(
+            request,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.RequestEntityTooLarge,
+            response.StatusCode);
+        Assert.Empty(factory.WishlistService.Updates);
     }
 
     [Fact]
@@ -752,6 +1178,32 @@ public class WishlistTests
                 message = "  Merci d’être là  "
             })
         };
+    }
+
+    private static HttpRequestMessage CreateUpdateRequest(Guid wishlistId)
+    {
+        var request = new HttpRequestMessage(
+            HttpMethod.Put,
+            $"/api/v1/wishlists/{wishlistId}")
+        {
+            Content = CreateUpdateContent()
+        };
+        request.Headers.TryAddWithoutValidation(
+            HeaderNames.IfMatch,
+            "\"0000002a\"");
+
+        return request;
+    }
+
+    private static JsonContent CreateUpdateContent()
+    {
+        return JsonContent.Create(new
+        {
+            name = "  Liste de Le\u0301a  ",
+            occasion = "wedding",
+            eventDate = "2099-12-24",
+            message = "  Merci beaucoup  "
+        });
     }
 
     private static WishlistDetails CreateWishlistDetails(

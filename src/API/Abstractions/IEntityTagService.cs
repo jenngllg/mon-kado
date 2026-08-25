@@ -1,14 +1,14 @@
 namespace JennGllg.Fr.MonKado.Back.Api.Abstractions;
 
 /// <summary>
-/// Formats and validates member profile entity tags.
+/// Formats and validates strong resource entity tags.
 /// </summary>
 public interface IEntityTagService
 {
     /// <summary>
-    /// Formats a member profile version as a strong entity tag.
+    /// Formats a resource version as a strong entity tag.
     /// </summary>
-    /// <param name="version">The member profile version.</param>
+    /// <param name="version">The resource version.</param>
     /// <returns>The strong entity tag.</returns>
     string Format(uint version);
 
@@ -16,7 +16,7 @@ public interface IEntityTagService
     /// Parses a required strong entity tag.
     /// </summary>
     /// <param name="value">The raw If-Match header value.</param>
-    /// <returns>The member profile version.</returns>
+    /// <returns>The resource version.</returns>
     /// <exception cref="Application.Common.Exceptions.PreconditionRequiredException">
     /// The If-Match header is absent.
     /// </exception>

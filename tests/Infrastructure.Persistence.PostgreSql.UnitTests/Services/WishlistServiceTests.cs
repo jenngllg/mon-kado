@@ -29,7 +29,15 @@ public class WishlistServiceTests
         _unitOfWorkMock = new Mock<IUnitOfWork>(MockBehavior.Strict);
         _wishlistService = new WishlistService(
             _wishlistRepositoryMock.Object,
-            _unitOfWorkMock.Object);
+            _unitOfWorkMock.Object,
+            new FixedTimeProvider(new DateTimeOffset(
+                2026,
+                8,
+                25,
+                10,
+                0,
+                0,
+                TimeSpan.Zero)));
     }
 
     [Fact]
@@ -325,6 +333,489 @@ public class WishlistServiceTests
     }
 
     [Fact]
+    public async Task UpdateAsync_WhenValuesChange_ReturnsUpdatedWishlistAndSaves()
+    {
+        // Arrange
+        var ownerId = Guid.CreateVersion7();
+        var wishlistId = Guid.CreateVersion7();
+        var wishlist = CreateWishlist(wishlistId);
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var eventDate = new DateOnly(
+            2026,
+            9,
+            24);
+        _wishlistRepositoryMock
+            .Setup(repository => repository.GetByIdForUpdateAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken))
+            .ReturnsAsync(wishlist);
+        _unitOfWorkMock
+            .Setup(unitOfWork => unitOfWork.SaveChangesAsync(cancellationToken))
+            .ReturnsAsync(1);
+
+        // Act
+        var result = await _wishlistService.UpdateAsync(
+            ownerId,
+            wishlistId,
+            "Nouvelle liste",
+            "NOUVELLE LISTE",
+            WishlistOccasion.Wedding,
+            eventDate,
+            "Merci",
+            0,
+            cancellationToken);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal(
+            "Nouvelle liste",
+            result.Name);
+        Assert.Equal(
+            WishlistOccasion.Wedding,
+            result.Occasion);
+        Assert.Equal(
+            eventDate,
+            result.EventDate);
+        Assert.Equal(
+            "Merci",
+            result.Message);
+        _wishlistRepositoryMock.Verify(
+            repository => repository.GetByIdForUpdateAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken),
+            Times.Once);
+        _unitOfWorkMock.Verify(
+            unitOfWork => unitOfWork.SaveChangesAsync(cancellationToken),
+            Times.Once);
+        VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task UpdateAsync_WhenValuesAreUnchanged_ReturnsWishlistWithoutSaving()
+    {
+        // Arrange
+        var ownerId = Guid.CreateVersion7();
+        var wishlistId = Guid.CreateVersion7();
+        var wishlist = CreateWishlist(wishlistId);
+        var cancellationToken = TestContext.Current.CancellationToken;
+        _wishlistRepositoryMock
+            .Setup(repository => repository.GetByIdForUpdateAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken))
+            .ReturnsAsync(wishlist);
+
+        // Act
+        var result = await _wishlistService.UpdateAsync(
+            ownerId,
+            wishlistId,
+            "Liste",
+            "LISTE",
+            WishlistOccasion.Other,
+            null,
+            null,
+            0,
+            cancellationToken);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal(
+            0u,
+            result.Version);
+        _wishlistRepositoryMock.Verify(
+            repository => repository.GetByIdForUpdateAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken),
+            Times.Once);
+        VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task UpdateAsync_WhenExistingPastDateIsUnchanged_ReturnsWishlistWithoutSaving()
+    {
+        // Arrange
+        var ownerId = Guid.CreateVersion7();
+        var wishlistId = Guid.CreateVersion7();
+        var pastDate = new DateOnly(
+            2020,
+            1,
+            1);
+        var wishlist = new Wishlist(
+            wishlistId,
+            ownerId,
+            "Liste",
+            "LISTE",
+            WishlistOccasion.Other,
+            pastDate,
+            null);
+        var cancellationToken = TestContext.Current.CancellationToken;
+        _wishlistRepositoryMock
+            .Setup(repository => repository.GetByIdForUpdateAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken))
+            .ReturnsAsync(wishlist);
+
+        // Act
+        var result = await _wishlistService.UpdateAsync(
+            ownerId,
+            wishlistId,
+            "Liste",
+            "LISTE",
+            WishlistOccasion.Other,
+            pastDate,
+            null,
+            0,
+            cancellationToken);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal(
+            pastDate,
+            result.EventDate);
+        _wishlistRepositoryMock.Verify(
+            repository => repository.GetByIdForUpdateAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken),
+            Times.Once);
+        VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task UpdateAsync_WhenPastDateIsChangedToAnotherPastDate_ThrowsRequestValidationException()
+    {
+        // Arrange
+        var ownerId = Guid.CreateVersion7();
+        var wishlistId = Guid.CreateVersion7();
+        var wishlist = new Wishlist(
+            wishlistId,
+            ownerId,
+            "Liste",
+            "LISTE",
+            WishlistOccasion.Other,
+            new DateOnly(
+                2020,
+                1,
+                1),
+            null);
+        var cancellationToken = TestContext.Current.CancellationToken;
+        _wishlistRepositoryMock
+            .Setup(repository => repository.GetByIdForUpdateAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken))
+            .ReturnsAsync(wishlist);
+
+        // Act
+        var action = () => _wishlistService.UpdateAsync(
+            ownerId,
+            wishlistId,
+            "Liste",
+            "LISTE",
+            WishlistOccasion.Other,
+            new DateOnly(
+                2021,
+                1,
+                1),
+            null,
+            0,
+            cancellationToken);
+
+        // Assert
+        var exception = await Assert.ThrowsAsync<RequestValidationException>(action);
+        var error = Assert.Single(exception.ValidationErrors);
+        Assert.Equal(
+            "eventDate",
+            error.PropertyName);
+        _wishlistRepositoryMock.Verify(
+            repository => repository.GetByIdForUpdateAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken),
+            Times.Once);
+        VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task UpdateAsync_WhenWishlistDoesNotExist_ReturnsNull()
+    {
+        // Arrange
+        var ownerId = Guid.CreateVersion7();
+        var wishlistId = Guid.CreateVersion7();
+        var cancellationToken = TestContext.Current.CancellationToken;
+        _wishlistRepositoryMock
+            .Setup(repository => repository.GetByIdForUpdateAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken))
+            .ReturnsAsync((Wishlist?)null);
+
+        // Act
+        var result = await UpdateAsync(
+            ownerId,
+            wishlistId,
+            cancellationToken);
+
+        // Assert
+        Assert.Null(result);
+        _wishlistRepositoryMock.Verify(
+            repository => repository.GetByIdForUpdateAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken),
+            Times.Once);
+        VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task UpdateAsync_WhenExpectedVersionIsStale_ThrowsWishlistVersionConflictException()
+    {
+        // Arrange
+        var ownerId = Guid.CreateVersion7();
+        var wishlistId = Guid.CreateVersion7();
+        var wishlist = CreateWishlist(wishlistId);
+        var cancellationToken = TestContext.Current.CancellationToken;
+        _wishlistRepositoryMock
+            .Setup(repository => repository.GetByIdForUpdateAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken))
+            .ReturnsAsync(wishlist);
+
+        // Act
+        var action = () => _wishlistService.UpdateAsync(
+            ownerId,
+            wishlistId,
+            "Liste",
+            "LISTE",
+            WishlistOccasion.Other,
+            null,
+            null,
+            42,
+            cancellationToken);
+
+        // Assert
+        await Assert.ThrowsAsync<WishlistVersionConflictException>(action);
+        _wishlistRepositoryMock.Verify(
+            repository => repository.GetByIdForUpdateAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken),
+            Times.Once);
+        VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task UpdateAsync_WhenNameAlreadyExists_ThrowsWishlistNameAlreadyExistsException()
+    {
+        // Arrange
+        var ownerId = Guid.CreateVersion7();
+        var wishlistId = Guid.CreateVersion7();
+        var cancellationToken = TestContext.Current.CancellationToken;
+        _wishlistRepositoryMock
+            .Setup(repository => repository.GetByIdForUpdateAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken))
+            .ReturnsAsync(CreateWishlist(wishlistId));
+        _unitOfWorkMock
+            .Setup(unitOfWork => unitOfWork.SaveChangesAsync(cancellationToken))
+            .ThrowsAsync(CreatePostgreSqlException(
+                PostgresErrorCodes.UniqueViolation,
+                OwnerNormalizedNameIndexName));
+
+        // Act
+        var action = () => _wishlistService.UpdateAsync(
+            ownerId,
+            wishlistId,
+            "Doublon",
+            "DOUBLON",
+            WishlistOccasion.Other,
+            null,
+            null,
+            0,
+            cancellationToken);
+
+        // Assert
+        await Assert.ThrowsAsync<WishlistNameAlreadyExistsException>(action);
+        _wishlistRepositoryMock.Verify(
+            repository => repository.GetByIdForUpdateAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken),
+            Times.Once);
+        _unitOfWorkMock.Verify(
+            unitOfWork => unitOfWork.SaveChangesAsync(cancellationToken),
+            Times.Once);
+        VerifyNoOtherCalls();
+    }
+
+    [Theory]
+    [InlineData(WishlistAccess.MemberNotFound, typeof(InvalidAuthenticationSessionException))]
+    [InlineData(WishlistAccess.Owner, typeof(WishlistVersionConflictException))]
+    public async Task UpdateAsync_WhenConcurrentUpdateStillHasAccess_ThrowsExpectedException(
+        WishlistAccess access,
+        Type expectedExceptionType)
+    {
+        // Arrange
+        var ownerId = Guid.CreateVersion7();
+        var wishlistId = Guid.CreateVersion7();
+        var cancellationToken = TestContext.Current.CancellationToken;
+        _wishlistRepositoryMock
+            .Setup(repository => repository.GetByIdForUpdateAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken))
+            .ReturnsAsync(CreateWishlist(wishlistId));
+        _unitOfWorkMock
+            .Setup(unitOfWork => unitOfWork.SaveChangesAsync(cancellationToken))
+            .ThrowsAsync(new DbUpdateConcurrencyException());
+        _wishlistRepositoryMock
+            .Setup(repository => repository.GetAccessAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken))
+            .ReturnsAsync(access);
+
+        // Act
+        var action = () => _wishlistService.UpdateAsync(
+            ownerId,
+            wishlistId,
+            "Nouvelle liste",
+            "NOUVELLE LISTE",
+            WishlistOccasion.Other,
+            null,
+            null,
+            0,
+            cancellationToken);
+
+        // Assert
+        var exception = await Assert.ThrowsAnyAsync<Exception>(action);
+        Assert.IsType(
+            expectedExceptionType,
+            exception);
+        VerifyConcurrentUpdate(
+            ownerId,
+            wishlistId,
+            cancellationToken);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_WhenWishlistIsDeletedConcurrently_ReturnsNull()
+    {
+        // Arrange
+        var ownerId = Guid.CreateVersion7();
+        var wishlistId = Guid.CreateVersion7();
+        var cancellationToken = TestContext.Current.CancellationToken;
+        _wishlistRepositoryMock
+            .Setup(repository => repository.GetByIdForUpdateAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken))
+            .ReturnsAsync(CreateWishlist(wishlistId));
+        _unitOfWorkMock
+            .Setup(unitOfWork => unitOfWork.SaveChangesAsync(cancellationToken))
+            .ThrowsAsync(new DbUpdateConcurrencyException());
+        _wishlistRepositoryMock
+            .Setup(repository => repository.GetAccessAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken))
+            .ReturnsAsync(WishlistAccess.NotOwned);
+
+        // Act
+        var result = await _wishlistService.UpdateAsync(
+            ownerId,
+            wishlistId,
+            "Nouvelle liste",
+            "NOUVELLE LISTE",
+            WishlistOccasion.Other,
+            null,
+            null,
+            0,
+            cancellationToken);
+
+        // Assert
+        Assert.Null(result);
+        VerifyConcurrentUpdate(
+            ownerId,
+            wishlistId,
+            cancellationToken);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_WhenConcurrentAccessCheckTimesOut_ThrowsDependencyUnavailableException()
+    {
+        // Arrange
+        var ownerId = Guid.CreateVersion7();
+        var wishlistId = Guid.CreateVersion7();
+        var cancellationToken = TestContext.Current.CancellationToken;
+        _wishlistRepositoryMock
+            .Setup(repository => repository.GetByIdForUpdateAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken))
+            .ReturnsAsync(CreateWishlist(wishlistId));
+        _unitOfWorkMock
+            .Setup(unitOfWork => unitOfWork.SaveChangesAsync(cancellationToken))
+            .ThrowsAsync(new DbUpdateConcurrencyException());
+        _wishlistRepositoryMock
+            .Setup(repository => repository.GetAccessAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken))
+            .ThrowsAsync(new TimeoutException());
+
+        // Act
+        var action = () => UpdateAsync(
+            ownerId,
+            wishlistId,
+            cancellationToken);
+
+        // Assert
+        await Assert.ThrowsAsync<DependencyUnavailableException>(action);
+        VerifyConcurrentUpdate(
+            ownerId,
+            wishlistId,
+            cancellationToken);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_WhenPostgreSqlTimesOut_ThrowsDependencyUnavailableException()
+    {
+        // Arrange
+        var ownerId = Guid.CreateVersion7();
+        var wishlistId = Guid.CreateVersion7();
+        var cancellationToken = TestContext.Current.CancellationToken;
+        _wishlistRepositoryMock
+            .Setup(repository => repository.GetByIdForUpdateAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken))
+            .ThrowsAsync(new TimeoutException());
+
+        // Act
+        var action = () => UpdateAsync(
+            ownerId,
+            wishlistId,
+            cancellationToken);
+
+        // Assert
+        await Assert.ThrowsAsync<DependencyUnavailableException>(action);
+        _wishlistRepositoryMock.Verify(
+            repository => repository.GetByIdForUpdateAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken),
+            Times.Once);
+        VerifyNoOtherCalls();
+    }
+
+    [Fact]
     public async Task GetByOwnerIdAsync_WhenMemberExists_ReturnsMappedWishlistsInRepositoryOrder()
     {
         // Arrange
@@ -498,6 +989,23 @@ public class WishlistServiceTests
             cancellationToken);
     }
 
+    private Task<WishlistDetails?> UpdateAsync(
+        Guid ownerId,
+        Guid wishlistId,
+        CancellationToken cancellationToken)
+    {
+        return _wishlistService.UpdateAsync(
+            ownerId,
+            wishlistId,
+            "Nouvelle liste",
+            "NOUVELLE LISTE",
+            WishlistOccasion.Other,
+            null,
+            null,
+            0,
+            cancellationToken);
+    }
+
     private static Wishlist CreateWishlist(Guid wishlistId)
     {
         return new Wishlist(
@@ -522,6 +1030,29 @@ public class WishlistServiceTests
                 "ERROR",
                 sqlState,
                 constraintName: constraintName));
+    }
+
+    private void VerifyConcurrentUpdate(
+        Guid ownerId,
+        Guid wishlistId,
+        CancellationToken cancellationToken)
+    {
+        _wishlistRepositoryMock.Verify(
+            repository => repository.GetByIdForUpdateAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken),
+            Times.Once);
+        _unitOfWorkMock.Verify(
+            unitOfWork => unitOfWork.SaveChangesAsync(cancellationToken),
+            Times.Once);
+        _wishlistRepositoryMock.Verify(
+            repository => repository.GetAccessAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken),
+            Times.Once);
+        VerifyNoOtherCalls();
     }
 
     private void VerifyNoOtherCalls()

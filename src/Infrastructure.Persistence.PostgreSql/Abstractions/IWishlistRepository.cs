@@ -25,6 +25,18 @@ public interface IWishlistRepository
         CancellationToken cancellationToken);
 
     /// <summary>
+    /// Gets a tracked wishlist owned by a member for an optimistic update.
+    /// </summary>
+    /// <param name="ownerId">The owner member identifier.</param>
+    /// <param name="wishlistId">The wishlist identifier.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The tracked wishlist when found; otherwise, <see langword="null" />.</returns>
+    Task<Wishlist?> GetByIdForUpdateAsync(
+        Guid ownerId,
+        Guid wishlistId,
+        CancellationToken cancellationToken);
+
+    /// <summary>
     /// Gets all private wishlists owned by a member in reverse creation order.
     /// </summary>
     /// <param name="ownerId">The owner member identifier.</param>

@@ -252,6 +252,16 @@ public static class LogEventIds
     /// </summary>
     public const int WishlistCollectionRetrieved = 2005;
 
+    /// <summary>
+    /// Identifies the start of a private wishlist update.
+    /// </summary>
+    public const int WishlistUpdateStarted = 2006;
+
+    /// <summary>
+    /// Identifies an updated private wishlist.
+    /// </summary>
+    public const int WishlistUpdated = 2007;
+
     #endregion
 
     #region Technical

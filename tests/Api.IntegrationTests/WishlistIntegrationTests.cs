@@ -10,6 +10,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 using System.Net;
 using System.Net.Http.Headers;
@@ -371,6 +372,418 @@ public class WishlistIntegrationTests(PostgreSqlContainerFixture fixture)
     }
 
     [Fact]
+    public async Task UpdateAsync_WhenUsingEntityTags_UpdatesThenRejectsStaleVersionAndPreservesNoOp()
+    {
+        // Arrange
+        var timeProvider = new FixedTimeProvider(_referenceTime);
+        await using var factory = await CreateMigratedFactoryAsync(timeProvider);
+        var owner = await CreateMemberAsync(
+            factory,
+            "owner@example.fr");
+        using var client = CreateAuthorizedClient(
+            factory,
+            owner.Id);
+        using var creationResponse = await CreateWishlistAsync(
+            client,
+            "Liste initiale");
+        var wishlistId = GetWishlistId(creationResponse);
+        var initialEntityTag = creationResponse.Headers.ETag?.Tag
+            ?? throw new InvalidOperationException("The created wishlist ETag is missing.");
+        timeProvider.UtcNow = _referenceTime.AddMinutes(1);
+
+        // Act
+        using var updateResponse = await UpdateWishlistAsync(
+            client,
+            wishlistId,
+            initialEntityTag,
+            "  Liste modifiée  ",
+            "wedding",
+            "2099-12-24",
+            "  Nouveau message  ");
+        var updatedEntityTag = updateResponse.Headers.ETag?.Tag
+            ?? throw new InvalidOperationException("The updated wishlist ETag is missing.");
+        var updated = await updateResponse.Content.ReadFromJsonAsync<JsonElement>(
+            TestContext.Current.CancellationToken);
+        var storedAfterUpdate = await GetWishlistAsync(
+            factory,
+            wishlistId);
+        timeProvider.UtcNow = _referenceTime.AddMinutes(2);
+        using var unchangedResponse = await UpdateWishlistAsync(
+            client,
+            wishlistId,
+            updatedEntityTag,
+            "  Liste modifiée  ",
+            "wedding",
+            "2099-12-24",
+            "  Nouveau message  ");
+        var storedAfterNoOp = await GetWishlistAsync(
+            factory,
+            wishlistId);
+        timeProvider.UtcNow = _referenceTime.AddMinutes(3);
+        using var clearedResponse = await UpdateWishlistAsync(
+            client,
+            wishlistId,
+            updatedEntityTag,
+            "Liste modifiée",
+            "wedding",
+            null,
+            null);
+        var clearedEntityTag = clearedResponse.Headers.ETag?.Tag
+            ?? throw new InvalidOperationException("The cleared wishlist ETag is missing.");
+        var storedAfterClear = await GetWishlistAsync(
+            factory,
+            wishlistId);
+        using var staleResponse = await UpdateWishlistAsync(
+            client,
+            wishlistId,
+            initialEntityTag,
+            "Autre nom",
+            "other",
+            null,
+            null);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.OK,
+            updateResponse.StatusCode);
+        Assert.NotEqual(
+            initialEntityTag,
+            updatedEntityTag);
+        Assert.Equal(
+            wishlistId,
+            updated.GetProperty("id").GetGuid());
+        Assert.Equal(
+            "Liste modifiée",
+            updated.GetProperty("name").GetString());
+        Assert.Equal(
+            "LISTE MODIFIÉE",
+            storedAfterUpdate.NormalizedName);
+        Assert.Equal(
+            WishlistOccasion.Wedding,
+            storedAfterUpdate.Occasion);
+        Assert.Equal(
+            new DateOnly(
+                2099,
+                12,
+                24),
+            storedAfterUpdate.EventDate);
+        Assert.Equal(
+            "Nouveau message",
+            storedAfterUpdate.Message);
+        Assert.Equal(
+            _referenceTime.UtcDateTime,
+            storedAfterUpdate.CreatedAt);
+        Assert.Equal(
+            _referenceTime.AddMinutes(1).UtcDateTime,
+            storedAfterUpdate.UpdatedAt);
+        Assert.Equal(
+            HttpStatusCode.OK,
+            unchangedResponse.StatusCode);
+        Assert.Equal(
+            updatedEntityTag,
+            unchangedResponse.Headers.ETag?.Tag);
+        Assert.Equal(
+            storedAfterUpdate.Version,
+            storedAfterNoOp.Version);
+        Assert.Equal(
+            storedAfterUpdate.UpdatedAt,
+            storedAfterNoOp.UpdatedAt);
+        Assert.Equal(
+            HttpStatusCode.OK,
+            clearedResponse.StatusCode);
+        Assert.NotEqual(
+            updatedEntityTag,
+            clearedEntityTag);
+        Assert.Null(storedAfterClear.EventDate);
+        Assert.Null(storedAfterClear.Message);
+        Assert.Equal(
+            _referenceTime.AddMinutes(3).UtcDateTime,
+            storedAfterClear.UpdatedAt);
+        Assert.Equal(
+            HttpStatusCode.PreconditionFailed,
+            staleResponse.StatusCode);
+        var staleError = await staleResponse.Content.ReadFromJsonAsync<ErrorResponse>(
+            TestContext.Current.CancellationToken);
+        Assert.NotNull(staleError);
+        Assert.Equal(
+            ErrorCodes.WishlistVersionConflict,
+            staleError.ErrorCode);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_WhenExistingDateIsPast_AllowsUnchangedDateAndRejectsAnotherPastDate()
+    {
+        // Arrange
+        await using var factory = await CreateMigratedFactoryAsync();
+        var owner = await CreateMemberAsync(
+            factory,
+            "owner@example.fr");
+        var wishlist = await SeedWishlistAsync(
+            factory,
+            Guid.CreateVersion7(),
+            owner.Id,
+            "Liste passée",
+            new DateOnly(
+                2020,
+                1,
+                1));
+        using var client = CreateAuthorizedClient(
+            factory,
+            owner.Id);
+        using var retrievalResponse = await client.GetAsync(
+            $"/api/v1/wishlists/{wishlist.Id}",
+            TestContext.Current.CancellationToken);
+        var initialEntityTag = retrievalResponse.Headers.ETag?.Tag
+            ?? throw new InvalidOperationException("The wishlist ETag is missing.");
+
+        // Act
+        using var acceptedResponse = await UpdateWishlistAsync(
+            client,
+            wishlist.Id,
+            initialEntityTag,
+            "Liste passée renommée",
+            "birthday",
+            "2020-01-01",
+            null);
+        var acceptedEntityTag = acceptedResponse.Headers.ETag?.Tag
+            ?? throw new InvalidOperationException("The updated wishlist ETag is missing.");
+        var acceptedWishlist = await GetWishlistAsync(
+            factory,
+            wishlist.Id);
+        using var rejectedResponse = await UpdateWishlistAsync(
+            client,
+            wishlist.Id,
+            acceptedEntityTag,
+            "Liste passée renommée",
+            "birthday",
+            "2021-01-01",
+            null);
+        var unchangedWishlist = await GetWishlistAsync(
+            factory,
+            wishlist.Id);
+        using var clearedResponse = await UpdateWishlistAsync(
+            client,
+            wishlist.Id,
+            acceptedEntityTag,
+            "Liste passée renommée",
+            "birthday",
+            null,
+            null);
+        var clearedWishlist = await GetWishlistAsync(
+            factory,
+            wishlist.Id);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.OK,
+            acceptedResponse.StatusCode);
+        Assert.Equal(
+            new DateOnly(
+                2020,
+                1,
+                1),
+            acceptedWishlist.EventDate);
+        Assert.Equal(
+            HttpStatusCode.BadRequest,
+            rejectedResponse.StatusCode);
+        var error = await rejectedResponse.Content.ReadFromJsonAsync<ErrorResponse>(
+            TestContext.Current.CancellationToken);
+        Assert.NotNull(error);
+        Assert.Equal(
+            ErrorCodes.RequestValidationError,
+            error.ErrorCode);
+        var validationError = Assert.Single(error.ValidationErrors ?? []);
+        Assert.Equal(
+            "eventDate",
+            validationError.PropertyName);
+        Assert.Equal(
+            acceptedWishlist.Version,
+            unchangedWishlist.Version);
+        Assert.Equal(
+            acceptedWishlist.EventDate,
+            unchangedWishlist.EventDate);
+        Assert.Equal(
+            HttpStatusCode.OK,
+            clearedResponse.StatusCode);
+        Assert.Null(clearedWishlist.EventDate);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_WhenNormalizedNameAlreadyExists_ReturnsConflictWithoutChangingWishlist()
+    {
+        // Arrange
+        await using var factory = await CreateMigratedFactoryAsync();
+        var owner = await CreateMemberAsync(
+            factory,
+            "owner@example.fr");
+        using var client = CreateAuthorizedClient(
+            factory,
+            owner.Id);
+        using var firstResponse = await CreateWishlistAsync(
+            client,
+            "Liste de Léa");
+        using var secondResponse = await CreateWishlistAsync(
+            client,
+            "Liste de Jenn");
+        var secondId = GetWishlistId(secondResponse);
+        var secondEntityTag = secondResponse.Headers.ETag?.Tag
+            ?? throw new InvalidOperationException("The second wishlist ETag is missing.");
+
+        // Act
+        using var response = await UpdateWishlistAsync(
+            client,
+            secondId,
+            secondEntityTag,
+            "  LISTE DE LÉA  ",
+            "birthday",
+            "2099-09-24",
+            "Merci d’être là");
+        var stored = await GetWishlistAsync(
+            factory,
+            secondId);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.Conflict,
+            response.StatusCode);
+        var error = await response.Content.ReadFromJsonAsync<ErrorResponse>(
+            TestContext.Current.CancellationToken);
+        Assert.NotNull(error);
+        Assert.Equal(
+            ErrorCodes.WishlistNameAlreadyExists,
+            error.ErrorCode);
+        Assert.Equal(
+            "Liste de Jenn",
+            stored.Name);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_WhenWishlistBelongsToAnotherMember_ReturnsNotFoundWithoutChangingWishlist()
+    {
+        // Arrange
+        await using var factory = await CreateMigratedFactoryAsync();
+        var owner = await CreateMemberAsync(
+            factory,
+            "owner@example.fr");
+        var otherMember = await CreateMemberAsync(
+            factory,
+            "other@example.fr");
+        using var ownerClient = CreateAuthorizedClient(
+            factory,
+            owner.Id);
+        using var otherClient = CreateAuthorizedClient(
+            factory,
+            otherMember.Id);
+        using var creationResponse = await CreateWishlistAsync(
+            ownerClient,
+            "Liste privée");
+        var wishlistId = GetWishlistId(creationResponse);
+        var entityTag = creationResponse.Headers.ETag?.Tag
+            ?? throw new InvalidOperationException("The wishlist ETag is missing.");
+
+        // Act
+        using var response = await UpdateWishlistAsync(
+            otherClient,
+            wishlistId,
+            entityTag,
+            "Intrusion",
+            "other",
+            null,
+            null);
+        var stored = await GetWishlistAsync(
+            factory,
+            wishlistId);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.NotFound,
+            response.StatusCode);
+        Assert.Equal(
+            "Liste privée",
+            stored.Name);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_WhenConcurrentRequestsUseSameVersion_ReturnsSuccessThenPreconditionFailed()
+    {
+        // Arrange
+        var coordinator = new FirstSaveChangesCoordinator();
+        await using var factory = await CreateMigratedFactoryAsync(
+            new FixedTimeProvider(_referenceTime),
+            coordinator);
+        var owner = await CreateMemberAsync(
+            factory,
+            "owner@example.fr");
+        var wishlist = await SeedWishlistAsync(
+            factory,
+            Guid.CreateVersion7(),
+            owner.Id,
+            "Liste initiale",
+            null);
+        using var client = CreateAuthorizedClient(
+            factory,
+            owner.Id);
+        using var retrievalResponse = await client.GetAsync(
+            $"/api/v1/wishlists/{wishlist.Id}",
+            TestContext.Current.CancellationToken);
+        var entityTag = retrievalResponse.Headers.ETag?.Tag
+            ?? throw new InvalidOperationException("The wishlist ETag is missing.");
+
+        // Act
+        var firstUpdateTask = UpdateWishlistAsync(
+            client,
+            wishlist.Id,
+            entityTag,
+            "Première modification",
+            "other",
+            null,
+            null);
+        await coordinator.WaitUntilFirstSaveStartsAsync(TestContext.Current.CancellationToken);
+        HttpResponseMessage secondResponse;
+
+        try
+        {
+            secondResponse = await UpdateWishlistAsync(
+                client,
+                wishlist.Id,
+                entityTag,
+                "Deuxième modification",
+                "other",
+                null,
+                null);
+        }
+        finally
+        {
+            coordinator.ReleaseFirstSave();
+        }
+
+        using (secondResponse)
+        using (var firstResponse = await firstUpdateTask)
+        {
+            var stored = await GetWishlistAsync(
+                factory,
+                wishlist.Id);
+            var conflict = await firstResponse.Content.ReadFromJsonAsync<ErrorResponse>(
+                TestContext.Current.CancellationToken);
+
+            // Assert
+            Assert.Equal(
+                HttpStatusCode.OK,
+                secondResponse.StatusCode);
+            Assert.Equal(
+                HttpStatusCode.PreconditionFailed,
+                firstResponse.StatusCode);
+            Assert.NotNull(conflict);
+            Assert.Equal(
+                ErrorCodes.WishlistVersionConflict,
+                conflict.ErrorCode);
+            Assert.Equal(
+                "Deuxième modification",
+                stored.Name);
+        }
+    }
+
+    [Fact]
     public async Task DeleteMemberAsync_WhenMemberOwnsWishlist_DeletesWishlistInCascade()
     {
         // Arrange
@@ -470,11 +883,16 @@ public class WishlistIntegrationTests(PostgreSqlContainerFixture fixture)
         return await CreateMigratedFactoryAsync(new FixedTimeProvider(_referenceTime));
     }
 
-    private async Task<PostgreSqlApiFactory> CreateMigratedFactoryAsync(TimeProvider timeProvider)
+    private async Task<PostgreSqlApiFactory> CreateMigratedFactoryAsync(
+        TimeProvider timeProvider,
+        FirstSaveChangesCoordinator? coordinator = null)
     {
         var factory = new PostgreSqlApiFactory(
             fixture.Container.GetConnectionString(),
-            timeProvider);
+            timeProvider,
+            configureServices: services => ConfigureCoordinatedUnitOfWork(
+                services,
+                coordinator));
         await using var scope = factory.Services.CreateAsyncScope();
         var context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
         await context.Database.MigrateAsync(TestContext.Current.CancellationToken);
@@ -483,6 +901,19 @@ public class WishlistIntegrationTests(PostgreSqlContainerFixture fixture)
             TestContext.Current.CancellationToken);
 
         return factory;
+    }
+
+    private static void ConfigureCoordinatedUnitOfWork(
+        IServiceCollection services,
+        FirstSaveChangesCoordinator? coordinator)
+    {
+
+        if (coordinator is null)
+            return;
+
+        services.RemoveAll<IUnitOfWork>();
+        services.AddSingleton(coordinator);
+        services.AddScoped<IUnitOfWork, CoordinatedUnitOfWork>();
     }
 
     private static async Task<MonKadoUser> CreateMemberAsync(
@@ -556,6 +987,44 @@ public class WishlistIntegrationTests(PostgreSqlContainerFixture fixture)
                 message = "  Merci d’être là  "
             },
             TestContext.Current.CancellationToken);
+    }
+
+    private static async Task<HttpResponseMessage> UpdateWishlistAsync(
+        HttpClient client,
+        Guid wishlistId,
+        string entityTag,
+        string name,
+        string occasion,
+        string? eventDate,
+        string? message)
+    {
+        using var request = new HttpRequestMessage(
+            HttpMethod.Put,
+            $"/api/v1/wishlists/{wishlistId}")
+        {
+            Content = JsonContent.Create(new
+            {
+                name,
+                occasion,
+                eventDate,
+                message
+            })
+        };
+        request.Headers.TryAddWithoutValidation(
+            "If-Match",
+            entityTag);
+
+        return await client.SendAsync(
+            request,
+            TestContext.Current.CancellationToken);
+    }
+
+    private static Guid GetWishlistId(HttpResponseMessage response)
+    {
+        var location = response.Headers.Location
+            ?? throw new InvalidOperationException("The wishlist location is missing.");
+
+        return Guid.Parse(location.Segments[^1]);
     }
 
     private static async Task<Wishlist> SeedWishlistAsync(

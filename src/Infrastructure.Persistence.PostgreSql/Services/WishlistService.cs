@@ -1,5 +1,7 @@
 using JennGllg.Fr.MonKado.Back.Application.Abstractions;
+using JennGllg.Fr.MonKado.Back.Application.Common.Constants;
 using JennGllg.Fr.MonKado.Back.Application.Common.Exceptions;
+using JennGllg.Fr.MonKado.Back.Application.Common.Models;
 using JennGllg.Fr.MonKado.Back.Application.Models;
 using JennGllg.Fr.MonKado.Back.Domain.Entities;
 using JennGllg.Fr.MonKado.Back.Domain.Enums;
@@ -12,13 +14,15 @@ using Npgsql;
 namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Services;
 
 /// <summary>
-/// Creates and retrieves private wishlists in PostgreSQL.
+/// Creates, updates and retrieves private wishlists in PostgreSQL.
 /// </summary>
 /// <param name="wishlistRepository">The wishlist repository.</param>
 /// <param name="unitOfWork">The unit of work.</param>
+/// <param name="timeProvider">The time provider.</param>
 public class WishlistService(
     IWishlistRepository wishlistRepository,
-    IUnitOfWork unitOfWork) : IWishlistService
+    IUnitOfWork unitOfWork,
+    TimeProvider timeProvider) : IWishlistService
 {
     private const string OwnerForeignKeyName = "fk_wishlists_users_owner_id";
     private const string OwnerNormalizedNameIndexName = "ux_wishlists_owner_normalized_name";
@@ -57,6 +61,99 @@ public class WishlistService(
         catch (DbUpdateException exception) when (IsMissingOwner(exception))
         {
             return null;
+        }
+        catch (Exception exception) when (PostgreSqlFailureClassifier.IsUnavailable(exception))
+        {
+            throw new DependencyUnavailableException(
+                "PostgreSQL",
+                exception);
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task<WishlistDetails?> UpdateAsync(
+        Guid ownerId,
+        Guid wishlistId,
+        string name,
+        string normalizedName,
+        WishlistOccasion occasion,
+        DateOnly? eventDate,
+        string? message,
+        uint expectedVersion,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var wishlist = await wishlistRepository.GetByIdForUpdateAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken);
+
+            if (wishlist is null)
+                return null;
+
+            if (wishlist.Version != expectedVersion)
+                throw new WishlistVersionConflictException();
+
+            var today = DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime);
+            var eventDateHasChanged = !Nullable.Equals(
+                eventDate,
+                wishlist.EventDate);
+
+            if (eventDate is { } requestedEventDate &&
+                eventDateHasChanged &&
+                requestedEventDate < today)
+            {
+                throw new RequestValidationException(
+                [
+                    new ValidationError(
+                        "eventDate",
+                        ValidationMessages.WishlistEventDateMustBeTodayOrLater)
+                ]);
+            }
+
+            var hasChanged = wishlist.Update(
+                name,
+                normalizedName,
+                occasion,
+                eventDate,
+                message);
+
+            if (!hasChanged)
+                return CreateDetails(wishlist);
+
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+
+            return CreateDetails(wishlist);
+        }
+        catch (DbUpdateException exception) when (IsDuplicateName(exception))
+        {
+            throw new WishlistNameAlreadyExistsException();
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+
+            try
+            {
+                var access = await wishlistRepository.GetAccessAsync(
+                    ownerId,
+                    wishlistId,
+                    cancellationToken);
+
+                if (access is WishlistAccess.MemberNotFound)
+                    throw new InvalidAuthenticationSessionException();
+
+                if (access is WishlistAccess.NotOwned)
+                    return null;
+            }
+            catch (Exception exception) when (PostgreSqlFailureClassifier.IsUnavailable(exception))
+            {
+                throw new DependencyUnavailableException(
+                    "PostgreSQL",
+                    exception);
+            }
+
+            throw new WishlistVersionConflictException();
         }
         catch (Exception exception) when (PostgreSqlFailureClassifier.IsUnavailable(exception))
         {

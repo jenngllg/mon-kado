@@ -126,6 +126,11 @@ public static class ErrorCodes
     /// </summary>
     public const string WishlistNameAlreadyExists = "WISHLIST_NAME_ALREADY_EXISTS";
 
+    /// <summary>
+    /// Identifies an optimistic wishlist update conflict.
+    /// </summary>
+    public const string WishlistVersionConflict = "WISHLIST_VERSION_CONFLICT";
+
     #endregion
 
     #region Technical
