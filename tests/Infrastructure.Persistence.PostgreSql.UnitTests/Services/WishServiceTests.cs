@@ -431,6 +431,617 @@ public class WishServiceTests
         VerifyRetrieval(data);
     }
 
+    [Fact]
+    public async Task UpdateAsync_WhenValuesChange_SavesAndReturnsUpdatedWish()
+    {
+        // Arrange
+        var data = CreateData();
+        var wish = CreateWish(data);
+        _wishRepositoryMock
+            .Setup(repository => repository.GetByIdForUpdateAsync(
+                data.WishlistId,
+                data.Id,
+                data.CancellationToken))
+            .ReturnsAsync(wish);
+        _unitOfWorkMock
+            .Setup(unitOfWork => unitOfWork.SaveChangesAsync(data.CancellationToken))
+            .ReturnsAsync(1);
+
+        // Act
+        var result = await UpdateAsync(
+            data,
+            "Nouvelle console",
+            null,
+            "https://example.com/new-console",
+            399.99m);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal(
+            "Nouvelle console",
+            result.Name);
+        Assert.Null(result.Note);
+        Assert.Equal(
+            "https://example.com/new-console",
+            result.Url);
+        Assert.Equal(
+            399.99m,
+            result.Price);
+        Assert.Equal(
+            1,
+            result.Position);
+        VerifyTrackedRetrieval(data);
+        _unitOfWorkMock.Verify(
+            unitOfWork => unitOfWork.SaveChangesAsync(data.CancellationToken),
+            Times.Once);
+        VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task UpdateAsync_WhenValuesAreUnchanged_ReturnsWithoutSaving()
+    {
+        // Arrange
+        var data = CreateData();
+        var wish = CreateWish(data);
+        _wishRepositoryMock
+            .Setup(repository => repository.GetByIdForUpdateAsync(
+                data.WishlistId,
+                data.Id,
+                data.CancellationToken))
+            .ReturnsAsync(wish);
+
+        // Act
+        var result = await UpdateAsync(
+            data,
+            data.Name,
+            data.Note,
+            data.Url,
+            data.Price);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal(
+            data.Name,
+            result.Name);
+        VerifyTrackedRetrieval(data);
+        VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task UpdateAsync_WhenVersionIsStale_ThrowsWishVersionConflictException()
+    {
+        // Arrange
+        var data = CreateData();
+        _wishRepositoryMock
+            .Setup(repository => repository.GetByIdForUpdateAsync(
+                data.WishlistId,
+                data.Id,
+                data.CancellationToken))
+            .ReturnsAsync(CreateWish(data));
+
+        // Act
+        var action = () => UpdateAsync(
+            data,
+            data.Name,
+            data.Note,
+            data.Url,
+            data.Price,
+            expectedVersion: 1);
+
+        // Assert
+        await Assert.ThrowsAsync<WishVersionConflictException>(action);
+        VerifyTrackedRetrieval(data);
+        VerifyNoOtherCalls();
+    }
+
+    [Theory]
+    [InlineData(WishlistAccess.Owner, null)]
+    [InlineData(WishlistAccess.NotOwned, typeof(WishlistNotFoundException))]
+    [InlineData(WishlistAccess.MemberNotFound, typeof(InvalidAuthenticationSessionException))]
+    public async Task UpdateAsync_WhenWishIsMissing_ResolvesParentAccess(
+        WishlistAccess access,
+        Type? expectedExceptionType)
+    {
+        // Arrange
+        var data = CreateData();
+        ConfigureMissingTrackedWish(
+            data,
+            access);
+
+        // Act
+        var action = () => UpdateAsync(
+            data,
+            "Nouvelle console",
+            null,
+            null,
+            null);
+
+        // Assert
+        if (expectedExceptionType is null)
+        {
+            var result = await action();
+            Assert.Null(result);
+        }
+        else
+        {
+            var exception = await Assert.ThrowsAnyAsync<Exception>(action);
+            Assert.IsType(
+                expectedExceptionType,
+                exception);
+        }
+
+        VerifyTrackedRetrievalAndAccess(data);
+        VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task UpdateAsync_WhenMissingWishAccessCheckTimesOut_ThrowsDependencyUnavailableException()
+    {
+        // Arrange
+        var data = CreateData();
+        _wishRepositoryMock
+            .Setup(repository => repository.GetByIdForUpdateAsync(
+                data.WishlistId,
+                data.Id,
+                data.CancellationToken))
+            .ReturnsAsync((Wish?)null);
+        _wishlistRepositoryMock
+            .Setup(repository => repository.GetAccessAsync(
+                data.OwnerId,
+                data.WishlistId,
+                data.CancellationToken))
+            .ThrowsAsync(new TimeoutException());
+
+        // Act
+        var action = () => UpdateAsync(
+            data,
+            "Nouvelle console",
+            null,
+            null,
+            null);
+
+        // Assert
+        var exception = await Assert.ThrowsAsync<DependencyUnavailableException>(action);
+        Assert.IsType<TimeoutException>(exception.InnerException);
+        VerifyTrackedRetrievalAndAccess(data);
+        VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task UpdateAsync_WhenTrackedLookupTimesOut_ThrowsDependencyUnavailableException()
+    {
+        // Arrange
+        var data = CreateData();
+        _wishRepositoryMock
+            .Setup(repository => repository.GetByIdForUpdateAsync(
+                data.WishlistId,
+                data.Id,
+                data.CancellationToken))
+            .ThrowsAsync(new TimeoutException());
+
+        // Act
+        var action = () => UpdateAsync(
+            data,
+            "Nouvelle console",
+            null,
+            null,
+            null);
+
+        // Assert
+        await Assert.ThrowsAsync<DependencyUnavailableException>(action);
+        VerifyTrackedRetrieval(data);
+        VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task UpdateAsync_WhenUnexpectedExceptionOccurs_PropagatesException()
+    {
+        // Arrange
+        var data = CreateData();
+        var expected = new InvalidOperationException();
+        _wishRepositoryMock
+            .Setup(repository => repository.GetByIdForUpdateAsync(
+                data.WishlistId,
+                data.Id,
+                data.CancellationToken))
+            .ThrowsAsync(expected);
+
+        // Act
+        var action = () => UpdateAsync(
+            data,
+            "Nouvelle console",
+            null,
+            null,
+            null);
+
+        // Assert
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(action);
+        Assert.Same(
+            expected,
+            exception);
+        VerifyTrackedRetrieval(data);
+        VerifyNoOtherCalls();
+    }
+
+    [Theory]
+    [InlineData(WishlistAccess.MemberNotFound, false, typeof(InvalidAuthenticationSessionException))]
+    [InlineData(WishlistAccess.NotOwned, false, typeof(WishlistNotFoundException))]
+    [InlineData(WishlistAccess.Owner, false, null)]
+    [InlineData(WishlistAccess.Owner, true, typeof(WishVersionConflictException))]
+    public async Task UpdateAsync_WhenConcurrencyFails_ResolvesCurrentResource(
+        WishlistAccess access,
+        bool wishStillExists,
+        Type? expectedExceptionType)
+    {
+        // Arrange
+        var data = CreateData();
+        ConfigureConcurrencyFailure(
+            data,
+            access,
+            wishStillExists);
+
+        // Act
+        var action = () => UpdateAsync(
+            data,
+            "Nouvelle console",
+            null,
+            null,
+            null);
+
+        // Assert
+        if (expectedExceptionType is null)
+        {
+            var result = await action();
+            Assert.Null(result);
+        }
+        else
+        {
+            var exception = await Assert.ThrowsAnyAsync<Exception>(action);
+            Assert.IsType(
+                expectedExceptionType,
+                exception);
+        }
+
+        VerifyConcurrencyFailure(
+            data,
+            access is WishlistAccess.Owner);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_WhenConcurrencyLookupTimesOut_ThrowsDependencyUnavailableException()
+    {
+        // Arrange
+        var data = CreateData();
+        var wish = ConfigureFailedSave(
+            data,
+            new DbUpdateConcurrencyException());
+        _wishlistRepositoryMock
+            .Setup(repository => repository.GetAccessAsync(
+                data.OwnerId,
+                data.WishlistId,
+                data.CancellationToken))
+            .ReturnsAsync(WishlistAccess.Owner);
+        _wishRepositoryMock
+            .Setup(repository => repository.GetByIdAsync(
+                data.WishlistId,
+                data.Id,
+                data.CancellationToken))
+            .ThrowsAsync(new TimeoutException());
+
+        // Act
+        var action = () => UpdateAsync(
+            data,
+            "Nouvelle console",
+            null,
+            null,
+            null);
+
+        // Assert
+        await Assert.ThrowsAsync<DependencyUnavailableException>(action);
+        VerifyFailedSave(
+            data,
+            wish);
+        _wishlistRepositoryMock.Verify(
+            repository => repository.GetAccessAsync(
+                data.OwnerId,
+                data.WishlistId,
+                data.CancellationToken),
+            Times.Once);
+        _wishRepositoryMock.Verify(
+            repository => repository.GetByIdAsync(
+                data.WishlistId,
+                data.Id,
+                data.CancellationToken),
+            Times.Once);
+        VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task UpdateAsync_WhenCommitAcknowledgementIsLostAndWishMatches_ReturnsCommittedWish()
+    {
+        // Arrange
+        var data = CreateData();
+        var attemptedWish = ConfigureFailedSave(
+            data,
+            new TimeoutException());
+        var committedWish = new Wish(
+            data.Id,
+            data.WishlistId,
+            "Nouvelle console",
+            null,
+            null,
+            null,
+            1);
+        _wishRepositoryMock
+            .Setup(repository => repository.GetByIdAsync(
+                data.WishlistId,
+                data.Id,
+                data.CancellationToken))
+            .ReturnsAsync(committedWish);
+
+        // Act
+        var result = await UpdateAsync(
+            data,
+            "Nouvelle console",
+            null,
+            null,
+            null);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal(
+            "Nouvelle console",
+            result.Name);
+        VerifyFailedSave(
+            data,
+            attemptedWish);
+        _wishRepositoryMock.Verify(
+            repository => repository.GetByIdAsync(
+                data.WishlistId,
+                data.Id,
+                data.CancellationToken),
+            Times.Once);
+        VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task UpdateAsync_WhenCommitAcknowledgementIsLostAndOriginalRemains_ThrowsDependencyUnavailableException()
+    {
+        // Arrange
+        var data = CreateData();
+        var attemptedWish = ConfigureFailedSave(
+            data,
+            new TimeoutException());
+        _wishRepositoryMock
+            .Setup(repository => repository.GetByIdAsync(
+                data.WishlistId,
+                data.Id,
+                data.CancellationToken))
+            .ReturnsAsync(CreateWish(data));
+
+        // Act
+        var action = () => UpdateAsync(
+            data,
+            "Nouvelle console",
+            null,
+            null,
+            null);
+
+        // Assert
+        await Assert.ThrowsAsync<DependencyUnavailableException>(action);
+        VerifyFailedSave(
+            data,
+            attemptedWish);
+        _wishRepositoryMock.Verify(
+            repository => repository.GetByIdAsync(
+                data.WishlistId,
+                data.Id,
+                data.CancellationToken),
+            Times.Once);
+        VerifyNoOtherCalls();
+    }
+
+    [Theory]
+    [InlineData(WishlistAccess.MemberNotFound, false, typeof(InvalidAuthenticationSessionException))]
+    [InlineData(WishlistAccess.NotOwned, false, typeof(WishlistNotFoundException))]
+    [InlineData(WishlistAccess.Owner, false, null)]
+    [InlineData(WishlistAccess.Owner, true, typeof(WishVersionConflictException))]
+    public async Task UpdateAsync_WhenAmbiguousUpdateDiffers_ResolvesCurrentResource(
+        WishlistAccess access,
+        bool wishStillExists,
+        Type? expectedExceptionType)
+    {
+        // Arrange
+        var data = CreateData();
+        var attemptedWish = ConfigureFailedSave(
+            data,
+            new TimeoutException());
+        var currentWish = wishStillExists
+            ? new Wish(
+                data.Id,
+                data.WishlistId,
+                "Concurrent console",
+                data.Note,
+                data.Url,
+                data.Price,
+                1)
+            : null;
+        _wishRepositoryMock
+            .Setup(repository => repository.GetByIdAsync(
+                data.WishlistId,
+                data.Id,
+                data.CancellationToken))
+            .ReturnsAsync(currentWish);
+        _wishlistRepositoryMock
+            .Setup(repository => repository.GetAccessAsync(
+                data.OwnerId,
+                data.WishlistId,
+                data.CancellationToken))
+            .ReturnsAsync(access);
+
+        // Act
+        var action = () => UpdateAsync(
+            data,
+            "Nouvelle console",
+            null,
+            null,
+            null);
+
+        // Assert
+        if (expectedExceptionType is null)
+        {
+            var result = await action();
+            Assert.Null(result);
+        }
+        else
+        {
+            var exception = await Assert.ThrowsAnyAsync<Exception>(action);
+            Assert.IsType(
+                expectedExceptionType,
+                exception);
+        }
+
+        VerifyFailedSave(
+            data,
+            attemptedWish);
+        _wishRepositoryMock.Verify(
+            repository => repository.GetByIdAsync(
+                data.WishlistId,
+                data.Id,
+                data.CancellationToken),
+            Times.Once);
+        _wishlistRepositoryMock.Verify(
+            repository => repository.GetAccessAsync(
+                data.OwnerId,
+                data.WishlistId,
+                data.CancellationToken),
+            Times.Once);
+        VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task UpdateAsync_WhenAmbiguousLookupTimesOut_ThrowsDependencyUnavailableException()
+    {
+        // Arrange
+        var data = CreateData();
+        var attemptedWish = ConfigureFailedSave(
+            data,
+            new TimeoutException());
+        _wishRepositoryMock
+            .Setup(repository => repository.GetByIdAsync(
+                data.WishlistId,
+                data.Id,
+                data.CancellationToken))
+            .ThrowsAsync(new TimeoutException());
+
+        // Act
+        var action = () => UpdateAsync(
+            data,
+            "Nouvelle console",
+            null,
+            null,
+            null);
+
+        // Assert
+        await Assert.ThrowsAsync<DependencyUnavailableException>(action);
+        VerifyFailedSave(
+            data,
+            attemptedWish);
+        _wishRepositoryMock.Verify(
+            repository => repository.GetByIdAsync(
+                data.WishlistId,
+                data.Id,
+                data.CancellationToken),
+            Times.Once);
+        VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task UpdateAsync_WhenAmbiguousAccessCheckTimesOut_ThrowsDependencyUnavailableException()
+    {
+        // Arrange
+        var data = CreateData();
+        var attemptedWish = ConfigureFailedSave(
+            data,
+            new TimeoutException());
+        var currentWish = new Wish(
+            data.Id,
+            data.WishlistId,
+            "Concurrent console",
+            data.Note,
+            data.Url,
+            data.Price,
+            1);
+        _wishRepositoryMock
+            .Setup(repository => repository.GetByIdAsync(
+                data.WishlistId,
+                data.Id,
+                data.CancellationToken))
+            .ReturnsAsync(currentWish);
+        _wishlistRepositoryMock
+            .Setup(repository => repository.GetAccessAsync(
+                data.OwnerId,
+                data.WishlistId,
+                data.CancellationToken))
+            .ThrowsAsync(new TimeoutException());
+
+        // Act
+        var action = () => UpdateAsync(
+            data,
+            "Nouvelle console",
+            null,
+            null,
+            null);
+
+        // Assert
+        await Assert.ThrowsAsync<DependencyUnavailableException>(action);
+        VerifyFailedSave(
+            data,
+            attemptedWish);
+        _wishRepositoryMock.Verify(
+            repository => repository.GetByIdAsync(
+                data.WishlistId,
+                data.Id,
+                data.CancellationToken),
+            Times.Once);
+        _wishlistRepositoryMock.Verify(
+            repository => repository.GetAccessAsync(
+                data.OwnerId,
+                data.WishlistId,
+                data.CancellationToken),
+            Times.Once);
+        VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task UpdateAsync_WhenSaveThrowsUnexpectedException_PropagatesException()
+    {
+        // Arrange
+        var data = CreateData();
+        var expected = new InvalidOperationException();
+        var attemptedWish = ConfigureFailedSave(
+            data,
+            expected);
+
+        // Act
+        var action = () => UpdateAsync(
+            data,
+            "Nouvelle console",
+            null,
+            null,
+            null);
+
+        // Assert
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(action);
+        Assert.Same(
+            expected,
+            exception);
+        VerifyFailedSave(
+            data,
+            attemptedWish);
+        VerifyNoOtherCalls();
+    }
+
     private Task<WishDetails?> CreateAsync(WishServiceTestData data)
     {
         return _wishService.CreateAsync(
@@ -442,6 +1053,157 @@ public class WishServiceTests
             data.Url,
             data.Price,
             data.CancellationToken);
+    }
+
+    private Task<WishDetails?> UpdateAsync(
+        WishServiceTestData data,
+        string name,
+        string? note,
+        string? url,
+        decimal? price,
+        uint expectedVersion = 0)
+    {
+        return _wishService.UpdateAsync(
+            data.OwnerId,
+            data.WishlistId,
+            data.Id,
+            name,
+            note,
+            url,
+            price,
+            expectedVersion,
+            data.CancellationToken);
+    }
+
+    private void ConfigureMissingTrackedWish(
+        WishServiceTestData data,
+        WishlistAccess access)
+    {
+        _wishRepositoryMock
+            .Setup(repository => repository.GetByIdForUpdateAsync(
+                data.WishlistId,
+                data.Id,
+                data.CancellationToken))
+            .ReturnsAsync((Wish?)null);
+        _wishlistRepositoryMock
+            .Setup(repository => repository.GetAccessAsync(
+                data.OwnerId,
+                data.WishlistId,
+                data.CancellationToken))
+            .ReturnsAsync(access);
+    }
+
+    private Wish ConfigureFailedSave(
+        WishServiceTestData data,
+        Exception exception)
+    {
+        var wish = CreateWish(data);
+        _wishRepositoryMock
+            .Setup(repository => repository.GetByIdForUpdateAsync(
+                data.WishlistId,
+                data.Id,
+                data.CancellationToken))
+            .ReturnsAsync(wish);
+        _unitOfWorkMock
+            .Setup(unitOfWork => unitOfWork.SaveChangesAsync(data.CancellationToken))
+            .ThrowsAsync(exception);
+
+        return wish;
+    }
+
+    private void ConfigureConcurrencyFailure(
+        WishServiceTestData data,
+        WishlistAccess access,
+        bool wishStillExists)
+    {
+        _ = ConfigureFailedSave(
+            data,
+            new DbUpdateConcurrencyException());
+        _wishlistRepositoryMock
+            .Setup(repository => repository.GetAccessAsync(
+                data.OwnerId,
+                data.WishlistId,
+                data.CancellationToken))
+            .ReturnsAsync(access);
+
+        if (access is WishlistAccess.Owner)
+        {
+            _wishRepositoryMock
+                .Setup(repository => repository.GetByIdAsync(
+                    data.WishlistId,
+                    data.Id,
+                    data.CancellationToken))
+                .ReturnsAsync(wishStillExists
+                    ? CreateWish(data)
+                    : null);
+        }
+    }
+
+    private void VerifyConcurrencyFailure(
+        WishServiceTestData data,
+        bool verifiesWish)
+    {
+        VerifyTrackedRetrieval(data);
+        _unitOfWorkMock.Verify(
+            unitOfWork => unitOfWork.SaveChangesAsync(data.CancellationToken),
+            Times.Once);
+        _wishlistRepositoryMock.Verify(
+            repository => repository.GetAccessAsync(
+                data.OwnerId,
+                data.WishlistId,
+                data.CancellationToken),
+            Times.Once);
+
+        if (verifiesWish)
+        {
+            _wishRepositoryMock.Verify(
+                repository => repository.GetByIdAsync(
+                    data.WishlistId,
+                    data.Id,
+                    data.CancellationToken),
+                Times.Once);
+        }
+
+        VerifyNoOtherCalls();
+    }
+
+    private void VerifyFailedSave(
+        WishServiceTestData data,
+        Wish wish)
+    {
+        _wishRepositoryMock.Verify(
+            repository => repository.GetByIdForUpdateAsync(
+                data.WishlistId,
+                data.Id,
+                data.CancellationToken),
+            Times.Once);
+        _unitOfWorkMock.Verify(
+            unitOfWork => unitOfWork.SaveChangesAsync(data.CancellationToken),
+            Times.Once);
+        Assert.Equal(
+            "Nouvelle console",
+            wish.Name);
+    }
+
+    private void VerifyTrackedRetrieval(WishServiceTestData data)
+    {
+        _wishRepositoryMock.Verify(
+            repository => repository.GetByIdForUpdateAsync(
+                data.WishlistId,
+                data.Id,
+                data.CancellationToken),
+            Times.Once);
+    }
+
+    private void VerifyTrackedRetrievalAndAccess(WishServiceTestData data)
+    {
+        VerifyTrackedRetrieval(data);
+        _wishlistRepositoryMock.Verify(
+            repository => repository.GetAccessAsync(
+                data.OwnerId,
+                data.WishlistId,
+                data.CancellationToken),
+            Times.Once);
     }
 
     private Wish ConfigureAmbiguousCreation(WishServiceTestData data)

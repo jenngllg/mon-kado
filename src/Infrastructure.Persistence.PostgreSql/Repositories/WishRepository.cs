@@ -80,4 +80,16 @@ public class WishRepository(MonKadoDbContext context) : IWishRepository
                 wish => wish.WishlistId == wishlistId && wish.Id == wishId,
                 cancellationToken);
     }
+
+    /// <inheritdoc />
+    public Task<Wish?> GetByIdForUpdateAsync(
+        Guid wishlistId,
+        Guid wishId,
+        CancellationToken cancellationToken)
+    {
+        return context.Wishes
+            .SingleOrDefaultAsync(
+                wish => wish.WishlistId == wishlistId && wish.Id == wishId,
+                cancellationToken);
+    }
 }

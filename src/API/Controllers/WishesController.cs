@@ -124,6 +124,56 @@ public class WishesController(
     }
 
     /// <summary>
+    /// Updates a gift wish in an owned private wishlist.
+    /// </summary>
+    /// <param name="wishlistId">The parent wishlist identifier.</param>
+    /// <param name="wishId">The wish identifier.</param>
+    /// <param name="request">The wish update request.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The updated gift wish.</returns>
+    [HttpPut("{wishId:guid}")]
+    [EntityTag(isRequired: true)]
+    [NoStoreResponse(StatusCodes.Status200OK)]
+    [RequestSizeLimit(MaximumRequestBodySize)]
+    [Consumes("application/json")]
+    [ProducesResponseType(typeof(WishResponse), StatusCodes.Status200OK, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status412PreconditionFailed, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status413PayloadTooLarge, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status415UnsupportedMediaType, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status428PreconditionRequired, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status503ServiceUnavailable, "application/json")]
+    public async Task<ActionResult<WishResponse>> UpdateAsync(
+        Guid wishlistId,
+        Guid wishId,
+        UpdateWishRequest request,
+        CancellationToken cancellationToken)
+    {
+        await AuthorizeWishlistAsync(
+            wishlistId,
+            cancellationToken);
+        var memberId = GetMemberId();
+        var expectedVersion = entityTagService.Parse(Request.Headers.IfMatch);
+        var wish = await sender.Send(
+            new UpdateWishCommand(
+                memberId,
+                wishlistId,
+                wishId,
+                request.Name,
+                request.Note,
+                request.Url,
+                request.Price,
+                expectedVersion),
+            cancellationToken);
+        var response = CreateResponse(wish);
+        Response.Headers.ETag = entityTagService.Format(wish.Version);
+        Response.Headers.CacheControl = "no-store";
+
+        return Ok(response);
+    }
+
+    /// <summary>
     /// Authorizes owner access to a private parent wishlist.
     /// </summary>
     /// <param name="wishlistId">The parent wishlist identifier.</param>

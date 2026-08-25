@@ -170,6 +170,81 @@ public class RequestBodyLimitExtensionsTests
     }
 
     [Theory]
+    [InlineData("/api/v1/wishlists/0198eaa7-1d33-7769-a9f8-9df63504b6f1/wishes/0198eaa7-1d33-7769-a9f8-9df63504b6f2")]
+    [InlineData("/api/v1/wishlists/0198eaa7-1d33-7769-a9f8-9df63504b6f1/wishes/0198eaa7-1d33-7769-a9f8-9df63504b6f2/")]
+    [InlineData("/API/V1/WISHLISTS/0198eaa7-1d33-7769-a9f8-9df63504b6f1/WISHES/0198eaa7-1d33-7769-a9f8-9df63504b6f2")]
+    public async Task UseRequestBodyLimits_WhenPutTargetsWishResource_ConfiguresMaximumSize(
+        string requestPath)
+    {
+        // Arrange
+        var featureMock = new Mock<IHttpMaxRequestBodySizeFeature>(MockBehavior.Strict);
+        featureMock
+            .SetupGet(feature => feature.IsReadOnly)
+            .Returns(false);
+        featureMock
+            .SetupSet(feature => feature.MaxRequestBodySize = MaximumRequestBodySize);
+        var context = CreateContext();
+        context.Request.Method = HttpMethods.Put;
+        context.Request.Path = requestPath;
+        context.Request.ContentLength = 0;
+        context.Features.Set(featureMock.Object);
+        var nextCalled = false;
+        var application = new ApplicationBuilder(context.RequestServices);
+        application.UseRequestBodyLimits();
+        application.Run(_ =>
+        {
+            nextCalled = true;
+
+            return Task.CompletedTask;
+        });
+        var pipeline = application.Build();
+
+        // Act
+        await pipeline(context);
+
+        // Assert
+        Assert.True(nextCalled);
+        featureMock.VerifyGet(
+            feature => feature.IsReadOnly,
+            Times.Once);
+        featureMock.VerifySet(
+            feature => feature.MaxRequestBodySize = MaximumRequestBodySize,
+            Times.Once);
+        featureMock.VerifyNoOtherCalls();
+    }
+
+    [Theory]
+    [InlineData("/api/v1/wishlists/not-a-guid/wishes/0198eaa7-1d33-7769-a9f8-9df63504b6f2")]
+    [InlineData("/api/v1/wishlists/0198eaa7-1d33-7769-a9f8-9df63504b6f1/wishes/not-a-guid")]
+    [InlineData("/api/v1/wishlists/0198eaa7-1d33-7769-a9f8-9df63504b6f1/wishes/0198eaa7-1d33-7769-a9f8-9df63504b6f2/extra")]
+    [InlineData("/api/v1/wishlists/0198eaa7-1d33-7769-a9f8-9df63504b6f1/gifts/0198eaa7-1d33-7769-a9f8-9df63504b6f2")]
+    public async Task UseRequestBodyLimits_WhenPutDoesNotTargetWishResource_DoesNotConfigureMaximumSize(
+        string requestPath)
+    {
+        // Arrange
+        var context = CreateContext();
+        context.Request.Method = HttpMethods.Put;
+        context.Request.Path = requestPath;
+        context.Request.ContentLength = 0;
+        var nextCalled = false;
+        var application = new ApplicationBuilder(context.RequestServices);
+        application.UseRequestBodyLimits();
+        application.Run(_ =>
+        {
+            nextCalled = true;
+
+            return Task.CompletedTask;
+        });
+        var pipeline = application.Build();
+
+        // Act
+        await pipeline(context);
+
+        // Assert
+        Assert.True(nextCalled);
+    }
+
+    [Theory]
     [InlineData("/api/v1/wishlists/0198eaa7-1d33-7769-a9f8-9df63504b6f1/wishes")]
     [InlineData("/api/v1/wishlists/0198eaa7-1d33-7769-a9f8-9df63504b6f1/wishes/")]
     [InlineData("/API/V1/WISHLISTS/0198eaa7-1d33-7769-a9f8-9df63504b6f1/WISHES")]

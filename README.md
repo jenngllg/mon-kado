@@ -111,6 +111,7 @@ The local launch profile listens on `http://localhost:7000` and uses the `Local`
 | `DELETE /api/v1/wishlists/{wishlistId}` | Deletes an owned private wishlist when `If-Match` is current |
 | `POST /api/v1/wishlists/{wishlistId}/wishes` | Adds a gift wish manually to an owned private wishlist |
 | `GET /api/v1/wishlists/{wishlistId}/wishes/{wishId}` | Returns one gift wish from an owned private wishlist |
+| `PUT /api/v1/wishlists/{wishlistId}/wishes/{wishId}` | Replaces an owned gift wish when `If-Match` is current |
 
 Liveness never contacts PostgreSQL. Readiness allows at most two seconds for PostgreSQL to accept a connection and returns `503 Unhealthy` otherwise; it checks connectivity, not whether all migrations have been applied.
 

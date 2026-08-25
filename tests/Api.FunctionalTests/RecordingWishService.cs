@@ -38,6 +38,22 @@ public class RecordingWishService : IWishService
     public List<(Guid WishlistId, Guid WishId)> Retrievals { get; } = [];
 
     /// <summary>
+    /// Gets the recorded update calls.
+    /// </summary>
+    public List<(
+        Guid OwnerId,
+        Guid WishlistId,
+        Guid WishId,
+        string Name,
+        string? Note,
+        string? Url,
+        decimal? Price,
+        uint ExpectedVersion)> Updates
+    {
+        get;
+    } = [];
+
+    /// <summary>
     /// Gets the gift wishes returned by their nested identifiers.
     /// </summary>
     public Dictionary<(Guid WishlistId, Guid WishId), WishDetails> Wishes { get; } = [];
@@ -120,5 +136,55 @@ public class RecordingWishService : IWishService
             out var wish);
 
         return Task.FromResult(wish);
+    }
+
+    /// <inheritdoc />
+    public Task<WishDetails?> UpdateAsync(
+        Guid ownerId,
+        Guid wishlistId,
+        Guid wishId,
+        string name,
+        string? note,
+        string? url,
+        decimal? price,
+        uint expectedVersion,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        Updates.Add((
+            ownerId,
+            wishlistId,
+            wishId,
+            name,
+            note,
+            url,
+            price,
+            expectedVersion));
+
+        if (Exception is not null)
+            throw Exception;
+
+        if (!WishlistExists ||
+            !Wishes.TryGetValue(
+                (wishlistId, wishId),
+                out var currentWish))
+        {
+            return Task.FromResult<WishDetails?>(null);
+        }
+
+        var wish = new WishDetails(
+            wishId,
+            wishlistId,
+            name,
+            note,
+            url,
+            price,
+            currentWish.Position,
+            currentWish.CreatedAt,
+            _createdAt.AddHours(1),
+            expectedVersion + 1);
+        Wishes[(wishlistId, wishId)] = wish;
+
+        return Task.FromResult<WishDetails?>(wish);
     }
 }

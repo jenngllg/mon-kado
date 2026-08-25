@@ -338,6 +338,407 @@ public class WishTests
     }
 
     [Fact]
+    public async Task UpdateAsync_WhenRequestIsValid_ReturnsExactUpdatedWishContractAndHeaders()
+    {
+        // Arrange
+        await using var factory = new RegistrationApiFactory();
+        var ownerId = Guid.CreateVersion7();
+        var wishlistId = Guid.CreateVersion7();
+        var wishId = Guid.CreateVersion7();
+        factory.WishService.Wishes[(wishlistId, wishId)] = CreateDetails(
+            wishlistId,
+            wishId);
+        using var client = CreateAuthorizedClient(
+            factory,
+            ownerId);
+
+        // Act
+        using var response = await PutAsync(
+            client,
+            wishlistId,
+            wishId,
+            new
+            {
+                name = "  Cafe\u0301 premium  ",
+                note = "   ",
+                url = "  https://example.com/premium  ",
+                price = 24.68m
+            },
+            "\"0000002a\"");
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.OK,
+            response.StatusCode);
+        Assert.True(response.Headers.CacheControl?.NoStore);
+        Assert.Equal(
+            "\"0000002b\"",
+            response.Headers.ETag?.Tag);
+        Assert.Equal(
+            [(ownerId, wishlistId)],
+            factory.WishlistService.Accesses);
+        var update = Assert.Single(factory.WishService.Updates);
+        Assert.Equal(
+            ownerId,
+            update.OwnerId);
+        Assert.Equal(
+            wishlistId,
+            update.WishlistId);
+        Assert.Equal(
+            wishId,
+            update.WishId);
+        Assert.Equal(
+            "Café premium",
+            update.Name);
+        Assert.Null(update.Note);
+        Assert.Equal(
+            "https://example.com/premium",
+            update.Url);
+        Assert.Equal(
+            24.68m,
+            update.Price);
+        Assert.Equal(
+            42u,
+            update.ExpectedVersion);
+        using var document = await response.Content.ReadFromJsonAsync<JsonDocument>(
+            TestContext.Current.CancellationToken)
+            ?? throw new InvalidOperationException("The updated wish response is empty.");
+        var wish = document.RootElement;
+        Assert.Equal(
+            wishId,
+            wish.GetProperty("id").GetGuid());
+        Assert.Equal(
+            wishlistId,
+            wish.GetProperty("wishlistId").GetGuid());
+        Assert.Equal(
+            "Café premium",
+            wish.GetProperty("name").GetString());
+        Assert.Equal(
+            JsonValueKind.Null,
+            wish.GetProperty("note").ValueKind);
+        Assert.Equal(
+            "https://example.com/premium",
+            wish.GetProperty("url").GetString());
+        Assert.Equal(
+            24.68m,
+            wish.GetProperty("price").GetDecimal());
+        Assert.Equal(
+            1,
+            wish.GetProperty("position").GetInt64());
+        Assert.Equal(
+            "2026-08-25T13:00:00Z",
+            wish.GetProperty("updatedAt").GetString());
+        Assert.Contains(
+            factory.LogMessages,
+            message => message.Contains(
+                $"Updating wish {wishId} in wishlist {wishlistId} for member {ownerId}",
+                StringComparison.Ordinal));
+        Assert.Contains(
+            factory.LogMessages,
+            message => message.Contains(
+                $"Wish {wishId} updated in wishlist {wishlistId} for member {ownerId}",
+                StringComparison.Ordinal));
+        Assert.DoesNotContain(
+            factory.LogMessages,
+            message => message.Contains(
+                "Café premium",
+                StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task UpdateAsync_WhenIfMatchIsMissing_ReturnsPreconditionRequired()
+    {
+        // Arrange
+        await using var factory = new RegistrationApiFactory();
+        var wishlistId = Guid.CreateVersion7();
+        var wishId = Guid.CreateVersion7();
+        factory.WishService.Wishes[(wishlistId, wishId)] = CreateDetails(
+            wishlistId,
+            wishId);
+        using var client = CreateAuthorizedClient(
+            factory,
+            Guid.CreateVersion7());
+
+        // Act
+        using var response = await PutAsync(
+            client,
+            wishlistId,
+            wishId,
+            new
+            {
+                name = "Cadeau"
+            },
+            entityTag: null);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.PreconditionRequired,
+            response.StatusCode);
+        var error = await response.Content.ReadFromJsonAsync<ErrorResponse>(
+            TestContext.Current.CancellationToken);
+        Assert.NotNull(error);
+        Assert.Equal(
+            ErrorCodes.RequestPreconditionRequired,
+            error.ErrorCode);
+        Assert.Empty(factory.WishService.Updates);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_WhenVersionIsStale_ReturnsPreconditionFailed()
+    {
+        // Arrange
+        await using var factory = new RegistrationApiFactory();
+        var wishlistId = Guid.CreateVersion7();
+        var wishId = Guid.CreateVersion7();
+        factory.WishService.Wishes[(wishlistId, wishId)] = CreateDetails(
+            wishlistId,
+            wishId);
+        factory.WishService.Exception = new WishVersionConflictException();
+        using var client = CreateAuthorizedClient(
+            factory,
+            Guid.CreateVersion7());
+
+        // Act
+        using var response = await PutAsync(
+            client,
+            wishlistId,
+            wishId,
+            new
+            {
+                name = "Cadeau"
+            },
+            "\"0000002a\"");
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.PreconditionFailed,
+            response.StatusCode);
+        var error = await response.Content.ReadFromJsonAsync<ErrorResponse>(
+            TestContext.Current.CancellationToken);
+        Assert.NotNull(error);
+        Assert.Equal(
+            ErrorCodes.WishVersionConflict,
+            error.ErrorCode);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_WhenWishlistIsNotOwned_ReturnsWishlistNotFoundBeforeUpdate()
+    {
+        // Arrange
+        await using var factory = new RegistrationApiFactory();
+        factory.WishlistService.Access = WishlistAccess.NotOwned;
+        var wishlistId = Guid.CreateVersion7();
+        using var client = CreateAuthorizedClient(
+            factory,
+            Guid.CreateVersion7());
+
+        // Act
+        using var response = await PutAsync(
+            client,
+            wishlistId,
+            Guid.CreateVersion7(),
+            new
+            {
+                name = "Cadeau"
+            },
+            "\"0000002a\"");
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.NotFound,
+            response.StatusCode);
+        var error = await response.Content.ReadFromJsonAsync<ErrorResponse>(
+            TestContext.Current.CancellationToken);
+        Assert.NotNull(error);
+        Assert.Equal(
+            ErrorCodes.WishlistNotFound,
+            error.ErrorCode);
+        Assert.Empty(factory.WishService.Updates);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_WhenWishDoesNotExistUnderParent_ReturnsWishNotFound()
+    {
+        // Arrange
+        await using var factory = new RegistrationApiFactory();
+        using var client = CreateAuthorizedClient(
+            factory,
+            Guid.CreateVersion7());
+
+        // Act
+        using var response = await PutAsync(
+            client,
+            Guid.CreateVersion7(),
+            Guid.CreateVersion7(),
+            new
+            {
+                name = "Cadeau"
+            },
+            "\"0000002a\"");
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.NotFound,
+            response.StatusCode);
+        var error = await response.Content.ReadFromJsonAsync<ErrorResponse>(
+            TestContext.Current.CancellationToken);
+        Assert.NotNull(error);
+        Assert.Equal(
+            ErrorCodes.WishNotFound,
+            error.ErrorCode);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_WhenRequestIsInvalid_ReturnsStructuredBadRequest()
+    {
+        // Arrange
+        await using var factory = new RegistrationApiFactory();
+        var wishlistId = Guid.CreateVersion7();
+        var wishId = Guid.CreateVersion7();
+        factory.WishService.Wishes[(wishlistId, wishId)] = CreateDetails(
+            wishlistId,
+            wishId);
+        using var client = CreateAuthorizedClient(
+            factory,
+            Guid.CreateVersion7());
+
+        // Act
+        using var response = await PutAsync(
+            client,
+            wishlistId,
+            wishId,
+            new
+            {
+                name = "   ",
+                url = "ftp://example.com/gift",
+                price = 0
+            },
+            "\"0000002a\"");
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.BadRequest,
+            response.StatusCode);
+        var error = await response.Content.ReadFromJsonAsync<ErrorResponse>(
+            TestContext.Current.CancellationToken);
+        Assert.NotNull(error);
+        Assert.Equal(
+            [
+                "name",
+                "price",
+                "url"
+            ],
+            error.ValidationErrors?
+                .Select(validation => validation.PropertyName)
+                .OrderBy(propertyName => propertyName));
+        Assert.Empty(factory.WishService.Updates);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_WhenPostgreSqlIsUnavailable_ReturnsServiceUnavailable()
+    {
+        // Arrange
+        await using var factory = new RegistrationApiFactory();
+        var wishlistId = Guid.CreateVersion7();
+        var wishId = Guid.CreateVersion7();
+        factory.WishService.Wishes[(wishlistId, wishId)] = CreateDetails(
+            wishlistId,
+            wishId);
+        factory.WishService.Exception = new DependencyUnavailableException(
+            "PostgreSQL",
+            new TimeoutException());
+        using var client = CreateAuthorizedClient(
+            factory,
+            Guid.CreateVersion7());
+
+        // Act
+        using var response = await PutAsync(
+            client,
+            wishlistId,
+            wishId,
+            new
+            {
+                name = "Cadeau"
+            },
+            "\"0000002a\"");
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.ServiceUnavailable,
+            response.StatusCode);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_WhenContentTypeIsNotJson_ReturnsUnsupportedMediaType()
+    {
+        // Arrange
+        await using var factory = new RegistrationApiFactory();
+        using var client = CreateAuthorizedClient(
+            factory,
+            Guid.CreateVersion7());
+        using var content = new StringContent(
+            "name=Cadeau",
+            Encoding.UTF8,
+            "text/plain");
+        using var request = new HttpRequestMessage(
+            HttpMethod.Put,
+            $"/api/v1/wishlists/{Guid.CreateVersion7()}/wishes/{Guid.CreateVersion7()}")
+        {
+            Content = content
+        };
+        request.Headers.TryAddWithoutValidation(
+            "If-Match",
+            "\"0000002a\"");
+
+        // Act
+        using var response = await client.SendAsync(
+            request,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.UnsupportedMediaType,
+            response.StatusCode);
+        Assert.Empty(factory.WishService.Updates);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_WhenBodyExceedsMaximumSize_ReturnsPayloadTooLarge()
+    {
+        // Arrange
+        await using var factory = new RegistrationApiFactory();
+        using var client = CreateAuthorizedClient(
+            factory,
+            Guid.CreateVersion7());
+        using var content = new StringContent(
+            "{\"name\":\"" + new string(
+                'a',
+                5 * 1024) + "\"}",
+            Encoding.UTF8,
+            "application/json");
+        using var request = new HttpRequestMessage(
+            HttpMethod.Put,
+            $"/api/v1/wishlists/{Guid.CreateVersion7()}/wishes/{Guid.CreateVersion7()}")
+        {
+            Content = content
+        };
+        request.Headers.TryAddWithoutValidation(
+            "If-Match",
+            "\"0000002a\"");
+
+        // Act
+        using var response = await client.SendAsync(
+            request,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.RequestEntityTooLarge,
+            response.StatusCode);
+        Assert.Empty(factory.WishService.Updates);
+    }
+
+    [Fact]
     public async Task GetAsync_WhenPostgreSqlIsUnavailable_ReturnsServiceUnavailable()
     {
         // Arrange
@@ -432,6 +833,32 @@ public class WishTests
             accessToken.Value);
 
         return client;
+    }
+
+    private static async Task<HttpResponseMessage> PutAsync(
+        HttpClient client,
+        Guid wishlistId,
+        Guid wishId,
+        object body,
+        string? entityTag)
+    {
+        using var request = new HttpRequestMessage(
+            HttpMethod.Put,
+            $"/api/v1/wishlists/{wishlistId}/wishes/{wishId}")
+        {
+            Content = JsonContent.Create(body)
+        };
+
+        if (entityTag is not null)
+        {
+            request.Headers.TryAddWithoutValidation(
+                "If-Match",
+                entityTag);
+        }
+
+        return await client.SendAsync(
+            request,
+            TestContext.Current.CancellationToken);
     }
 
     private static WishDetails CreateDetails(

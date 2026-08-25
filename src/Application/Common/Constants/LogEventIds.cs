@@ -292,6 +292,16 @@ public static class LogEventIds
     /// </summary>
     public const int WishRetrieved = 2013;
 
+    /// <summary>
+    /// Identifies the start of a gift wish update.
+    /// </summary>
+    public const int WishUpdateStarted = 2014;
+
+    /// <summary>
+    /// Identifies an updated gift wish.
+    /// </summary>
+    public const int WishUpdated = 2015;
+
     #endregion
 
     #region Technical

@@ -143,6 +143,12 @@ public class GlobalExceptionHandler(
                 "The wish was not found under the requested wishlist.",
                 ErrorCodes.WishNotFound,
                 null),
+            WishVersionConflictException => new ErrorResponse(
+                StatusCodes.Status412PreconditionFailed,
+                "Wish version conflict",
+                "The wish has changed. Retrieve it again before retrying.",
+                ErrorCodes.WishVersionConflict,
+                null),
             PreconditionRequiredException => new ErrorResponse(
                 StatusCodes.Status428PreconditionRequired,
                 "Precondition required",

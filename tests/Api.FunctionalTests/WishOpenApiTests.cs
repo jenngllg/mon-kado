@@ -28,6 +28,7 @@ public class WishOpenApiTests
         var itemPath = paths.GetProperty("/api/v1/wishlists/{wishlistId}/wishes/{wishId}");
         var create = collectionPath.GetProperty("post");
         var get = itemPath.GetProperty("get");
+        var update = itemPath.GetProperty("put");
 
         // Assert
         Assert.Equal(
@@ -91,6 +92,55 @@ public class WishOpenApiTests
         AssertWishResponseSchema(
             document.RootElement,
             getResponses.GetProperty("200"));
+
+        Assert.Equal(
+            "Updates a gift wish in an owned private wishlist.",
+            update.GetProperty("summary").GetString());
+        AssertBearerWithoutAntiforgery(update);
+        var updateParameters = update.GetProperty("parameters");
+        Assert.Contains(
+            updateParameters.EnumerateArray(),
+            parameter => parameter.GetProperty("name").GetString() == "If-Match" &&
+                parameter.GetProperty("required").GetBoolean());
+        var updateSchema = ResolveSchema(
+            document.RootElement,
+            update
+                .GetProperty("requestBody")
+                .GetProperty("content")
+                .GetProperty("application/json")
+                .GetProperty("schema"));
+        Assert.Equal(
+            [
+                "name",
+                "note",
+                "price",
+                "url"
+            ],
+            updateSchema
+                .GetProperty("properties")
+                .EnumerateObject()
+                .Select(property => property.Name)
+                .OrderBy(property => property));
+        var updateResponses = update.GetProperty("responses");
+        AssertResponses(
+            updateResponses,
+            "200",
+            "400",
+            "401",
+            "403",
+            "404",
+            "412",
+            "413",
+            "415",
+            "428",
+            "500",
+            "503");
+        AssertSuccessHeaders(
+            updateResponses.GetProperty("200"),
+            includesLocation: false);
+        AssertWishResponseSchema(
+            document.RootElement,
+            updateResponses.GetProperty("200"));
     }
 
     private static void AssertBearerWithoutAntiforgery(JsonElement operation)

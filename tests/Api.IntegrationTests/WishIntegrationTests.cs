@@ -124,6 +124,262 @@ public class WishIntegrationTests(PostgreSqlContainerFixture fixture)
     }
 
     [Fact]
+    public async Task UpdateAsync_WhenRequestIsValid_ReplacesEditableValuesAndPersistsThem()
+    {
+        // Arrange
+        await using var factory = await CreateFactoryAsync();
+        var owner = await CreateMemberAsync(factory);
+        var wishlist = await SeedWishlistAsync(
+            factory,
+            owner.Id,
+            "Liste anniversaire");
+        var parentVersion = wishlist.Version;
+        using var client = CreateAuthorizedClient(
+            factory,
+            owner.Id);
+        using var creationResponse = await CreateWishAsync(
+            client,
+            wishlist.Id,
+            "Cadeau initial");
+        var created = await creationResponse.Content.ReadFromJsonAsync<JsonElement>(
+            TestContext.Current.CancellationToken);
+        var wishId = created.GetProperty("id").GetGuid();
+
+        // Act
+        using var updateResponse = await UpdateWishAsync(
+            client,
+            wishlist.Id,
+            wishId,
+            new
+            {
+                name = "  Cafe\u0301 premium  ",
+                note = "   ",
+                url = (string?)null,
+                price = (decimal?)null
+            },
+            creationResponse.Headers.ETag?.Tag);
+        var updated = await updateResponse.Content.ReadFromJsonAsync<JsonElement>(
+            TestContext.Current.CancellationToken);
+        using var retrievalResponse = await client.GetAsync(
+            $"/api/v1/wishlists/{wishlist.Id}/wishes/{wishId}",
+            TestContext.Current.CancellationToken);
+        var retrieved = await retrievalResponse.Content.ReadFromJsonAsync<JsonElement>(
+            TestContext.Current.CancellationToken);
+        var storedWish = await GetWishAsync(
+            factory,
+            wishlist.Id,
+            wishId);
+        var storedParent = await GetWishlistAsync(
+            factory,
+            wishlist.Id);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.OK,
+            updateResponse.StatusCode);
+        Assert.Equal(
+            HttpStatusCode.OK,
+            retrievalResponse.StatusCode);
+        Assert.Equal(
+            "Café premium",
+            updated.GetProperty("name").GetString());
+        Assert.Equal(
+            JsonValueKind.Null,
+            updated.GetProperty("note").ValueKind);
+        Assert.Equal(
+            JsonValueKind.Null,
+            updated.GetProperty("url").ValueKind);
+        Assert.Equal(
+            JsonValueKind.Null,
+            updated.GetProperty("price").ValueKind);
+        Assert.Equal(
+            1,
+            updated.GetProperty("position").GetInt64());
+        Assert.NotEqual(
+            creationResponse.Headers.ETag?.Tag,
+            updateResponse.Headers.ETag?.Tag);
+        Assert.Equal(
+            updateResponse.Headers.ETag?.Tag,
+            retrievalResponse.Headers.ETag?.Tag);
+        Assert.Equal(
+            updated.GetProperty("name").GetString(),
+            retrieved.GetProperty("name").GetString());
+        Assert.Equal(
+            "Café premium",
+            storedWish.Name);
+        Assert.Null(storedWish.Note);
+        Assert.Null(storedWish.Url);
+        Assert.Null(storedWish.Price);
+        Assert.Equal(
+            1,
+            storedWish.Position);
+        Assert.Equal(
+            _referenceTime.UtcDateTime,
+            storedWish.UpdatedAt);
+        Assert.Equal(
+            parentVersion,
+            storedParent.Version);
+        Assert.Null(storedParent.UpdatedAt);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_WhenValuesAreUnchanged_PreservesVersionAndUpdatedAt()
+    {
+        // Arrange
+        await using var factory = await CreateFactoryAsync();
+        var owner = await CreateMemberAsync(factory);
+        var wishlist = await SeedWishlistAsync(
+            factory,
+            owner.Id,
+            "Liste anniversaire");
+        using var client = CreateAuthorizedClient(
+            factory,
+            owner.Id);
+        using var creationResponse = await CreateWishAsync(
+            client,
+            wishlist.Id,
+            "Café");
+        var created = await creationResponse.Content.ReadFromJsonAsync<JsonElement>(
+            TestContext.Current.CancellationToken);
+        var wishId = created.GetProperty("id").GetGuid();
+
+        // Act
+        using var updateResponse = await UpdateWishAsync(
+            client,
+            wishlist.Id,
+            wishId,
+            new
+            {
+                name = "Café",
+                note = "Édition blanche",
+                url = "https://example.com/gift",
+                price = 12.34m
+            },
+            creationResponse.Headers.ETag?.Tag);
+        var updated = await updateResponse.Content.ReadFromJsonAsync<JsonElement>(
+            TestContext.Current.CancellationToken);
+        var storedWish = await GetWishAsync(
+            factory,
+            wishlist.Id,
+            wishId);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.OK,
+            updateResponse.StatusCode);
+        Assert.Equal(
+            creationResponse.Headers.ETag?.Tag,
+            updateResponse.Headers.ETag?.Tag);
+        Assert.Equal(
+            JsonValueKind.Null,
+            updated.GetProperty("updatedAt").ValueKind);
+        Assert.Null(storedWish.UpdatedAt);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_WhenEntityTagIsStale_ReturnsPreconditionFailedWithoutChangingWish()
+    {
+        // Arrange
+        await using var factory = await CreateFactoryAsync();
+        var owner = await CreateMemberAsync(factory);
+        var wishlist = await SeedWishlistAsync(
+            factory,
+            owner.Id,
+            "Liste anniversaire");
+        using var client = CreateAuthorizedClient(
+            factory,
+            owner.Id);
+        using var creationResponse = await CreateWishAsync(
+            client,
+            wishlist.Id,
+            "Cadeau initial");
+        var created = await creationResponse.Content.ReadFromJsonAsync<JsonElement>(
+            TestContext.Current.CancellationToken);
+        var wishId = created.GetProperty("id").GetGuid();
+
+        // Act
+        using var updateResponse = await UpdateWishAsync(
+            client,
+            wishlist.Id,
+            wishId,
+            new
+            {
+                name = "Cadeau modifié",
+                note = (string?)null,
+                url = (string?)null,
+                price = (decimal?)null
+            },
+            "\"00000000\"");
+        var error = await updateResponse.Content.ReadFromJsonAsync<ErrorResponse>(
+            TestContext.Current.CancellationToken);
+        var storedWish = await GetWishAsync(
+            factory,
+            wishlist.Id,
+            wishId);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.PreconditionFailed,
+            updateResponse.StatusCode);
+        Assert.Equal(
+            ErrorCodes.WishVersionConflict,
+            error?.ErrorCode);
+        Assert.Equal(
+            "Cadeau initial",
+            storedWish.Name);
+        Assert.Equal(
+            "Édition blanche",
+            storedWish.Note);
+        Assert.Null(storedWish.UpdatedAt);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_WhenWishBelongsToDifferentOwnedParent_ReturnsWishNotFound()
+    {
+        // Arrange
+        await using var factory = await CreateFactoryAsync();
+        var owner = await CreateMemberAsync(factory);
+        var sourceWishlist = await SeedWishlistAsync(
+            factory,
+            owner.Id,
+            "Liste source");
+        var targetWishlist = await SeedWishlistAsync(
+            factory,
+            owner.Id,
+            "Liste cible");
+        using var client = CreateAuthorizedClient(
+            factory,
+            owner.Id);
+        using var creationResponse = await CreateWishAsync(
+            client,
+            sourceWishlist.Id,
+            "Cadeau");
+        var created = await creationResponse.Content.ReadFromJsonAsync<JsonElement>(
+            TestContext.Current.CancellationToken);
+
+        // Act
+        using var updateResponse = await UpdateWishAsync(
+            client,
+            targetWishlist.Id,
+            created.GetProperty("id").GetGuid(),
+            new
+            {
+                name = "Cadeau modifié"
+            },
+            creationResponse.Headers.ETag?.Tag);
+        var error = await updateResponse.Content.ReadFromJsonAsync<ErrorResponse>(
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.NotFound,
+            updateResponse.StatusCode);
+        Assert.Equal(
+            ErrorCodes.WishNotFound,
+            error?.ErrorCode);
+    }
+
+    [Fact]
     public async Task CreateAsync_WhenTwoEqualNamesAreCreatedConcurrently_AllocatesDistinctSequentialPositions()
     {
         // Arrange
@@ -464,6 +720,32 @@ public class WishIntegrationTests(PostgreSqlContainerFixture fixture)
                 url = "  https://example.com/gift  ",
                 price = 12.34m
             },
+            TestContext.Current.CancellationToken);
+    }
+
+    private static async Task<HttpResponseMessage> UpdateWishAsync(
+        HttpClient client,
+        Guid wishlistId,
+        Guid wishId,
+        object body,
+        string? entityTag)
+    {
+        using var request = new HttpRequestMessage(
+            HttpMethod.Put,
+            $"/api/v1/wishlists/{wishlistId}/wishes/{wishId}")
+        {
+            Content = JsonContent.Create(body)
+        };
+
+        if (entityTag is not null)
+        {
+            request.Headers.TryAddWithoutValidation(
+                "If-Match",
+                entityTag);
+        }
+
+        return await client.SendAsync(
+            request,
             TestContext.Current.CancellationToken);
     }
 

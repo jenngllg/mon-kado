@@ -173,7 +173,8 @@ public static class RequestBodyLimitExtensions
                 (MatchesPath(request.Path, _memberProfilePath) ||
                     MatchesPath(request.Path, _memberEmailPath) ||
                     MatchesPath(request.Path, _memberPasswordPath) ||
-                    MatchesWishlistResourcePath(request.Path)));
+                    MatchesWishlistResourcePath(request.Path) ||
+                    MatchesWishResourcePath(request.Path)));
     }
 
     /// <summary>
@@ -239,6 +240,58 @@ public static class RequestBodyLimitExtensions
                 StringComparison.OrdinalIgnoreCase) &&
             Guid.TryParse(
                 wishlistId,
+                out _);
+    }
+
+    /// <summary>
+    /// Matches a nested wish resource endpoint and its equivalent route with one trailing slash.
+    /// </summary>
+    /// <param name="requestPath">The request path.</param>
+    /// <returns><see langword="true" /> when the path identifies a nested wish resource.</returns>
+    private static bool MatchesWishResourcePath(PathString requestPath)
+    {
+        if (!requestPath.StartsWithSegments(
+            _wishlistsPath,
+            out var remainingPath))
+        {
+            return false;
+        }
+
+        var remainingValue = remainingPath.Value;
+
+        if (string.IsNullOrEmpty(remainingValue) || remainingValue[0] != '/')
+            return false;
+
+        var nestedPath = remainingValue.AsSpan(1);
+
+        if (nestedPath.EndsWith('/'))
+            nestedPath = nestedPath[..^1];
+
+        var firstSeparatorIndex = nestedPath.IndexOf('/');
+
+        if (firstSeparatorIndex <= 0)
+            return false;
+
+        var wishlistId = nestedPath[..firstSeparatorIndex];
+        var nestedResource = nestedPath[(firstSeparatorIndex + 1)..];
+        var secondSeparatorIndex = nestedResource.IndexOf('/');
+
+        if (secondSeparatorIndex <= 0)
+            return false;
+
+        var resourceName = nestedResource[..secondSeparatorIndex];
+        var wishId = nestedResource[(secondSeparatorIndex + 1)..];
+
+        return !wishId.IsEmpty &&
+            !wishId.Contains('/') &&
+            resourceName.Equals(
+                "wishes",
+                StringComparison.OrdinalIgnoreCase) &&
+            Guid.TryParse(
+                wishlistId,
+                out _) &&
+            Guid.TryParse(
+                wishId,
                 out _);
     }
 
