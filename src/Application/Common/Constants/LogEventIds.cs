@@ -262,6 +262,16 @@ public static class LogEventIds
     /// </summary>
     public const int WishlistUpdated = 2007;
 
+    /// <summary>
+    /// Identifies the start of a private wishlist deletion.
+    /// </summary>
+    public const int WishlistDeletionStarted = 2008;
+
+    /// <summary>
+    /// Identifies a deleted private wishlist.
+    /// </summary>
+    public const int WishlistDeleted = 2009;
+
     #endregion
 
     #region Technical

@@ -472,4 +472,34 @@ public static partial class ApplicationLogMessages
         ILogger logger,
         Guid memberId,
         Guid wishlistId);
+
+    /// <summary>
+    /// Logs the start of a private wishlist deletion.
+    /// </summary>
+    /// <param name="logger">The logger.</param>
+    /// <param name="memberId">The owner member identifier.</param>
+    /// <param name="wishlistId">The wishlist identifier.</param>
+    [LoggerMessage(
+        EventId = LogEventIds.WishlistDeletionStarted,
+        Level = LogLevel.Debug,
+        Message = "Deleting wishlist {WishlistId} for member {MemberId}.")]
+    public static partial void WishlistDeletionStarted(
+        ILogger logger,
+        Guid memberId,
+        Guid wishlistId);
+
+    /// <summary>
+    /// Logs a deleted private wishlist.
+    /// </summary>
+    /// <param name="logger">The logger.</param>
+    /// <param name="memberId">The owner member identifier.</param>
+    /// <param name="wishlistId">The wishlist identifier.</param>
+    [LoggerMessage(
+        EventId = LogEventIds.WishlistDeleted,
+        Level = LogLevel.Information,
+        Message = "Wishlist {WishlistId} deleted for member {MemberId}.")]
+    public static partial void WishlistDeleted(
+        ILogger logger,
+        Guid memberId,
+        Guid wishlistId);
 }

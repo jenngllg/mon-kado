@@ -20,6 +20,12 @@ public class WishlistRepository(MonKadoDbContext context) : IWishlistRepository
     }
 
     /// <inheritdoc />
+    public void Remove(Wishlist wishlist)
+    {
+        context.Wishlists.Remove(wishlist);
+    }
+
+    /// <inheritdoc />
     public Task<Wishlist?> GetByIdAsync(
         Guid wishlistId,
         CancellationToken cancellationToken)

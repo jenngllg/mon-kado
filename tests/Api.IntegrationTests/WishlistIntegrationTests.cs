@@ -784,6 +784,304 @@ public class WishlistIntegrationTests(PostgreSqlContainerFixture fixture)
     }
 
     [Fact]
+    public async Task DeleteAsync_WhenWishlistExists_DeletesItAndAllowsNameReuse()
+    {
+        // Arrange
+        await using var factory = await CreateMigratedFactoryAsync();
+        var owner = await CreateMemberAsync(
+            factory,
+            "owner@example.fr");
+        using var client = CreateAuthorizedClient(
+            factory,
+            owner.Id);
+        using var creationResponse = await CreateWishlistAsync(
+            client,
+            "Liste à supprimer");
+        var wishlistId = GetWishlistId(creationResponse);
+        var entityTag = creationResponse.Headers.ETag?.Tag
+            ?? throw new InvalidOperationException("The wishlist ETag is missing.");
+
+        // Act
+        using var deletionResponse = await DeleteWishlistAsync(
+            client,
+            wishlistId,
+            entityTag);
+        using var retrievalResponse = await client.GetAsync(
+            $"/api/v1/wishlists/{wishlistId}",
+            TestContext.Current.CancellationToken);
+        using var collectionResponse = await client.GetAsync(
+            "/api/v1/wishlists",
+            TestContext.Current.CancellationToken);
+        var collection = await collectionResponse.Content.ReadFromJsonAsync<JsonElement>(
+            TestContext.Current.CancellationToken);
+        using var secondDeletionResponse = await DeleteWishlistAsync(
+            client,
+            wishlistId,
+            entityTag);
+        using var recreationResponse = await CreateWishlistAsync(
+            client,
+            "Liste à supprimer");
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.NoContent,
+            deletionResponse.StatusCode);
+        Assert.True(deletionResponse.Headers.CacheControl?.NoStore);
+        Assert.Equal(
+            string.Empty,
+            await deletionResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+        Assert.Equal(
+            HttpStatusCode.NotFound,
+            retrievalResponse.StatusCode);
+        Assert.Empty(collection.EnumerateArray());
+        Assert.Equal(
+            HttpStatusCode.NotFound,
+            secondDeletionResponse.StatusCode);
+        Assert.Equal(
+            HttpStatusCode.Created,
+            recreationResponse.StatusCode);
+        Assert.Equal(
+            1,
+            await CountWishlistsAsync(factory));
+    }
+
+    [Fact]
+    public async Task DeleteAsync_WhenEntityTagIsStale_PreservesWishlistUntilCurrentVersionIsUsed()
+    {
+        // Arrange
+        await using var factory = await CreateMigratedFactoryAsync();
+        var owner = await CreateMemberAsync(
+            factory,
+            "owner@example.fr");
+        using var client = CreateAuthorizedClient(
+            factory,
+            owner.Id);
+        using var creationResponse = await CreateWishlistAsync(
+            client,
+            "Liste initiale");
+        var wishlistId = GetWishlistId(creationResponse);
+        var initialEntityTag = creationResponse.Headers.ETag?.Tag
+            ?? throw new InvalidOperationException("The wishlist ETag is missing.");
+        using var updateResponse = await UpdateWishlistAsync(
+            client,
+            wishlistId,
+            initialEntityTag,
+            "Liste modifiée",
+            "other",
+            null,
+            null);
+        var currentEntityTag = updateResponse.Headers.ETag?.Tag
+            ?? throw new InvalidOperationException("The updated wishlist ETag is missing.");
+
+        // Act
+        using var staleDeletionResponse = await DeleteWishlistAsync(
+            client,
+            wishlistId,
+            initialEntityTag);
+        var storedAfterConflict = await GetWishlistAsync(
+            factory,
+            wishlistId);
+        using var currentDeletionResponse = await DeleteWishlistAsync(
+            client,
+            wishlistId,
+            currentEntityTag);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.PreconditionFailed,
+            staleDeletionResponse.StatusCode);
+        Assert.Equal(
+            "Liste modifiée",
+            storedAfterConflict.Name);
+        Assert.Equal(
+            HttpStatusCode.NoContent,
+            currentDeletionResponse.StatusCode);
+        Assert.Equal(
+            0,
+            await CountWishlistsAsync(factory));
+    }
+
+    [Fact]
+    public async Task DeleteAsync_WhenWishlistBelongsToAnotherMember_ReturnsNotFoundBeforePrecondition()
+    {
+        // Arrange
+        await using var factory = await CreateMigratedFactoryAsync();
+        var owner = await CreateMemberAsync(
+            factory,
+            "owner@example.fr");
+        var otherMember = await CreateMemberAsync(
+            factory,
+            "other@example.fr");
+        using var ownerClient = CreateAuthorizedClient(
+            factory,
+            owner.Id);
+        using var otherClient = CreateAuthorizedClient(
+            factory,
+            otherMember.Id);
+        using var creationResponse = await CreateWishlistAsync(
+            ownerClient,
+            "Liste privée");
+        var wishlistId = GetWishlistId(creationResponse);
+        using var request = new HttpRequestMessage(
+            HttpMethod.Delete,
+            $"/api/v1/wishlists/{wishlistId}");
+
+        // Act
+        using var response = await otherClient.SendAsync(
+            request,
+            TestContext.Current.CancellationToken);
+        var stored = await GetWishlistAsync(
+            factory,
+            wishlistId);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.NotFound,
+            response.StatusCode);
+        Assert.Equal(
+            "Liste privée",
+            stored.Name);
+    }
+
+    [Fact]
+    public async Task DeleteAsync_WhenConcurrentDeletionWins_ReturnsNoContentThenNotFound()
+    {
+        // Arrange
+        var coordinator = new FirstSaveChangesCoordinator();
+        await using var factory = await CreateMigratedFactoryAsync(
+            new FixedTimeProvider(_referenceTime),
+            coordinator);
+        var owner = await CreateMemberAsync(
+            factory,
+            "owner@example.fr");
+        var wishlist = await SeedWishlistAsync(
+            factory,
+            Guid.CreateVersion7(),
+            owner.Id,
+            "Liste initiale",
+            null);
+        using var client = CreateAuthorizedClient(
+            factory,
+            owner.Id);
+        using var retrievalResponse = await client.GetAsync(
+            $"/api/v1/wishlists/{wishlist.Id}",
+            TestContext.Current.CancellationToken);
+        var entityTag = retrievalResponse.Headers.ETag?.Tag
+            ?? throw new InvalidOperationException("The wishlist ETag is missing.");
+
+        // Act
+        var firstDeletionTask = DeleteWishlistAsync(
+            client,
+            wishlist.Id,
+            entityTag);
+        await coordinator.WaitUntilFirstSaveStartsAsync(TestContext.Current.CancellationToken);
+        HttpResponseMessage secondResponse;
+
+        try
+        {
+            secondResponse = await DeleteWishlistAsync(
+                client,
+                wishlist.Id,
+                entityTag);
+        }
+        finally
+        {
+            coordinator.ReleaseFirstSave();
+        }
+
+        using (secondResponse)
+        using (var firstResponse = await firstDeletionTask)
+        {
+            // Assert
+            Assert.Equal(
+                HttpStatusCode.NoContent,
+                secondResponse.StatusCode);
+            Assert.Equal(
+                HttpStatusCode.NotFound,
+                firstResponse.StatusCode);
+            Assert.Equal(
+                0,
+                await CountWishlistsAsync(factory));
+        }
+    }
+
+    [Fact]
+    public async Task DeleteAsync_WhenConcurrentUpdateWins_ReturnsPreconditionFailedAndPreservesUpdate()
+    {
+        // Arrange
+        var coordinator = new FirstSaveChangesCoordinator();
+        await using var factory = await CreateMigratedFactoryAsync(
+            new FixedTimeProvider(_referenceTime),
+            coordinator);
+        var owner = await CreateMemberAsync(
+            factory,
+            "owner@example.fr");
+        var wishlist = await SeedWishlistAsync(
+            factory,
+            Guid.CreateVersion7(),
+            owner.Id,
+            "Liste initiale",
+            null);
+        using var client = CreateAuthorizedClient(
+            factory,
+            owner.Id);
+        using var retrievalResponse = await client.GetAsync(
+            $"/api/v1/wishlists/{wishlist.Id}",
+            TestContext.Current.CancellationToken);
+        var entityTag = retrievalResponse.Headers.ETag?.Tag
+            ?? throw new InvalidOperationException("The wishlist ETag is missing.");
+
+        // Act
+        var deletionTask = DeleteWishlistAsync(
+            client,
+            wishlist.Id,
+            entityTag);
+        await coordinator.WaitUntilFirstSaveStartsAsync(TestContext.Current.CancellationToken);
+        HttpResponseMessage updateResponse;
+
+        try
+        {
+            updateResponse = await UpdateWishlistAsync(
+                client,
+                wishlist.Id,
+                entityTag,
+                "Modification concurrente",
+                "other",
+                null,
+                null);
+        }
+        finally
+        {
+            coordinator.ReleaseFirstSave();
+        }
+
+        using (updateResponse)
+        using (var deletionResponse = await deletionTask)
+        {
+            var stored = await GetWishlistAsync(
+                factory,
+                wishlist.Id);
+            var error = await deletionResponse.Content.ReadFromJsonAsync<ErrorResponse>(
+                TestContext.Current.CancellationToken);
+
+            // Assert
+            Assert.Equal(
+                HttpStatusCode.OK,
+                updateResponse.StatusCode);
+            Assert.Equal(
+                HttpStatusCode.PreconditionFailed,
+                deletionResponse.StatusCode);
+            Assert.NotNull(error);
+            Assert.Equal(
+                ErrorCodes.WishlistVersionConflict,
+                error.ErrorCode);
+            Assert.Equal(
+                "Modification concurrente",
+                stored.Name);
+        }
+    }
+
+    [Fact]
     public async Task DeleteMemberAsync_WhenMemberOwnsWishlist_DeletesWishlistInCascade()
     {
         // Arrange
@@ -1010,6 +1308,23 @@ public class WishlistIntegrationTests(PostgreSqlContainerFixture fixture)
                 message
             })
         };
+        request.Headers.TryAddWithoutValidation(
+            "If-Match",
+            entityTag);
+
+        return await client.SendAsync(
+            request,
+            TestContext.Current.CancellationToken);
+    }
+
+    private static async Task<HttpResponseMessage> DeleteWishlistAsync(
+        HttpClient client,
+        Guid wishlistId,
+        string entityTag)
+    {
+        using var request = new HttpRequestMessage(
+            HttpMethod.Delete,
+            $"/api/v1/wishlists/{wishlistId}");
         request.Headers.TryAddWithoutValidation(
             "If-Match",
             entityTag);

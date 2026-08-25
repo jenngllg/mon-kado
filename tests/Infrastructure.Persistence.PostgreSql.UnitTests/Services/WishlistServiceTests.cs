@@ -816,6 +816,309 @@ public class WishlistServiceTests
     }
 
     [Fact]
+    public async Task DeleteAsync_WhenWishlistExists_RemovesWishlistAndSaves()
+    {
+        // Arrange
+        var ownerId = Guid.CreateVersion7();
+        var wishlistId = Guid.CreateVersion7();
+        var wishlist = CreateWishlist(wishlistId);
+        var cancellationToken = TestContext.Current.CancellationToken;
+        _wishlistRepositoryMock
+            .Setup(repository => repository.GetByIdForUpdateAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken))
+            .ReturnsAsync(wishlist);
+        _wishlistRepositoryMock
+            .Setup(repository => repository.Remove(wishlist));
+        _unitOfWorkMock
+            .Setup(unitOfWork => unitOfWork.SaveChangesAsync(cancellationToken))
+            .ReturnsAsync(1);
+
+        // Act
+        var result = await _wishlistService.DeleteAsync(
+            ownerId,
+            wishlistId,
+            0,
+            cancellationToken);
+
+        // Assert
+        Assert.True(result);
+        VerifyDeletion(
+            ownerId,
+            wishlistId,
+            wishlist,
+            cancellationToken);
+    }
+
+    [Fact]
+    public async Task DeleteAsync_WhenWishlistDoesNotExist_ReturnsFalse()
+    {
+        // Arrange
+        var ownerId = Guid.CreateVersion7();
+        var wishlistId = Guid.CreateVersion7();
+        var cancellationToken = TestContext.Current.CancellationToken;
+        _wishlistRepositoryMock
+            .Setup(repository => repository.GetByIdForUpdateAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken))
+            .ReturnsAsync((Wishlist?)null);
+        _wishlistRepositoryMock
+            .Setup(repository => repository.GetAccessAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken))
+            .ReturnsAsync(WishlistAccess.NotOwned);
+
+        // Act
+        var result = await _wishlistService.DeleteAsync(
+            ownerId,
+            wishlistId,
+            0,
+            cancellationToken);
+
+        // Assert
+        Assert.False(result);
+        _wishlistRepositoryMock.Verify(
+            repository => repository.GetByIdForUpdateAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken),
+            Times.Once);
+        _wishlistRepositoryMock.Verify(
+            repository => repository.GetAccessAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken),
+            Times.Once);
+        VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task DeleteAsync_WhenMemberDisappearsBeforeLoadingWishlist_ThrowsInvalidAuthenticationSessionException()
+    {
+        // Arrange
+        var ownerId = Guid.CreateVersion7();
+        var wishlistId = Guid.CreateVersion7();
+        var cancellationToken = TestContext.Current.CancellationToken;
+        _wishlistRepositoryMock
+            .Setup(repository => repository.GetByIdForUpdateAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken))
+            .ReturnsAsync((Wishlist?)null);
+        _wishlistRepositoryMock
+            .Setup(repository => repository.GetAccessAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken))
+            .ReturnsAsync(WishlistAccess.MemberNotFound);
+
+        // Act
+        var action = () => _wishlistService.DeleteAsync(
+            ownerId,
+            wishlistId,
+            0,
+            cancellationToken);
+
+        // Assert
+        await Assert.ThrowsAsync<InvalidAuthenticationSessionException>(action);
+        _wishlistRepositoryMock.Verify(
+            repository => repository.GetByIdForUpdateAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken),
+            Times.Once);
+        _wishlistRepositoryMock.Verify(
+            repository => repository.GetAccessAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken),
+            Times.Once);
+        VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task DeleteAsync_WhenExpectedVersionIsStale_ThrowsWishlistVersionConflictException()
+    {
+        // Arrange
+        var ownerId = Guid.CreateVersion7();
+        var wishlistId = Guid.CreateVersion7();
+        var cancellationToken = TestContext.Current.CancellationToken;
+        _wishlistRepositoryMock
+            .Setup(repository => repository.GetByIdForUpdateAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken))
+            .ReturnsAsync(CreateWishlist(wishlistId));
+
+        // Act
+        var action = () => _wishlistService.DeleteAsync(
+            ownerId,
+            wishlistId,
+            42,
+            cancellationToken);
+
+        // Assert
+        await Assert.ThrowsAsync<WishlistVersionConflictException>(action);
+        _wishlistRepositoryMock.Verify(
+            repository => repository.GetByIdForUpdateAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken),
+            Times.Once);
+        VerifyNoOtherCalls();
+    }
+
+    [Theory]
+    [InlineData(WishlistAccess.MemberNotFound, typeof(InvalidAuthenticationSessionException))]
+    [InlineData(WishlistAccess.Owner, typeof(WishlistVersionConflictException))]
+    public async Task DeleteAsync_WhenConcurrentDeletionStillHasAccess_ThrowsExpectedException(
+        WishlistAccess access,
+        Type expectedExceptionType)
+    {
+        // Arrange
+        var ownerId = Guid.CreateVersion7();
+        var wishlistId = Guid.CreateVersion7();
+        var wishlist = CreateWishlist(wishlistId);
+        var cancellationToken = TestContext.Current.CancellationToken;
+        ConfigureConcurrentDeletion(
+            ownerId,
+            wishlistId,
+            wishlist,
+            cancellationToken);
+        _wishlistRepositoryMock
+            .Setup(repository => repository.GetAccessAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken))
+            .ReturnsAsync(access);
+
+        // Act
+        var action = () => _wishlistService.DeleteAsync(
+            ownerId,
+            wishlistId,
+            0,
+            cancellationToken);
+
+        // Assert
+        var exception = await Assert.ThrowsAnyAsync<Exception>(action);
+        Assert.IsType(
+            expectedExceptionType,
+            exception);
+        VerifyConcurrentDeletion(
+            ownerId,
+            wishlistId,
+            wishlist,
+            cancellationToken);
+    }
+
+    [Fact]
+    public async Task DeleteAsync_WhenWishlistIsDeletedConcurrently_ReturnsFalse()
+    {
+        // Arrange
+        var ownerId = Guid.CreateVersion7();
+        var wishlistId = Guid.CreateVersion7();
+        var wishlist = CreateWishlist(wishlistId);
+        var cancellationToken = TestContext.Current.CancellationToken;
+        ConfigureConcurrentDeletion(
+            ownerId,
+            wishlistId,
+            wishlist,
+            cancellationToken);
+        _wishlistRepositoryMock
+            .Setup(repository => repository.GetAccessAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken))
+            .ReturnsAsync(WishlistAccess.NotOwned);
+
+        // Act
+        var result = await _wishlistService.DeleteAsync(
+            ownerId,
+            wishlistId,
+            0,
+            cancellationToken);
+
+        // Assert
+        Assert.False(result);
+        VerifyConcurrentDeletion(
+            ownerId,
+            wishlistId,
+            wishlist,
+            cancellationToken);
+    }
+
+    [Fact]
+    public async Task DeleteAsync_WhenConcurrentAccessCheckTimesOut_ThrowsDependencyUnavailableException()
+    {
+        // Arrange
+        var ownerId = Guid.CreateVersion7();
+        var wishlistId = Guid.CreateVersion7();
+        var wishlist = CreateWishlist(wishlistId);
+        var cancellationToken = TestContext.Current.CancellationToken;
+        ConfigureConcurrentDeletion(
+            ownerId,
+            wishlistId,
+            wishlist,
+            cancellationToken);
+        _wishlistRepositoryMock
+            .Setup(repository => repository.GetAccessAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken))
+            .ThrowsAsync(new TimeoutException());
+
+        // Act
+        var action = () => _wishlistService.DeleteAsync(
+            ownerId,
+            wishlistId,
+            0,
+            cancellationToken);
+
+        // Assert
+        await Assert.ThrowsAsync<DependencyUnavailableException>(action);
+        VerifyConcurrentDeletion(
+            ownerId,
+            wishlistId,
+            wishlist,
+            cancellationToken);
+    }
+
+    [Fact]
+    public async Task DeleteAsync_WhenPostgreSqlTimesOut_ThrowsDependencyUnavailableException()
+    {
+        // Arrange
+        var ownerId = Guid.CreateVersion7();
+        var wishlistId = Guid.CreateVersion7();
+        var cancellationToken = TestContext.Current.CancellationToken;
+        _wishlistRepositoryMock
+            .Setup(repository => repository.GetByIdForUpdateAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken))
+            .ThrowsAsync(new TimeoutException());
+
+        // Act
+        var action = () => _wishlistService.DeleteAsync(
+            ownerId,
+            wishlistId,
+            0,
+            cancellationToken);
+
+        // Assert
+        await Assert.ThrowsAsync<DependencyUnavailableException>(action);
+        _wishlistRepositoryMock.Verify(
+            repository => repository.GetByIdForUpdateAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken),
+            Times.Once);
+        VerifyNoOtherCalls();
+    }
+
+    [Fact]
     public async Task GetByOwnerIdAsync_WhenMemberExists_ReturnsMappedWishlistsInRepositoryOrder()
     {
         // Arrange
@@ -1053,6 +1356,65 @@ public class WishlistServiceTests
                 cancellationToken),
             Times.Once);
         VerifyNoOtherCalls();
+    }
+
+    private void ConfigureConcurrentDeletion(
+        Guid ownerId,
+        Guid wishlistId,
+        Wishlist wishlist,
+        CancellationToken cancellationToken)
+    {
+        _wishlistRepositoryMock
+            .Setup(repository => repository.GetByIdForUpdateAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken))
+            .ReturnsAsync(wishlist);
+        _wishlistRepositoryMock
+            .Setup(repository => repository.Remove(wishlist));
+        _unitOfWorkMock
+            .Setup(unitOfWork => unitOfWork.SaveChangesAsync(cancellationToken))
+            .ThrowsAsync(new DbUpdateConcurrencyException());
+    }
+
+    private void VerifyDeletion(
+        Guid ownerId,
+        Guid wishlistId,
+        Wishlist wishlist,
+        CancellationToken cancellationToken)
+    {
+        _wishlistRepositoryMock.Verify(
+            repository => repository.GetByIdForUpdateAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken),
+            Times.Once);
+        _wishlistRepositoryMock.Verify(
+            repository => repository.Remove(wishlist),
+            Times.Once);
+        _unitOfWorkMock.Verify(
+            unitOfWork => unitOfWork.SaveChangesAsync(cancellationToken),
+            Times.Once);
+        VerifyNoOtherCalls();
+    }
+
+    private void VerifyConcurrentDeletion(
+        Guid ownerId,
+        Guid wishlistId,
+        Wishlist wishlist,
+        CancellationToken cancellationToken)
+    {
+        _wishlistRepositoryMock.Verify(
+            repository => repository.GetAccessAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken),
+            Times.Once);
+        VerifyDeletion(
+            ownerId,
+            wishlistId,
+            wishlist,
+            cancellationToken);
     }
 
     private void VerifyNoOtherCalls()
