@@ -32,6 +32,17 @@ public class WishlistRepository(MonKadoDbContext context) : IWishlistRepository
     }
 
     /// <inheritdoc />
+    public Task<Wishlist?> GetByIdForUpdateAsync(
+        Guid ownerId,
+        Guid wishlistId,
+        CancellationToken cancellationToken)
+    {
+        return context.Wishlists.SingleOrDefaultAsync(
+            wishlist => wishlist.Id == wishlistId && wishlist.OwnerId == ownerId,
+            cancellationToken);
+    }
+
+    /// <inheritdoc />
     public async Task<IReadOnlyCollection<Wishlist>?> GetByOwnerIdAsync(
         Guid ownerId,
         CancellationToken cancellationToken)

@@ -44,4 +44,9 @@ public static class ValidationMessages
     /// Identifies a new password that is identical to the current password.
     /// </summary>
     public const string NewPasswordMustDiffer = "The new password must differ from the current password.";
+
+    /// <summary>
+    /// Identifies a wishlist event date earlier than the current date.
+    /// </summary>
+    public const string WishlistEventDateMustBeTodayOrLater = "The event date must be today or later.";
 }

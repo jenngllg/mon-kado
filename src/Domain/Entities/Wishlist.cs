@@ -41,6 +41,52 @@ public class Wishlist : IAuditableEntity
     }
 
     /// <summary>
+    /// Replaces the editable wishlist metadata.
+    /// </summary>
+    /// <param name="name">The normalized display name.</param>
+    /// <param name="normalizedName">The normalized uniqueness key.</param>
+    /// <param name="occasion">The associated occasion.</param>
+    /// <param name="eventDate">The optional event date.</param>
+    /// <param name="message">The optional owner message.</param>
+    /// <returns><see langword="true" /> when at least one value changed; otherwise, <see langword="false" />.</returns>
+    public bool Update(
+        string name,
+        string normalizedName,
+        WishlistOccasion occasion,
+        DateOnly? eventDate,
+        string? message)
+    {
+
+        if (string.Equals(
+                Name,
+                name,
+                StringComparison.Ordinal) &&
+            string.Equals(
+                NormalizedName,
+                normalizedName,
+                StringComparison.Ordinal) &&
+            Occasion == occasion &&
+            Nullable.Equals(
+                EventDate,
+                eventDate) &&
+            string.Equals(
+                Message,
+                message,
+                StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        Name = name;
+        NormalizedName = normalizedName;
+        Occasion = occasion;
+        EventDate = eventDate;
+        Message = message;
+
+        return true;
+    }
+
+    /// <summary>
     /// Gets the wishlist identifier.
     /// </summary>
     public Guid Id

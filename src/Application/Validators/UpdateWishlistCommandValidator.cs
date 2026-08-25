@@ -6,20 +6,19 @@ using JennGllg.Fr.MonKado.Back.Application.Common.Constants;
 namespace JennGllg.Fr.MonKado.Back.Application.Validators;
 
 /// <summary>
-/// Validates private wishlist creation commands.
+/// Validates private wishlist update commands.
 /// </summary>
-public class CreateWishlistCommandValidator : AbstractValidator<CreateWishlistCommand>
+public class UpdateWishlistCommandValidator : AbstractValidator<UpdateWishlistCommand>
 {
-    private readonly TimeProvider _timeProvider;
-
     /// <summary>
-    /// Initializes a new instance of the <see cref="CreateWishlistCommandValidator" /> class.
+    /// Initializes a new instance of the <see cref="UpdateWishlistCommandValidator" /> class.
     /// </summary>
-    /// <param name="timeProvider">The time provider.</param>
-    public CreateWishlistCommandValidator(TimeProvider timeProvider)
+    public UpdateWishlistCommandValidator()
     {
-        _timeProvider = timeProvider;
         RuleFor(command => command.OwnerId)
+            .NotEmpty()
+            .WithMessage(ValidationMessages.MandatoryProperty);
+        RuleFor(command => command.WishlistId)
             .NotEmpty()
             .WithMessage(ValidationMessages.MandatoryProperty);
         RuleFor(command => command.Name)
@@ -34,21 +33,8 @@ public class CreateWishlistCommandValidator : AbstractValidator<CreateWishlistCo
             .WithMessage(ValidationMessages.MandatoryProperty)
             .IsInEnum()
             .WithMessage("The wishlist occasion is invalid.");
-        RuleFor(command => command.EventDate)
-            .Must(BeTodayOrLater)
-            .WithMessage(ValidationMessages.WishlistEventDateMustBeTodayOrLater);
         RuleFor(command => command.Message)
             .Must(WishlistTextValidation.IsValidMessage)
             .WithMessage($"The wishlist message must not exceed {WishlistTextValidation.MaximumMessageLength} characters or contain unsupported control characters.");
-    }
-
-    private bool BeTodayOrLater(DateOnly? eventDate)
-    {
-        if (eventDate is null)
-            return true;
-
-        var today = DateOnly.FromDateTime(_timeProvider.GetUtcNow().UtcDateTime);
-
-        return eventDate.Value >= today;
     }
 }

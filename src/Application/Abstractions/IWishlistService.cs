@@ -4,7 +4,7 @@ using JennGllg.Fr.MonKado.Back.Domain.Enums;
 namespace JennGllg.Fr.MonKado.Back.Application.Abstractions;
 
 /// <summary>
-/// Creates and retrieves private wishlists.
+/// Creates, updates and retrieves private wishlists.
 /// </summary>
 public interface IWishlistService
 {
@@ -32,6 +32,39 @@ public interface IWishlistService
         WishlistOccasion occasion,
         DateOnly? eventDate,
         string? message,
+        CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Updates a private wishlist owned by a member.
+    /// </summary>
+    /// <param name="ownerId">The owner member identifier.</param>
+    /// <param name="wishlistId">The wishlist identifier.</param>
+    /// <param name="name">The normalized display name.</param>
+    /// <param name="normalizedName">The normalized uniqueness key.</param>
+    /// <param name="occasion">The associated occasion.</param>
+    /// <param name="eventDate">The optional event date.</param>
+    /// <param name="message">The optional owner message.</param>
+    /// <param name="expectedVersion">The version supplied by the client.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The updated wishlist, or <see langword="null" /> when it is unavailable to the member.</returns>
+    /// <exception cref="Common.Exceptions.RequestValidationException">A changed event date is in the past.</exception>
+    /// <exception cref="Common.Exceptions.WishlistNameAlreadyExistsException">
+    /// The member already owns another wishlist with the normalized name.
+    /// </exception>
+    /// <exception cref="Common.Exceptions.WishlistVersionConflictException">The supplied version is stale.</exception>
+    /// <exception cref="Common.Exceptions.InvalidAuthenticationSessionException">
+    /// The member was deleted during the update.
+    /// </exception>
+    /// <exception cref="Common.Exceptions.DependencyUnavailableException">PostgreSQL is unavailable.</exception>
+    Task<WishlistDetails?> UpdateAsync(
+        Guid ownerId,
+        Guid wishlistId,
+        string name,
+        string normalizedName,
+        WishlistOccasion occasion,
+        DateOnly? eventDate,
+        string? message,
+        uint expectedVersion,
         CancellationToken cancellationToken);
 
     /// <summary>

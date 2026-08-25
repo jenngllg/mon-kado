@@ -442,4 +442,34 @@ public static partial class ApplicationLogMessages
     public static partial void WishlistCollectionRetrieved(
         ILogger logger,
         Guid memberId);
+
+    /// <summary>
+    /// Logs the start of a private wishlist update.
+    /// </summary>
+    /// <param name="logger">The logger.</param>
+    /// <param name="memberId">The owner member identifier.</param>
+    /// <param name="wishlistId">The wishlist identifier.</param>
+    [LoggerMessage(
+        EventId = LogEventIds.WishlistUpdateStarted,
+        Level = LogLevel.Debug,
+        Message = "Updating wishlist {WishlistId} for member {MemberId}.")]
+    public static partial void WishlistUpdateStarted(
+        ILogger logger,
+        Guid memberId,
+        Guid wishlistId);
+
+    /// <summary>
+    /// Logs an updated private wishlist.
+    /// </summary>
+    /// <param name="logger">The logger.</param>
+    /// <param name="memberId">The owner member identifier.</param>
+    /// <param name="wishlistId">The wishlist identifier.</param>
+    [LoggerMessage(
+        EventId = LogEventIds.WishlistUpdated,
+        Level = LogLevel.Information,
+        Message = "Wishlist {WishlistId} updated for member {MemberId}.")]
+    public static partial void WishlistUpdated(
+        ILogger logger,
+        Guid memberId,
+        Guid wishlistId);
 }

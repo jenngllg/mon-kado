@@ -171,7 +171,38 @@ public static class RequestBodyLimitExtensions
             (HttpMethods.IsPut(request.Method) &&
                 (MatchesPath(request.Path, _memberProfilePath) ||
                     MatchesPath(request.Path, _memberEmailPath) ||
-                    MatchesPath(request.Path, _memberPasswordPath)));
+                    MatchesPath(request.Path, _memberPasswordPath) ||
+                    MatchesWishlistResourcePath(request.Path)));
+    }
+
+    /// <summary>
+    /// Matches a wishlist resource endpoint and its equivalent route with one trailing slash.
+    /// </summary>
+    /// <param name="requestPath">The request path.</param>
+    /// <returns><see langword="true" /> when the path identifies a wishlist resource.</returns>
+    private static bool MatchesWishlistResourcePath(PathString requestPath)
+    {
+
+        if (!requestPath.StartsWithSegments(
+            _wishlistsPath,
+            out var remainingPath))
+            return false;
+
+        var remainingValue = remainingPath.Value;
+
+        if (string.IsNullOrEmpty(remainingValue) || remainingValue[0] != '/')
+            return false;
+
+        var wishlistId = remainingValue.AsSpan(1);
+
+        if (wishlistId.EndsWith('/'))
+            wishlistId = wishlistId[..^1];
+
+        return !wishlistId.IsEmpty &&
+            !wishlistId.Contains('/') &&
+            Guid.TryParse(
+                wishlistId,
+                out _);
     }
 
     /// <summary>

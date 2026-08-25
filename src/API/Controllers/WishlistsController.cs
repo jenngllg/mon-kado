@@ -105,6 +105,59 @@ public class WishlistsController(
     }
 
     /// <summary>
+    /// Updates a private wishlist owned by the current member.
+    /// </summary>
+    /// <param name="wishlistId">The wishlist identifier.</param>
+    /// <param name="request">The wishlist update request.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The updated private wishlist.</returns>
+    [HttpPut("{wishlistId:guid}")]
+    [EntityTag(isRequired: true)]
+    [NoStoreResponse(StatusCodes.Status200OK)]
+    [RequestSizeLimit(MaximumRequestBodySize)]
+    [Consumes("application/json")]
+    [ProducesResponseType(typeof(WishlistResponse), StatusCodes.Status200OK, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status409Conflict, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status412PreconditionFailed, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status413PayloadTooLarge, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status415UnsupportedMediaType, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status428PreconditionRequired, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status503ServiceUnavailable, "application/json")]
+    public async Task<ActionResult<WishlistResponse>> UpdateAsync(
+        Guid wishlistId,
+        UpdateWishlistRequest request,
+        CancellationToken cancellationToken)
+    {
+        var authorization = await authorizationService.AuthorizeAsync(
+            User,
+            wishlistId,
+            AuthorizationPolicies.ManageWishlist);
+
+        if (!authorization.Succeeded)
+            throw new WishlistNotFoundException();
+
+        var memberId = GetMemberId();
+        var expectedVersion = entityTagService.Parse(Request.Headers.IfMatch);
+        var wishlist = await sender.Send(
+            new UpdateWishlistCommand(
+                memberId,
+                wishlistId,
+                request.Name,
+                request.Occasion,
+                request.EventDate,
+                request.Message,
+                expectedVersion),
+            cancellationToken);
+        var response = CreateResponse(wishlist);
+        Response.Headers.ETag = entityTagService.Format(wishlist.Version);
+        Response.Headers.CacheControl = "no-store";
+
+        return Ok(response);
+    }
+
+    /// <summary>
     /// Gets a private wishlist owned by the current member.
     /// </summary>
     /// <param name="wishlistId">The wishlist identifier.</param>

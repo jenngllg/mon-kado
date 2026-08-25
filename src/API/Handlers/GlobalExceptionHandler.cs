@@ -131,6 +131,12 @@ public class GlobalExceptionHandler(
                 "A wishlist with this name already exists.",
                 ErrorCodes.WishlistNameAlreadyExists,
                 null),
+            WishlistVersionConflictException => new ErrorResponse(
+                StatusCodes.Status412PreconditionFailed,
+                "Wishlist update conflict",
+                "The wishlist has changed. Retrieve it again before retrying.",
+                ErrorCodes.WishlistVersionConflict,
+                null),
             PreconditionRequiredException => new ErrorResponse(
                 StatusCodes.Status428PreconditionRequired,
                 "Precondition required",

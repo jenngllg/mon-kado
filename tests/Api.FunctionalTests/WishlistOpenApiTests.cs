@@ -33,6 +33,9 @@ public class WishlistOpenApiTests
         var get = paths
             .GetProperty("/api/v1/wishlists/{wishlistId}")
             .GetProperty("get");
+        var update = paths
+            .GetProperty("/api/v1/wishlists/{wishlistId}")
+            .GetProperty("put");
 
         // Assert
         Assert.Equal(
@@ -136,6 +139,65 @@ public class WishlistOpenApiTests
         AssertWishlistResponseSchema(
             document.RootElement,
             getResponses.GetProperty("200"));
+
+        Assert.Equal(
+            "Updates a private wishlist owned by the current member.",
+            update.GetProperty("summary").GetString());
+        AssertBearerWithoutAntiforgery(update);
+        var parameters = update.GetProperty("parameters").EnumerateArray().ToArray();
+        var ifMatch = Assert.Single(
+            parameters,
+            parameter => parameter.GetProperty("name").GetString() == "If-Match");
+        Assert.Equal(
+            "header",
+            ifMatch.GetProperty("in").GetString());
+        Assert.True(ifMatch.GetProperty("required").GetBoolean());
+        var updateRequestSchema = ResolveSchema(
+            document.RootElement,
+            update
+                .GetProperty("requestBody")
+                .GetProperty("content")
+                .GetProperty("application/json")
+                .GetProperty("schema"));
+        Assert.Equal(
+            [
+                "eventDate",
+                "message",
+                "name",
+                "occasion"
+            ],
+            updateRequestSchema
+                .GetProperty("properties")
+                .EnumerateObject()
+                .Select(property => property.Name)
+                .OrderBy(property => property));
+        var updateResponses = update.GetProperty("responses");
+        AssertResponses(
+            updateResponses,
+            "200",
+            "400",
+            "401",
+            "403",
+            "404",
+            "409",
+            "412",
+            "413",
+            "415",
+            "428",
+            "500",
+            "503");
+        var updateHeaders = updateResponses
+            .GetProperty("200")
+            .GetProperty("headers");
+        Assert.True(updateHeaders.TryGetProperty(
+            "ETag",
+            out _));
+        Assert.True(updateHeaders.TryGetProperty(
+            "Cache-Control",
+            out _));
+        AssertWishlistResponseSchema(
+            document.RootElement,
+            updateResponses.GetProperty("200"));
     }
 
     private static void AssertBearerWithoutAntiforgery(JsonElement operation)

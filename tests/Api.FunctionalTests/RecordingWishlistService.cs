@@ -34,6 +34,22 @@ public class RecordingWishlistService : IWishlistService
     } = [];
 
     /// <summary>
+    /// Gets the recorded update calls.
+    /// </summary>
+    public List<(
+        Guid OwnerId,
+        Guid WishlistId,
+        string Name,
+        string NormalizedName,
+        WishlistOccasion Occasion,
+        DateOnly? EventDate,
+        string? Message,
+        uint ExpectedVersion)> Updates
+    {
+        get;
+    } = [];
+
+    /// <summary>
     /// Gets the recorded access calls.
     /// </summary>
     public List<(Guid MemberId, Guid WishlistId)> Accesses { get; } = [];
@@ -81,6 +97,22 @@ public class RecordingWishlistService : IWishlistService
     {
         get; set;
     }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether wishlist update finds the resource.
+    /// </summary>
+    public bool WishlistExistsForUpdate
+    {
+        get; set;
+    } = true;
+
+    /// <summary>
+    /// Gets or sets the version returned after a wishlist update.
+    /// </summary>
+    public uint UpdatedVersion
+    {
+        get; set;
+    } = 43;
 
     /// <inheritdoc />
     public Task<WishlistDetails?> CreateAsync(
@@ -139,6 +171,49 @@ public class RecordingWishlistService : IWishlistService
             out var wishlist);
 
         return Task.FromResult(wishlist);
+    }
+
+    /// <inheritdoc />
+    public Task<WishlistDetails?> UpdateAsync(
+        Guid ownerId,
+        Guid wishlistId,
+        string name,
+        string normalizedName,
+        WishlistOccasion occasion,
+        DateOnly? eventDate,
+        string? message,
+        uint expectedVersion,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        Updates.Add((
+            ownerId,
+            wishlistId,
+            name,
+            normalizedName,
+            occasion,
+            eventDate,
+            message,
+            expectedVersion));
+
+        if (Exception is not null)
+            throw Exception;
+
+        if (!WishlistExistsForUpdate)
+            return Task.FromResult<WishlistDetails?>(null);
+
+        var wishlist = new WishlistDetails(
+            wishlistId,
+            name,
+            occasion,
+            eventDate,
+            message,
+            _createdAt,
+            _createdAt.AddDays(1),
+            UpdatedVersion);
+        Wishlists[wishlistId] = wishlist;
+
+        return Task.FromResult<WishlistDetails?>(wishlist);
     }
 
     /// <inheritdoc />

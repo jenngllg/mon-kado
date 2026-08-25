@@ -7,7 +7,7 @@ using System.Globalization;
 namespace JennGllg.Fr.MonKado.Back.Api.Services;
 
 /// <summary>
-/// Formats and validates strong member profile entity tags.
+/// Formats and validates strong resource entity tags.
 /// </summary>
 public class EntityTagService : IEntityTagService
 {
