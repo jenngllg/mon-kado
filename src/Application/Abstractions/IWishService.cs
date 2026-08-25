@@ -3,7 +3,7 @@ using JennGllg.Fr.MonKado.Back.Application.Models;
 namespace JennGllg.Fr.MonKado.Back.Application.Abstractions;
 
 /// <summary>
-/// Creates, retrieves, and updates gift wishes in private wishlists.
+/// Creates, retrieves, updates, and deletes gift wishes in private wishlists.
 /// </summary>
 public interface IWishService
 {
@@ -69,6 +69,26 @@ public interface IWishService
         string? note,
         string? url,
         decimal? price,
+        uint expectedVersion,
+        CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Deletes a gift wish from an owned private wishlist.
+    /// </summary>
+    /// <param name="ownerId">The authenticated owner identifier.</param>
+    /// <param name="wishlistId">The parent wishlist identifier.</param>
+    /// <param name="wishId">The wish identifier.</param>
+    /// <param name="expectedVersion">The version supplied by the client.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns><see langword="true" /> when the wish was deleted; otherwise, <see langword="false" />.</returns>
+    /// <exception cref="Common.Exceptions.InvalidAuthenticationSessionException">The authenticated member no longer exists.</exception>
+    /// <exception cref="Common.Exceptions.WishlistNotFoundException">The parent wishlist is unavailable to the owner.</exception>
+    /// <exception cref="Common.Exceptions.WishVersionConflictException">The wish version is stale.</exception>
+    /// <exception cref="Common.Exceptions.DependencyUnavailableException">PostgreSQL is unavailable.</exception>
+    Task<bool> DeleteAsync(
+        Guid ownerId,
+        Guid wishlistId,
+        Guid wishId,
         uint expectedVersion,
         CancellationToken cancellationToken);
 }

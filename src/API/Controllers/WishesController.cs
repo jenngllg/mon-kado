@@ -174,6 +174,44 @@ public class WishesController(
     }
 
     /// <summary>
+    /// Deletes a gift wish from an owned private wishlist.
+    /// </summary>
+    /// <param name="wishlistId">The parent wishlist identifier.</param>
+    /// <param name="wishId">The wish identifier.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>No content after the gift wish is deleted.</returns>
+    [HttpDelete("{wishId:guid}")]
+    [EntityTag(isRequired: true, returnsEntityTag: false)]
+    [NoStoreResponse(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status412PreconditionFailed, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status428PreconditionRequired, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status503ServiceUnavailable, "application/json")]
+    public async Task<IActionResult> DeleteAsync(
+        Guid wishlistId,
+        Guid wishId,
+        CancellationToken cancellationToken)
+    {
+        await AuthorizeWishlistAsync(
+            wishlistId,
+            cancellationToken);
+        var memberId = GetMemberId();
+        var expectedVersion = entityTagService.Parse(Request.Headers.IfMatch);
+        await sender.Send(
+            new DeleteWishCommand(
+                memberId,
+                wishlistId,
+                wishId,
+                expectedVersion),
+            cancellationToken);
+        Response.Headers.CacheControl = "no-store";
+
+        return NoContent();
+    }
+
+    /// <summary>
     /// Authorizes owner access to a private parent wishlist.
     /// </summary>
     /// <param name="wishlistId">The parent wishlist identifier.</param>

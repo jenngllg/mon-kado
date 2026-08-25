@@ -29,6 +29,7 @@ public class WishOpenApiTests
         var create = collectionPath.GetProperty("post");
         var get = itemPath.GetProperty("get");
         var update = itemPath.GetProperty("put");
+        var delete = itemPath.GetProperty("delete");
 
         // Assert
         Assert.Equal(
@@ -141,6 +142,51 @@ public class WishOpenApiTests
         AssertWishResponseSchema(
             document.RootElement,
             updateResponses.GetProperty("200"));
+
+        Assert.Equal(
+            "Deletes a gift wish from an owned private wishlist.",
+            delete.GetProperty("summary").GetString());
+        AssertBearerWithoutAntiforgery(delete);
+        Assert.False(delete.TryGetProperty(
+            "requestBody",
+            out _));
+        var deleteParameters = delete.GetProperty("parameters").EnumerateArray().ToArray();
+        var deleteIfMatch = Assert.Single(
+            deleteParameters,
+            parameter => parameter.GetProperty("name").GetString() == "If-Match");
+        Assert.Equal(
+            "header",
+            deleteIfMatch.GetProperty("in").GetString());
+        Assert.True(deleteIfMatch.GetProperty("required").GetBoolean());
+        Assert.Equal(
+            "Strong entity tag returned when the resource was retrieved or last modified.",
+            deleteIfMatch.GetProperty("description").GetString());
+        var deleteResponses = delete.GetProperty("responses");
+        AssertResponses(
+            deleteResponses,
+            "204",
+            "400",
+            "401",
+            "403",
+            "404",
+            "412",
+            "428",
+            "500",
+            "503");
+        var deleteSuccess = deleteResponses.GetProperty("204");
+        Assert.False(deleteSuccess.TryGetProperty(
+            "content",
+            out _));
+        var deleteHeaders = deleteSuccess.GetProperty("headers");
+        Assert.True(deleteHeaders.TryGetProperty(
+            "Cache-Control",
+            out _));
+        Assert.False(deleteHeaders.TryGetProperty(
+            "ETag",
+            out _));
+        Assert.False(deleteHeaders.TryGetProperty(
+            "Location",
+            out _));
     }
 
     private static void AssertBearerWithoutAntiforgery(JsonElement operation)
