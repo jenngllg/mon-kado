@@ -416,4 +416,30 @@ public static partial class ApplicationLogMessages
         ILogger logger,
         Guid memberId,
         Guid wishlistId);
+
+    /// <summary>
+    /// Logs the start of an owned wishlist collection retrieval.
+    /// </summary>
+    /// <param name="logger">The logger.</param>
+    /// <param name="memberId">The owner member identifier.</param>
+    [LoggerMessage(
+        EventId = LogEventIds.WishlistCollectionRetrievalStarted,
+        Level = LogLevel.Debug,
+        Message = "Retrieving wishlists for member {MemberId}.")]
+    public static partial void WishlistCollectionRetrievalStarted(
+        ILogger logger,
+        Guid memberId);
+
+    /// <summary>
+    /// Logs a retrieved owned wishlist collection.
+    /// </summary>
+    /// <param name="logger">The logger.</param>
+    /// <param name="memberId">The owner member identifier.</param>
+    [LoggerMessage(
+        EventId = LogEventIds.WishlistCollectionRetrieved,
+        Level = LogLevel.Information,
+        Message = "Wishlists retrieved for member {MemberId}.")]
+    public static partial void WishlistCollectionRetrieved(
+        ILogger logger,
+        Guid memberId);
 }

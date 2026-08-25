@@ -38,6 +38,30 @@ public class WishlistsController(
     private const int MaximumRequestBodySize = 4 * 1024;
 
     /// <summary>
+    /// Gets all private wishlists owned by the current member.
+    /// </summary>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The owned wishlists in reverse creation order.</returns>
+    [HttpGet]
+    [NoStoreResponse(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(IEnumerable<WishlistResponse>), StatusCodes.Status200OK, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status503ServiceUnavailable, "application/json")]
+    public async Task<ActionResult<IEnumerable<WishlistResponse>>> GetAllAsync(
+        CancellationToken cancellationToken)
+    {
+        var memberId = GetMemberId();
+        var wishlists = await sender.Send(
+            new GetWishlistsQuery(memberId),
+            cancellationToken);
+        var response = wishlists
+            .Select(CreateResponse)
+            .ToArray();
+        Response.Headers.CacheControl = "no-store";
+
+        return Ok(response);
+    }
+
+    /// <summary>
     /// Creates a private wishlist for the current member.
     /// </summary>
     /// <param name="request">The wishlist creation request.</param>

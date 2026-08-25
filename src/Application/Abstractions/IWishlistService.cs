@@ -46,6 +46,20 @@ public interface IWishlistService
         CancellationToken cancellationToken);
 
     /// <summary>
+    /// Gets all private wishlists owned by a member.
+    /// </summary>
+    /// <param name="ownerId">The owner member identifier.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>
+    /// The ordered wishlists, an empty collection when the member owns none, or
+    /// <see langword="null" /> when the member no longer exists.
+    /// </returns>
+    /// <exception cref="Common.Exceptions.DependencyUnavailableException">PostgreSQL is unavailable.</exception>
+    Task<IReadOnlyCollection<WishlistDetails>?> GetByOwnerIdAsync(
+        Guid ownerId,
+        CancellationToken cancellationToken);
+
+    /// <summary>
     /// Gets the access of a member to a private wishlist.
     /// </summary>
     /// <param name="memberId">The authenticated member identifier.</param>

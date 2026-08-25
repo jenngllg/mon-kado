@@ -324,6 +324,100 @@ public class WishlistServiceTests
         VerifyNoOtherCalls();
     }
 
+    [Fact]
+    public async Task GetByOwnerIdAsync_WhenMemberExists_ReturnsMappedWishlistsInRepositoryOrder()
+    {
+        // Arrange
+        var ownerId = Guid.CreateVersion7();
+        var firstWishlist = CreateWishlist(Guid.CreateVersion7());
+        var secondWishlist = CreateWishlist(Guid.CreateVersion7());
+        var cancellationToken = TestContext.Current.CancellationToken;
+        IReadOnlyCollection<Wishlist> wishlists =
+        [
+            firstWishlist,
+            secondWishlist
+        ];
+        _wishlistRepositoryMock
+            .Setup(repository => repository.GetByOwnerIdAsync(
+                ownerId,
+                cancellationToken))
+            .ReturnsAsync(wishlists);
+
+        // Act
+        var result = await _wishlistService.GetByOwnerIdAsync(
+            ownerId,
+            cancellationToken);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal(
+            [
+                firstWishlist.Id,
+                secondWishlist.Id
+            ],
+            result.Select(wishlist => wishlist.Id));
+        _wishlistRepositoryMock.Verify(
+            repository => repository.GetByOwnerIdAsync(
+                ownerId,
+                cancellationToken),
+            Times.Once);
+        VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task GetByOwnerIdAsync_WhenMemberDoesNotExist_ReturnsNull()
+    {
+        // Arrange
+        var ownerId = Guid.CreateVersion7();
+        var cancellationToken = TestContext.Current.CancellationToken;
+        _wishlistRepositoryMock
+            .Setup(repository => repository.GetByOwnerIdAsync(
+                ownerId,
+                cancellationToken))
+            .ReturnsAsync((IReadOnlyCollection<Wishlist>?)null);
+
+        // Act
+        var result = await _wishlistService.GetByOwnerIdAsync(
+            ownerId,
+            cancellationToken);
+
+        // Assert
+        Assert.Null(result);
+        _wishlistRepositoryMock.Verify(
+            repository => repository.GetByOwnerIdAsync(
+                ownerId,
+                cancellationToken),
+            Times.Once);
+        VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task GetByOwnerIdAsync_WhenPostgreSqlTimesOut_ThrowsDependencyUnavailableException()
+    {
+        // Arrange
+        var ownerId = Guid.CreateVersion7();
+        var cancellationToken = TestContext.Current.CancellationToken;
+        _wishlistRepositoryMock
+            .Setup(repository => repository.GetByOwnerIdAsync(
+                ownerId,
+                cancellationToken))
+            .ThrowsAsync(new TimeoutException());
+
+        // Act
+        var action = () => _wishlistService.GetByOwnerIdAsync(
+            ownerId,
+            cancellationToken);
+
+        // Assert
+        await Assert.ThrowsAsync<DependencyUnavailableException>(action);
+        _wishlistRepositoryMock.Verify(
+            repository => repository.GetByOwnerIdAsync(
+                ownerId,
+                cancellationToken),
+            Times.Once);
+        VerifyNoOtherCalls();
+    }
+
     [Theory]
     [InlineData(WishlistAccess.MemberNotFound)]
     [InlineData(WishlistAccess.NotOwned)]

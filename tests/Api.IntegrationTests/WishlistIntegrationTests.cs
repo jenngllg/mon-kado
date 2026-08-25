@@ -31,6 +31,184 @@ public class WishlistIntegrationTests(PostgreSqlContainerFixture fixture)
         TimeSpan.Zero);
 
     [Fact]
+    public async Task GetAllAsync_WhenMemberOwnsWishlists_ReturnsOnlyOwnedWishlistsInReverseCreationOrder()
+    {
+        // Arrange
+        var timeProvider = new FixedTimeProvider(_referenceTime);
+        await using var factory = await CreateMigratedFactoryAsync(timeProvider);
+        var owner = await CreateMemberAsync(
+            factory,
+            "owner@example.fr");
+        var otherOwner = await CreateMemberAsync(
+            factory,
+            "other@example.fr");
+        using var ownerClient = CreateAuthorizedClient(
+            factory,
+            owner.Id);
+        var pastWishlist = await SeedWishlistAsync(
+            factory,
+            Guid.CreateVersion7(),
+            owner.Id,
+            "Liste passée",
+            new DateOnly(
+                2020,
+                1,
+                1));
+        timeProvider.UtcNow = _referenceTime.AddMinutes(1);
+        await SeedWishlistAsync(
+            factory,
+            Guid.CreateVersion7(),
+            otherOwner.Id,
+            "Liste étrangère",
+            null);
+        timeProvider.UtcNow = _referenceTime.AddMinutes(2);
+        var undatedWishlist = await SeedWishlistAsync(
+            factory,
+            Guid.CreateVersion7(),
+            owner.Id,
+            "Liste sans date",
+            null);
+
+        // Act
+        using var response = await ownerClient.GetAsync(
+            "/api/v1/wishlists",
+            TestContext.Current.CancellationToken);
+        var wishlists = await response.Content.ReadFromJsonAsync<JsonElement>(
+            TestContext.Current.CancellationToken);
+        var items = wishlists.EnumerateArray().ToArray();
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.OK,
+            response.StatusCode);
+        Assert.Equal(
+            2,
+            items.Length);
+        Assert.Equal(
+            undatedWishlist.Id,
+            items[0].GetProperty("id").GetGuid());
+        Assert.Equal(
+            "Liste sans date",
+            items[0].GetProperty("name").GetString());
+        Assert.Equal(
+            JsonValueKind.Null,
+            items[0].GetProperty("eventDate").ValueKind);
+        Assert.Equal(
+            pastWishlist.Id,
+            items[1].GetProperty("id").GetGuid());
+        Assert.Equal(
+            "2020-01-01",
+            items[1].GetProperty("eventDate").GetString());
+    }
+
+    [Fact]
+    public async Task GetAllAsync_WhenCreationDatesAreEqual_OrdersByDescendingIdentifier()
+    {
+        // Arrange
+        await using var factory = await CreateMigratedFactoryAsync();
+        var owner = await CreateMemberAsync(
+            factory,
+            "owner@example.fr");
+        var lowerId = Guid.Parse("00000000-0000-0000-0000-000000000001");
+        var higherId = Guid.Parse("00000000-0000-0000-0000-000000000002");
+        await SeedWishlistAsync(
+            factory,
+            lowerId,
+            owner.Id,
+            "Première liste",
+            null);
+        await SeedWishlistAsync(
+            factory,
+            higherId,
+            owner.Id,
+            "Deuxième liste",
+            null);
+        using var client = CreateAuthorizedClient(
+            factory,
+            owner.Id);
+
+        // Act
+        using var response = await client.GetAsync(
+            "/api/v1/wishlists",
+            TestContext.Current.CancellationToken);
+        var wishlists = await response.Content.ReadFromJsonAsync<JsonElement>(
+            TestContext.Current.CancellationToken);
+        var identifiers = wishlists
+            .EnumerateArray()
+            .Select(wishlist => wishlist.GetProperty("id").GetGuid())
+            .ToArray();
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.OK,
+            response.StatusCode);
+        Assert.Equal(
+            [
+                higherId,
+                lowerId
+            ],
+            identifiers);
+    }
+
+    [Fact]
+    public async Task GetAllAsync_WhenMemberOwnsNoWishlist_ReturnsEmptyCollection()
+    {
+        // Arrange
+        await using var factory = await CreateMigratedFactoryAsync();
+        var owner = await CreateMemberAsync(
+            factory,
+            "owner@example.fr");
+        using var client = CreateAuthorizedClient(
+            factory,
+            owner.Id);
+
+        // Act
+        using var response = await client.GetAsync(
+            "/api/v1/wishlists",
+            TestContext.Current.CancellationToken);
+        var wishlists = await response.Content.ReadFromJsonAsync<JsonElement>(
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.OK,
+            response.StatusCode);
+        Assert.Empty(wishlists.EnumerateArray());
+    }
+
+    [Fact]
+    public async Task GetAllAsync_WhenAuthenticatedMemberWasDeleted_ReturnsUnauthorized()
+    {
+        // Arrange
+        await using var factory = await CreateMigratedFactoryAsync();
+        var owner = await CreateMemberAsync(
+            factory,
+            "owner@example.fr");
+        using var client = CreateAuthorizedClient(
+            factory,
+            owner.Id);
+        await DeleteMemberAsync(
+            factory,
+            owner.Id);
+
+        // Act
+        using var response = await client.GetAsync(
+            "/api/v1/wishlists",
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.Unauthorized,
+            response.StatusCode);
+        var error = await response.Content.ReadFromJsonAsync<ErrorResponse>(
+            TestContext.Current.CancellationToken);
+        Assert.NotNull(error);
+        Assert.Equal(
+            ErrorCodes.AccountAuthenticationSessionInvalid,
+            error.ErrorCode);
+    }
+
+    [Fact]
     public async Task CreateAsync_WhenRequestIsValid_PersistsAndReturnsPrivateWishlist()
     {
         // Arrange
@@ -289,9 +467,14 @@ public class WishlistIntegrationTests(PostgreSqlContainerFixture fixture)
 
     private async Task<PostgreSqlApiFactory> CreateMigratedFactoryAsync()
     {
+        return await CreateMigratedFactoryAsync(new FixedTimeProvider(_referenceTime));
+    }
+
+    private async Task<PostgreSqlApiFactory> CreateMigratedFactoryAsync(TimeProvider timeProvider)
+    {
         var factory = new PostgreSqlApiFactory(
             fixture.Container.GetConnectionString(),
-            new FixedTimeProvider(_referenceTime));
+            timeProvider);
         await using var scope = factory.Services.CreateAsyncScope();
         var context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
         await context.Database.MigrateAsync(TestContext.Current.CancellationToken);
@@ -352,16 +535,50 @@ public class WishlistIntegrationTests(PostgreSqlContainerFixture fixture)
         HttpClient client,
         string name)
     {
+        return await CreateWishlistAsync(
+            client,
+            name,
+            "2099-09-24");
+    }
+
+    private static async Task<HttpResponseMessage> CreateWishlistAsync(
+        HttpClient client,
+        string name,
+        string? eventDate)
+    {
         return await client.PostAsJsonAsync(
             "/api/v1/wishlists",
             new
             {
                 name,
                 occasion = "birthday",
-                eventDate = "2099-09-24",
+                eventDate,
                 message = "  Merci d’être là  "
             },
             TestContext.Current.CancellationToken);
+    }
+
+    private static async Task<Wishlist> SeedWishlistAsync(
+        PostgreSqlApiFactory factory,
+        Guid wishlistId,
+        Guid ownerId,
+        string name,
+        DateOnly? eventDate)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
+        var wishlist = new Wishlist(
+            wishlistId,
+            ownerId,
+            name,
+            name.ToUpperInvariant(),
+            WishlistOccasion.Birthday,
+            eventDate,
+            null);
+        context.Wishlists.Add(wishlist);
+        await context.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        return wishlist;
     }
 
     private static async Task<Wishlist> GetWishlistAsync(
