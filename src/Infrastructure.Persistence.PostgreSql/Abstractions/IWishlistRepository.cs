@@ -15,6 +15,12 @@ public interface IWishlistRepository
     void Add(Wishlist wishlist);
 
     /// <summary>
+    /// Removes a tracked wishlist from the current unit of work.
+    /// </summary>
+    /// <param name="wishlist">The wishlist to remove.</param>
+    void Remove(Wishlist wishlist);
+
+    /// <summary>
     /// Gets a wishlist without tracking it.
     /// </summary>
     /// <param name="wishlistId">The wishlist identifier.</param>

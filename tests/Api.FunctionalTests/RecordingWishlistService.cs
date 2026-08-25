@@ -50,6 +50,17 @@ public class RecordingWishlistService : IWishlistService
     } = [];
 
     /// <summary>
+    /// Gets the recorded deletion calls.
+    /// </summary>
+    public List<(
+        Guid OwnerId,
+        Guid WishlistId,
+        uint ExpectedVersion)> Deletions
+    {
+        get;
+    } = [];
+
+    /// <summary>
     /// Gets the recorded access calls.
     /// </summary>
     public List<(Guid MemberId, Guid WishlistId)> Accesses { get; } = [];
@@ -113,6 +124,14 @@ public class RecordingWishlistService : IWishlistService
     {
         get; set;
     } = 43;
+
+    /// <summary>
+    /// Gets or sets a value indicating whether wishlist deletion finds the resource.
+    /// </summary>
+    public bool WishlistExistsForDeletion
+    {
+        get; set;
+    } = true;
 
     /// <inheritdoc />
     public Task<WishlistDetails?> CreateAsync(
@@ -214,6 +233,30 @@ public class RecordingWishlistService : IWishlistService
         Wishlists[wishlistId] = wishlist;
 
         return Task.FromResult<WishlistDetails?>(wishlist);
+    }
+
+    /// <inheritdoc />
+    public Task<bool> DeleteAsync(
+        Guid ownerId,
+        Guid wishlistId,
+        uint expectedVersion,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        Deletions.Add((
+            ownerId,
+            wishlistId,
+            expectedVersion));
+
+        if (Exception is not null)
+            throw Exception;
+
+        if (!WishlistExistsForDeletion)
+            return Task.FromResult(false);
+
+        Wishlists.Remove(wishlistId);
+
+        return Task.FromResult(true);
     }
 
     /// <inheritdoc />

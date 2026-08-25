@@ -657,6 +657,255 @@ public class WishlistTests
     }
 
     [Fact]
+    public async Task DeleteAsync_WhenRequestIsValid_ReturnsNoContentAndHeaders()
+    {
+        // Arrange
+        await using var factory = new RegistrationApiFactory();
+        var ownerId = Guid.CreateVersion7();
+        var wishlistId = Guid.CreateVersion7();
+        using var client = CreateAuthorizedClient(
+            factory,
+            ownerId);
+        using var request = CreateDeleteRequest(wishlistId);
+
+        // Act
+        using var response = await client.SendAsync(
+            request,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.NoContent,
+            response.StatusCode);
+        Assert.True(response.Headers.CacheControl?.NoStore);
+        Assert.Null(response.Headers.ETag);
+        Assert.Equal(
+            string.Empty,
+            await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+        Assert.Equal(
+            [(ownerId, wishlistId)],
+            factory.WishlistService.Accesses);
+        Assert.Equal(
+            [(ownerId, wishlistId, 42u)],
+            factory.WishlistService.Deletions);
+        Assert.Contains(
+            factory.LogMessages,
+            message => message.Contains(
+                $"Deleting wishlist {wishlistId} for member {ownerId}",
+                StringComparison.Ordinal));
+        Assert.Contains(
+            factory.LogMessages,
+            message => message.Contains(
+                $"Wishlist {wishlistId} deleted for member {ownerId}",
+                StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task DeleteAsync_WhenIfMatchIsMissing_ReturnsPreconditionRequiredAfterAuthorization()
+    {
+        // Arrange
+        await using var factory = new RegistrationApiFactory();
+        var ownerId = Guid.CreateVersion7();
+        var wishlistId = Guid.CreateVersion7();
+        using var client = CreateAuthorizedClient(
+            factory,
+            ownerId);
+        using var request = new HttpRequestMessage(
+            HttpMethod.Delete,
+            $"/api/v1/wishlists/{wishlistId}");
+
+        // Act
+        using var response = await client.SendAsync(
+            request,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(
+            (HttpStatusCode)428,
+            response.StatusCode);
+        var error = await response.Content.ReadFromJsonAsync<ErrorResponse>(
+            TestContext.Current.CancellationToken);
+        Assert.NotNull(error);
+        Assert.Equal(
+            ErrorCodes.RequestPreconditionRequired,
+            error.ErrorCode);
+        Assert.Equal(
+            [(ownerId, wishlistId)],
+            factory.WishlistService.Accesses);
+        Assert.Empty(factory.WishlistService.Deletions);
+    }
+
+    [Fact]
+    public async Task DeleteAsync_WhenIfMatchIsMalformed_ReturnsValidationError()
+    {
+        // Arrange
+        await using var factory = new RegistrationApiFactory();
+        var wishlistId = Guid.CreateVersion7();
+        using var client = CreateAuthorizedClient(
+            factory,
+            Guid.CreateVersion7());
+        using var request = new HttpRequestMessage(
+            HttpMethod.Delete,
+            $"/api/v1/wishlists/{wishlistId}");
+        request.Headers.TryAddWithoutValidation(
+            HeaderNames.IfMatch,
+            "invalid");
+
+        // Act
+        using var response = await client.SendAsync(
+            request,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.BadRequest,
+            response.StatusCode);
+        var error = await response.Content.ReadFromJsonAsync<ErrorResponse>(
+            TestContext.Current.CancellationToken);
+        Assert.NotNull(error);
+        Assert.Equal(
+            ErrorCodes.RequestValidationError,
+            error.ErrorCode);
+        var validationError = Assert.Single(error.ValidationErrors ?? []);
+        Assert.Equal(
+            "ifMatch",
+            validationError.PropertyName);
+        Assert.Empty(factory.WishlistService.Deletions);
+    }
+
+    [Theory]
+    [InlineData(WishlistAccess.NotOwned, HttpStatusCode.NotFound, ErrorCodes.WishlistNotFound)]
+    [InlineData(WishlistAccess.MemberNotFound, HttpStatusCode.Unauthorized, ErrorCodes.AccountAuthenticationSessionInvalid)]
+    public async Task DeleteAsync_WhenAccessIsRejected_ReturnsPrivateResourceErrorBeforePrecondition(
+        WishlistAccess access,
+        HttpStatusCode expectedStatus,
+        string expectedErrorCode)
+    {
+        // Arrange
+        await using var factory = new RegistrationApiFactory();
+        factory.WishlistService.Access = access;
+        var wishlistId = Guid.CreateVersion7();
+        using var client = CreateAuthorizedClient(
+            factory,
+            Guid.CreateVersion7());
+        using var request = new HttpRequestMessage(
+            HttpMethod.Delete,
+            $"/api/v1/wishlists/{wishlistId}");
+
+        // Act
+        using var response = await client.SendAsync(
+            request,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(
+            expectedStatus,
+            response.StatusCode);
+        var error = await response.Content.ReadFromJsonAsync<ErrorResponse>(
+            TestContext.Current.CancellationToken);
+        Assert.NotNull(error);
+        Assert.Equal(
+            expectedErrorCode,
+            error.ErrorCode);
+        Assert.Empty(factory.WishlistService.Deletions);
+    }
+
+    [Fact]
+    public async Task DeleteAsync_WhenWishlistDisappearsAfterAuthorization_ReturnsNotFound()
+    {
+        // Arrange
+        await using var factory = new RegistrationApiFactory();
+        factory.WishlistService.WishlistExistsForDeletion = false;
+        using var client = CreateAuthorizedClient(
+            factory,
+            Guid.CreateVersion7());
+        using var request = CreateDeleteRequest(Guid.CreateVersion7());
+
+        // Act
+        using var response = await client.SendAsync(
+            request,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.NotFound,
+            response.StatusCode);
+        var error = await response.Content.ReadFromJsonAsync<ErrorResponse>(
+            TestContext.Current.CancellationToken);
+        Assert.NotNull(error);
+        Assert.Equal(
+            ErrorCodes.WishlistNotFound,
+            error.ErrorCode);
+    }
+
+    [Theory]
+    [InlineData("version", HttpStatusCode.PreconditionFailed, ErrorCodes.WishlistVersionConflict)]
+    [InlineData("member", HttpStatusCode.Unauthorized, ErrorCodes.AccountAuthenticationSessionInvalid)]
+    [InlineData("database", HttpStatusCode.ServiceUnavailable, ErrorCodes.TechnicalDependencyUnavailable)]
+    public async Task DeleteAsync_WhenServiceRejectsDeletion_ReturnsStructuredError(
+        string scenario,
+        HttpStatusCode expectedStatus,
+        string expectedErrorCode)
+    {
+        // Arrange
+        await using var factory = new RegistrationApiFactory();
+        factory.WishlistService.Exception = scenario switch
+        {
+            "version" => new WishlistVersionConflictException(),
+            "member" => new InvalidAuthenticationSessionException(),
+            _ => new DependencyUnavailableException(
+                "PostgreSQL",
+                new TimeoutException())
+        };
+        using var client = CreateAuthorizedClient(
+            factory,
+            Guid.CreateVersion7());
+        using var request = CreateDeleteRequest(Guid.CreateVersion7());
+
+        // Act
+        using var response = await client.SendAsync(
+            request,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(
+            expectedStatus,
+            response.StatusCode);
+        var error = await response.Content.ReadFromJsonAsync<ErrorResponse>(
+            TestContext.Current.CancellationToken);
+        Assert.NotNull(error);
+        Assert.Equal(
+            expectedErrorCode,
+            error.ErrorCode);
+
+        if (scenario == "version")
+            Assert.Equal(
+                "Wishlist version conflict",
+                error.Title);
+    }
+
+    [Fact]
+    public async Task DeleteAsync_WhenBearerTokenIsMissing_ReturnsUnauthorized()
+    {
+        // Arrange
+        await using var factory = new RegistrationApiFactory();
+        using var client = factory.CreateClient();
+        using var request = CreateDeleteRequest(Guid.CreateVersion7());
+
+        // Act
+        using var response = await client.SendAsync(
+            request,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.Unauthorized,
+            response.StatusCode);
+        Assert.Empty(factory.WishlistService.Accesses);
+        Assert.Empty(factory.WishlistService.Deletions);
+    }
+
+    [Fact]
     public async Task CreateAsync_WhenBearerTokenIsMissing_ReturnsUnauthorized()
     {
         // Arrange
@@ -1188,6 +1437,18 @@ public class WishlistTests
         {
             Content = CreateUpdateContent()
         };
+        request.Headers.TryAddWithoutValidation(
+            HeaderNames.IfMatch,
+            "\"0000002a\"");
+
+        return request;
+    }
+
+    private static HttpRequestMessage CreateDeleteRequest(Guid wishlistId)
+    {
+        var request = new HttpRequestMessage(
+            HttpMethod.Delete,
+            $"/api/v1/wishlists/{wishlistId}");
         request.Headers.TryAddWithoutValidation(
             HeaderNames.IfMatch,
             "\"0000002a\"");

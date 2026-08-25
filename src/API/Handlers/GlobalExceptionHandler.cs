@@ -133,7 +133,7 @@ public class GlobalExceptionHandler(
                 null),
             WishlistVersionConflictException => new ErrorResponse(
                 StatusCodes.Status412PreconditionFailed,
-                "Wishlist update conflict",
+                "Wishlist version conflict",
                 "The wishlist has changed. Retrieve it again before retrying.",
                 ErrorCodes.WishlistVersionConflict,
                 null),

@@ -4,7 +4,7 @@ using JennGllg.Fr.MonKado.Back.Domain.Enums;
 namespace JennGllg.Fr.MonKado.Back.Application.Abstractions;
 
 /// <summary>
-/// Creates, updates and retrieves private wishlists.
+/// Creates, updates, deletes and retrieves private wishlists.
 /// </summary>
 public interface IWishlistService
 {
@@ -64,6 +64,25 @@ public interface IWishlistService
         WishlistOccasion occasion,
         DateOnly? eventDate,
         string? message,
+        uint expectedVersion,
+        CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Deletes a private wishlist owned by a member.
+    /// </summary>
+    /// <param name="ownerId">The owner member identifier.</param>
+    /// <param name="wishlistId">The wishlist identifier.</param>
+    /// <param name="expectedVersion">The version supplied by the client.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns><see langword="true" /> when the wishlist was deleted; otherwise, <see langword="false" />.</returns>
+    /// <exception cref="Common.Exceptions.WishlistVersionConflictException">The supplied version is stale.</exception>
+    /// <exception cref="Common.Exceptions.InvalidAuthenticationSessionException">
+    /// The member was deleted during the deletion.
+    /// </exception>
+    /// <exception cref="Common.Exceptions.DependencyUnavailableException">PostgreSQL is unavailable.</exception>
+    Task<bool> DeleteAsync(
+        Guid ownerId,
+        Guid wishlistId,
         uint expectedVersion,
         CancellationToken cancellationToken);
 

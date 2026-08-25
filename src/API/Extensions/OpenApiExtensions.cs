@@ -433,7 +433,7 @@ public static class OpenApiExtensions
                 Name = HeaderNames.IfMatch,
                 In = ParameterLocation.Header,
                 Required = true,
-                Description = "Strong entity tag returned by the current session or the previous profile update.",
+                Description = "Strong entity tag returned when the resource was retrieved or last modified.",
                 Schema = new OpenApiSchema { Type = JsonSchemaType.String }
             });
     }

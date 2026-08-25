@@ -158,6 +158,46 @@ public class WishlistsController(
     }
 
     /// <summary>
+    /// Deletes a private wishlist owned by the current member.
+    /// </summary>
+    /// <param name="wishlistId">The wishlist identifier.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>No content after the wishlist is deleted.</returns>
+    [HttpDelete("{wishlistId:guid}")]
+    [EntityTag(isRequired: true, returnsEntityTag: false)]
+    [NoStoreResponse(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status412PreconditionFailed, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status428PreconditionRequired, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status503ServiceUnavailable, "application/json")]
+    public async Task<IActionResult> DeleteAsync(
+        Guid wishlistId,
+        CancellationToken cancellationToken)
+    {
+        var authorization = await authorizationService.AuthorizeAsync(
+            User,
+            wishlistId,
+            AuthorizationPolicies.ManageWishlist);
+
+        if (!authorization.Succeeded)
+            throw new WishlistNotFoundException();
+
+        var memberId = GetMemberId();
+        var expectedVersion = entityTagService.Parse(Request.Headers.IfMatch);
+        await sender.Send(
+            new DeleteWishlistCommand(
+                memberId,
+                wishlistId,
+                expectedVersion),
+            cancellationToken);
+        Response.Headers.CacheControl = "no-store";
+
+        return NoContent();
+    }
+
+    /// <summary>
     /// Gets a private wishlist owned by the current member.
     /// </summary>
     /// <param name="wishlistId">The wishlist identifier.</param>

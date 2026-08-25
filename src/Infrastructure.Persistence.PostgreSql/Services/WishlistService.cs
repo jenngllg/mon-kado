@@ -14,7 +14,7 @@ using Npgsql;
 namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Services;
 
 /// <summary>
-/// Creates, updates and retrieves private wishlists in PostgreSQL.
+/// Creates, updates, deletes and retrieves private wishlists in PostgreSQL.
 /// </summary>
 /// <param name="wishlistRepository">The wishlist repository.</param>
 /// <param name="unitOfWork">The unit of work.</param>
@@ -132,10 +132,44 @@ public class WishlistService(
         }
         catch (DbUpdateConcurrencyException)
         {
+            var access = await GetAccessSafelyAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken);
 
-            try
+            if (access is WishlistAccess.MemberNotFound)
+                throw new InvalidAuthenticationSessionException();
+
+            if (access is WishlistAccess.NotOwned)
+                return null;
+
+            throw new WishlistVersionConflictException();
+        }
+        catch (Exception exception) when (PostgreSqlFailureClassifier.IsUnavailable(exception))
+        {
+            throw new DependencyUnavailableException(
+                "PostgreSQL",
+                exception);
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task<bool> DeleteAsync(
+        Guid ownerId,
+        Guid wishlistId,
+        uint expectedVersion,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var wishlist = await wishlistRepository.GetByIdForUpdateAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken);
+
+            if (wishlist is null)
             {
-                var access = await wishlistRepository.GetAccessAsync(
+                var access = await GetAccessSafelyAsync(
                     ownerId,
                     wishlistId,
                     cancellationToken);
@@ -143,15 +177,29 @@ public class WishlistService(
                 if (access is WishlistAccess.MemberNotFound)
                     throw new InvalidAuthenticationSessionException();
 
-                if (access is WishlistAccess.NotOwned)
-                    return null;
+                return false;
             }
-            catch (Exception exception) when (PostgreSqlFailureClassifier.IsUnavailable(exception))
-            {
-                throw new DependencyUnavailableException(
-                    "PostgreSQL",
-                    exception);
-            }
+
+            if (wishlist.Version != expectedVersion)
+                throw new WishlistVersionConflictException();
+
+            wishlistRepository.Remove(wishlist);
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+
+            return true;
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            var access = await GetAccessSafelyAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken);
+
+            if (access is WishlistAccess.MemberNotFound)
+                throw new InvalidAuthenticationSessionException();
+
+            if (access is WishlistAccess.NotOwned)
+                return false;
 
             throw new WishlistVersionConflictException();
         }
@@ -241,6 +289,26 @@ public class WishlistService(
             wishlist.CreatedAt,
             wishlist.UpdatedAt,
             wishlist.Version);
+    }
+
+    private async Task<WishlistAccess> GetAccessSafelyAsync(
+        Guid ownerId,
+        Guid wishlistId,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await wishlistRepository.GetAccessAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken);
+        }
+        catch (Exception exception) when (PostgreSqlFailureClassifier.IsUnavailable(exception))
+        {
+            throw new DependencyUnavailableException(
+                "PostgreSQL",
+                exception);
+        }
     }
 
     private static bool IsDuplicateName(DbUpdateException exception)
