@@ -52,7 +52,7 @@ public class WorkerProgramTests
     public async Task RunAsync_WhenCancellationOccursAfterStartup_Completes()
     {
         // Arrange
-        using var source = new CancellationTokenSource(TimeSpan.FromMilliseconds(100));
+        using var source = new CancellationTokenSource();
         var args = new[]
         {
             "--environment=Staging",
@@ -61,9 +61,11 @@ public class WorkerProgramTests
         };
 
         // Act
-        var exception = await Record.ExceptionAsync(() => Program.RunAsync(
+        var runTask = Program.RunAsync(
             args,
-            source.Token));
+            source.Token);
+        source.Cancel();
+        var exception = await Record.ExceptionAsync(() => runTask);
 
         // Assert
         Assert.Null(exception);
