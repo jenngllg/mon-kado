@@ -64,15 +64,7 @@ public class WishesController(
             cancellationToken);
         var response = new WishCollectionResponse(collection.Wishes
             .Select(wish => new WishCollectionItemResponse(
-                wish.Id,
-                wish.WishlistId,
-                wish.Name,
-                wish.Note,
-                wish.Url,
-                wish.Price,
-                wish.Position,
-                wish.CreatedAt,
-                wish.UpdatedAt,
+                CreateResponse(wish),
                 entityTagService.Format(wish.Version)))
             .ToArray());
         Response.Headers.ETag = entityTagService.Format(collection.Version);
