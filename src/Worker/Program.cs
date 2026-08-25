@@ -36,10 +36,12 @@ public static class Program
         string[] args,
         CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var host = Build(args);
         try
         {
-            await host.RunAsync(cancellationToken);
+            await host.StartAsync(CancellationToken.None);
+            await host.WaitForShutdownAsync(cancellationToken);
         }
         finally
         {

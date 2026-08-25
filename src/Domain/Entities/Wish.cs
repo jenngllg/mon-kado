@@ -145,4 +145,19 @@ public class Wish : IAuditableEntity
 
         return true;
     }
+
+    /// <summary>
+    /// Moves the gift wish to another positive position.
+    /// </summary>
+    /// <param name="position">The new position inside the parent wishlist.</param>
+    /// <returns><see langword="true" /> when the position changed.</returns>
+    public bool MoveTo(long position)
+    {
+        if (Position == position)
+            return false;
+
+        Position = position;
+
+        return true;
+    }
 }

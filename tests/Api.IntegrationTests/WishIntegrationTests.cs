@@ -35,6 +35,297 @@ public class WishIntegrationTests(PostgreSqlContainerFixture fixture)
         TimeSpan.Zero);
 
     [Fact]
+    public async Task ReorderAsync_WhenOrderChanges_ReusesExistingSlotsAndPersistsCompleteOrder()
+    {
+        // Arrange
+        await using var factory = await CreateFactoryAsync();
+        var owner = await CreateMemberAsync(factory);
+        var wishlist = await SeedWishlistAsync(
+            factory,
+            owner.Id,
+            "Liste ordonnée");
+        using var client = CreateAuthorizedClient(
+            factory,
+            owner.Id);
+        using var firstCreation = await CreateWishAsync(
+            client,
+            wishlist.Id,
+            "Premier");
+        using var removedCreation = await CreateWishAsync(
+            client,
+            wishlist.Id,
+            "Supprimé");
+        using var thirdCreation = await CreateWishAsync(
+            client,
+            wishlist.Id,
+            "Troisième");
+        var firstId = await ReadWishIdAsync(firstCreation);
+        var removedId = await ReadWishIdAsync(removedCreation);
+        var thirdId = await ReadWishIdAsync(thirdCreation);
+        using var deletion = await DeleteWishAsync(
+            client,
+            wishlist.Id,
+            removedId,
+            removedCreation.Headers.ETag?.Tag);
+        using var fourthCreation = await CreateWishAsync(
+            client,
+            wishlist.Id,
+            "Quatrième");
+        var fourthId = await ReadWishIdAsync(fourthCreation);
+        using var collectionBefore = await client.GetAsync(
+            $"/api/v1/wishlists/{wishlist.Id}/wishes",
+            TestContext.Current.CancellationToken);
+
+        // Act
+        using var reorder = await ReorderWishesAsync(
+            client,
+            wishlist.Id,
+            [
+                firstId,
+                fourthId,
+                thirdId
+            ],
+            collectionBefore.Headers.ETag?.Tag);
+        using var collectionAfter = await client.GetAsync(
+            $"/api/v1/wishlists/{wishlist.Id}/wishes",
+            TestContext.Current.CancellationToken);
+        var reorderBody = await reorder.Content.ReadFromJsonAsync<JsonElement>(
+            TestContext.Current.CancellationToken);
+        var collectionBody = await collectionAfter.Content.ReadFromJsonAsync<JsonElement>(
+            TestContext.Current.CancellationToken);
+        var reorderError = reorder.StatusCode == HttpStatusCode.OK
+            ? null
+            : await reorder.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.NoContent,
+            deletion.StatusCode);
+        Assert.True(
+            reorder.StatusCode == HttpStatusCode.OK,
+            reorderError);
+        Assert.NotEqual(
+            collectionBefore.Headers.ETag?.Tag,
+            reorder.Headers.ETag?.Tag);
+        Assert.Equal(
+            reorder.Headers.ETag?.Tag,
+            collectionAfter.Headers.ETag?.Tag);
+        var reorderedWishes = reorderBody
+            .GetProperty("wishes")
+            .EnumerateArray()
+            .ToArray();
+        Assert.Equal(
+            [firstId, fourthId, thirdId],
+            reorderedWishes.Select(wish => wish.GetProperty("id").GetGuid()));
+        Assert.Equal(
+            [1L, 3L, 4L],
+            reorderedWishes.Select(wish => wish.GetProperty("position").GetInt64()));
+        Assert.All(
+            reorderedWishes,
+            wish => Assert.False(string.IsNullOrWhiteSpace(
+                wish.GetProperty("entityTag").GetString())));
+        Assert.Equal(
+            [firstId, fourthId, thirdId],
+            collectionBody
+                .GetProperty("wishes")
+                .EnumerateArray()
+                .Select(wish => wish.GetProperty("id").GetGuid()));
+    }
+
+    [Fact]
+    public async Task ReorderAsync_WhenOrderIsUnchanged_PreservesCollectionAndItemEntityTags()
+    {
+        // Arrange
+        await using var factory = await CreateFactoryAsync();
+        var owner = await CreateMemberAsync(factory);
+        var wishlist = await SeedWishlistAsync(
+            factory,
+            owner.Id,
+            "Liste stable");
+        using var client = CreateAuthorizedClient(
+            factory,
+            owner.Id);
+        using var creation = await CreateWishAsync(
+            client,
+            wishlist.Id,
+            "Stable");
+        var wishId = await ReadWishIdAsync(creation);
+        using var collection = await client.GetAsync(
+            $"/api/v1/wishlists/{wishlist.Id}/wishes",
+            TestContext.Current.CancellationToken);
+        var collectionBody = await collection.Content.ReadFromJsonAsync<JsonElement>(
+            TestContext.Current.CancellationToken);
+        var itemEntityTag = collectionBody
+            .GetProperty("wishes")[0]
+            .GetProperty("entityTag")
+            .GetString();
+
+        // Act
+        using var reorder = await ReorderWishesAsync(
+            client,
+            wishlist.Id,
+            [wishId],
+            collection.Headers.ETag?.Tag);
+        var reorderBody = await reorder.Content.ReadFromJsonAsync<JsonElement>(
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.OK,
+            reorder.StatusCode);
+        Assert.Equal(
+            collection.Headers.ETag?.Tag,
+            reorder.Headers.ETag?.Tag);
+        Assert.Equal(
+            itemEntityTag,
+            reorderBody
+                .GetProperty("wishes")[0]
+                .GetProperty("entityTag")
+                .GetString());
+    }
+
+    [Fact]
+    public async Task ReorderAsync_WhenCollectionChanged_ReturnsPreconditionFailed()
+    {
+        // Arrange
+        await using var factory = await CreateFactoryAsync();
+        var owner = await CreateMemberAsync(factory);
+        var wishlist = await SeedWishlistAsync(
+            factory,
+            owner.Id,
+            "Liste concurrente");
+        using var client = CreateAuthorizedClient(
+            factory,
+            owner.Id);
+        using var emptyCollection = await client.GetAsync(
+            $"/api/v1/wishlists/{wishlist.Id}/wishes",
+            TestContext.Current.CancellationToken);
+        using var creation = await CreateWishAsync(
+            client,
+            wishlist.Id,
+            "Concurrent");
+        var wishId = await ReadWishIdAsync(creation);
+
+        // Act
+        using var response = await ReorderWishesAsync(
+            client,
+            wishlist.Id,
+            [wishId],
+            emptyCollection.Headers.ETag?.Tag);
+        var error = await response.Content.ReadFromJsonAsync<JsonElement>(
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.PreconditionFailed,
+            response.StatusCode);
+        Assert.Equal(
+            ErrorCodes.WishOrderVersionConflict,
+            error.GetProperty("errorCode").GetString());
+    }
+
+    [Fact]
+    public async Task ReorderAsync_WhenMembershipIsIncomplete_ReturnsConflictWithoutChangingOrder()
+    {
+        // Arrange
+        await using var factory = await CreateFactoryAsync();
+        var owner = await CreateMemberAsync(factory);
+        var wishlist = await SeedWishlistAsync(
+            factory,
+            owner.Id,
+            "Liste incomplète");
+        using var client = CreateAuthorizedClient(
+            factory,
+            owner.Id);
+        using var creation = await CreateWishAsync(
+            client,
+            wishlist.Id,
+            "Présent");
+        using var collection = await client.GetAsync(
+            $"/api/v1/wishlists/{wishlist.Id}/wishes",
+            TestContext.Current.CancellationToken);
+
+        // Act
+        using var response = await ReorderWishesAsync(
+            client,
+            wishlist.Id,
+            [],
+            collection.Headers.ETag?.Tag);
+        var error = await response.Content.ReadFromJsonAsync<JsonElement>(
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.Conflict,
+            response.StatusCode);
+        Assert.Equal(
+            ErrorCodes.WishOrderConflict,
+            error.GetProperty("errorCode").GetString());
+    }
+
+    [Fact]
+    public async Task ReorderAsync_WhenCommitAcknowledgementIsLost_ReturnsCommittedOrder()
+    {
+        // Arrange
+        var interceptor = new AmbiguousCommitInterceptor();
+        await using var factory = await CreateFactoryAsync(services =>
+        {
+            services.AddSingleton(interceptor);
+            services.AddDbContextPool<MonKadoDbContext>((
+                _,
+                options) => options.AddInterceptors(interceptor));
+        });
+        var owner = await CreateMemberAsync(factory);
+        var wishlist = await SeedWishlistAsync(
+            factory,
+            owner.Id,
+            "Liste réordonnée après commit ambigu");
+        using var client = CreateAuthorizedClient(
+            factory,
+            owner.Id);
+        using var firstCreation = await CreateWishAsync(
+            client,
+            wishlist.Id,
+            "Premier");
+        using var secondCreation = await CreateWishAsync(
+            client,
+            wishlist.Id,
+            "Deuxième");
+        var firstId = await ReadWishIdAsync(firstCreation);
+        var secondId = await ReadWishIdAsync(secondCreation);
+        using var collectionBefore = await client.GetAsync(
+            $"/api/v1/wishlists/{wishlist.Id}/wishes",
+            TestContext.Current.CancellationToken);
+        interceptor.Arm();
+
+        // Act
+        using var reorder = await ReorderWishesAsync(
+            client,
+            wishlist.Id,
+            [secondId, firstId],
+            collectionBefore.Headers.ETag?.Tag);
+        using var collectionAfter = await client.GetAsync(
+            $"/api/v1/wishlists/{wishlist.Id}/wishes",
+            TestContext.Current.CancellationToken);
+        var body = await collectionAfter.Content.ReadFromJsonAsync<JsonElement>(
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.OK,
+            reorder.StatusCode);
+        Assert.Equal(
+            HttpStatusCode.OK,
+            collectionAfter.StatusCode);
+        Assert.Equal(
+            [secondId, firstId],
+            body
+                .GetProperty("wishes")
+                .EnumerateArray()
+                .Select(wish => wish.GetProperty("id").GetGuid()));
+    }
+
+    [Fact]
     public async Task CreateAsync_WhenRequestIsValid_PersistsAndRetrievesNestedWishWithoutUpdatingParent()
     {
         // Arrange
@@ -1070,6 +1361,42 @@ public class WishIntegrationTests(PostgreSqlContainerFixture fixture)
         return await client.SendAsync(
             request,
             TestContext.Current.CancellationToken);
+    }
+
+    private static async Task<HttpResponseMessage> ReorderWishesAsync(
+        HttpClient client,
+        Guid wishlistId,
+        IReadOnlyCollection<Guid> wishIds,
+        string? entityTag)
+    {
+        using var request = new HttpRequestMessage(
+            HttpMethod.Patch,
+            $"/api/v1/wishlists/{wishlistId}/wishes")
+        {
+            Content = JsonContent.Create(new
+            {
+                wishIds
+            })
+        };
+
+        if (entityTag is not null)
+        {
+            request.Headers.TryAddWithoutValidation(
+                "If-Match",
+                entityTag);
+        }
+
+        return await client.SendAsync(
+            request,
+            TestContext.Current.CancellationToken);
+    }
+
+    private static async Task<Guid> ReadWishIdAsync(HttpResponseMessage response)
+    {
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(
+            TestContext.Current.CancellationToken);
+
+        return body.GetProperty("id").GetGuid();
     }
 
     private static async Task<HttpResponseMessage> DeleteWishAsync(

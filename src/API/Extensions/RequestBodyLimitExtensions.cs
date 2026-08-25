@@ -10,6 +10,7 @@ namespace JennGllg.Fr.MonKado.Back.Api.Extensions;
 public static class RequestBodyLimitExtensions
 {
     private const long MaximumRequestBodySize = 4 * 1024;
+    private const long MaximumReorderRequestBodySize = 64 * 1024;
     private static readonly PathString _registrationPath = new("/api/v1/auth/registrations");
     private static readonly PathString _confirmationPath = new("/api/v1/auth/email-confirmations");
     private static readonly PathString _loginPath = new("/api/v1/auth/sessions");
@@ -46,18 +47,18 @@ public static class RequestBodyLimitExtensions
             context,
             next) =>
         {
-            var isLimitedRequest = IsLimitedRequest(context.Request);
+            var maximumRequestBodySize = GetMaximumRequestBodySize(context.Request);
 
-            if (isLimitedRequest)
+            if (maximumRequestBodySize is not null)
             {
                 var maximumBodySizeFeature = context.Features.Get<IHttpMaxRequestBodySizeFeature>();
 
                 if (maximumBodySizeFeature is not null && !maximumBodySizeFeature.IsReadOnly)
-                    maximumBodySizeFeature.MaxRequestBodySize = MaximumRequestBodySize;
+                    maximumBodySizeFeature.MaxRequestBodySize = maximumRequestBodySize;
             }
 
-            if (isLimitedRequest &&
-                context.Request.ContentLength > MaximumRequestBodySize)
+            if (maximumRequestBodySize is not null &&
+                context.Request.ContentLength > maximumRequestBodySize)
             {
                 await WritePayloadTooLargeAsync(
                     context,
@@ -66,10 +67,11 @@ public static class RequestBodyLimitExtensions
                 return;
             }
 
-            if (isLimitedRequest &&
+            if (maximumRequestBodySize is not null &&
                 context.Request.ContentLength is null &&
                 await ExceedsMaximumBodySizeAsync(
                     context.Request,
+                    maximumRequestBodySize.Value,
                     context.RequestAborted))
             {
                 await WritePayloadTooLargeAsync(
@@ -87,17 +89,19 @@ public static class RequestBodyLimitExtensions
     /// Reads at most one byte beyond the configured limit without consuming a valid request body.
     /// </summary>
     /// <param name="request">The HTTP request.</param>
+    /// <param name="maximumRequestBodySize">The maximum accepted body size.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns><see langword="true" /> when the request body exceeds the limit.</returns>
     /// <exception cref="OperationCanceledException">The operation is canceled.</exception>
     private static async Task<bool> ExceedsMaximumBodySizeAsync(
         HttpRequest request,
+        long maximumRequestBodySize,
         CancellationToken cancellationToken)
     {
         request.EnableBuffering(
-            bufferThreshold: (int)MaximumRequestBodySize + 1,
-            bufferLimit: MaximumRequestBodySize + 1);
-        var buffer = new byte[MaximumRequestBodySize + 1];
+            bufferThreshold: (int)maximumRequestBodySize + 1,
+            bufferLimit: maximumRequestBodySize + 1);
+        var buffer = new byte[maximumRequestBodySize + 1];
         var totalBytesRead = 0;
 
         try
@@ -127,7 +131,25 @@ public static class RequestBodyLimitExtensions
                 request.Body.Position = 0;
         }
 
-        return totalBytesRead > MaximumRequestBodySize;
+        return totalBytesRead > maximumRequestBodySize;
+    }
+
+    /// <summary>
+    /// Gets the body limit that applies to a bounded JSON endpoint.
+    /// </summary>
+    /// <param name="request">The current HTTP request.</param>
+    /// <returns>The applicable body limit, or <see langword="null" /> for an unbounded endpoint.</returns>
+    private static long? GetMaximumRequestBodySize(HttpRequest request)
+    {
+        if (HttpMethods.IsPatch(request.Method) &&
+            MatchesWishCollectionPath(request.Path))
+        {
+            return MaximumReorderRequestBodySize;
+        }
+
+        return IsLimitedRequest(request)
+            ? MaximumRequestBodySize
+            : null;
     }
 
     /// <summary>

@@ -26,12 +26,79 @@ public class WishOpenApiTests
         var paths = document.RootElement.GetProperty("paths");
         var collectionPath = paths.GetProperty("/api/v1/wishlists/{wishlistId}/wishes");
         var itemPath = paths.GetProperty("/api/v1/wishlists/{wishlistId}/wishes/{wishId}");
+        var getCollection = collectionPath.GetProperty("get");
+        var reorder = collectionPath.GetProperty("patch");
         var create = collectionPath.GetProperty("post");
         var get = itemPath.GetProperty("get");
         var update = itemPath.GetProperty("put");
         var delete = itemPath.GetProperty("delete");
 
         // Assert
+        Assert.Equal(
+            "Gets all gift wishes from an owned private wishlist.",
+            getCollection.GetProperty("summary").GetString());
+        AssertBearerWithoutAntiforgery(getCollection);
+        var getCollectionResponses = getCollection.GetProperty("responses");
+        AssertResponses(
+            getCollectionResponses,
+            "200",
+            "401",
+            "403",
+            "404",
+            "500",
+            "503");
+        AssertSuccessHeaders(
+            getCollectionResponses.GetProperty("200"),
+            includesLocation: false);
+        AssertResponseProperties(
+            document.RootElement,
+            getCollectionResponses.GetProperty("200"),
+            "wishes");
+
+        Assert.Equal(
+            "Replaces the complete order of gift wishes in an owned private wishlist.",
+            reorder.GetProperty("summary").GetString());
+        AssertBearerWithoutAntiforgery(reorder);
+        var reorderIfMatch = Assert.Single(
+            reorder.GetProperty("parameters").EnumerateArray(),
+            parameter => parameter.GetProperty("name").GetString() == "If-Match");
+        Assert.True(reorderIfMatch.GetProperty("required").GetBoolean());
+        var reorderRequestSchema = ResolveSchema(
+            document.RootElement,
+            reorder
+                .GetProperty("requestBody")
+                .GetProperty("content")
+                .GetProperty("application/json")
+                .GetProperty("schema"));
+        Assert.Equal(
+            ["wishIds"],
+            reorderRequestSchema
+                .GetProperty("properties")
+                .EnumerateObject()
+                .Select(property => property.Name));
+        var reorderResponses = reorder.GetProperty("responses");
+        AssertResponses(
+            reorderResponses,
+            "200",
+            "400",
+            "401",
+            "403",
+            "404",
+            "409",
+            "412",
+            "413",
+            "415",
+            "428",
+            "500",
+            "503");
+        AssertSuccessHeaders(
+            reorderResponses.GetProperty("200"),
+            includesLocation: false);
+        AssertResponseProperties(
+            document.RootElement,
+            reorderResponses.GetProperty("200"),
+            "wishes");
+
         Assert.Equal(
             "Adds a gift wish manually to an owned private wishlist.",
             create.GetProperty("summary").GetString());
@@ -63,6 +130,7 @@ public class WishOpenApiTests
             "401",
             "403",
             "404",
+            "409",
             "413",
             "415",
             "500",
@@ -260,6 +328,25 @@ public class WishOpenApiTests
                 .EnumerateObject()
                 .Select(property => property.Name)
                 .OrderBy(property => property));
+    }
+
+    private static void AssertResponseProperties(
+        JsonElement document,
+        JsonElement response,
+        params string[] expectedProperties)
+    {
+        var schema = ResolveSchema(
+            document,
+            response
+                .GetProperty("content")
+                .GetProperty("application/json")
+                .GetProperty("schema"));
+        Assert.Equal(
+            expectedProperties,
+            schema
+                .GetProperty("properties")
+                .EnumerateObject()
+                .Select(property => property.Name));
     }
 
     private static JsonElement ResolveSchema(

@@ -98,6 +98,10 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
             migration => Assert.EndsWith(
                 "_AddWishes",
                 migration,
+                StringComparison.Ordinal),
+            migration => Assert.EndsWith(
+                "_AddWishCollectionOrdering",
+                migration,
                 StringComparison.Ordinal));
         Assert.False(context.Database.HasPendingModelChanges());
 
@@ -179,6 +183,9 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
             constraints);
         Assert.Contains(
             "ck_wish_position_sequences_next_position_valid",
+            constraints);
+        Assert.Contains(
+            "ck_wish_position_sequences_current_count_valid",
             constraints);
         Assert.Contains(
             "fk_wish_position_sequences_wishlists_wishlist_id",

@@ -8,6 +8,8 @@ using Microsoft.EntityFrameworkCore;
 
 using Npgsql;
 
+using System.Data;
+
 namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Services;
 
 /// <summary>
@@ -16,13 +18,176 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Service
 /// <param name="wishRepository">The wish repository.</param>
 /// <param name="wishlistRepository">The wishlist repository.</param>
 /// <param name="unitOfWork">The unit of work.</param>
+/// <param name="wishTransactionFactory">The gift wish transaction factory.</param>
 public class WishService(
     IWishRepository wishRepository,
     IWishlistRepository wishlistRepository,
-    IUnitOfWork unitOfWork) : IWishService
+    IUnitOfWork unitOfWork,
+    IWishTransactionFactory wishTransactionFactory) : IWishService
 {
     private const string WishlistForeignKeyName = "fk_wishes_wishlists_wishlist_id";
     private const string PositionWishlistForeignKeyName = "fk_wish_position_sequences_wishlists_wishlist_id";
+    private const string WishCountConstraintName = "ck_wish_position_sequences_current_count_limit";
+
+    /// <inheritdoc />
+    public async Task<WishCollectionDetails> GetCollectionAsync(
+        Guid ownerId,
+        Guid wishlistId,
+        CancellationToken cancellationToken)
+    {
+        await EnsureOwnedWishlistAsync(
+            ownerId,
+            wishlistId,
+            cancellationToken);
+        WishCollectionDetails result;
+
+        try
+        {
+            await using var transaction = await wishTransactionFactory.BeginAsync(
+                IsolationLevel.RepeatableRead,
+                cancellationToken);
+            var sequence = await wishRepository.GetCollectionStateAsync(
+                wishlistId,
+                cancellationToken);
+
+            if (sequence is null)
+                throw new WishlistNotFoundException();
+
+            var wishes = await wishRepository.GetByWishlistIdAsync(
+                wishlistId,
+                cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+
+            result = CreateCollectionDetails(
+                wishes,
+                sequence.Version);
+        }
+        catch (Exception exception)
+            when (PostgreSqlFailureClassifier.IsUnavailable(exception))
+        {
+            throw new DependencyUnavailableException(
+                "PostgreSQL",
+                exception);
+        }
+
+        return result;
+    }
+
+    /// <inheritdoc />
+    public async Task<WishOrderDetails> ReorderAsync(
+        Guid ownerId,
+        Guid wishlistId,
+        IReadOnlyCollection<Guid> wishIds,
+        uint expectedVersion,
+        CancellationToken cancellationToken)
+    {
+        await EnsureOwnedWishlistAsync(
+            ownerId,
+            wishlistId,
+            cancellationToken);
+        IReadOnlyCollection<Guid> originalOrder = [];
+        WishOrderDetails result;
+        var commitAttempted = false;
+
+        try
+        {
+            await using var transaction = await wishTransactionFactory.BeginAsync(
+                IsolationLevel.ReadCommitted,
+                cancellationToken);
+            // Lock wishes first to match update and delete trigger lock ordering.
+            var wishes = await wishRepository.GetByWishlistIdForUpdateAsync(
+                wishlistId,
+                cancellationToken);
+            var sequence = await wishRepository.GetCollectionStateForUpdateAsync(
+                wishlistId,
+                cancellationToken);
+
+            if (sequence is null)
+                throw new WishlistNotFoundException();
+
+            if (sequence.Version != expectedVersion)
+                throw new WishOrderVersionConflictException();
+            originalOrder = wishes
+                .Select(wish => wish.Id)
+                .ToArray();
+
+            if (!HasExactMembership(
+                wishes,
+                wishIds))
+            {
+                throw new WishOrderConflictException();
+            }
+
+            result = CreateOrderDetails(
+                wishes,
+                sequence.Version);
+
+            if (!originalOrder.SequenceEqual(wishIds))
+            {
+                var positions = wishes
+                    .Select(wish => wish.Position)
+                    .Order()
+                    .ToArray();
+                var wishesById = wishes.ToDictionary(wish => wish.Id);
+                var finalPositions = wishIds
+                    .Select((
+                        wishId,
+                        index) => new
+                        {
+                            Wish = wishesById[wishId],
+                            Position = positions[index]
+                        })
+                    .Where(item => item.Wish.Position != item.Position)
+                    .ToArray();
+                var temporaryPosition = checked(positions[^1] + 1);
+
+                foreach (var item in finalPositions)
+                {
+                    item.Wish.MoveTo(temporaryPosition);
+                    temporaryPosition = checked(temporaryPosition + 1);
+                }
+
+                await unitOfWork.SaveChangesAsync(cancellationToken);
+
+                foreach (var item in finalPositions)
+                    item.Wish.MoveTo(item.Position);
+
+                await unitOfWork.SaveChangesAsync(cancellationToken);
+                await wishRepository.ReloadCollectionStateAsync(
+                    sequence,
+                    cancellationToken);
+                result = CreateOrderDetails(
+                    wishIds
+                        .Select(wishId => wishesById[wishId])
+                        .ToArray(),
+                    sequence.Version);
+                commitAttempted = true;
+                await transaction.CommitAsync(cancellationToken);
+            }
+        }
+        catch (Exception exception)
+            when (PostgreSqlFailureClassifier.IsUnavailable(exception))
+        {
+            wishRepository.ClearTracking();
+
+            if (!commitAttempted)
+            {
+                throw new DependencyUnavailableException(
+                    "PostgreSQL",
+                    exception);
+            }
+
+            return await ResolveAmbiguousReorderAsync(
+                ownerId,
+                wishlistId,
+                originalOrder,
+                wishIds,
+                exception,
+                cancellationToken);
+        }
+
+        return result;
+    }
 
     /// <inheritdoc />
     public async Task<WishDetails?> CreateAsync(
@@ -56,6 +221,10 @@ public class WishService(
 
             return CreateDetails(wish);
         }
+        catch (Exception exception) when (IsWishLimitReached(exception))
+        {
+            throw new WishLimitReachedException();
+        }
         catch (Exception exception) when (IsMissingWishlist(exception))
         {
             return await ResolveMissingWishlistAsync(
@@ -82,6 +251,158 @@ public class WishService(
                 exception,
                 cancellationToken);
         }
+    }
+
+    /// <summary>
+    /// Resolves whether a collection reorder committed after its acknowledgement was lost.
+    /// </summary>
+    /// <param name="ownerId">The authenticated owner identifier.</param>
+    /// <param name="wishlistId">The parent wishlist identifier.</param>
+    /// <param name="originalOrder">The exact order before the attempted reorder.</param>
+    /// <param name="requestedOrder">The exact requested final order.</param>
+    /// <param name="originalException">The transient commit exception.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The committed order when it can be confirmed.</returns>
+    /// <exception cref="DependencyUnavailableException">The original order is still present.</exception>
+    /// <exception cref="WishOrderVersionConflictException">A third state was committed.</exception>
+    private async Task<WishOrderDetails> ResolveAmbiguousReorderAsync(
+        Guid ownerId,
+        Guid wishlistId,
+        IReadOnlyCollection<Guid> originalOrder,
+        IReadOnlyCollection<Guid> requestedOrder,
+        Exception originalException,
+        CancellationToken cancellationToken)
+    {
+        var collection = await GetCollectionAsync(
+            ownerId,
+            wishlistId,
+            cancellationToken);
+        var currentOrder = collection.Wishes
+            .Select(wish => wish.Id)
+            .ToArray();
+
+        if (currentOrder.SequenceEqual(requestedOrder))
+            return CreateOrderDetails(
+                collection.Wishes,
+                collection.Version);
+
+        if (currentOrder.SequenceEqual(originalOrder))
+        {
+            throw new DependencyUnavailableException(
+                "PostgreSQL",
+                originalException);
+        }
+
+        throw new WishOrderVersionConflictException();
+    }
+
+    /// <summary>
+    /// Ensures that the current member owns the requested private wishlist.
+    /// </summary>
+    /// <param name="ownerId">The authenticated owner identifier.</param>
+    /// <param name="wishlistId">The parent wishlist identifier.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A task that represents the asynchronous access check.</returns>
+    /// <exception cref="InvalidAuthenticationSessionException">The authenticated member disappeared.</exception>
+    /// <exception cref="WishlistNotFoundException">The parent is unavailable to the owner.</exception>
+    private async Task EnsureOwnedWishlistAsync(
+        Guid ownerId,
+        Guid wishlistId,
+        CancellationToken cancellationToken)
+    {
+        var access = await GetAccessSafelyAsync(
+            ownerId,
+            wishlistId,
+            cancellationToken);
+
+        if (access is WishlistAccess.MemberNotFound)
+            throw new InvalidAuthenticationSessionException();
+
+        if (access is WishlistAccess.NotOwned)
+            throw new WishlistNotFoundException();
+    }
+
+    /// <summary>
+    /// Determines whether a requested order contains every current wish exactly once.
+    /// </summary>
+    /// <param name="wishes">The current persisted collection.</param>
+    /// <param name="wishIds">The requested identifiers.</param>
+    /// <returns><see langword="true" /> when both collections have exact membership.</returns>
+    private static bool HasExactMembership(
+        IReadOnlyCollection<Wish> wishes,
+        IReadOnlyCollection<Guid> wishIds)
+    {
+        if (wishes.Count != wishIds.Count)
+            return false;
+
+        var currentIds = wishes
+            .Select(wish => wish.Id)
+            .ToHashSet();
+
+        return currentIds.SetEquals(wishIds);
+    }
+
+    /// <summary>
+    /// Maps persisted wishes to a complete versioned collection.
+    /// </summary>
+    /// <param name="wishes">The persisted wishes.</param>
+    /// <param name="version">The collection version.</param>
+    /// <returns>The complete application collection.</returns>
+    private static WishCollectionDetails CreateCollectionDetails(
+        IEnumerable<Wish> wishes,
+        uint version)
+    {
+        var details = wishes
+            .Select(CreateDetails)
+            .ToArray();
+
+        return new WishCollectionDetails(
+            details,
+            version);
+    }
+
+    /// <summary>
+    /// Maps persisted wishes to a complete lightweight order.
+    /// </summary>
+    /// <param name="wishes">The ordered persisted wishes.</param>
+    /// <param name="version">The collection version.</param>
+    /// <returns>The complete application order.</returns>
+    private static WishOrderDetails CreateOrderDetails(
+        IEnumerable<Wish> wishes,
+        uint version)
+    {
+        var items = wishes
+            .Select(wish => new WishOrderItem(
+                wish.Id,
+                wish.Position,
+                wish.Version))
+            .ToArray();
+
+        return new WishOrderDetails(
+            items,
+            version);
+    }
+
+    /// <summary>
+    /// Maps application wish details to a complete lightweight order.
+    /// </summary>
+    /// <param name="wishes">The ordered application wishes.</param>
+    /// <param name="version">The collection version.</param>
+    /// <returns>The complete application order.</returns>
+    private static WishOrderDetails CreateOrderDetails(
+        IEnumerable<WishDetails> wishes,
+        uint version)
+    {
+        var items = wishes
+            .Select(wish => new WishOrderItem(
+                wish.Id,
+                wish.Position,
+                wish.Version))
+            .ToArray();
+
+        return new WishOrderDetails(
+            items,
+            version);
     }
 
     /// <inheritdoc />
@@ -638,6 +959,27 @@ public class WishService(
         {
             SqlState: PostgresErrorCodes.ForeignKeyViolation,
             ConstraintName: WishlistForeignKeyName or PositionWishlistForeignKeyName
+        };
+    }
+
+    /// <summary>
+    /// Determines whether a database update exceeded the wishlist gift limit.
+    /// </summary>
+    /// <param name="exception">The database update exception.</param>
+    /// <returns><see langword="true" /> for the expected limit constraint.</returns>
+    private static bool IsWishLimitReached(Exception exception)
+    {
+        var postgresException = exception switch
+        {
+            PostgresException directException => directException,
+            DbUpdateException { InnerException: PostgresException innerException } => innerException,
+            _ => null
+        };
+
+        return postgresException is
+        {
+            SqlState: PostgresErrorCodes.CheckViolation,
+            ConstraintName: WishCountConstraintName
         };
     }
 

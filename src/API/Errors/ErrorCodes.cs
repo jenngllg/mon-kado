@@ -141,6 +141,21 @@ public static class ErrorCodes
     /// </summary>
     public const string WishVersionConflict = "WISH_VERSION_CONFLICT";
 
+    /// <summary>
+    /// Identifies a requested gift wish order that does not match the current collection.
+    /// </summary>
+    public const string WishOrderConflict = "WISH_ORDER_CONFLICT";
+
+    /// <summary>
+    /// Identifies an optimistic gift wish collection order conflict.
+    /// </summary>
+    public const string WishOrderVersionConflict = "WISH_ORDER_VERSION_CONFLICT";
+
+    /// <summary>
+    /// Identifies a wishlist that reached its maximum number of gift wishes.
+    /// </summary>
+    public const string WishLimitReached = "WISH_LIMIT_REACHED";
+
     #endregion
 
     #region Technical

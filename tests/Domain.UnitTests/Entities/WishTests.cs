@@ -102,6 +102,38 @@ public class WishTests
             wish.Name);
     }
 
+    [Fact]
+    public void MoveTo_WhenPositionChanges_ReplacesPositionAndReturnsTrue()
+    {
+        // Arrange
+        var wish = CreateWish();
+
+        // Act
+        var result = wish.MoveTo(8);
+
+        // Assert
+        Assert.True(result);
+        Assert.Equal(
+            8,
+            wish.Position);
+    }
+
+    [Fact]
+    public void MoveTo_WhenPositionIsUnchanged_ReturnsFalse()
+    {
+        // Arrange
+        var wish = CreateWish();
+
+        // Act
+        var result = wish.MoveTo(3);
+
+        // Assert
+        Assert.False(result);
+        Assert.Equal(
+            3,
+            wish.Position);
+    }
+
     private static Wish CreateWish()
     {
         return new Wish(

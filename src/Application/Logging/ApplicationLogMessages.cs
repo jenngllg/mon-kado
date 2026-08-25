@@ -572,6 +572,66 @@ public static partial class ApplicationLogMessages
         Guid wishId);
 
     /// <summary>
+    /// Logs the start of a gift wish collection retrieval.
+    /// </summary>
+    /// <param name="logger">The logger.</param>
+    /// <param name="memberId">The authenticated member identifier.</param>
+    /// <param name="wishlistId">The parent wishlist identifier.</param>
+    [LoggerMessage(
+        EventId = LogEventIds.WishCollectionRetrievalStarted,
+        Level = LogLevel.Debug,
+        Message = "Retrieving wishes from wishlist {WishlistId} for member {MemberId}.")]
+    public static partial void WishCollectionRetrievalStarted(
+        ILogger logger,
+        Guid memberId,
+        Guid wishlistId);
+
+    /// <summary>
+    /// Logs a retrieved gift wish collection.
+    /// </summary>
+    /// <param name="logger">The logger.</param>
+    /// <param name="memberId">The authenticated member identifier.</param>
+    /// <param name="wishlistId">The parent wishlist identifier.</param>
+    [LoggerMessage(
+        EventId = LogEventIds.WishCollectionRetrieved,
+        Level = LogLevel.Information,
+        Message = "Wishes retrieved from wishlist {WishlistId} for member {MemberId}.")]
+    public static partial void WishCollectionRetrieved(
+        ILogger logger,
+        Guid memberId,
+        Guid wishlistId);
+
+    /// <summary>
+    /// Logs the start of a gift wish collection reorder.
+    /// </summary>
+    /// <param name="logger">The logger.</param>
+    /// <param name="memberId">The authenticated member identifier.</param>
+    /// <param name="wishlistId">The parent wishlist identifier.</param>
+    [LoggerMessage(
+        EventId = LogEventIds.WishReorderStarted,
+        Level = LogLevel.Debug,
+        Message = "Reordering wishes in wishlist {WishlistId} for member {MemberId}.")]
+    public static partial void WishReorderStarted(
+        ILogger logger,
+        Guid memberId,
+        Guid wishlistId);
+
+    /// <summary>
+    /// Logs a reordered gift wish collection.
+    /// </summary>
+    /// <param name="logger">The logger.</param>
+    /// <param name="memberId">The authenticated member identifier.</param>
+    /// <param name="wishlistId">The parent wishlist identifier.</param>
+    [LoggerMessage(
+        EventId = LogEventIds.WishReordered,
+        Level = LogLevel.Information,
+        Message = "Wishes reordered in wishlist {WishlistId} for member {MemberId}.")]
+    public static partial void WishReordered(
+        ILogger logger,
+        Guid memberId,
+        Guid wishlistId);
+
+    /// <summary>
     /// Logs the start of a gift wish update.
     /// </summary>
     /// <param name="logger">The logger.</param>

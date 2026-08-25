@@ -35,6 +35,93 @@ public class WishesController(
 {
     private const string GetWishRouteName = "GetWish";
     private const int MaximumRequestBodySize = 4 * 1024;
+    private const int MaximumReorderRequestBodySize = 64 * 1024;
+
+    /// <summary>
+    /// Gets all gift wishes from an owned private wishlist.
+    /// </summary>
+    /// <param name="wishlistId">The parent wishlist identifier.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The complete ordered gift wish collection.</returns>
+    [HttpGet]
+    [EntityTag]
+    [NoStoreResponse(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(WishCollectionResponse), StatusCodes.Status200OK, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status503ServiceUnavailable, "application/json")]
+    public async Task<ActionResult<WishCollectionResponse>> GetCollectionAsync(
+        Guid wishlistId,
+        CancellationToken cancellationToken)
+    {
+        await AuthorizeWishlistAsync(
+            wishlistId,
+            cancellationToken);
+        var memberId = GetMemberId();
+        var collection = await sender.Send(
+            new GetWishesQuery(
+                memberId,
+                wishlistId),
+            cancellationToken);
+        var response = new WishCollectionResponse(collection.Wishes
+            .Select(wish => new WishCollectionItemResponse(
+                CreateResponse(wish),
+                entityTagService.Format(wish.Version)))
+            .ToArray());
+        Response.Headers.ETag = entityTagService.Format(collection.Version);
+        Response.Headers.CacheControl = "no-store";
+
+        return Ok(response);
+    }
+
+    /// <summary>
+    /// Replaces the complete order of gift wishes in an owned private wishlist.
+    /// </summary>
+    /// <param name="wishlistId">The parent wishlist identifier.</param>
+    /// <param name="request">The complete requested order.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The complete updated lightweight order.</returns>
+    [HttpPatch]
+    [EntityTag(isRequired: true)]
+    [NoStoreResponse(StatusCodes.Status200OK)]
+    [RequestSizeLimit(MaximumReorderRequestBodySize)]
+    [Consumes("application/json")]
+    [ProducesResponseType(typeof(WishOrderResponse), StatusCodes.Status200OK, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status409Conflict, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status412PreconditionFailed, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status413PayloadTooLarge, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status415UnsupportedMediaType, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status428PreconditionRequired, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status503ServiceUnavailable, "application/json")]
+    public async Task<ActionResult<WishOrderResponse>> ReorderAsync(
+        Guid wishlistId,
+        ReorderWishesRequest request,
+        CancellationToken cancellationToken)
+    {
+        await AuthorizeWishlistAsync(
+            wishlistId,
+            cancellationToken);
+        var memberId = GetMemberId();
+        var expectedVersion = entityTagService.Parse(Request.Headers.IfMatch);
+        var order = await sender.Send(
+            new ReorderWishesCommand(
+                memberId,
+                wishlistId,
+                request.WishIds,
+                expectedVersion),
+            cancellationToken);
+        var response = new WishOrderResponse(order.Wishes
+            .Select(wish => new WishOrderItemResponse(
+                wish.Id,
+                wish.Position,
+                entityTagService.Format(wish.Version)))
+            .ToArray());
+        Response.Headers.ETag = entityTagService.Format(order.Version);
+        Response.Headers.CacheControl = "no-store";
+
+        return Ok(response);
+    }
 
     /// <summary>
     /// Adds a gift wish manually to an owned private wishlist.
@@ -51,6 +138,7 @@ public class WishesController(
     [ProducesResponseType(typeof(WishResponse), StatusCodes.Status201Created, "application/json")]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest, "application/json")]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status409Conflict, "application/json")]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status413PayloadTooLarge, "application/json")]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status415UnsupportedMediaType, "application/json")]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status503ServiceUnavailable, "application/json")]

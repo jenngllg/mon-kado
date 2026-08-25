@@ -8,6 +8,42 @@ namespace JennGllg.Fr.MonKado.Back.Application.Abstractions;
 public interface IWishService
 {
     /// <summary>
+    /// Gets all gift wishes from an owned private wishlist.
+    /// </summary>
+    /// <param name="ownerId">The authenticated owner identifier.</param>
+    /// <param name="wishlistId">The parent wishlist identifier.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The complete ordered collection.</returns>
+    /// <exception cref="Common.Exceptions.InvalidAuthenticationSessionException">The authenticated member no longer exists.</exception>
+    /// <exception cref="Common.Exceptions.WishlistNotFoundException">The parent wishlist is unavailable to the owner.</exception>
+    /// <exception cref="Common.Exceptions.DependencyUnavailableException">PostgreSQL is unavailable.</exception>
+    Task<WishCollectionDetails> GetCollectionAsync(
+        Guid ownerId,
+        Guid wishlistId,
+        CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Reorders all gift wishes from an owned private wishlist.
+    /// </summary>
+    /// <param name="ownerId">The authenticated owner identifier.</param>
+    /// <param name="wishlistId">The parent wishlist identifier.</param>
+    /// <param name="wishIds">All current wish identifiers in their requested final order.</param>
+    /// <param name="expectedVersion">The collection version supplied by the client.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The complete updated order.</returns>
+    /// <exception cref="Common.Exceptions.InvalidAuthenticationSessionException">The authenticated member no longer exists.</exception>
+    /// <exception cref="Common.Exceptions.WishlistNotFoundException">The parent wishlist is unavailable to the owner.</exception>
+    /// <exception cref="Common.Exceptions.WishOrderConflictException">The requested identifiers do not match the collection.</exception>
+    /// <exception cref="Common.Exceptions.WishOrderVersionConflictException">The collection version is stale.</exception>
+    /// <exception cref="Common.Exceptions.DependencyUnavailableException">PostgreSQL is unavailable.</exception>
+    Task<WishOrderDetails> ReorderAsync(
+        Guid ownerId,
+        Guid wishlistId,
+        IReadOnlyCollection<Guid> wishIds,
+        uint expectedVersion,
+        CancellationToken cancellationToken);
+
+    /// <summary>
     /// Creates a gift wish in an owned private wishlist.
     /// </summary>
     /// <param name="id">The generated wish identifier.</param>

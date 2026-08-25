@@ -312,6 +312,26 @@ public static class LogEventIds
     /// </summary>
     public const int WishDeleted = 2017;
 
+    /// <summary>
+    /// Identifies the start of a gift wish collection retrieval.
+    /// </summary>
+    public const int WishCollectionRetrievalStarted = 2018;
+
+    /// <summary>
+    /// Identifies a retrieved gift wish collection.
+    /// </summary>
+    public const int WishCollectionRetrieved = 2019;
+
+    /// <summary>
+    /// Identifies the start of a gift wish reorder.
+    /// </summary>
+    public const int WishReorderStarted = 2020;
+
+    /// <summary>
+    /// Identifies a reordered gift wish collection.
+    /// </summary>
+    public const int WishReordered = 2021;
+
     #endregion
 
     #region Technical
