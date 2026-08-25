@@ -242,6 +242,16 @@ public static class LogEventIds
     /// </summary>
     public const int WishlistRetrieved = 2003;
 
+    /// <summary>
+    /// Identifies the start of an owned wishlist collection retrieval.
+    /// </summary>
+    public const int WishlistCollectionRetrievalStarted = 2004;
+
+    /// <summary>
+    /// Identifies a retrieved owned wishlist collection.
+    /// </summary>
+    public const int WishlistCollectionRetrieved = 2005;
+
     #endregion
 
     #region Technical

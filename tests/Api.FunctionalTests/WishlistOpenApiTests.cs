@@ -27,6 +27,9 @@ public class WishlistOpenApiTests
         var create = paths
             .GetProperty("/api/v1/wishlists")
             .GetProperty("post");
+        var getAll = paths
+            .GetProperty("/api/v1/wishlists")
+            .GetProperty("get");
         var get = paths
             .GetProperty("/api/v1/wishlists/{wishlistId}")
             .GetProperty("get");
@@ -82,6 +85,31 @@ public class WishlistOpenApiTests
         AssertWishlistResponseSchema(
             document.RootElement,
             createResponses.GetProperty("201"));
+
+        Assert.Equal(
+            "Gets all private wishlists owned by the current member.",
+            getAll.GetProperty("summary").GetString());
+        AssertBearerWithoutAntiforgery(getAll);
+        var getAllResponses = getAll.GetProperty("responses");
+        AssertResponses(
+            getAllResponses,
+            "200",
+            "401",
+            "403",
+            "500",
+            "503");
+        var getAllHeaders = getAllResponses
+            .GetProperty("200")
+            .GetProperty("headers");
+        Assert.True(getAllHeaders.TryGetProperty(
+            "Cache-Control",
+            out _));
+        Assert.False(getAllHeaders.TryGetProperty(
+            "ETag",
+            out _));
+        AssertWishlistCollectionResponseSchema(
+            document.RootElement,
+            getAllResponses.GetProperty("200"));
 
         Assert.Equal(
             "Gets a private wishlist owned by the current member.",
@@ -157,6 +185,37 @@ public class WishlistOpenApiTests
                 "updatedAt"
             ],
             schema
+                .GetProperty("properties")
+                .EnumerateObject()
+                .Select(property => property.Name)
+                .OrderBy(property => property));
+    }
+
+    private static void AssertWishlistCollectionResponseSchema(
+        JsonElement document,
+        JsonElement response)
+    {
+        var schema = response
+            .GetProperty("content")
+            .GetProperty("application/json")
+            .GetProperty("schema");
+        Assert.Equal(
+            "array",
+            schema.GetProperty("type").GetString());
+        var itemSchema = ResolveSchema(
+            document,
+            schema.GetProperty("items"));
+        Assert.Equal(
+            [
+                "createdAt",
+                "eventDate",
+                "id",
+                "message",
+                "name",
+                "occasion",
+                "updatedAt"
+            ],
+            itemSchema
                 .GetProperty("properties")
                 .EnumerateObject()
                 .Select(property => property.Name)

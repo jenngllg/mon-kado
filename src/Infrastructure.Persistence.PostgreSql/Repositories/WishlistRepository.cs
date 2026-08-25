@@ -32,6 +32,23 @@ public class WishlistRepository(MonKadoDbContext context) : IWishlistRepository
     }
 
     /// <inheritdoc />
+    public async Task<IReadOnlyCollection<Wishlist>?> GetByOwnerIdAsync(
+        Guid ownerId,
+        CancellationToken cancellationToken)
+    {
+        return await context.Users
+            .AsNoTracking()
+            .Where(member => member.Id == ownerId)
+            .Select(_ => context.Wishlists
+                .AsNoTracking()
+                .Where(wishlist => wishlist.OwnerId == ownerId)
+                .OrderByDescending(wishlist => wishlist.CreatedAt)
+                .ThenByDescending(wishlist => wishlist.Id)
+                .ToArray())
+            .SingleOrDefaultAsync(cancellationToken);
+    }
+
+    /// <inheritdoc />
     public async Task<WishlistAccess> GetAccessAsync(
         Guid memberId,
         Guid wishlistId,

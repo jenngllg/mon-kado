@@ -25,6 +25,19 @@ public interface IWishlistRepository
         CancellationToken cancellationToken);
 
     /// <summary>
+    /// Gets all private wishlists owned by a member in reverse creation order.
+    /// </summary>
+    /// <param name="ownerId">The owner member identifier.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>
+    /// The ordered wishlists, an empty collection when the member owns none, or
+    /// <see langword="null" /> when the member no longer exists.
+    /// </returns>
+    Task<IReadOnlyCollection<Wishlist>?> GetByOwnerIdAsync(
+        Guid ownerId,
+        CancellationToken cancellationToken);
+
+    /// <summary>
     /// Gets a member's access to a private wishlist.
     /// </summary>
     /// <param name="memberId">The authenticated member identifier.</param>

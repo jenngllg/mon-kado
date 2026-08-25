@@ -90,6 +90,29 @@ public class WishlistService(
     }
 
     /// <inheritdoc />
+    public async Task<IReadOnlyCollection<WishlistDetails>?> GetByOwnerIdAsync(
+        Guid ownerId,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var wishlists = await wishlistRepository.GetByOwnerIdAsync(
+                ownerId,
+                cancellationToken);
+
+            return wishlists?
+                .Select(CreateDetails)
+                .ToArray();
+        }
+        catch (Exception exception) when (PostgreSqlFailureClassifier.IsUnavailable(exception))
+        {
+            throw new DependencyUnavailableException(
+                "PostgreSQL",
+                exception);
+        }
+    }
+
+    /// <inheritdoc />
     public async Task<WishlistAccess> GetAccessAsync(
         Guid memberId,
         Guid wishlistId,

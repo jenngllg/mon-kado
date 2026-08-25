@@ -44,6 +44,16 @@ public class RecordingWishlistService : IWishlistService
     public List<Guid> Retrievals { get; } = [];
 
     /// <summary>
+    /// Gets the recorded owner collection retrieval identifiers.
+    /// </summary>
+    public List<Guid> OwnerRetrievals { get; } = [];
+
+    /// <summary>
+    /// Gets the configured owned wishlist collection.
+    /// </summary>
+    public List<WishlistDetails> OwnedWishlists { get; } = [];
+
+    /// <summary>
     /// Gets the wishlists returned by identifier.
     /// </summary>
     public Dictionary<Guid, WishlistDetails> Wishlists { get; } = [];
@@ -129,6 +139,23 @@ public class RecordingWishlistService : IWishlistService
             out var wishlist);
 
         return Task.FromResult(wishlist);
+    }
+
+    /// <inheritdoc />
+    public Task<IReadOnlyCollection<WishlistDetails>?> GetByOwnerIdAsync(
+        Guid ownerId,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        OwnerRetrievals.Add(ownerId);
+
+        if (Exception is not null)
+            throw Exception;
+
+        if (!MemberExists)
+            return Task.FromResult<IReadOnlyCollection<WishlistDetails>?>(null);
+
+        return Task.FromResult<IReadOnlyCollection<WishlistDetails>?>(OwnedWishlists);
     }
 
     /// <inheritdoc />

@@ -2,6 +2,7 @@ using JennGllg.Fr.MonKado.Back.Api.Errors;
 using JennGllg.Fr.MonKado.Back.Application.Abstractions;
 using JennGllg.Fr.MonKado.Back.Application.Common.Exceptions;
 using JennGllg.Fr.MonKado.Back.Application.Models;
+using JennGllg.Fr.MonKado.Back.Domain.Enums;
 
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Http;
@@ -17,6 +18,218 @@ namespace JennGllg.Fr.MonKado.Back.Api.FunctionalTests;
 
 public class WishlistTests
 {
+    [Fact]
+    public async Task GetAllAsync_WhenMemberOwnsWishlists_ReturnsExactOrderedCollection()
+    {
+        // Arrange
+        await using var factory = new RegistrationApiFactory();
+        var memberId = Guid.CreateVersion7();
+        var recentWishlist = CreateWishlistDetails(
+            "Liste récente",
+            WishlistOccasion.Birthday,
+            new DateOnly(
+                2099,
+                9,
+                24),
+            "Merci",
+            new DateTime(
+                2026,
+                8,
+                25,
+                12,
+                0,
+                0,
+                DateTimeKind.Utc));
+        var olderWishlist = CreateWishlistDetails(
+            "Liste passée",
+            WishlistOccasion.Other,
+            new DateOnly(
+                2020,
+                1,
+                1),
+            null,
+            new DateTime(
+                2026,
+                8,
+                24,
+                12,
+                0,
+                0,
+                DateTimeKind.Utc));
+        factory.WishlistService.OwnedWishlists.AddRange(
+        [
+            recentWishlist,
+            olderWishlist
+        ]);
+        using var client = CreateAuthorizedClient(
+            factory,
+            memberId);
+
+        // Act
+        using var response = await client.GetAsync(
+            "/api/v1/wishlists",
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.OK,
+            response.StatusCode);
+        Assert.True(response.Headers.CacheControl?.NoStore);
+        Assert.Null(response.Headers.ETag);
+        Assert.Equal(
+            [memberId],
+            factory.WishlistService.OwnerRetrievals);
+        using var document = await response.Content.ReadFromJsonAsync<JsonDocument>(
+            TestContext.Current.CancellationToken)
+            ?? throw new InvalidOperationException("The wishlist collection response is empty.");
+        var wishlists = document.RootElement.EnumerateArray().ToArray();
+        Assert.Equal(
+            2,
+            wishlists.Length);
+        Assert.Equal(
+            [
+                "id",
+                "name",
+                "occasion",
+                "eventDate",
+                "message",
+                "createdAt",
+                "updatedAt"
+            ],
+            wishlists[0]
+                .EnumerateObject()
+                .Select(property => property.Name));
+        Assert.Equal(
+            recentWishlist.Id,
+            wishlists[0].GetProperty("id").GetGuid());
+        Assert.Equal(
+            "Liste récente",
+            wishlists[0].GetProperty("name").GetString());
+        Assert.Equal(
+            olderWishlist.Id,
+            wishlists[1].GetProperty("id").GetGuid());
+        Assert.Equal(
+            "2020-01-01",
+            wishlists[1].GetProperty("eventDate").GetString());
+        Assert.Contains(
+            factory.LogMessages,
+            message => message.Contains(
+                $"Wishlists retrieved for member {memberId}",
+                StringComparison.Ordinal));
+        Assert.DoesNotContain(
+            factory.LogMessages,
+            message => message.Contains(
+                "Liste récente",
+                StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task GetAllAsync_WhenMemberOwnsNoWishlist_ReturnsEmptyCollection()
+    {
+        // Arrange
+        await using var factory = new RegistrationApiFactory();
+        var memberId = Guid.CreateVersion7();
+        using var client = CreateAuthorizedClient(
+            factory,
+            memberId);
+
+        // Act
+        using var response = await client.GetAsync(
+            "/api/v1/wishlists",
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.OK,
+            response.StatusCode);
+        var wishlists = await response.Content.ReadFromJsonAsync<JsonElement>(
+            TestContext.Current.CancellationToken);
+        Assert.Empty(wishlists.EnumerateArray());
+        Assert.Equal(
+            [memberId],
+            factory.WishlistService.OwnerRetrievals);
+    }
+
+    [Fact]
+    public async Task GetAllAsync_WhenBearerTokenIsMissing_ReturnsUnauthorized()
+    {
+        // Arrange
+        await using var factory = new RegistrationApiFactory();
+        using var client = factory.CreateClient();
+
+        // Act
+        using var response = await client.GetAsync(
+            "/api/v1/wishlists",
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.Unauthorized,
+            response.StatusCode);
+        Assert.Empty(factory.WishlistService.OwnerRetrievals);
+    }
+
+    [Fact]
+    public async Task GetAllAsync_WhenMemberWasDeleted_ReturnsUnauthorizedAndDeletesRefreshCookie()
+    {
+        // Arrange
+        await using var factory = new RegistrationApiFactory();
+        factory.WishlistService.MemberExists = false;
+        using var client = CreateAuthorizedClient(
+            factory,
+            Guid.CreateVersion7());
+
+        // Act
+        using var response = await client.GetAsync(
+            "/api/v1/wishlists",
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.Unauthorized,
+            response.StatusCode);
+        var error = await response.Content.ReadFromJsonAsync<ErrorResponse>(
+            TestContext.Current.CancellationToken);
+        Assert.NotNull(error);
+        Assert.Equal(
+            ErrorCodes.AccountAuthenticationSessionInvalid,
+            error.ErrorCode);
+        Assert.Contains(
+            response.Headers.GetValues("Set-Cookie"),
+            value => value.StartsWith(
+                "MonKado.Refresh=;",
+                StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task GetAllAsync_WhenPostgreSqlIsUnavailable_ReturnsServiceUnavailable()
+    {
+        // Arrange
+        await using var factory = new RegistrationApiFactory();
+        factory.WishlistService.Exception = new DependencyUnavailableException(
+            "PostgreSQL",
+            new TimeoutException());
+        using var client = CreateAuthorizedClient(
+            factory,
+            Guid.CreateVersion7());
+
+        // Act
+        using var response = await client.GetAsync(
+            "/api/v1/wishlists",
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.ServiceUnavailable,
+            response.StatusCode);
+        var error = await response.Content.ReadFromJsonAsync<ErrorResponse>(
+            TestContext.Current.CancellationToken);
+        Assert.NotNull(error);
+        Assert.Equal(
+            ErrorCodes.TechnicalDependencyUnavailable,
+            error.ErrorCode);
+    }
+
     [Fact]
     public async Task CreateAsync_WhenBearerTokenIsMissing_ReturnsUnauthorized()
     {
@@ -539,5 +752,23 @@ public class WishlistTests
                 message = "  Merci d’être là  "
             })
         };
+    }
+
+    private static WishlistDetails CreateWishlistDetails(
+        string name,
+        WishlistOccasion occasion,
+        DateOnly? eventDate,
+        string? message,
+        DateTime createdAt)
+    {
+        return new WishlistDetails(
+            Guid.CreateVersion7(),
+            name,
+            occasion,
+            eventDate,
+            message,
+            createdAt,
+            null,
+            42);
     }
 }
