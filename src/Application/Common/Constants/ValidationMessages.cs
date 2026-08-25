@@ -46,6 +46,18 @@ public static class ValidationMessages
     public const string NewPasswordMustDiffer = "The new password must differ from the current password.";
 
     /// <summary>
+    /// Identifies an invalid wishlist name.
+    /// </summary>
+    public const string InvalidWishlistName = "The wishlist name must be a single line of at most 100 characters.";
+    /// <summary>
+    /// Identifies an invalid wishlist occasion.
+    /// </summary>
+    public const string InvalidWishlistOccasion = "The wishlist occasion is invalid.";
+    /// <summary>
+    /// Identifies an invalid wishlist message.
+    /// </summary>
+    public const string InvalidWishlistMessage = "The wishlist message must not exceed 500 characters or contain unsupported control characters.";
+    /// <summary>
     /// Identifies a wishlist event date earlier than the current date.
     /// </summary>
     public const string WishlistEventDateMustBeTodayOrLater = "The event date must be today or later.";

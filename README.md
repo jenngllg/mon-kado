@@ -104,6 +104,11 @@ The local launch profile listens on `http://localhost:7000` and uses the `Local`
 | `PUT /api/v1/members/current/email` | Requests an e-mail change after password verification |
 | `PUT /api/v1/members/current/password` | Changes the current member password and ends every refresh session |
 | `POST /api/v1/auth/email-change-confirmations` | Confirms a pending e-mail change from the new address |
+| `GET /api/v1/wishlists` | Returns the current member's private wishlists |
+| `POST /api/v1/wishlists` | Creates a private wishlist and returns its strong `ETag` |
+| `GET /api/v1/wishlists/{wishlistId}` | Returns one owned private wishlist and its strong `ETag` |
+| `PUT /api/v1/wishlists/{wishlistId}` | Replaces an owned private wishlist when `If-Match` is current |
+| `DELETE /api/v1/wishlists/{wishlistId}` | Deletes an owned private wishlist when `If-Match` is current |
 
 Liveness never contacts PostgreSQL. Readiness allows at most two seconds for PostgreSQL to accept a connection and returns `503 Unhealthy` otherwise; it checks connectivity, not whether all migrations have been applied.
 
