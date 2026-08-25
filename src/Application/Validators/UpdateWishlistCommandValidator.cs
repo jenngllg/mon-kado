@@ -26,15 +26,15 @@ public class UpdateWishlistCommandValidator : AbstractValidator<UpdateWishlistCo
             .NotEmpty()
             .WithMessage(ValidationMessages.MandatoryProperty)
             .Must(WishlistTextValidation.IsValidName)
-            .WithMessage($"The wishlist name must be a single line of at most {WishlistTextValidation.MaximumNameLength} characters.");
+            .WithMessage(ValidationMessages.InvalidWishlistName);
         RuleFor(command => command.Occasion)
             .Cascade(CascadeMode.Stop)
             .NotNull()
             .WithMessage(ValidationMessages.MandatoryProperty)
             .IsInEnum()
-            .WithMessage("The wishlist occasion is invalid.");
+            .WithMessage(ValidationMessages.InvalidWishlistOccasion);
         RuleFor(command => command.Message)
             .Must(WishlistTextValidation.IsValidMessage)
-            .WithMessage($"The wishlist message must not exceed {WishlistTextValidation.MaximumMessageLength} characters or contain unsupported control characters.");
+            .WithMessage(ValidationMessages.InvalidWishlistMessage);
     }
 }

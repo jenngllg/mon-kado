@@ -5,12 +5,15 @@ using JennGllg.Fr.MonKado.Back.Domain.Entities;
 using JennGllg.Fr.MonKado.Back.Domain.Enums;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Contexts;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Entities;
+using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Options;
+using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Services;
 
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Options;
 
 using System.Net;
 using System.Net.Http.Headers;
@@ -284,6 +287,49 @@ public class WishlistIntegrationTests(PostgreSqlContainerFixture fixture)
     }
 
     [Fact]
+    public async Task CreateAsync_WhenCommitAcknowledgementIsLost_ReturnsCreatedWishlistOnce()
+    {
+        // Arrange
+        var interceptor = new AmbiguousCommitInterceptor();
+        await using var factory = await CreateMigratedFactoryAsync(
+            new FixedTimeProvider(_referenceTime),
+            configureServices: services =>
+            {
+                services.AddSingleton(interceptor);
+                services.AddDbContextPool<MonKadoDbContext>((
+                    _,
+                    options) => options.AddInterceptors(interceptor));
+            });
+        var owner = await CreateMemberAsync(
+            factory,
+            "owner@example.fr");
+        using var client = CreateAuthorizedClient(
+            factory,
+            owner.Id);
+        interceptor.Arm();
+
+        // Act
+        using var response = await CreateWishlistAsync(
+            client,
+            "Liste ambiguë");
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.Created,
+            response.StatusCode);
+        Assert.NotNull(response.Headers.ETag);
+        Assert.Equal(
+            1,
+            await CountWishlistsAsync(factory));
+        var wishlist = await GetWishlistAsync(
+            factory,
+            GetWishlistId(response));
+        Assert.Equal(
+            "Liste ambiguë",
+            wishlist.Name);
+    }
+
+    [Fact]
     public async Task CreateAsync_WhenNormalizedNameAlreadyExistsForOwner_ReturnsConflict()
     {
         // Arrange
@@ -508,6 +554,63 @@ public class WishlistIntegrationTests(PostgreSqlContainerFixture fixture)
         Assert.Equal(
             ErrorCodes.WishlistVersionConflict,
             staleError.ErrorCode);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_WhenCommitAcknowledgementIsLost_ReturnsPersistedUpdate()
+    {
+        // Arrange
+        var interceptor = new AmbiguousCommitInterceptor();
+        await using var factory = await CreateMigratedFactoryAsync(
+            new FixedTimeProvider(_referenceTime),
+            configureServices: services =>
+            {
+                services.AddSingleton(interceptor);
+                services.AddDbContextPool<MonKadoDbContext>((
+                    _,
+                    options) => options.AddInterceptors(interceptor));
+            });
+        var owner = await CreateMemberAsync(
+            factory,
+            "owner@example.fr");
+        using var client = CreateAuthorizedClient(
+            factory,
+            owner.Id);
+        using var creationResponse = await CreateWishlistAsync(
+            client,
+            "Liste initiale");
+        var wishlistId = GetWishlistId(creationResponse);
+        var entityTag = creationResponse.Headers.ETag?.Tag
+            ?? throw new InvalidOperationException("The wishlist ETag is missing.");
+        interceptor.Arm();
+
+        // Act
+        using var response = await UpdateWishlistAsync(
+            client,
+            wishlistId,
+            entityTag,
+            "Liste mise à jour",
+            "wedding",
+            null,
+            "Merci");
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.OK,
+            response.StatusCode);
+        Assert.NotNull(response.Headers.ETag);
+        var wishlist = await GetWishlistAsync(
+            factory,
+            wishlistId);
+        Assert.Equal(
+            "Liste mise à jour",
+            wishlist.Name);
+        Assert.Equal(
+            WishlistOccasion.Wedding,
+            wishlist.Occasion);
+        Assert.Equal(
+            "Merci",
+            wishlist.Message);
     }
 
     [Fact]
@@ -842,6 +945,49 @@ public class WishlistIntegrationTests(PostgreSqlContainerFixture fixture)
             recreationResponse.StatusCode);
         Assert.Equal(
             1,
+            await CountWishlistsAsync(factory));
+    }
+
+    [Fact]
+    public async Task DeleteAsync_WhenCommitAcknowledgementIsLost_ReturnsNoContentAfterDeletion()
+    {
+        // Arrange
+        var interceptor = new AmbiguousCommitInterceptor();
+        await using var factory = await CreateMigratedFactoryAsync(
+            new FixedTimeProvider(_referenceTime),
+            configureServices: services =>
+            {
+                services.AddSingleton(interceptor);
+                services.AddDbContextPool<MonKadoDbContext>((
+                    _,
+                    options) => options.AddInterceptors(interceptor));
+            });
+        var owner = await CreateMemberAsync(
+            factory,
+            "owner@example.fr");
+        using var client = CreateAuthorizedClient(
+            factory,
+            owner.Id);
+        using var creationResponse = await CreateWishlistAsync(
+            client,
+            "Liste à supprimer");
+        var wishlistId = GetWishlistId(creationResponse);
+        var entityTag = creationResponse.Headers.ETag?.Tag
+            ?? throw new InvalidOperationException("The wishlist ETag is missing.");
+        interceptor.Arm();
+
+        // Act
+        using var response = await DeleteWishlistAsync(
+            client,
+            wishlistId,
+            entityTag);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.NoContent,
+            response.StatusCode);
+        Assert.Equal(
+            0,
             await CountWishlistsAsync(factory));
     }
 
@@ -1183,14 +1329,19 @@ public class WishlistIntegrationTests(PostgreSqlContainerFixture fixture)
 
     private async Task<PostgreSqlApiFactory> CreateMigratedFactoryAsync(
         TimeProvider timeProvider,
-        FirstSaveChangesCoordinator? coordinator = null)
+        FirstSaveChangesCoordinator? coordinator = null,
+        Action<IServiceCollection>? configureServices = null)
     {
         var factory = new PostgreSqlApiFactory(
             fixture.Container.GetConnectionString(),
             timeProvider,
-            configureServices: services => ConfigureCoordinatedUnitOfWork(
-                services,
-                coordinator));
+            configureServices: services =>
+            {
+                ConfigureCoordinatedUnitOfWork(
+                    services,
+                    coordinator);
+                configureServices?.Invoke(services);
+            });
         await using var scope = factory.Services.CreateAsyncScope();
         var context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
         await context.Database.MigrateAsync(TestContext.Current.CancellationToken);
@@ -1251,7 +1402,10 @@ public class WishlistIntegrationTests(PostgreSqlContainerFixture fixture)
         Guid memberId)
     {
         var client = factory.CreateClient();
-        var accessTokenService = factory.Services.GetRequiredService<IAccessTokenService>();
+        var jwtOptions = factory.Services.GetRequiredService<IOptions<JwtOptions>>();
+        var accessTokenService = new JwtAccessTokenService(
+            jwtOptions,
+            TimeProvider.System);
         var accessToken = accessTokenService.Create(memberId);
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
             JwtBearerDefaults.AuthenticationScheme,
