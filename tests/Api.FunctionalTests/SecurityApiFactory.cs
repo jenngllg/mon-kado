@@ -35,6 +35,9 @@ public class SecurityApiFactory(
             "WebSecurity:AllowedOrigins:0",
             allowedOrigin);
         builder.UseSetting(
+            "WishlistSharing:FrontendOrigin",
+            allowedOrigin);
+        builder.UseSetting(
             "DataProtection:KeysPath",
             dataProtectionKeysPath);
         builder.UseSetting(

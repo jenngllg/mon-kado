@@ -33,6 +33,9 @@ public sealed class PostgreSqlApiFactory(
             "WebSecurity:AllowedOrigins:0",
             "http://localhost:5173");
         builder.UseSetting(
+            "WishlistSharing:FrontendOrigin",
+            "http://localhost:5173");
+        builder.UseSetting(
             "Jwt:SigningKey",
             "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA=");
         builder.ConfigureTestServices(services =>

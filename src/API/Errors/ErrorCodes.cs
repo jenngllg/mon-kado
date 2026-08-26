@@ -156,6 +156,18 @@ public static class ErrorCodes
     /// </summary>
     public const string WishLimitReached = "WISH_LIMIT_REACHED";
 
+    /// <summary>Identifies an active wishlist share link that was not found.</summary>
+    public const string WishlistShareLinkNotFound = "WISHLIST_SHARE_LINK_NOT_FOUND";
+
+    /// <summary>Identifies a wishlist that already has an active share link.</summary>
+    public const string WishlistShareLinkAlreadyExists = "WISHLIST_SHARE_LINK_ALREADY_EXISTS";
+
+    /// <summary>Identifies an optimistic share-link version conflict.</summary>
+    public const string WishlistShareLinkVersionConflict = "WISHLIST_SHARE_LINK_VERSION_CONFLICT";
+
+    /// <summary>Identifies public wishlist content unavailable through a share link.</summary>
+    public const string SharedWishlistNotFound = "SHARED_WISHLIST_NOT_FOUND";
+
     #endregion
 
     #region Technical

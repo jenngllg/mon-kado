@@ -10,6 +10,162 @@ namespace JennGllg.Fr.MonKado.Back.Application.Logging;
 public static partial class ApplicationLogMessages
 {
     /// <summary>
+    /// Logs the start of share-link creation.
+    /// </summary>
+    /// <param name="logger">The logger.</param>
+    /// <param name="memberId">The member identifier.</param>
+    /// <param name="wishlistId">The wishlist identifier.</param>
+    /// <param name="shareLinkId">The share-link identifier.</param>
+    [LoggerMessage(
+        EventId = LogEventIds.WishlistShareLinkCreationStarted,
+        Level = LogLevel.Debug,
+        Message = "Creating share link {ShareLinkId} for wishlist {WishlistId} and member {MemberId}.")]
+    public static partial void WishlistShareLinkCreationStarted(
+        ILogger logger,
+        Guid memberId,
+        Guid wishlistId,
+        Guid shareLinkId);
+
+    /// <summary>
+    /// Logs a created share link.
+    /// </summary>
+    /// <param name="logger">The logger.</param>
+    /// <param name="memberId">The member identifier.</param>
+    /// <param name="wishlistId">The wishlist identifier.</param>
+    /// <param name="shareLinkId">The share-link identifier.</param>
+    [LoggerMessage(
+        EventId = LogEventIds.WishlistShareLinkCreated,
+        Level = LogLevel.Information,
+        Message = "Share link {ShareLinkId} created for wishlist {WishlistId} and member {MemberId}.")]
+    public static partial void WishlistShareLinkCreated(
+        ILogger logger,
+        Guid memberId,
+        Guid wishlistId,
+        Guid shareLinkId);
+
+    /// <summary>
+    /// Logs the start of owner share-link retrieval.
+    /// </summary>
+    /// <param name="logger">The logger.</param>
+    /// <param name="memberId">The member identifier.</param>
+    /// <param name="wishlistId">The wishlist identifier.</param>
+    [LoggerMessage(
+        EventId = LogEventIds.WishlistShareLinkRetrievalStarted,
+        Level = LogLevel.Debug,
+        Message = "Retrieving share link for wishlist {WishlistId} and member {MemberId}.")]
+    public static partial void WishlistShareLinkRetrievalStarted(
+        ILogger logger,
+        Guid memberId,
+        Guid wishlistId);
+
+    /// <summary>
+    /// Logs an owner-retrieved share link.
+    /// </summary>
+    /// <param name="logger">The logger.</param>
+    /// <param name="memberId">The member identifier.</param>
+    /// <param name="wishlistId">The wishlist identifier.</param>
+    /// <param name="shareLinkId">The share-link identifier.</param>
+    [LoggerMessage(
+        EventId = LogEventIds.WishlistShareLinkRetrieved,
+        Level = LogLevel.Information,
+        Message = "Share link {ShareLinkId} retrieved for wishlist {WishlistId} and member {MemberId}.")]
+    public static partial void WishlistShareLinkRetrieved(
+        ILogger logger,
+        Guid memberId,
+        Guid wishlistId,
+        Guid shareLinkId);
+
+    /// <summary>
+    /// Logs the start of share-link rotation.
+    /// </summary>
+    /// <param name="logger">The logger.</param>
+    /// <param name="memberId">The member identifier.</param>
+    /// <param name="wishlistId">The wishlist identifier.</param>
+    [LoggerMessage(
+        EventId = LogEventIds.WishlistShareLinkRotationStarted,
+        Level = LogLevel.Debug,
+        Message = "Rotating share link for wishlist {WishlistId} and member {MemberId}.")]
+    public static partial void WishlistShareLinkRotationStarted(
+        ILogger logger,
+        Guid memberId,
+        Guid wishlistId);
+
+    /// <summary>
+    /// Logs a rotated share link.
+    /// </summary>
+    /// <param name="logger">The logger.</param>
+    /// <param name="memberId">The member identifier.</param>
+    /// <param name="wishlistId">The wishlist identifier.</param>
+    /// <param name="shareLinkId">The share-link identifier.</param>
+    [LoggerMessage(
+        EventId = LogEventIds.WishlistShareLinkRotated,
+        Level = LogLevel.Information,
+        Message = "Share link {ShareLinkId} rotated for wishlist {WishlistId} and member {MemberId}.")]
+    public static partial void WishlistShareLinkRotated(
+        ILogger logger,
+        Guid memberId,
+        Guid wishlistId,
+        Guid shareLinkId);
+
+    /// <summary>
+    /// Logs the start of share-link revocation.
+    /// </summary>
+    /// <param name="logger">The logger.</param>
+    /// <param name="memberId">The member identifier.</param>
+    /// <param name="wishlistId">The wishlist identifier.</param>
+    [LoggerMessage(
+        EventId = LogEventIds.WishlistShareLinkDeletionStarted,
+        Level = LogLevel.Debug,
+        Message = "Revoking share link for wishlist {WishlistId} and member {MemberId}.")]
+    public static partial void WishlistShareLinkDeletionStarted(
+        ILogger logger,
+        Guid memberId,
+        Guid wishlistId);
+
+    /// <summary>
+    /// Logs a revoked share link.
+    /// </summary>
+    /// <param name="logger">The logger.</param>
+    /// <param name="memberId">The member identifier.</param>
+    /// <param name="wishlistId">The wishlist identifier.</param>
+    [LoggerMessage(
+        EventId = LogEventIds.WishlistShareLinkDeleted,
+        Level = LogLevel.Information,
+        Message = "Share link revoked for wishlist {WishlistId} and member {MemberId}.")]
+    public static partial void WishlistShareLinkDeleted(
+        ILogger logger,
+        Guid memberId,
+        Guid wishlistId);
+
+    /// <summary>
+    /// Logs the start of public wishlist retrieval.
+    /// </summary>
+    /// <param name="logger">The logger.</param>
+    /// <param name="shareLinkId">The share-link identifier.</param>
+    [LoggerMessage(
+        EventId = LogEventIds.SharedWishlistRetrievalStarted,
+        Level = LogLevel.Debug,
+        Message = "Retrieving public wishlist through share link {ShareLinkId}.")]
+    public static partial void SharedWishlistRetrievalStarted(
+        ILogger logger,
+        Guid shareLinkId);
+
+    /// <summary>
+    /// Logs a publicly retrieved wishlist.
+    /// </summary>
+    /// <param name="logger">The logger.</param>
+    /// <param name="shareLinkId">The share-link identifier.</param>
+    /// <param name="wishlistId">The wishlist identifier.</param>
+    [LoggerMessage(
+        EventId = LogEventIds.SharedWishlistRetrieved,
+        Level = LogLevel.Information,
+        Message = "Wishlist {WishlistId} retrieved through share link {ShareLinkId}.")]
+    public static partial void SharedWishlistRetrieved(
+        ILogger logger,
+        Guid shareLinkId,
+        Guid wishlistId);
+
+    /// <summary>
     /// Logs the start of a current session retrieval.
     /// </summary>
     /// <param name="logger">The logger.</param>

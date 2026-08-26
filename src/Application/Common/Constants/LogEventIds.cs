@@ -332,6 +332,27 @@ public static class LogEventIds
     /// </summary>
     public const int WishReordered = 2021;
 
+    /// <summary>Identifies the start of share-link creation.</summary>
+    public const int WishlistShareLinkCreationStarted = 2022;
+    /// <summary>Identifies a created share link.</summary>
+    public const int WishlistShareLinkCreated = 2023;
+    /// <summary>Identifies the start of owner share-link retrieval.</summary>
+    public const int WishlistShareLinkRetrievalStarted = 2024;
+    /// <summary>Identifies an owner-retrieved share link.</summary>
+    public const int WishlistShareLinkRetrieved = 2025;
+    /// <summary>Identifies the start of share-link rotation.</summary>
+    public const int WishlistShareLinkRotationStarted = 2026;
+    /// <summary>Identifies a rotated share link.</summary>
+    public const int WishlistShareLinkRotated = 2027;
+    /// <summary>Identifies the start of share-link revocation.</summary>
+    public const int WishlistShareLinkDeletionStarted = 2028;
+    /// <summary>Identifies a revoked share link.</summary>
+    public const int WishlistShareLinkDeleted = 2029;
+    /// <summary>Identifies the start of public wishlist retrieval.</summary>
+    public const int SharedWishlistRetrievalStarted = 2030;
+    /// <summary>Identifies a publicly retrieved wishlist.</summary>
+    public const int SharedWishlistRetrieved = 2031;
+
     #endregion
 
     #region Technical

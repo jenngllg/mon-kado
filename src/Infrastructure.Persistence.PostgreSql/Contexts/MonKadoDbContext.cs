@@ -55,6 +55,11 @@ public class MonKadoDbContext(DbContextOptions<MonKadoDbContext> options)
     /// </summary>
     public DbSet<WishPositionSequence> WishPositionSequences => Set<WishPositionSequence>();
 
+    /// <summary>
+    /// Gets active wishlist share links.
+    /// </summary>
+    public DbSet<WishlistShareLink> WishlistShareLinks => Set<WishlistShareLink>();
+
     /// <inheritdoc />
     protected override void OnModelCreating(ModelBuilder builder)
     {
