@@ -12,11 +12,13 @@ namespace JennGllg.Fr.MonKado.Back.Api.Handlers;
 /// <param name="logger">The logger.</param>
 /// <param name="refreshTokenCookieService">The refresh token cookie service.</param>
 /// <param name="googleExternalAuthenticationService">The protected Google external cookie service.</param>
+/// <param name="guestSessionCookieService">The guest-session cookie service.</param>
 
 public class GlobalExceptionHandler(
     ILogger<GlobalExceptionHandler> logger,
     IRefreshTokenCookieService refreshTokenCookieService,
-    IGoogleExternalAuthenticationService googleExternalAuthenticationService) : IExceptionHandler
+    IGoogleExternalAuthenticationService googleExternalAuthenticationService,
+    IGuestSessionCookieService guestSessionCookieService) : IExceptionHandler
 {
     /// <summary>
     /// Executes the try handle async operation.
@@ -191,6 +193,30 @@ public class GlobalExceptionHandler(
                 "The shared wishlist was not found.",
                 ErrorCodes.SharedWishlistNotFound,
                 null),
+            GuestSessionInvalidException => new ErrorResponse(
+                StatusCodes.Status401Unauthorized,
+                "Guest session invalid",
+                "The guest session is invalid or expired.",
+                ErrorCodes.GuestSessionInvalid,
+                null),
+            WishlistParticipantNotFoundException => new ErrorResponse(
+                StatusCodes.Status404NotFound,
+                "Wishlist participant not found",
+                "The current identity has not joined the shared wishlist.",
+                ErrorCodes.WishlistParticipantNotFound,
+                null),
+            WishlistOwnerCannotJoinException => new ErrorResponse(
+                StatusCodes.Status409Conflict,
+                "Wishlist owner cannot join",
+                "The wishlist owner cannot join their own wishlist as a participant.",
+                ErrorCodes.WishlistOwnerCannotJoin,
+                null),
+            WishlistParticipantLimitReachedException => new ErrorResponse(
+                StatusCodes.Status409Conflict,
+                "Wishlist participant limit reached",
+                "The wishlist already contains the maximum number of active participants.",
+                ErrorCodes.WishlistParticipantLimitReached,
+                null),
             PreconditionRequiredException => new ErrorResponse(
                 StatusCodes.Status428PreconditionRequired,
                 "Precondition required",
@@ -217,6 +243,9 @@ public class GlobalExceptionHandler(
 
         if (exception is InvalidAuthenticationSessionException)
             refreshTokenCookieService.Delete(httpContext);
+
+        if (exception is GuestSessionInvalidException)
+            guestSessionCookieService.Delete(httpContext);
 
         if (exception is GoogleAuthenticationFailedException or GoogleAccountLinkConflictException)
             await googleExternalAuthenticationService.DeleteAsync(

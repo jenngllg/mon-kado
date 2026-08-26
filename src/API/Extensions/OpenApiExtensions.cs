@@ -67,6 +67,25 @@ public static class OpenApiExtensions
                         operation,
                         refreshTokenCookie.IsRequired);
 
+                var guestSessionCookie = metadata
+                    .OfType<GuestSessionCookieAttribute>()
+                    .SingleOrDefault();
+
+                if (guestSessionCookie is not null)
+                {
+                    AddGuestSessionCookieParameter(
+                        operation,
+                        guestSessionCookie.IsRequired);
+
+                    if (guestSessionCookie.IsReturned)
+                        AddGuestSessionCookieResponseHeader(operation);
+                }
+
+                if (metadata.OfType<OptionalBearerAttribute>().Any())
+                    AddOptionalBearerSecurityRequirement(
+                        operation,
+                        context.Document);
+
                 var googleExternalCookie = metadata
                     .OfType<GoogleExternalCookieAttribute>()
                     .SingleOrDefault();
@@ -315,6 +334,61 @@ public static class OpenApiExtensions
                     "local development uses MonKado.Refresh.",
                 Schema = new OpenApiSchema { Type = JsonSchemaType.String }
             });
+    }
+
+    private static void AddGuestSessionCookieParameter(
+        OpenApiOperation operation,
+        bool isRequired)
+    {
+        operation.Parameters = AddItem(
+            operation.Parameters,
+            new OpenApiParameter
+            {
+                Name = GuestSessionCookieService.ProductionCookieName,
+                In = ParameterLocation.Cookie,
+                Required = isRequired,
+                Description =
+                    "Persistent opaque guest-session cookie. Production uses __Host-MonKado.Guest; " +
+                    "local development uses MonKado.Guest.",
+                Schema = new OpenApiSchema { Type = JsonSchemaType.String }
+            });
+    }
+
+    private static void AddGuestSessionCookieResponseHeader(OpenApiOperation operation)
+    {
+        ArgumentNullException.ThrowIfNull(operation.Responses);
+        var response = operation.Responses[
+            StatusCodes.Status201Created.ToString(System.Globalization.CultureInfo.InvariantCulture)];
+        var mutableResponse = (OpenApiResponse)response;
+        mutableResponse.Headers = AddOrReplace(
+            mutableResponse.Headers,
+            HeaderNames.SetCookie,
+            new OpenApiHeader
+            {
+                Description =
+                    "Issues an HttpOnly, SameSite=Strict, host-only guest-session cookie for the configured lifetime, " +
+                    "which cannot exceed 180 days. " +
+                    "Production cookies are Secure and use the __Host- prefix.",
+                Schema = new OpenApiSchema { Type = JsonSchemaType.String }
+            });
+    }
+
+    private static void AddOptionalBearerSecurityRequirement(
+        OpenApiOperation operation,
+        OpenApiDocument? document)
+    {
+        var scheme = new OpenApiSecuritySchemeReference(
+            BearerSecuritySchemeName,
+            document,
+            null);
+        operation.Security =
+        [
+            new OpenApiSecurityRequirement(),
+            new OpenApiSecurityRequirement
+            {
+                [scheme] = []
+            }
+        ];
     }
 
     private static void AddGoogleExternalCookieParameter(

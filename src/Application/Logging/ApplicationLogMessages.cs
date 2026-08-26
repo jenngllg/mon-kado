@@ -9,6 +9,54 @@ namespace JennGllg.Fr.MonKado.Back.Application.Logging;
 /// </summary>
 public static partial class ApplicationLogMessages
 {
+    /// <summary>Logs the start of a shared-wishlist participant join.</summary>
+    /// <param name="logger">The logger.</param>
+    /// <param name="shareLinkId">The share-link identifier.</param>
+    [LoggerMessage(
+        EventId = LogEventIds.WishlistParticipantJoinStarted,
+        Level = LogLevel.Debug,
+        Message = "Joining shared wishlist through link {ShareLinkId}.")]
+    public static partial void WishlistParticipantJoinStarted(
+        ILogger logger,
+        Guid shareLinkId);
+
+    /// <summary>Logs a joined shared-wishlist participant.</summary>
+    /// <param name="logger">The logger.</param>
+    /// <param name="wishlistId">The wishlist identifier.</param>
+    /// <param name="participantId">The participant identifier.</param>
+    [LoggerMessage(
+        EventId = LogEventIds.WishlistParticipantJoined,
+        Level = LogLevel.Information,
+        Message = "Participant {ParticipantId} joined wishlist {WishlistId}.")]
+    public static partial void WishlistParticipantJoined(
+        ILogger logger,
+        Guid wishlistId,
+        Guid participantId);
+
+    /// <summary>Logs the start of current-participant retrieval.</summary>
+    /// <param name="logger">The logger.</param>
+    /// <param name="shareLinkId">The share-link identifier.</param>
+    [LoggerMessage(
+        EventId = LogEventIds.WishlistParticipantRetrievalStarted,
+        Level = LogLevel.Debug,
+        Message = "Retrieving the current participant through link {ShareLinkId}.")]
+    public static partial void WishlistParticipantRetrievalStarted(
+        ILogger logger,
+        Guid shareLinkId);
+
+    /// <summary>Logs a retrieved current participant.</summary>
+    /// <param name="logger">The logger.</param>
+    /// <param name="wishlistId">The wishlist identifier.</param>
+    /// <param name="participantId">The participant identifier.</param>
+    [LoggerMessage(
+        EventId = LogEventIds.WishlistParticipantRetrieved,
+        Level = LogLevel.Information,
+        Message = "Participant {ParticipantId} retrieved from wishlist {WishlistId}.")]
+    public static partial void WishlistParticipantRetrieved(
+        ILogger logger,
+        Guid wishlistId,
+        Guid participantId);
+
     /// <summary>
     /// Logs the start of share-link creation.
     /// </summary>

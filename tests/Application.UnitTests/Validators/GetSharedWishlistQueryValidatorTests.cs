@@ -8,9 +8,14 @@ public class GetSharedWishlistQueryValidatorTests
     private readonly GetSharedWishlistQueryValidator _validator = new();
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task ValidateAsync_WhenValuesVary_ReturnsExpectedResult(bool valuesAreMissing)
+    [InlineData(false, false, true, 0)]
+    [InlineData(true, false, false, 2)]
+    [InlineData(false, true, false, 1)]
+    public async Task ValidateAsync_WhenValuesVary_ReturnsExpectedResult(
+        bool valuesAreMissing,
+        bool memberIdIsEmpty,
+        bool expectedIsValid,
+        int expectedErrorCount)
     {
         // Arrange
         var query = new GetSharedWishlistQuery(
@@ -19,7 +24,11 @@ public class GetSharedWishlistQueryValidatorTests
                 : Guid.CreateVersion7(),
             valuesAreMissing
                 ? null
-                : "secret");
+                : "secret",
+            memberIdIsEmpty
+                ? Guid.Empty
+                : null,
+            null);
 
         // Act
         var result = await _validator.ValidateAsync(
@@ -28,12 +37,10 @@ public class GetSharedWishlistQueryValidatorTests
 
         // Assert
         Assert.Equal(
-            !valuesAreMissing,
+            expectedIsValid,
             result.IsValid);
         Assert.Equal(
-            valuesAreMissing
-                ? 2
-                : 0,
+            expectedErrorCount,
             result.Errors.Count);
     }
 }

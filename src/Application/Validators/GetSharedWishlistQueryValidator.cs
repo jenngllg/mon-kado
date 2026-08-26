@@ -17,5 +17,7 @@ public class GetSharedWishlistQueryValidator : AbstractValidator<GetSharedWishli
         RuleFor(query => query.Secret)
             .NotEmpty()
             .WithMessage(ValidationMessages.MandatoryProperty);
+        RuleFor(query => query.MemberId)
+            .Must(memberId => memberId != Guid.Empty);
     }
 }

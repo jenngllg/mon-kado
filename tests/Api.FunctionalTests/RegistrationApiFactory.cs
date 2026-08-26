@@ -10,11 +10,14 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 
+using System.Net;
+
 namespace JennGllg.Fr.MonKado.Back.Api.FunctionalTests;
 
 public class RegistrationApiFactory(
     string environment = "Local",
-    string? dataProtectionKeysPath = null) : WebApplicationFactory<Program>
+    string? dataProtectionKeysPath = null,
+    IPAddress? remoteIpAddress = null) : WebApplicationFactory<Program>
 {
     private const string UnavailableConnectionString =
         "Host=127.0.0.1;Port=1;Database=mon_kado;Username=mon_kado;Password=functional-tests-only;" +
@@ -39,6 +42,8 @@ public class RegistrationApiFactory(
     public RecordingWishService WishService { get; } = new();
 
     public RecordingWishlistShareService WishlistShareService { get; } = new();
+
+    public RecordingWishlistParticipantService WishlistParticipantService { get; } = new();
 
     public RecordingAccountSessionService SessionService { get; } = new();
 
@@ -87,6 +92,9 @@ public class RegistrationApiFactory(
                     .AddDataProtection()
                     .UseEphemeralDataProtectionProvider();
 
+            if (remoteIpAddress is not null)
+                services.AddSingleton<IStartupFilter>(new RemoteIpStartupFilter(remoteIpAddress));
+
             services.RemoveAll<IAccountRegistrationService>();
             services.AddSingleton<IAccountRegistrationService>(RegistrationService);
             services.RemoveAll<IEmailConfirmationService>();
@@ -108,6 +116,8 @@ public class RegistrationApiFactory(
             services.AddSingleton<IWishService>(WishService);
             services.RemoveAll<IWishlistShareService>();
             services.AddSingleton<IWishlistShareService>(WishlistShareService);
+            services.RemoveAll<IWishlistParticipantService>();
+            services.AddSingleton<IWishlistParticipantService>(WishlistParticipantService);
             services.AddSingleton<IEmailConfirmationService>(EmailConfirmationService);
         });
     }

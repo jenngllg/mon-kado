@@ -165,6 +165,30 @@ public static partial class WorkerLogMessages
         string exceptionType,
         Exception exception);
 
+    /// <summary>Logs deleted expired guest sessions.</summary>
+    /// <param name="logger">The logger.</param>
+    /// <param name="deletedSessionCount">The deleted guest-session count.</param>
+    [LoggerMessage(
+        EventId = LogEventIds.ExpiredGuestSessionsDeleted,
+        Level = LogLevel.Information,
+        Message = "Deleted {DeletedSessionCount} expired guest sessions.")]
+    public static partial void ExpiredGuestSessionsDeleted(
+        ILogger logger,
+        int deletedSessionCount);
+
+    /// <summary>Logs an expired guest-session cleanup failure.</summary>
+    /// <param name="logger">The logger.</param>
+    /// <param name="exceptionType">The exception type.</param>
+    /// <param name="exception">The cleanup exception.</param>
+    [LoggerMessage(
+        EventId = LogEventIds.ExpiredGuestSessionCleanupFailed,
+        Level = LogLevel.Error,
+        Message = "Guest session cleanup failed and will be retried. Exception type: {ExceptionType}")]
+    public static partial void ExpiredGuestSessionCleanupFailed(
+        ILogger logger,
+        string exceptionType,
+        Exception exception);
+
     /// <summary>
     /// Logs deleted member email change requests.
     /// </summary>

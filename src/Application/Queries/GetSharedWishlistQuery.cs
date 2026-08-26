@@ -14,16 +14,47 @@ namespace JennGllg.Fr.MonKado.Back.Application.Queries;
 /// <summary>
 /// Represents public wishlist retrieval through a bearer share link.
 /// </summary>
-/// <param name="shareLinkId">The share-link identifier.</param>
-/// <param name="secret">The nullable bearer secret received from the client.</param>
-public class GetSharedWishlistQuery(
-    Guid shareLinkId,
-    string? secret) : IRequest<SharedWishlistDetails>, IGenericValidationFailure
+public class GetSharedWishlistQuery : IRequest<SharedWishlistResult>, IGenericValidationFailure
 {
+    /// <summary>Initializes a public shared-wishlist query.</summary>
+    /// <param name="shareLinkId">The share-link identifier.</param>
+    /// <param name="secret">The nullable bearer secret received from the client.</param>
+    /// <param name="memberId">The optional authenticated member identifier.</param>
+    /// <param name="guestToken">The optional browser guest token.</param>
+    public GetSharedWishlistQuery(
+        Guid shareLinkId,
+        string? secret,
+        Guid? memberId,
+        string? guestToken)
+    {
+        ShareLinkId = shareLinkId;
+        Secret = secret;
+        MemberId = memberId;
+        GuestToken = guestToken;
+    }
+
     /// <summary>Gets the share-link identifier.</summary>
-    public Guid ShareLinkId { get; } = shareLinkId;
+    public Guid ShareLinkId
+    {
+        get;
+    }
     /// <summary>Gets the nullable bearer secret received from the client.</summary>
-    public string? Secret { get; } = secret;
+    public string? Secret
+    {
+        get;
+    }
+
+    /// <summary>Gets the optional authenticated member identifier.</summary>
+    public Guid? MemberId
+    {
+        get;
+    }
+
+    /// <summary>Gets the optional browser guest token.</summary>
+    public string? GuestToken
+    {
+        get;
+    }
 
     Exception IGenericValidationFailure.CreateValidationException(IEnumerable<ValidationError> validationErrors)
     {
@@ -37,11 +68,13 @@ public class GetSharedWishlistQuery(
 /// Handles public wishlist retrieval through a bearer share link.
 /// </summary>
 /// <param name="shareService">The wishlist share-link service.</param>
+/// <param name="participantService">The wishlist participant service.</param>
 /// <param name="logger">The logger.</param>
 public class GetSharedWishlistQueryHandler(
     IWishlistShareService shareService,
+    IWishlistParticipantService participantService,
     ILogger<GetSharedWishlistQueryHandler> logger)
-    : IRequestHandler<GetSharedWishlistQuery, SharedWishlistDetails>
+    : IRequestHandler<GetSharedWishlistQuery, SharedWishlistResult>
 {
     /// <summary>Gets the publicly shared wishlist.</summary>
     /// <param name="request">The query.</param>
@@ -49,7 +82,7 @@ public class GetSharedWishlistQueryHandler(
     /// <returns>The public wishlist content.</returns>
     /// <exception cref="SharedWishlistNotFoundException">The share link is invalid or unavailable.</exception>
     /// <exception cref="DependencyUnavailableException">PostgreSQL is unavailable.</exception>
-    public async Task<SharedWishlistDetails> Handle(
+    public async Task<SharedWishlistResult> Handle(
         GetSharedWishlistQuery request,
         CancellationToken cancellationToken)
     {
@@ -60,11 +93,24 @@ public class GetSharedWishlistQueryHandler(
             request.ShareLinkId,
             request.Secret ?? string.Empty,
             cancellationToken) ?? throw new SharedWishlistNotFoundException();
+        var participantLookup = await participantService.GetCurrentAsync(
+            wishlist.Id,
+            request.MemberId,
+            request.GuestToken,
+            cancellationToken);
+
+        if (participantLookup.Outcome is WishlistParticipantLookupOutcome.MemberNotFound)
+            throw new InvalidAuthenticationSessionException();
+
         ApplicationLogMessages.SharedWishlistRetrieved(
             logger,
             request.ShareLinkId,
             wishlist.Id);
 
-        return wishlist;
+        return new SharedWishlistResult(
+            wishlist,
+            participantLookup.Outcome is WishlistParticipantLookupOutcome.Found
+                ? participantLookup.Participant
+                : null);
     }
 }

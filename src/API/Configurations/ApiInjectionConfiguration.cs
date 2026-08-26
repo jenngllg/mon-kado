@@ -41,6 +41,7 @@ public static class ApiInjectionConfiguration
             configuration,
             environment);
         services.AddSingleton<IRefreshTokenCookieService, RefreshTokenCookieService>();
+        services.AddSingleton<IGuestSessionCookieService, GuestSessionCookieService>();
         services.AddSingleton<IEntityTagService, EntityTagService>();
         services.AddSingleton<IWishlistShareLinkUrlService, WishlistShareLinkUrlService>();
         services.AddSingleton<IValidateOptions<WishlistSharingOptions>, WishlistSharingOptionsValidator>();

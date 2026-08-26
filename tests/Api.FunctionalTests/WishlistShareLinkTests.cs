@@ -344,7 +344,8 @@ public class WishlistShareLinkTests
                 "occasion",
                 "eventDate",
                 "message",
-                "wishes"
+                "wishes",
+                "currentParticipant"
             ],
             document.RootElement
                 .EnumerateObject()
@@ -366,6 +367,9 @@ public class WishlistShareLinkTests
         Assert.Equal(
             "Jenn",
             document.RootElement.GetProperty("ownerDisplayName").GetString());
+        Assert.Equal(
+            JsonValueKind.Null,
+            document.RootElement.GetProperty("currentParticipant").ValueKind);
     }
 
     [Fact]

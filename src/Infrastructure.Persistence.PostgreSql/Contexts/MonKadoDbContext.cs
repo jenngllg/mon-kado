@@ -60,6 +60,16 @@ public class MonKadoDbContext(DbContextOptions<MonKadoDbContext> options)
     /// </summary>
     public DbSet<WishlistShareLink> WishlistShareLinks => Set<WishlistShareLink>();
 
+    /// <summary>
+    /// Gets anonymous browser guest sessions.
+    /// </summary>
+    public DbSet<GuestSession> GuestSessions => Set<GuestSession>();
+
+    /// <summary>
+    /// Gets wishlist participants.
+    /// </summary>
+    public DbSet<WishlistParticipant> WishlistParticipants => Set<WishlistParticipant>();
+
     /// <inheritdoc />
     protected override void OnModelCreating(ModelBuilder builder)
     {
