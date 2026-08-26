@@ -110,6 +110,9 @@ public class GoogleAuthenticationApiFactory : WebApplicationFactory<Program>
             "GoogleAuthentication:FrontendOrigin",
             "https://app.example.test");
         builder.UseSetting(
+            "WishlistSharing:FrontendOrigin",
+            "https://app.example.test");
+        builder.UseSetting(
             "GoogleAuthentication:DefaultReturnPath",
             "/my-lists");
         builder.UseSetting(

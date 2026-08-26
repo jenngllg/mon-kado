@@ -40,7 +40,7 @@ public class WebSecurityBehaviorTests
             "PUT");
         request.Headers.Add(
             "Access-Control-Request-Headers",
-            "authorization,content-type,if-match,x-correlation-id,x-csrf-token");
+            "authorization,content-type,if-match,x-correlation-id,x-csrf-token,x-monkado-share-token");
 
         // Act
         using var response = await client.SendAsync(
@@ -81,6 +81,10 @@ public class WebSecurityBehaviorTests
             StringComparison.OrdinalIgnoreCase);
         Assert.Contains(
             CorrelationIdMiddleware.HeaderName,
+            allowedHeaders,
+            StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(
+            "x-monkado-share-token",
             allowedHeaders,
             StringComparison.OrdinalIgnoreCase);
         Assert.Equal(

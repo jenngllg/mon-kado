@@ -35,6 +35,7 @@ FROM build AS migrations-build
 
 RUN AllowedHosts=localhost \
     WebSecurity__AllowedOrigins__0=https://localhost \
+    WishlistSharing__FrontendOrigin=https://localhost \
     DataProtection__KeysPath=/tmp/data-protection-keys \
     ReverseProxy__KnownNetworks__0=127.0.0.0/8 \
     ConnectionStrings__PostgreSql="Host=127.0.0.1;Database=mon_kado;Username=mon_kado;Password=build-only" \

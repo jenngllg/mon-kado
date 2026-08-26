@@ -102,6 +102,7 @@ public static class InfrastructureInjectionConfiguration
         services.AddScoped<IMemberEmailChangeRequestRepository, MemberEmailChangeRequestRepository>();
         services.AddScoped<IWishlistRepository, WishlistRepository>();
         services.AddScoped<IWishRepository, WishRepository>();
+        services.AddScoped<IWishlistShareLinkRepository, WishlistShareLinkRepository>();
         services.AddScoped<IWishTransactionFactory, WishTransactionFactory>();
         services.AddScoped<IAccountRegistrationService, AccountRegistrationService>();
         services.AddScoped<IEmailConfirmationService, EmailConfirmationService>();
@@ -120,6 +121,8 @@ public static class InfrastructureInjectionConfiguration
         services.AddScoped<IProcessedAuthenticationEmailCleanup, ProcessedAuthenticationEmailCleanup>();
         services.AddScoped<IWishlistService, WishlistService>();
         services.AddScoped<IWishService, WishService>();
+        services.AddScoped<IWishlistShareService, WishlistShareService>();
+        services.AddSingleton<IWishlistShareTokenService, WishlistShareTokenService>();
         services.AddScoped<
             IExpiredMemberEmailChangeRequestCleanup,
             ExpiredMemberEmailChangeRequestCleanup>();

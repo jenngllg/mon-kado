@@ -38,6 +38,8 @@ public class RegistrationApiFactory(
 
     public RecordingWishService WishService { get; } = new();
 
+    public RecordingWishlistShareService WishlistShareService { get; } = new();
+
     public RecordingAccountSessionService SessionService { get; } = new();
 
     public IReadOnlyCollection<string> LogMessages => _logProvider.Messages;
@@ -56,6 +58,9 @@ public class RegistrationApiFactory(
             "localhost");
         builder.UseSetting(
             "WebSecurity:AllowedOrigins:0",
+            allowedOrigin);
+        builder.UseSetting(
+            "WishlistSharing:FrontendOrigin",
             allowedOrigin);
         builder.UseSetting(
             "Jwt:SigningKey",
@@ -101,6 +106,8 @@ public class RegistrationApiFactory(
             services.AddSingleton<IWishlistService>(WishlistService);
             services.RemoveAll<IWishService>();
             services.AddSingleton<IWishService>(WishService);
+            services.RemoveAll<IWishlistShareService>();
+            services.AddSingleton<IWishlistShareService>(WishlistShareService);
             services.AddSingleton<IEmailConfirmationService>(EmailConfirmationService);
         });
     }

@@ -1,6 +1,7 @@
 using JennGllg.Fr.MonKado.Back.Api.Abstractions;
 using JennGllg.Fr.MonKado.Back.Api.Authorization;
 using JennGllg.Fr.MonKado.Back.Api.Extensions;
+using JennGllg.Fr.MonKado.Back.Api.Options;
 using JennGllg.Fr.MonKado.Back.Api.Services;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Abstractions;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Configurations;
@@ -11,6 +12,7 @@ using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Options;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Services;
 
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.Extensions.Options;
 
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -40,6 +42,11 @@ public static class ApiInjectionConfiguration
             environment);
         services.AddSingleton<IRefreshTokenCookieService, RefreshTokenCookieService>();
         services.AddSingleton<IEntityTagService, EntityTagService>();
+        services.AddSingleton<IWishlistShareLinkUrlService, WishlistShareLinkUrlService>();
+        services.AddSingleton<IValidateOptions<WishlistSharingOptions>, WishlistSharingOptionsValidator>();
+        services.AddOptions<WishlistSharingOptions>()
+            .Bind(configuration.GetSection(WishlistSharingOptions.SectionName))
+            .ValidateOnStart();
         services.AddHttpContextAccessor();
         services.AddScoped<IAuthorizationHandler, WishlistOwnerAuthorizationHandler>();
         services.ConfigureDataProtection(

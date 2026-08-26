@@ -50,6 +50,7 @@ services:
       DOTNET_BUNDLE_EXTRACT_BASE_DIR: /tmp/dotnet-bundle
       AllowedHosts: ${API_ALLOWED_HOST:?Set API_ALLOWED_HOST in .env}
       WebSecurity__AllowedOrigins__0: ${FRONTEND_ORIGIN:?Set FRONTEND_ORIGIN in .env}
+      WishlistSharing__FrontendOrigin: ${FRONTEND_ORIGIN:?Set FRONTEND_ORIGIN in .env}
       DataProtection__KeysPath: /tmp/data-protection-keys
     entrypoint:
       - /app/efbundle
@@ -82,6 +83,7 @@ services:
       ASPNETCORE_HTTP_PORTS: "8080"
       AllowedHosts: ${API_ALLOWED_HOST:?Set API_ALLOWED_HOST in .env}
       WebSecurity__AllowedOrigins__0: ${FRONTEND_ORIGIN:?Set FRONTEND_ORIGIN in .env}
+      WishlistSharing__FrontendOrigin: ${FRONTEND_ORIGIN:?Set FRONTEND_ORIGIN in .env}
       DataProtection__KeysPath: /var/lib/mon-kado/data-protection-keys
     expose:
       - "8080"

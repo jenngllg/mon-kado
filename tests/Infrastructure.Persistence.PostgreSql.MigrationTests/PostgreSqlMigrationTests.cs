@@ -102,6 +102,10 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
             migration => Assert.EndsWith(
                 "_AddWishCollectionOrdering",
                 migration,
+                StringComparison.Ordinal),
+            migration => Assert.EndsWith(
+                "_AddWishlistShareLinks",
+                migration,
                 StringComparison.Ordinal));
         Assert.False(context.Database.HasPendingModelChanges());
 
@@ -123,6 +127,7 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
                 "users",
                 "wish_position_sequences",
                 "wishes",
+                "wishlist_share_links",
                 "wishlists"
             ],
             tables);
@@ -208,6 +213,15 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
         Assert.Contains(
             "fk_wishes_wishlists_wishlist_id",
             constraints);
+        Assert.Contains(
+            "ck_wishlist_share_links_secret_hash_length",
+            constraints);
+        Assert.Contains(
+            "ck_wishlist_share_links_timestamps_consistent",
+            constraints);
+        Assert.Contains(
+            "fk_wishlist_share_links_wishlists_wishlist_id",
+            constraints);
 
         var indexes = await GetPublicIndexesAsync(
             context,
@@ -253,6 +267,12 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
             indexes);
         Assert.Contains(
             "ux_wishes_wishlist_position",
+            indexes);
+        Assert.Contains(
+            "ux_wishlist_share_links_secret_hash",
+            indexes);
+        Assert.Contains(
+            "ux_wishlist_share_links_wishlist_id",
             indexes);
 
         var columns = await GetAuthenticationEmailOutboxColumnsAsync(

@@ -167,6 +167,30 @@ public class GlobalExceptionHandler(
                 "The wishlist already contains the maximum number of wishes.",
                 ErrorCodes.WishLimitReached,
                 null),
+            WishlistShareLinkNotFoundException => new ErrorResponse(
+                StatusCodes.Status404NotFound,
+                "Wishlist share link not found",
+                "The wishlist share link was not found.",
+                ErrorCodes.WishlistShareLinkNotFound,
+                null),
+            WishlistShareLinkAlreadyExistsException => new ErrorResponse(
+                StatusCodes.Status409Conflict,
+                "Wishlist share link already exists",
+                "The wishlist already has an active share link.",
+                ErrorCodes.WishlistShareLinkAlreadyExists,
+                null),
+            WishlistShareLinkVersionConflictException => new ErrorResponse(
+                StatusCodes.Status412PreconditionFailed,
+                "Wishlist share link version conflict",
+                "The wishlist share link has changed. Retrieve it again before retrying.",
+                ErrorCodes.WishlistShareLinkVersionConflict,
+                null),
+            SharedWishlistNotFoundException => new ErrorResponse(
+                StatusCodes.Status404NotFound,
+                "Shared wishlist not found",
+                "The shared wishlist was not found.",
+                ErrorCodes.SharedWishlistNotFound,
+                null),
             PreconditionRequiredException => new ErrorResponse(
                 StatusCodes.Status428PreconditionRequired,
                 "Precondition required",

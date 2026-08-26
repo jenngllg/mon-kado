@@ -1,4 +1,5 @@
 using JennGllg.Fr.MonKado.Back.Api.Contracts.Responses;
+using JennGllg.Fr.MonKado.Back.Api.Controllers;
 using JennGllg.Fr.MonKado.Back.Api.Middleware;
 using JennGllg.Fr.MonKado.Back.Api.Options;
 
@@ -179,6 +180,7 @@ public static class WebSecurityExtensions
                     HeaderNames.Authorization,
                     HeaderNames.IfMatch,
                     CorrelationIdMiddleware.HeaderName,
+                    SharedWishlistsController.ShareTokenHeaderName,
                     WebSecurityOptions.AntiforgeryHeaderName)
                 .WithExposedHeaders(
                     CorrelationIdMiddleware.HeaderName,

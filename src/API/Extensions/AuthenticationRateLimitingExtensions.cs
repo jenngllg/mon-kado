@@ -68,9 +68,17 @@ public static class AuthenticationRateLimitingExtensions
     /// </summary>
     public const string GoogleLinkPolicy = "GoogleLink";
     /// <summary>
+    /// Identifies public shared-wishlist retrieval policy.
+    /// </summary>
+    public const string SharedWishlistPolicy = "SharedWishlist";
+    /// <summary>
     /// Gets the per-minute Google callback and completion limit for one remote address.
     /// </summary>
     public const int GoogleTransientFlowPermitLimit = 10;
+    /// <summary>
+    /// Gets the per-minute public shared-wishlist limit for one remote address.
+    /// </summary>
+    public const int SharedWishlistPermitLimit = 60;
 
     private static readonly TimeSpan _window = TimeSpan.FromMinutes(1);
     /// <summary>
@@ -153,6 +161,11 @@ public static class AuthenticationRateLimitingExtensions
                 context => CreateLimiter(
                     context,
                     5));
+            options.AddPolicy(
+                SharedWishlistPolicy,
+                context => CreateLimiter(
+                    context,
+                    SharedWishlistPermitLimit));
 
             options.OnRejected = async (
                 rejectionContext,
@@ -175,7 +188,7 @@ public static class AuthenticationRateLimitingExtensions
                 var errorResponse = new ErrorResponse(
                     StatusCodes.Status429TooManyRequests,
                     "Rate limit exceeded",
-                    "Too many authentication requests. Retry later.",
+                    "Too many requests. Retry later.",
                     ErrorCodes.RequestRateLimitExceeded,
                     null);
                 var loggerFactory = context.RequestServices.GetRequiredService<ILoggerFactory>();
