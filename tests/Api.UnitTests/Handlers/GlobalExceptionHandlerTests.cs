@@ -16,6 +16,7 @@ public class GlobalExceptionHandlerTests
 {
     private static readonly JsonSerializerOptions _jsonOptions = new(JsonSerializerDefaults.Web);
     private readonly Mock<IGoogleExternalAuthenticationService> _googleExternalAuthenticationServiceMock;
+    private readonly Mock<IGuestSessionCookieService> _guestSessionCookieServiceMock;
     private readonly Mock<IRefreshTokenCookieService> _refreshTokenCookieServiceMock;
     private readonly GlobalExceptionHandler _handler;
 
@@ -23,11 +24,13 @@ public class GlobalExceptionHandlerTests
     {
         _googleExternalAuthenticationServiceMock = new Mock<IGoogleExternalAuthenticationService>(
             MockBehavior.Strict);
+        _guestSessionCookieServiceMock = new Mock<IGuestSessionCookieService>(MockBehavior.Strict);
         _refreshTokenCookieServiceMock = new Mock<IRefreshTokenCookieService>(MockBehavior.Strict);
         _handler = new GlobalExceptionHandler(
             NullLogger<GlobalExceptionHandler>.Instance,
             _refreshTokenCookieServiceMock.Object,
-            _googleExternalAuthenticationServiceMock.Object);
+            _googleExternalAuthenticationServiceMock.Object,
+            _guestSessionCookieServiceMock.Object);
     }
 
     public static TheoryData<Exception, int, string, bool> GoogleFailures => new()
@@ -103,6 +106,7 @@ public class GlobalExceptionHandlerTests
 
         _googleExternalAuthenticationServiceMock.VerifyNoOtherCalls();
         _refreshTokenCookieServiceMock.VerifyNoOtherCalls();
+        _guestSessionCookieServiceMock.VerifyNoOtherCalls();
     }
 
     [Fact]
@@ -139,5 +143,76 @@ public class GlobalExceptionHandlerTests
             context.Response.Headers.CacheControl);
         _googleExternalAuthenticationServiceMock.VerifyNoOtherCalls();
         _refreshTokenCookieServiceMock.VerifyNoOtherCalls();
+        _guestSessionCookieServiceMock.VerifyNoOtherCalls();
+    }
+
+    [Theory]
+    [InlineData(nameof(WishlistParticipantNotFoundException), StatusCodes.Status404NotFound, ErrorCodes.WishlistParticipantNotFound)]
+    [InlineData(nameof(WishlistOwnerCannotJoinException), StatusCodes.Status409Conflict, ErrorCodes.WishlistOwnerCannotJoin)]
+    [InlineData(nameof(WishlistParticipantLimitReachedException), StatusCodes.Status409Conflict, ErrorCodes.WishlistParticipantLimitReached)]
+    public async Task TryHandleAsync_WhenParticipantFailureOccurs_ReturnsStructuredError(
+        string exceptionName,
+        int expectedStatusCode,
+        string expectedErrorCode)
+    {
+        // Arrange
+        var context = new DefaultHttpContext();
+        context.Response.Body = new MemoryStream();
+        var exception = exceptionName switch
+        {
+            nameof(WishlistParticipantNotFoundException) => (Exception)new WishlistParticipantNotFoundException(),
+            nameof(WishlistOwnerCannotJoinException) => new WishlistOwnerCannotJoinException(),
+            nameof(WishlistParticipantLimitReachedException) => new WishlistParticipantLimitReachedException(),
+            _ => throw new InvalidOperationException("Unknown participant failure.")
+        };
+
+        // Act
+        await _handler.TryHandleAsync(
+            context,
+            exception,
+            TestContext.Current.CancellationToken);
+        context.Response.Body.Position = 0;
+        var error = await JsonSerializer.DeserializeAsync<ErrorResponse>(
+            context.Response.Body,
+            _jsonOptions,
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(
+            expectedStatusCode,
+            context.Response.StatusCode);
+        Assert.Equal(
+            expectedErrorCode,
+            error?.ErrorCode);
+        _googleExternalAuthenticationServiceMock.VerifyNoOtherCalls();
+        _refreshTokenCookieServiceMock.VerifyNoOtherCalls();
+        _guestSessionCookieServiceMock.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task TryHandleAsync_WhenGuestSessionIsInvalid_DeletesGuestCookie()
+    {
+        // Arrange
+        var context = new DefaultHttpContext();
+        context.Response.Body = new MemoryStream();
+        _guestSessionCookieServiceMock
+            .Setup(service => service.Delete(context));
+
+        // Act
+        await _handler.TryHandleAsync(
+            context,
+            new GuestSessionInvalidException(),
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(
+            StatusCodes.Status401Unauthorized,
+            context.Response.StatusCode);
+        _guestSessionCookieServiceMock.Verify(
+            service => service.Delete(context),
+            Times.Once);
+        _googleExternalAuthenticationServiceMock.VerifyNoOtherCalls();
+        _refreshTokenCookieServiceMock.VerifyNoOtherCalls();
+        _guestSessionCookieServiceMock.VerifyNoOtherCalls();
     }
 }

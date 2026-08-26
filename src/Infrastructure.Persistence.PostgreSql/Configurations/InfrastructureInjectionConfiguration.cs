@@ -18,6 +18,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Options;
 
 namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Configurations;
 /// <summary>
@@ -91,6 +92,10 @@ public static class InfrastructureInjectionConfiguration
             new InvariantFallbackLookupNormalizer(
                 provider.GetRequiredService<UpperInvariantLookupNormalizer>()));
         services.Configure<PasswordHasherOptions>(options => options.IterationCount = 220_000);
+        services.AddSingleton<IValidateOptions<GuestSessionOptions>, GuestSessionOptionsValidator>();
+        services.AddOptions<GuestSessionOptions>()
+            .Bind(configuration.GetSection(GuestSessionOptions.SectionName))
+            .ValidateOnStart();
 
         services.AddScoped<IUnitOfWork>(provider =>
             provider.GetRequiredService<MonKadoDbContext>());
@@ -103,7 +108,10 @@ public static class InfrastructureInjectionConfiguration
         services.AddScoped<IWishlistRepository, WishlistRepository>();
         services.AddScoped<IWishRepository, WishRepository>();
         services.AddScoped<IWishlistShareLinkRepository, WishlistShareLinkRepository>();
+        services.AddScoped<IGuestSessionRepository, GuestSessionRepository>();
+        services.AddScoped<IWishlistParticipantRepository, WishlistParticipantRepository>();
         services.AddScoped<IWishTransactionFactory, WishTransactionFactory>();
+        services.AddScoped<IWishlistParticipantTransactionFactory, WishlistParticipantTransactionFactory>();
         services.AddScoped<IAccountRegistrationService, AccountRegistrationService>();
         services.AddScoped<IEmailConfirmationService, EmailConfirmationService>();
         services.AddScoped<IExpiredAccountCleanup, ExpiredAccountCleanup>();
@@ -123,6 +131,9 @@ public static class InfrastructureInjectionConfiguration
         services.AddScoped<IWishService, WishService>();
         services.AddScoped<IWishlistShareService, WishlistShareService>();
         services.AddSingleton<IWishlistShareTokenService, WishlistShareTokenService>();
+        services.AddSingleton<IGuestSessionTokenService, GuestSessionTokenService>();
+        services.AddScoped<IWishlistParticipantService, WishlistParticipantService>();
+        services.AddScoped<IExpiredGuestSessionCleanup, ExpiredGuestSessionCleanup>();
         services.AddScoped<
             IExpiredMemberEmailChangeRequestCleanup,
             ExpiredMemberEmailChangeRequestCleanup>();

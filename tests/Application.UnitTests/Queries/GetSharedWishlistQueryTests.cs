@@ -13,6 +13,8 @@ public class GetSharedWishlistQueryTests
         // Arrange
         var query = new GetSharedWishlistQuery(
             Guid.Empty,
+            null,
+            null,
             null);
 
         // Act

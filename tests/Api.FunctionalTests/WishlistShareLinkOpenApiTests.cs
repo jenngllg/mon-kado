@@ -26,6 +26,12 @@ public class WishlistShareLinkOpenApiTests
         var getSharedWishlist = paths
             .GetProperty("/api/v1/shared-wishlists/{shareLinkId}")
             .GetProperty("get");
+        var participantsPath = paths
+            .GetProperty("/api/v1/shared-wishlists/{shareLinkId}/participants");
+        var joinSharedWishlist = participantsPath.GetProperty("post");
+        var getCurrentParticipant = paths
+            .GetProperty("/api/v1/shared-wishlists/{shareLinkId}/participants/current")
+            .GetProperty("get");
 
         // Assert
         Assert.Equal(
@@ -111,9 +117,9 @@ public class WishlistShareLinkOpenApiTests
         Assert.Equal(
             "Gets a wishlist through its active share link.",
             getSharedWishlist.GetProperty("summary").GetString());
-        Assert.False(getSharedWishlist.TryGetProperty(
-            "security",
-            out _));
+        AssertOptionalBearerAndGuestCookie(
+            getSharedWishlist,
+            expectsAntiforgery: false);
         var shareToken = Assert.Single(
             getSharedWishlist.GetProperty("parameters").EnumerateArray(),
             parameter => parameter.GetProperty("name").GetString() == "X-MonKado-Share-Token");
@@ -127,6 +133,7 @@ public class WishlistShareLinkOpenApiTests
         AssertResponses(
             getSharedWishlist,
             "200",
+            "401",
             "404",
             "429",
             "500",
@@ -134,6 +141,63 @@ public class WishlistShareLinkOpenApiTests
         AssertSharedSuccessResponse(
             document.RootElement,
             getSharedWishlist);
+
+        Assert.Equal(
+            "Joins a wishlist through its active share link.",
+            joinSharedWishlist.GetProperty("summary").GetString());
+        AssertOptionalBearerAndGuestCookie(
+            joinSharedWishlist,
+            expectsAntiforgery: true);
+        var requestBody = joinSharedWishlist.GetProperty("requestBody");
+        Assert.False(requestBody.TryGetProperty(
+            "required",
+            out var requestBodyIsRequired) && requestBodyIsRequired.GetBoolean());
+        AssertResponses(
+            joinSharedWishlist,
+            "200",
+            "201",
+            "400",
+            "401",
+            "404",
+            "409",
+            "413",
+            "415",
+            "429",
+            "500",
+            "503");
+        AssertParticipantSuccessResponse(
+            document.RootElement,
+            joinSharedWishlist,
+            "200",
+            includesLocation: false,
+            includesGuestCookie: false);
+        AssertParticipantSuccessResponse(
+            document.RootElement,
+            joinSharedWishlist,
+            "201",
+            includesLocation: true,
+            includesGuestCookie: true);
+
+        Assert.Equal(
+            "Gets the participant associated with the current caller.",
+            getCurrentParticipant.GetProperty("summary").GetString());
+        AssertOptionalBearerAndGuestCookie(
+            getCurrentParticipant,
+            expectsAntiforgery: false);
+        AssertResponses(
+            getCurrentParticipant,
+            "200",
+            "401",
+            "404",
+            "429",
+            "500",
+            "503");
+        AssertParticipantSuccessResponse(
+            document.RootElement,
+            getCurrentParticipant,
+            "200",
+            includesLocation: false,
+            includesGuestCookie: false);
     }
 
     private static void AssertBearerWithoutAntiforgery(JsonElement operation)
@@ -153,6 +217,37 @@ public class WishlistShareLinkOpenApiTests
             operation.GetProperty("parameters").EnumerateArray(),
             parameter => parameter.GetProperty("name").GetString() == "If-Match");
         Assert.True(ifMatch.GetProperty("required").GetBoolean());
+    }
+
+    private static void AssertOptionalBearerAndGuestCookie(
+        JsonElement operation,
+        bool expectsAntiforgery)
+    {
+        Assert.Equal(
+            2,
+            operation.GetProperty("security").GetArrayLength());
+        var parameters = operation.GetProperty("parameters").EnumerateArray();
+        var shareToken = Assert.Single(
+            parameters,
+            parameter => parameter.GetProperty("name").GetString() == "X-MonKado-Share-Token");
+        Assert.False(shareToken.TryGetProperty(
+            "required",
+            out var shareTokenIsRequired) && shareTokenIsRequired.GetBoolean());
+        var guestCookie = Assert.Single(
+            operation.GetProperty("parameters").EnumerateArray(),
+            parameter => parameter.GetProperty("name").GetString() == "__Host-MonKado.Guest");
+        Assert.Equal(
+            "cookie",
+            guestCookie.GetProperty("in").GetString());
+        Assert.False(guestCookie.TryGetProperty(
+            "required",
+            out var guestCookieIsRequired) && guestCookieIsRequired.GetBoolean());
+        Assert.Equal(
+            expectsAntiforgery,
+            operation
+                .GetProperty("parameters")
+                .EnumerateArray()
+                .Any(parameter => parameter.GetProperty("name").GetString() == "X-CSRF-TOKEN"));
     }
 
     private static void AssertResponses(
@@ -232,6 +327,7 @@ public class WishlistShareLinkOpenApiTests
                 .GetProperty("schema"));
         Assert.Equal(
             [
+                "currentParticipant",
                 "eventDate",
                 "id",
                 "message",
@@ -239,6 +335,48 @@ public class WishlistShareLinkOpenApiTests
                 "occasion",
                 "ownerDisplayName",
                 "wishes"
+            ],
+            schema
+                .GetProperty("properties")
+                .EnumerateObject()
+                .Select(property => property.Name)
+                .OrderBy(property => property));
+    }
+
+    private static void AssertParticipantSuccessResponse(
+        JsonElement document,
+        JsonElement operation,
+        string statusCode,
+        bool includesLocation,
+        bool includesGuestCookie)
+    {
+        var success = operation
+            .GetProperty("responses")
+            .GetProperty(statusCode);
+        var headers = success.GetProperty("headers");
+        Assert.True(headers.TryGetProperty(
+            "Cache-Control",
+            out _));
+        Assert.Equal(
+            includesLocation,
+            headers.TryGetProperty(
+                "Location",
+                out _));
+        Assert.Equal(
+            includesGuestCookie,
+            headers.TryGetProperty(
+                "Set-Cookie",
+                out _));
+        var schema = ResolveSchema(
+            document,
+            success
+                .GetProperty("content")
+                .GetProperty("application/json")
+                .GetProperty("schema"));
+        Assert.Equal(
+            [
+                "displayName",
+                "id"
             ],
             schema
                 .GetProperty("properties")

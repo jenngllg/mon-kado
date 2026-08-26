@@ -106,6 +106,10 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
             migration => Assert.EndsWith(
                 "_AddWishlistShareLinks",
                 migration,
+                StringComparison.Ordinal),
+            migration => Assert.EndsWith(
+                "_AddWishlistParticipants",
+                migration,
                 StringComparison.Ordinal));
         Assert.False(context.Database.HasPendingModelChanges());
 
@@ -117,6 +121,7 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
                 "__EFMigrationsHistory",
                 "authentication_email_outbox",
                 "authentication_sessions",
+                "guest_sessions",
                 "member_email_change_requests",
                 "role_claims",
                 "roles",
@@ -127,6 +132,7 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
                 "users",
                 "wish_position_sequences",
                 "wishes",
+                "wishlist_participants",
                 "wishlist_share_links",
                 "wishlists"
             ],
@@ -222,6 +228,21 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
         Assert.Contains(
             "fk_wishlist_share_links_wishlists_wishlist_id",
             constraints);
+        Assert.Contains(
+            "ck_guest_sessions_secret_hash_length",
+            constraints);
+        Assert.Contains(
+            "ck_wishlist_participants_identity",
+            constraints);
+        Assert.Contains(
+            "fk_wishlist_participants_guest_sessions_guest_session_id",
+            constraints);
+        Assert.Contains(
+            "fk_wishlist_participants_users_member_id",
+            constraints);
+        Assert.Contains(
+            "fk_wishlist_participants_wishlists_wishlist_id",
+            constraints);
 
         var indexes = await GetPublicIndexesAsync(
             context,
@@ -273,6 +294,15 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
             indexes);
         Assert.Contains(
             "ux_wishlist_share_links_wishlist_id",
+            indexes);
+        Assert.Contains(
+            "ix_guest_sessions_expires_at",
+            indexes);
+        Assert.Contains(
+            "ux_wishlist_participants_wishlist_guest_session",
+            indexes);
+        Assert.Contains(
+            "ux_wishlist_participants_wishlist_member",
             indexes);
 
         var columns = await GetAuthenticationEmailOutboxColumnsAsync(

@@ -168,6 +168,18 @@ public static class ErrorCodes
     /// <summary>Identifies public wishlist content unavailable through a share link.</summary>
     public const string SharedWishlistNotFound = "SHARED_WISHLIST_NOT_FOUND";
 
+    /// <summary>Identifies a current identity that has not joined the wishlist.</summary>
+    public const string WishlistParticipantNotFound = "WISHLIST_PARTICIPANT_NOT_FOUND";
+
+    /// <summary>Identifies a wishlist owner attempting to join as a participant.</summary>
+    public const string WishlistOwnerCannotJoin = "WISHLIST_OWNER_CANNOT_JOIN";
+
+    /// <summary>Identifies a wishlist that reached its participant limit.</summary>
+    public const string WishlistParticipantLimitReached = "WISHLIST_PARTICIPANT_LIMIT_REACHED";
+
+    /// <summary>Identifies an invalid or expired browser guest session.</summary>
+    public const string GuestSessionInvalid = "GUEST_SESSION_INVALID";
+
     #endregion
 
     #region Technical

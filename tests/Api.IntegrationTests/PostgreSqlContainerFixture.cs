@@ -38,7 +38,7 @@ public sealed class PostgreSqlContainerFixture : IAsyncLifetime
     {
         await using var context = CreateContext();
         await context.Database.ExecuteSqlRawAsync(
-            "TRUNCATE TABLE public.users CASCADE;",
+            "TRUNCATE TABLE public.users, public.guest_sessions CASCADE;",
             cancellationToken);
     }
 

@@ -72,6 +72,10 @@ public static class AuthenticationRateLimitingExtensions
     /// </summary>
     public const string SharedWishlistPolicy = "SharedWishlist";
     /// <summary>
+    /// Identifies shared-wishlist participant creation policy.
+    /// </summary>
+    public const string SharedWishlistJoinPolicy = "SharedWishlistJoin";
+    /// <summary>
     /// Gets the per-minute Google callback and completion limit for one remote address.
     /// </summary>
     public const int GoogleTransientFlowPermitLimit = 10;
@@ -79,6 +83,10 @@ public static class AuthenticationRateLimitingExtensions
     /// Gets the per-minute public shared-wishlist limit for one remote address.
     /// </summary>
     public const int SharedWishlistPermitLimit = 60;
+    /// <summary>
+    /// Gets the per-minute shared-wishlist join limit for one address and share link.
+    /// </summary>
+    public const int SharedWishlistJoinPermitLimit = 10;
 
     private static readonly TimeSpan _window = TimeSpan.FromMinutes(1);
     /// <summary>
@@ -166,6 +174,9 @@ public static class AuthenticationRateLimitingExtensions
                 context => CreateLimiter(
                     context,
                     SharedWishlistPermitLimit));
+            options.AddPolicy(
+                SharedWishlistJoinPolicy,
+                CreateSharedWishlistJoinLimiter);
 
             options.OnRejected = async (
                 rejectionContext,
@@ -212,13 +223,35 @@ public static class AuthenticationRateLimitingExtensions
         HttpContext context,
         int permitLimit)
     {
-
         return RateLimitPartition.GetFixedWindowLimiter(
             context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
             _ => new FixedWindowRateLimiterOptions
             {
                 AutoReplenishment = true,
                 PermitLimit = permitLimit,
+                QueueLimit = 0,
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                Window = _window
+            });
+    }
+
+    private static RateLimitPartition<string> CreateSharedWishlistJoinLimiter(HttpContext context)
+    {
+        var remoteAddress = context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        var shareLinkId = Convert.ToString(
+            context.Request.RouteValues["shareLinkId"],
+            CultureInfo.InvariantCulture);
+        var partitionKey = string.Concat(
+            remoteAddress,
+            ':',
+            shareLinkId);
+
+        return RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey,
+            _ => new FixedWindowRateLimiterOptions
+            {
+                AutoReplenishment = true,
+                PermitLimit = SharedWishlistJoinPermitLimit,
                 QueueLimit = 0,
                 QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
                 Window = _window

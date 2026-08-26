@@ -352,6 +352,18 @@ public static class LogEventIds
     public const int SharedWishlistRetrievalStarted = 2030;
     /// <summary>Identifies a publicly retrieved wishlist.</summary>
     public const int SharedWishlistRetrieved = 2031;
+    /// <summary>Identifies the start of a shared-wishlist participant join.</summary>
+    public const int WishlistParticipantJoinStarted = 2032;
+    /// <summary>Identifies a joined shared-wishlist participant.</summary>
+    public const int WishlistParticipantJoined = 2033;
+    /// <summary>Identifies the start of current-participant retrieval.</summary>
+    public const int WishlistParticipantRetrievalStarted = 2034;
+    /// <summary>Identifies a retrieved current participant.</summary>
+    public const int WishlistParticipantRetrieved = 2035;
+    /// <summary>Identifies deleted expired guest sessions.</summary>
+    public const int ExpiredGuestSessionsDeleted = 2036;
+    /// <summary>Identifies an expired guest-session cleanup failure.</summary>
+    public const int ExpiredGuestSessionCleanupFailed = 2037;
 
     #endregion
 
