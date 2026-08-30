@@ -90,7 +90,7 @@ public class WishlistShareLinkRepository(MonKadoDbContext context) : IWishlistSh
                         wish.Quantity,
                         context.Set<GiftReservation>()
                             .Where(reservation => reservation.WishId == wish.Id)
-                            .Sum(reservation => (int?)reservation.Quantity) ?? 0,
+                            .Sum((GiftReservation reservation) => (int?)reservation.Quantity) ?? 0,
                         null))
                     .ToArray()))
             .SingleOrDefaultAsync(cancellationToken);

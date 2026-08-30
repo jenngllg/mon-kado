@@ -1,5 +1,7 @@
 using JennGllg.Fr.MonKado.Back.Domain.Abstractions;
 
+using System.Diagnostics.CodeAnalysis;
+
 namespace JennGllg.Fr.MonKado.Back.Domain.Entities;
 
 /// <summary>
@@ -64,18 +66,30 @@ public class GiftReservation : IAuditableEntity
     }
 
     /// <inheritdoc />
+    [SuppressMessage(
+        "CodeQuality",
+        "S1144:Unused private types or members should be removed",
+        Justification = "Entity Framework sets this private setter through change tracking.")]
     public DateTime CreatedAt
     {
         get; private set;
     }
 
     /// <inheritdoc />
+    [SuppressMessage(
+        "CodeQuality",
+        "S1144:Unused private types or members should be removed",
+        Justification = "Entity Framework sets this private setter through change tracking.")]
     public DateTime? UpdatedAt
     {
         get; private set;
     }
 
     /// <summary>Gets the PostgreSQL optimistic concurrency version.</summary>
+    [SuppressMessage(
+        "CodeQuality",
+        "S1144:Unused private types or members should be removed",
+        Justification = "Entity Framework sets this private setter from PostgreSQL xmin.")]
     public uint Version
     {
         get; private set;

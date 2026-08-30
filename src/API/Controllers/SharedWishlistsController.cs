@@ -36,6 +36,9 @@ public class SharedWishlistsController(
 {
     private const string GetCurrentParticipantRouteName = "GetCurrentSharedWishlistParticipant";
     private const string GetCurrentReservationRouteName = "GetCurrentSharedWishlistGiftReservation";
+    private const string NoStoreCacheControl = "no-store";
+    private const string RobotsHeaderName = "X-Robots-Tag";
+    private const string RobotsHeaderValue = "noindex, nofollow, noarchive";
     private const int MaximumRequestBodySize = 4 * 1024;
 
     /// <summary>Identifies the bearer share-secret request header.</summary>
@@ -96,8 +99,8 @@ public class SharedWishlistsController(
                 ? null
                 : CreateParticipantResponse(result.CurrentParticipant)
         };
-        Response.Headers["X-Robots-Tag"] = "noindex, nofollow, noarchive";
-        Response.Headers.CacheControl = "no-store";
+        Response.Headers[RobotsHeaderName] = RobotsHeaderValue;
+        Response.Headers.CacheControl = NoStoreCacheControl;
 
         return Ok(response);
     }
@@ -151,8 +154,8 @@ public class SharedWishlistsController(
         }
 
         var response = CreateParticipantResponse(result.Participant);
-        Response.Headers["X-Robots-Tag"] = "noindex, nofollow, noarchive";
-        Response.Headers.CacheControl = "no-store";
+        Response.Headers[RobotsHeaderName] = RobotsHeaderValue;
+        Response.Headers.CacheControl = NoStoreCacheControl;
 
         if (!result.IsCreated)
             return Ok(response);
@@ -194,8 +197,8 @@ public class SharedWishlistsController(
                 guestSessionCookieService.GetValue(Request)),
             cancellationToken);
         var response = CreateParticipantResponse(participant);
-        Response.Headers["X-Robots-Tag"] = "noindex, nofollow, noarchive";
-        Response.Headers.CacheControl = "no-store";
+        Response.Headers[RobotsHeaderName] = RobotsHeaderValue;
+        Response.Headers.CacheControl = NoStoreCacheControl;
 
         return Ok(response);
     }
@@ -234,8 +237,8 @@ public class SharedWishlistsController(
             cancellationToken);
         var response = CreateReservationResponse(reservation);
         Response.Headers.ETag = entityTagService.Format(reservation.Version);
-        Response.Headers["X-Robots-Tag"] = "noindex, nofollow, noarchive";
-        Response.Headers.CacheControl = "no-store";
+        Response.Headers[RobotsHeaderName] = RobotsHeaderValue;
+        Response.Headers.CacheControl = NoStoreCacheControl;
 
         return Ok(response);
     }
@@ -290,8 +293,8 @@ public class SharedWishlistsController(
             cancellationToken);
         var response = CreateReservationResponse(result.Reservation);
         Response.Headers.ETag = entityTagService.Format(result.Reservation.Version);
-        Response.Headers["X-Robots-Tag"] = "noindex, nofollow, noarchive";
-        Response.Headers.CacheControl = "no-store";
+        Response.Headers[RobotsHeaderName] = RobotsHeaderValue;
+        Response.Headers.CacheControl = NoStoreCacheControl;
 
         if (!result.IsCreated)
             return Ok(response);

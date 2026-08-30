@@ -1,5 +1,7 @@
 using JennGllg.Fr.MonKado.Back.Domain.Abstractions;
 
+using System.Diagnostics.CodeAnalysis;
+
 namespace JennGllg.Fr.MonKado.Back.Domain.Entities;
 
 /// <summary>
@@ -22,6 +24,10 @@ public class Wish : IAuditableEntity
     /// <param name="price">The optional price in euros.</param>
     /// <param name="position">The allocated position inside the parent wishlist.</param>
     /// <param name="quantity">The total desired quantity.</param>
+    [SuppressMessage(
+        "CodeQuality",
+        "S107:Methods should not have too many parameters",
+        Justification = "The constructor captures the complete initial state of a gift wish.")]
     public Wish(
         Guid id,
         Guid wishlistId,
