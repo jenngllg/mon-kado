@@ -38,7 +38,8 @@ public class UpdateWishCommandHandlerTests
             "   ",
             "  https://example.com/gift  ",
             12.34m,
-            42);
+            42,
+            4);
         var expected = new WishDetails(
             wishId,
             wishlistId,
@@ -49,7 +50,8 @@ public class UpdateWishCommandHandlerTests
             3,
             DateTime.UtcNow,
             DateTime.UtcNow,
-            43);
+            43,
+            4);
         _wishServiceMock
             .Setup(service => service.UpdateAsync(
                 ownerId,
@@ -59,6 +61,7 @@ public class UpdateWishCommandHandlerTests
                 null,
                 "https://example.com/gift",
                 12.34m,
+                4,
                 42,
                 cancellationToken))
             .ReturnsAsync(expected);
@@ -81,6 +84,7 @@ public class UpdateWishCommandHandlerTests
                 null,
                 "https://example.com/gift",
                 12.34m,
+                4,
                 42,
                 cancellationToken),
             Times.Once);
@@ -113,6 +117,7 @@ public class UpdateWishCommandHandlerTests
                 null,
                 null,
                 null,
+                1,
                 42,
                 cancellationToken))
             .ReturnsAsync((WishDetails?)null);
@@ -133,6 +138,7 @@ public class UpdateWishCommandHandlerTests
                 null,
                 null,
                 null,
+                1,
                 42,
                 cancellationToken),
             Times.Once);

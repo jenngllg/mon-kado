@@ -23,6 +23,7 @@ public class WishlistParticipantServiceTests
         0,
         DateTimeKind.Utc);
     private readonly Mock<IGuestSessionRepository> _guestSessionRepositoryMock;
+    private readonly Mock<IGiftReservationRepository> _giftReservationRepositoryMock;
     private readonly Mock<IWishlistParticipantRepository> _participantRepositoryMock;
     private readonly WishlistParticipantService _service;
     private readonly GuestSessionTokenService _tokenService = new();
@@ -35,6 +36,7 @@ public class WishlistParticipantServiceTests
     {
         _participantRepositoryMock = new Mock<IWishlistParticipantRepository>(MockBehavior.Strict);
         _guestSessionRepositoryMock = new Mock<IGuestSessionRepository>(MockBehavior.Strict);
+        _giftReservationRepositoryMock = new Mock<IGiftReservationRepository>(MockBehavior.Strict);
         _transactionFactoryMock = new Mock<IWishlistParticipantTransactionFactory>(MockBehavior.Strict);
         _transactionMock = new Mock<IWishlistParticipantTransaction>(MockBehavior.Strict);
         _unitOfWorkMock = new Mock<IUnitOfWork>(MockBehavior.Strict);
@@ -46,6 +48,7 @@ public class WishlistParticipantServiceTests
             _participantRepositoryMock.Object,
             _guestSessionRepositoryMock.Object,
             _tokenService,
+            _giftReservationRepositoryMock.Object,
             _wishlistShareTokenServiceMock.Object,
             _transactionFactoryMock.Object,
             _unitOfWorkMock.Object,
@@ -416,7 +419,7 @@ public class WishlistParticipantServiceTests
     }
 
     [Fact]
-    public async Task JoinAsync_WhenMemberAndGuestParticipantsExist_RemovesGuestDuplicate()
+    public async Task JoinAsync_WhenMemberAndGuestParticipantsExist_MergesReservationsAndRemovesGuestDuplicate()
     {
         // Arrange
         var wishlistId = Guid.CreateVersion7();
@@ -432,6 +435,25 @@ public class WishlistParticipantServiceTests
             wishlistId,
             guestSessionId,
             "Guest");
+        var sharedWishId = Guid.CreateVersion7();
+        var guestSharedReservation = new GiftReservation(
+            Guid.CreateVersion7(),
+            wishlistId,
+            sharedWishId,
+            guestParticipant.Id,
+            2);
+        var guestUniqueReservation = new GiftReservation(
+            Guid.CreateVersion7(),
+            wishlistId,
+            Guid.CreateVersion7(),
+            guestParticipant.Id,
+            1);
+        var memberSharedReservation = new GiftReservation(
+            Guid.CreateVersion7(),
+            wishlistId,
+            sharedWishId,
+            memberParticipant.Id,
+            3);
         var cancellationToken = TestContext.Current.CancellationToken;
         var token = SetupValidGuest(
             guestSessionId,
@@ -453,6 +475,25 @@ public class WishlistParticipantServiceTests
             .ReturnsAsync(guestParticipant);
         _participantRepositoryMock
             .Setup(repository => repository.Remove(guestParticipant));
+        _giftReservationRepositoryMock
+            .Setup(repository => repository.GetByParticipantForUpdateAsync(
+                guestParticipant.Id,
+                cancellationToken))
+            .ReturnsAsync(
+            [
+                guestSharedReservation,
+                guestUniqueReservation
+            ]);
+        _giftReservationRepositoryMock
+            .Setup(repository => repository.GetByParticipantForUpdateAsync(
+                memberParticipant.Id,
+                cancellationToken))
+            .ReturnsAsync(
+            [
+                memberSharedReservation
+            ]);
+        _giftReservationRepositoryMock
+            .Setup(repository => repository.Remove(guestSharedReservation));
         SetupSaveAndCommit(cancellationToken);
 
         // Act
@@ -474,6 +515,12 @@ public class WishlistParticipantServiceTests
         Assert.Equal(
             memberParticipant.Id,
             result.Participant.Id);
+        Assert.Equal(
+            5,
+            memberSharedReservation.Quantity);
+        Assert.Equal(
+            memberParticipant.Id,
+            guestUniqueReservation.WishlistParticipantId);
         VerifyTransaction(
             wishlistId,
             commits: true,
@@ -493,6 +540,19 @@ public class WishlistParticipantServiceTests
             Times.Once);
         _participantRepositoryMock.Verify(
             repository => repository.Remove(guestParticipant),
+            Times.Once);
+        _giftReservationRepositoryMock.Verify(
+            repository => repository.GetByParticipantForUpdateAsync(
+                guestParticipant.Id,
+                cancellationToken),
+            Times.Once);
+        _giftReservationRepositoryMock.Verify(
+            repository => repository.GetByParticipantForUpdateAsync(
+                memberParticipant.Id,
+                cancellationToken),
+            Times.Once);
+        _giftReservationRepositoryMock.Verify(
+            repository => repository.Remove(guestSharedReservation),
             Times.Once);
         VerifySave(cancellationToken);
         VerifyNoOtherCalls();
@@ -1273,6 +1333,7 @@ public class WishlistParticipantServiceTests
     {
         _participantRepositoryMock.VerifyNoOtherCalls();
         _guestSessionRepositoryMock.VerifyNoOtherCalls();
+        _giftReservationRepositoryMock.VerifyNoOtherCalls();
         _transactionFactoryMock.VerifyNoOtherCalls();
         _transactionMock.VerifyNoOtherCalls();
         _unitOfWorkMock.VerifyNoOtherCalls();

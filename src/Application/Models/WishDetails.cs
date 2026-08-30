@@ -5,6 +5,17 @@ namespace JennGllg.Fr.MonKado.Back.Application.Models;
 /// <summary>
 /// Represents the private details of a gift wish.
 /// </summary>
+/// <param name="id">The gift-wish identifier.</param>
+/// <param name="wishlistId">The parent wishlist identifier.</param>
+/// <param name="name">The display name.</param>
+/// <param name="note">The optional owner note.</param>
+/// <param name="url">The optional product URL.</param>
+/// <param name="price">The optional price in euros.</param>
+/// <param name="position">The stable position inside the parent wishlist.</param>
+/// <param name="createdAt">The UTC creation date and time.</param>
+/// <param name="updatedAt">The optional UTC update date and time.</param>
+/// <param name="version">The optimistic concurrency version.</param>
+/// <param name="quantity">The total desired quantity.</param>
 [ExcludeFromCodeCoverage]
 public class WishDetails(
     Guid id,
@@ -16,7 +27,8 @@ public class WishDetails(
     long position,
     DateTime createdAt,
     DateTime? updatedAt,
-    uint version)
+    uint version,
+    int quantity = 1)
 {
     /// <summary>
     /// Gets the wish identifier.
@@ -47,6 +59,11 @@ public class WishDetails(
     /// Gets the optional price in euros.
     /// </summary>
     public decimal? Price { get; } = price;
+
+    /// <summary>
+    /// Gets the total desired quantity.
+    /// </summary>
+    public int Quantity { get; } = quantity;
 
     /// <summary>
     /// Gets the stable position inside the parent wishlist.

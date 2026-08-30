@@ -71,6 +71,9 @@ public class WishTests
             12.34m,
             creation.Price);
         Assert.Equal(
+            1,
+            creation.Quantity);
+        Assert.Equal(
             $"/api/v1/wishlists/{wishlistId}/wishes/{creation.Id}",
             response.Headers.Location.AbsolutePath);
         using var document = await response.Content.ReadFromJsonAsync<JsonDocument>(
@@ -362,7 +365,8 @@ public class WishTests
                 name = "  Cafe\u0301 premium  ",
                 note = "   ",
                 url = "  https://example.com/premium  ",
-                price = 24.68m
+                price = 24.68m,
+                quantity = 4
             },
             "\"0000002a\"");
 
@@ -398,6 +402,9 @@ public class WishTests
             24.68m,
             update.Price);
         Assert.Equal(
+            4,
+            update.Quantity);
+        Assert.Equal(
             42u,
             update.ExpectedVersion);
         using var document = await response.Content.ReadFromJsonAsync<JsonDocument>(
@@ -422,6 +429,9 @@ public class WishTests
         Assert.Equal(
             24.68m,
             wish.GetProperty("price").GetDecimal());
+        Assert.Equal(
+            4,
+            wish.GetProperty("quantity").GetInt32());
         Assert.Equal(
             1,
             wish.GetProperty("position").GetInt64());
@@ -466,7 +476,8 @@ public class WishTests
             wishId,
             new
             {
-                name = "Cadeau"
+                name = "Cadeau",
+                quantity = 1
             },
             entityTag: null);
 
@@ -505,7 +516,8 @@ public class WishTests
             wishId,
             new
             {
-                name = "Cadeau"
+                name = "Cadeau",
+                quantity = 1
             },
             "\"0000002a\"");
 
@@ -539,7 +551,8 @@ public class WishTests
             Guid.CreateVersion7(),
             new
             {
-                name = "Cadeau"
+                name = "Cadeau",
+                quantity = 1
             },
             "\"0000002a\"");
 
@@ -572,7 +585,8 @@ public class WishTests
             Guid.CreateVersion7(),
             new
             {
-                name = "Cadeau"
+                name = "Cadeau",
+                quantity = 1
             },
             "\"0000002a\"");
 
@@ -611,7 +625,8 @@ public class WishTests
             {
                 name = "   ",
                 url = "ftp://example.com/gift",
-                price = 0
+                price = 0,
+                quantity = 1
             },
             "\"0000002a\"");
 
@@ -658,7 +673,8 @@ public class WishTests
             wishId,
             new
             {
-                name = "Cadeau"
+                name = "Cadeau",
+                quantity = 1
             },
             "\"0000002a\"");
 
@@ -1142,6 +1158,7 @@ public class WishTests
                 "note",
                 "url",
                 "price",
+                "quantity",
                 "position",
                 "createdAt",
                 "updatedAt"
@@ -1167,6 +1184,9 @@ public class WishTests
         Assert.Equal(
             12.34m,
             wish.GetProperty("price").GetDecimal());
+        Assert.Equal(
+            1,
+            wish.GetProperty("quantity").GetInt32());
         Assert.Equal(
             1,
             wish.GetProperty("position").GetInt64());

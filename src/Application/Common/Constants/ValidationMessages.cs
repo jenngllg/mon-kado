@@ -81,4 +81,9 @@ public static class ValidationMessages
     /// Identifies an invalid gift wish price.
     /// </summary>
     public const string InvalidWishPrice = "The wish price must be greater than zero and contain at most two decimal places.";
+
+    /// <summary>
+    /// Identifies an invalid gift quantity message.
+    /// </summary>
+    public const string InvalidGiftQuantity = "The gift quantity must be between 1 and 100.";
 }

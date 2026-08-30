@@ -2,6 +2,7 @@ using JennGllg.Fr.MonKado.Back.Api.Extensions;
 using JennGllg.Fr.MonKado.Back.Application.Abstractions;
 using JennGllg.Fr.MonKado.Back.Application.Common.Exceptions;
 using JennGllg.Fr.MonKado.Back.Application.Models;
+using JennGllg.Fr.MonKado.Back.Domain.Enums;
 
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Http;
@@ -356,7 +357,11 @@ public class WishlistShareLinkTests
                 "id",
                 "name",
                 "url",
-                "price"
+                "price",
+                "quantity",
+                "reservedQuantity",
+                "availableQuantity",
+                "currentParticipantReservedQuantity"
             ],
             wish
                 .EnumerateObject()
@@ -365,11 +370,96 @@ public class WishlistShareLinkTests
             "note",
             out _));
         Assert.Equal(
+            1,
+            wish.GetProperty("quantity").GetInt32());
+        Assert.Equal(
+            0,
+            wish.GetProperty("reservedQuantity").GetInt32());
+        Assert.Equal(
+            1,
+            wish.GetProperty("availableQuantity").GetInt32());
+        Assert.Equal(
+            JsonValueKind.Null,
+            wish.GetProperty("currentParticipantReservedQuantity").ValueKind);
+        Assert.Equal(
             "Jenn",
             document.RootElement.GetProperty("ownerDisplayName").GetString());
         Assert.Equal(
             JsonValueKind.Null,
             document.RootElement.GetProperty("currentParticipant").ValueKind);
+    }
+
+    [Fact]
+    public async Task GetAsync_WhenMemberJoinedOverreservedWishlist_ClampsAvailabilityAndReturnsCurrentQuantity()
+    {
+        // Arrange
+        await using var factory = new RegistrationApiFactory();
+        var memberId = Guid.CreateVersion7();
+        var shareLinkId = Guid.CreateVersion7();
+        var wishId = Guid.CreateVersion7();
+        var participant = new WishlistParticipantDetails(
+            Guid.CreateVersion7(),
+            "Participant");
+        var wishlist = new SharedWishlistDetails(
+            Guid.CreateVersion7(),
+            "Owner",
+            "Birthday",
+            WishlistOccasion.Birthday,
+            null,
+            null,
+            [
+                new SharedWishDetails(
+                    wishId,
+                    "Gift",
+                    null,
+                    null,
+                    1,
+                    3)
+            ]);
+        factory.WishlistShareService.SharedWishlist = wishlist;
+        factory.WishlistParticipantService.LookupResult = new WishlistParticipantLookupResult(
+            WishlistParticipantLookupOutcome.Found,
+            participant);
+        factory.GiftReservationService.Quantities[wishId] = 2;
+        using var client = CreateAuthorizedClient(
+            factory,
+            memberId);
+
+        // Act
+        using var response = await SendPublicRequestAsync(
+            client,
+            shareLinkId,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.OK,
+            response.StatusCode);
+        using var document = await response.Content.ReadFromJsonAsync<JsonDocument>(
+            TestContext.Current.CancellationToken)
+            ?? throw new InvalidOperationException("The shared-wishlist response is empty.");
+        var wish = Assert.Single(document.RootElement.GetProperty("wishes").EnumerateArray());
+        Assert.Equal(
+            1,
+            wish.GetProperty("quantity").GetInt32());
+        Assert.Equal(
+            3,
+            wish.GetProperty("reservedQuantity").GetInt32());
+        Assert.Equal(
+            0,
+            wish.GetProperty("availableQuantity").GetInt32());
+        Assert.Equal(
+            2,
+            wish.GetProperty("currentParticipantReservedQuantity").GetInt32());
+        Assert.Equal(
+            participant.Id,
+            document.RootElement
+                .GetProperty("currentParticipant")
+                .GetProperty("id")
+                .GetGuid());
+        Assert.Equal(
+            [(wishlist.Id, participant.Id)],
+            factory.GiftReservationService.QuantityRetrievals);
     }
 
     [Fact]

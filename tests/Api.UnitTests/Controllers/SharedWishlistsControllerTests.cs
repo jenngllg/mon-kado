@@ -1,6 +1,7 @@
 using JennGllg.Fr.MonKado.Back.Api.Abstractions;
 using JennGllg.Fr.MonKado.Back.Api.Contracts.Responses;
 using JennGllg.Fr.MonKado.Back.Api.Controllers;
+using JennGllg.Fr.MonKado.Back.Api.Services;
 using JennGllg.Fr.MonKado.Back.Application.Models;
 using JennGllg.Fr.MonKado.Back.Application.Queries;
 using JennGllg.Fr.MonKado.Back.Domain.Enums;
@@ -28,7 +29,8 @@ public class SharedWishlistsControllerTests
         _guestSessionCookieServiceMock = new Mock<IGuestSessionCookieService>(MockBehavior.Strict);
         _controller = new SharedWishlistsController(
             _senderMock.Object,
-            _guestSessionCookieServiceMock.Object)
+            _guestSessionCookieServiceMock.Object,
+            new EntityTagService())
         {
             ControllerContext = new ControllerContext
             {

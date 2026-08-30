@@ -5,6 +5,7 @@ using JennGllg.Fr.MonKado.Back.Application.Common.Exceptions;
 using JennGllg.Fr.MonKado.Back.Application.Common.Models;
 using JennGllg.Fr.MonKado.Back.Application.Logging;
 using JennGllg.Fr.MonKado.Back.Application.Models;
+using JennGllg.Fr.MonKado.Back.Application.Validators;
 
 using MediatR;
 
@@ -21,13 +22,15 @@ namespace JennGllg.Fr.MonKado.Back.Application.Commands;
 /// <param name="note">The optional owner note.</param>
 /// <param name="url">The optional product URL.</param>
 /// <param name="price">The optional price in euros.</param>
+/// <param name="quantity">The optional total desired quantity.</param>
 public class CreateWishCommand(
     Guid ownerId,
     Guid wishlistId,
     string? name,
     string? note,
     string? url,
-    decimal? price) : IRequest<WishDetails>, IGenericValidationFailure
+    decimal? price,
+    int? quantity = null) : IRequest<WishDetails>, IGenericValidationFailure
 {
     /// <summary>
     /// Gets the authenticated owner identifier.
@@ -58,6 +61,11 @@ public class CreateWishCommand(
     /// Gets the optional price in euros.
     /// </summary>
     public decimal? Price { get; } = price;
+
+    /// <summary>
+    /// Gets the optional total desired quantity.
+    /// </summary>
+    public int? Quantity { get; } = quantity;
 
     /// <inheritdoc />
     Exception IGenericValidationFailure.CreateValidationException(
@@ -111,6 +119,7 @@ public class CreateWishCommandHandler(
             note,
             url,
             request.Price,
+            request.Quantity ?? WishTextValidation.MinimumQuantity,
             cancellationToken);
 
         if (wish is null)

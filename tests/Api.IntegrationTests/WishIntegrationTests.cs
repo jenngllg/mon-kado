@@ -446,7 +446,8 @@ public class WishIntegrationTests(PostgreSqlContainerFixture fixture)
                 name = "  Cafe\u0301 premium  ",
                 note = "   ",
                 url = (string?)null,
-                price = (decimal?)null
+                price = (decimal?)null,
+                quantity = 4
             },
             creationResponse.Headers.ETag?.Tag);
         var updated = await updateResponse.Content.ReadFromJsonAsync<JsonElement>(
@@ -484,6 +485,9 @@ public class WishIntegrationTests(PostgreSqlContainerFixture fixture)
             JsonValueKind.Null,
             updated.GetProperty("price").ValueKind);
         Assert.Equal(
+            4,
+            updated.GetProperty("quantity").GetInt32());
+        Assert.Equal(
             1,
             updated.GetProperty("position").GetInt64());
         Assert.NotEqual(
@@ -501,6 +505,9 @@ public class WishIntegrationTests(PostgreSqlContainerFixture fixture)
         Assert.Null(storedWish.Note);
         Assert.Null(storedWish.Url);
         Assert.Null(storedWish.Price);
+        Assert.Equal(
+            4,
+            storedWish.Quantity);
         Assert.Equal(
             1,
             storedWish.Position);
@@ -544,7 +551,8 @@ public class WishIntegrationTests(PostgreSqlContainerFixture fixture)
                 name = "Café",
                 note = "Édition blanche",
                 url = "https://example.com/gift",
-                price = 12.34m
+                price = 12.34m,
+                quantity = 1
             },
             creationResponse.Headers.ETag?.Tag);
         var updated = await updateResponse.Content.ReadFromJsonAsync<JsonElement>(
@@ -598,7 +606,8 @@ public class WishIntegrationTests(PostgreSqlContainerFixture fixture)
                 name = "Cadeau modifié",
                 note = (string?)null,
                 url = (string?)null,
-                price = (decimal?)null
+                price = (decimal?)null,
+                quantity = 1
             },
             "\"00000000\"");
         var error = await updateResponse.Content.ReadFromJsonAsync<ErrorResponse>(
@@ -655,7 +664,8 @@ public class WishIntegrationTests(PostgreSqlContainerFixture fixture)
             created.GetProperty("id").GetGuid(),
             new
             {
-                name = "Cadeau modifié"
+                name = "Cadeau modifié",
+                quantity = 1
             },
             creationResponse.Headers.ETag?.Tag);
         var error = await updateResponse.Content.ReadFromJsonAsync<ErrorResponse>(
@@ -976,7 +986,8 @@ public class WishIntegrationTests(PostgreSqlContainerFixture fixture)
             wishId,
             new
             {
-                name = "Cadeau modifié"
+                name = "Cadeau modifié",
+                quantity = 1
             },
             staleEntityTag);
 

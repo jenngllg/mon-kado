@@ -180,6 +180,15 @@ public static class ErrorCodes
     /// <summary>Identifies an invalid or expired browser guest session.</summary>
     public const string GuestSessionInvalid = "GUEST_SESSION_INVALID";
 
+    /// <summary>Identifies a missing current-participant gift reservation.</summary>
+    public const string GiftReservationNotFound = "GIFT_RESERVATION_NOT_FOUND";
+
+    /// <summary>Identifies a reservation quantity that is no longer available.</summary>
+    public const string GiftReservationQuantityUnavailable = "GIFT_RESERVATION_QUANTITY_UNAVAILABLE";
+
+    /// <summary>Identifies an optimistic gift-reservation version conflict.</summary>
+    public const string GiftReservationVersionConflict = "GIFT_RESERVATION_VERSION_CONFLICT";
+
     #endregion
 
     #region Technical

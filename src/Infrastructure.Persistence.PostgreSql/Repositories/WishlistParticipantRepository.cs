@@ -30,10 +30,15 @@ public class WishlistParticipantRepository(MonKadoDbContext context) : IWishlist
         Guid memberId,
         CancellationToken cancellationToken)
     {
-        return context.WishlistParticipants.SingleOrDefaultAsync(
-            participant => participant.WishlistId == wishlistId &&
-                participant.MemberId == memberId,
-            cancellationToken);
+        return context.WishlistParticipants
+            .FromSqlInterpolated($"""
+                SELECT participant.*
+                FROM public.wishlist_participants AS participant
+                WHERE participant.wishlist_id = {wishlistId}
+                    AND participant.member_id = {memberId}
+                FOR UPDATE
+                """)
+            .SingleOrDefaultAsync(cancellationToken);
     }
 
     /// <inheritdoc />
@@ -42,10 +47,15 @@ public class WishlistParticipantRepository(MonKadoDbContext context) : IWishlist
         Guid guestSessionId,
         CancellationToken cancellationToken)
     {
-        return context.WishlistParticipants.SingleOrDefaultAsync(
-            participant => participant.WishlistId == wishlistId &&
-                participant.GuestSessionId == guestSessionId,
-            cancellationToken);
+        return context.WishlistParticipants
+            .FromSqlInterpolated($"""
+                SELECT participant.*
+                FROM public.wishlist_participants AS participant
+                WHERE participant.wishlist_id = {wishlistId}
+                    AND participant.guest_session_id = {guestSessionId}
+                FOR UPDATE
+                """)
+            .SingleOrDefaultAsync(cancellationToken);
     }
 
     /// <inheritdoc />

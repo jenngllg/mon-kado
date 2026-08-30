@@ -1,5 +1,7 @@
 using JennGllg.Fr.MonKado.Back.Domain.Abstractions;
 
+using System.Diagnostics.CodeAnalysis;
+
 namespace JennGllg.Fr.MonKado.Back.Domain.Entities;
 
 /// <summary>
@@ -21,6 +23,11 @@ public class Wish : IAuditableEntity
     /// <param name="url">The optional product URL.</param>
     /// <param name="price">The optional price in euros.</param>
     /// <param name="position">The allocated position inside the parent wishlist.</param>
+    /// <param name="quantity">The total desired quantity.</param>
+    [SuppressMessage(
+        "CodeQuality",
+        "S107:Methods should not have too many parameters",
+        Justification = "The constructor captures the complete initial state of a gift wish.")]
     public Wish(
         Guid id,
         Guid wishlistId,
@@ -28,7 +35,8 @@ public class Wish : IAuditableEntity
         string? note,
         string? url,
         decimal? price,
-        long position)
+        long position,
+        int quantity = 1)
     {
         Id = id;
         WishlistId = wishlistId;
@@ -36,6 +44,7 @@ public class Wish : IAuditableEntity
         Note = note;
         Url = url;
         Price = price;
+        Quantity = quantity;
         Position = position;
     }
 
@@ -85,6 +94,14 @@ public class Wish : IAuditableEntity
     }
 
     /// <summary>
+    /// Gets the total desired quantity.
+    /// </summary>
+    public int Quantity
+    {
+        get; private set;
+    }
+
+    /// <summary>
     /// Gets the stable position inside the parent wishlist.
     /// </summary>
     public long Position
@@ -123,17 +140,20 @@ public class Wish : IAuditableEntity
     /// <param name="note">The optional owner note.</param>
     /// <param name="url">The optional product URL.</param>
     /// <param name="price">The optional price in euros.</param>
+    /// <param name="quantity">The total desired quantity.</param>
     /// <returns><see langword="true" /> when at least one value changed.</returns>
     public bool Update(
         string name,
         string? note,
         string? url,
-        decimal? price)
+        decimal? price,
+        int quantity = 1)
     {
         var hasChanged = Name != name ||
             Note != note ||
             Url != url ||
-            Price != price;
+            Price != price ||
+            Quantity != quantity;
 
         if (!hasChanged)
             return false;
@@ -142,6 +162,7 @@ public class Wish : IAuditableEntity
         Note = note;
         Url = url;
         Price = price;
+        Quantity = quantity;
 
         return true;
     }

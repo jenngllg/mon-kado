@@ -27,7 +27,8 @@ public class RecordingWishService : IWishService
         string Name,
         string? Note,
         string? Url,
-        decimal? Price)> Creations
+        decimal? Price,
+        int Quantity)> Creations
     {
         get;
     } = [];
@@ -65,6 +66,7 @@ public class RecordingWishService : IWishService
         string? Note,
         string? Url,
         decimal? Price,
+        int Quantity,
         uint ExpectedVersion)> Updates
     {
         get;
@@ -182,6 +184,7 @@ public class RecordingWishService : IWishService
         string? note,
         string? url,
         decimal? price,
+        int quantity,
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -192,7 +195,8 @@ public class RecordingWishService : IWishService
             name,
             note,
             url,
-            price));
+            price,
+            quantity));
 
         if (Exception is not null)
             throw Exception;
@@ -210,7 +214,8 @@ public class RecordingWishService : IWishService
             1,
             _createdAt,
             null,
-            42);
+            42,
+            quantity);
         Wishes[(wishlistId, id)] = wish;
 
         return Task.FromResult<WishDetails?>(wish);
@@ -246,6 +251,7 @@ public class RecordingWishService : IWishService
         string? note,
         string? url,
         decimal? price,
+        int quantity,
         uint expectedVersion,
         CancellationToken cancellationToken)
     {
@@ -258,6 +264,7 @@ public class RecordingWishService : IWishService
             note,
             url,
             price,
+            quantity,
             expectedVersion));
 
         if (Exception is not null)
@@ -281,7 +288,8 @@ public class RecordingWishService : IWishService
             currentWish.Position,
             currentWish.CreatedAt,
             _createdAt.AddHours(1),
-            expectedVersion + 1);
+            expectedVersion + 1,
+            quantity);
         Wishes[(wishlistId, wishId)] = wish;
 
         return Task.FromResult<WishDetails?>(wish);

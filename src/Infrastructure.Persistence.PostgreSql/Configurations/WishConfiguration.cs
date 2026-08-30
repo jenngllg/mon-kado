@@ -6,7 +6,10 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Configurations;
 
-internal sealed class WishConfiguration : IEntityTypeConfiguration<Wish>
+/// <summary>
+/// Configures gift wishes for PostgreSQL.
+/// </summary>
+public class WishConfiguration : IEntityTypeConfiguration<Wish>
 {
     /// <summary>
     /// Configures gift wish persistence.
@@ -16,6 +19,11 @@ internal sealed class WishConfiguration : IEntityTypeConfiguration<Wish>
     {
         builder.ToTable("wishes");
         builder.HasKey(wish => wish.Id);
+        builder.HasAlternateKey(wish => new
+        {
+            wish.WishlistId,
+            wish.Id
+        });
         builder.Property(wish => wish.Name)
             .HasMaxLength(WishTextValidation.MaximumNameLength)
             .IsRequired();
@@ -27,6 +35,8 @@ internal sealed class WishConfiguration : IEntityTypeConfiguration<Wish>
             .HasPrecision(
                 WishTextValidation.MaximumPricePrecision,
                 WishTextValidation.MaximumPriceScale);
+        builder.Property(wish => wish.Quantity)
+            .IsRequired();
         builder.Property(wish => wish.Position)
             .IsRequired();
         builder.Property(wish => wish.Version)
@@ -56,6 +66,9 @@ internal sealed class WishConfiguration : IEntityTypeConfiguration<Wish>
             table.HasCheckConstraint(
                 "ck_wishes_price_valid",
                 "price IS NULL OR price > 0");
+            table.HasCheckConstraint(
+                "ck_wishes_quantity_valid",
+                $"quantity BETWEEN {WishTextValidation.MinimumQuantity} AND {WishTextValidation.MaximumQuantity}");
             table.HasCheckConstraint(
                 "ck_wishes_position_valid",
                 "position > 0");

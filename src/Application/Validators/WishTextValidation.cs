@@ -35,6 +35,16 @@ public static class WishTextValidation
     public const int MaximumPriceScale = 2;
 
     /// <summary>
+    /// Identifies the minimum total desired quantity.
+    /// </summary>
+    public const int MinimumQuantity = 1;
+
+    /// <summary>
+    /// Identifies the maximum total desired quantity.
+    /// </summary>
+    public const int MaximumQuantity = 100;
+
+    /// <summary>
     /// Determines whether a required wish name is valid.
     /// </summary>
     /// <param name="value">The candidate value.</param>

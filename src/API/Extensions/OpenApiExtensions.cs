@@ -481,20 +481,20 @@ public static class OpenApiExtensions
 
         if (returnsEntityTag)
         {
-            var response = operation.Responses
+            foreach (var response in operation.Responses
                 .Where(response => response.Key.StartsWith('2'))
-                .OrderBy(response => response.Key)
-                .Select(response => response.Value)
-                .First();
-            var mutableResponse = (OpenApiResponse)response;
-            mutableResponse.Headers = AddOrReplace(
-                mutableResponse.Headers,
-                HeaderNames.ETag,
-                new OpenApiHeader
-                {
-                    Description = "Strong entity tag representing the current resource version.",
-                    Schema = new OpenApiSchema { Type = JsonSchemaType.String }
-                });
+                .Select(response => response.Value))
+            {
+                var mutableResponse = (OpenApiResponse)response;
+                mutableResponse.Headers = AddOrReplace(
+                    mutableResponse.Headers,
+                    HeaderNames.ETag,
+                    new OpenApiHeader
+                    {
+                        Description = "Strong entity tag representing the current resource version.",
+                        Schema = new OpenApiSchema { Type = JsonSchemaType.String }
+                    });
+            }
         }
 
         if (!isRequired)

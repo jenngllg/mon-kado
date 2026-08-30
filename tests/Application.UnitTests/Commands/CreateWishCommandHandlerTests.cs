@@ -35,7 +35,8 @@ public class CreateWishCommandHandlerTests
             "  Cafe\u0301  ",
             "  Note  ",
             "  https://example.com/gift  ",
-            12.34m);
+            12.34m,
+            4);
         WishDetails? expected = null;
         _wishServiceMock
             .Setup(service => service.CreateAsync(
@@ -46,6 +47,7 @@ public class CreateWishCommandHandlerTests
                 "Note",
                 "https://example.com/gift",
                 12.34m,
+                4,
                 cancellationToken))
             .Returns((
                 Guid id,
@@ -55,6 +57,7 @@ public class CreateWishCommandHandlerTests
                 string? _,
                 string? _,
                 decimal? _,
+                int _,
                 CancellationToken _) =>
             {
                 expected = CreateDetails(id, wishlistId);
@@ -80,6 +83,7 @@ public class CreateWishCommandHandlerTests
                 "Note",
                 "https://example.com/gift",
                 12.34m,
+                4,
                 cancellationToken),
             Times.Once);
         _wishServiceMock.VerifyNoOtherCalls();
@@ -108,6 +112,7 @@ public class CreateWishCommandHandlerTests
                 null,
                 null,
                 null,
+                1,
                 cancellationToken))
             .ReturnsAsync((WishDetails?)null);
 
@@ -127,6 +132,7 @@ public class CreateWishCommandHandlerTests
                 null,
                 null,
                 null,
+                1,
                 cancellationToken),
             Times.Once);
         _wishServiceMock.VerifyNoOtherCalls();
@@ -146,6 +152,7 @@ public class CreateWishCommandHandlerTests
             1,
             DateTime.UnixEpoch,
             null,
-            42);
+            42,
+            4);
     }
 }

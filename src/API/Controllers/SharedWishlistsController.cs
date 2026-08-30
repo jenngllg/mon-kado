@@ -25,14 +25,20 @@ namespace JennGllg.Fr.MonKado.Back.Api.Controllers;
 /// </summary>
 /// <param name="sender">The mediator sender.</param>
 /// <param name="guestSessionCookieService">The guest-session cookie service.</param>
+/// <param name="entityTagService">The entity-tag service.</param>
 [ApiController]
 [AllowAnonymous]
 [Route("api/v1/shared-wishlists")]
 public class SharedWishlistsController(
     ISender sender,
-    IGuestSessionCookieService guestSessionCookieService) : ControllerBase
+    IGuestSessionCookieService guestSessionCookieService,
+    IEntityTagService entityTagService) : ControllerBase
 {
     private const string GetCurrentParticipantRouteName = "GetCurrentSharedWishlistParticipant";
+    private const string GetCurrentReservationRouteName = "GetCurrentSharedWishlistGiftReservation";
+    private const string NoStoreCacheControl = "no-store";
+    private const string RobotsHeaderName = "X-Robots-Tag";
+    private const string RobotsHeaderValue = "noindex, nofollow, noarchive";
     private const int MaximumRequestBodySize = 4 * 1024;
 
     /// <summary>Identifies the bearer share-secret request header.</summary>
@@ -75,18 +81,26 @@ public class SharedWishlistsController(
             EventDate = wishlist.EventDate,
             Message = wishlist.Message,
             Wishes = wishlist.Wishes
-                .Select(wish => new SharedWishResponse(
-                    wish.Id,
-                    wish.Name,
-                    wish.Url,
-                    wish.Price))
+                .Select(wish => new SharedWishResponse
+                {
+                    Id = wish.Id,
+                    Name = wish.Name,
+                    Url = wish.Url,
+                    Price = wish.Price,
+                    Quantity = wish.Quantity,
+                    ReservedQuantity = wish.ReservedQuantity,
+                    AvailableQuantity = Math.Max(
+                        0,
+                        wish.Quantity - wish.ReservedQuantity),
+                    CurrentParticipantReservedQuantity = wish.CurrentParticipantReservedQuantity
+                })
                 .ToArray(),
             CurrentParticipant = result.CurrentParticipant is null
                 ? null
                 : CreateParticipantResponse(result.CurrentParticipant)
         };
-        Response.Headers["X-Robots-Tag"] = "noindex, nofollow, noarchive";
-        Response.Headers.CacheControl = "no-store";
+        Response.Headers[RobotsHeaderName] = RobotsHeaderValue;
+        Response.Headers.CacheControl = NoStoreCacheControl;
 
         return Ok(response);
     }
@@ -140,8 +154,8 @@ public class SharedWishlistsController(
         }
 
         var response = CreateParticipantResponse(result.Participant);
-        Response.Headers["X-Robots-Tag"] = "noindex, nofollow, noarchive";
-        Response.Headers.CacheControl = "no-store";
+        Response.Headers[RobotsHeaderName] = RobotsHeaderValue;
+        Response.Headers.CacheControl = NoStoreCacheControl;
 
         if (!result.IsCreated)
             return Ok(response);
@@ -183,10 +197,116 @@ public class SharedWishlistsController(
                 guestSessionCookieService.GetValue(Request)),
             cancellationToken);
         var response = CreateParticipantResponse(participant);
-        Response.Headers["X-Robots-Tag"] = "noindex, nofollow, noarchive";
-        Response.Headers.CacheControl = "no-store";
+        Response.Headers[RobotsHeaderName] = RobotsHeaderValue;
+        Response.Headers.CacheControl = NoStoreCacheControl;
 
         return Ok(response);
+    }
+
+    /// <summary>Gets the current participant's reservation for one shared gift.</summary>
+    /// <param name="shareLinkId">The public share-link identifier.</param>
+    /// <param name="wishId">The gift-wish identifier.</param>
+    /// <param name="shareToken">The bearer secret contained in the URL fragment.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The current participant's reservation.</returns>
+    [HttpGet("{shareLinkId:guid}/wishes/{wishId:guid}/reservations/current", Name = GetCurrentReservationRouteName)]
+    [EnableRateLimiting(AuthenticationRateLimitingExtensions.SharedWishlistPolicy)]
+    [OptionalBearer]
+    [GuestSessionCookie(isRequired: false)]
+    [EntityTag]
+    [NoStoreResponse(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(GiftReservationResponse), StatusCodes.Status200OK, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status429TooManyRequests, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status503ServiceUnavailable, "application/json")]
+    public async Task<ActionResult<GiftReservationResponse>> GetCurrentReservationAsync(
+        Guid shareLinkId,
+        Guid wishId,
+        [FromHeader(Name = ShareTokenHeaderName)] string? shareToken,
+        CancellationToken cancellationToken)
+    {
+        var reservation = await sender.Send(
+            new GetCurrentGiftReservationQuery(
+                shareLinkId,
+                shareToken,
+                wishId,
+                GetOptionalMemberId(),
+                guestSessionCookieService.GetValue(Request)),
+            cancellationToken);
+        var response = CreateReservationResponse(reservation);
+        Response.Headers.ETag = entityTagService.Format(reservation.Version);
+        Response.Headers[RobotsHeaderName] = RobotsHeaderValue;
+        Response.Headers.CacheControl = NoStoreCacheControl;
+
+        return Ok(response);
+    }
+
+    /// <summary>Creates or replaces the current participant's reservation for one shared gift.</summary>
+    /// <param name="shareLinkId">The public share-link identifier.</param>
+    /// <param name="wishId">The gift-wish identifier.</param>
+    /// <param name="shareToken">The bearer secret contained in the URL fragment.</param>
+    /// <param name="request">The absolute reservation quantity.</param>
+    /// <param name="expectedEntityTag">The optional current reservation entity tag.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The created or replaced reservation.</returns>
+    [HttpPut("{shareLinkId:guid}/wishes/{wishId:guid}/reservations/current")]
+    [ValidateAntiForgeryToken]
+    [EnableRateLimiting(AuthenticationRateLimitingExtensions.SharedWishlistReservationPolicy)]
+    [OptionalBearer]
+    [GuestSessionCookie(isRequired: false)]
+    [EntityTag]
+    [NoStoreResponse(StatusCodes.Status200OK)]
+    [NoStoreResponse(StatusCodes.Status201Created)]
+    [RequestSizeLimit(MaximumRequestBodySize)]
+    [Consumes("application/json")]
+    [ProducesResponseType(typeof(GiftReservationResponse), StatusCodes.Status200OK, "application/json")]
+    [ProducesResponseType(typeof(GiftReservationResponse), StatusCodes.Status201Created, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status409Conflict, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status412PreconditionFailed, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status413PayloadTooLarge, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status415UnsupportedMediaType, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status428PreconditionRequired, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status429TooManyRequests, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status503ServiceUnavailable, "application/json")]
+    public async Task<ActionResult<GiftReservationResponse>> UpsertCurrentReservationAsync(
+        Guid shareLinkId,
+        Guid wishId,
+        [FromHeader(Name = ShareTokenHeaderName)] string? shareToken,
+        UpsertGiftReservationRequest request,
+        [FromHeader(Name = "If-Match")] string? expectedEntityTag,
+        CancellationToken cancellationToken)
+    {
+        var result = await sender.Send(
+            new UpsertGiftReservationCommand(
+                shareLinkId,
+                shareToken,
+                wishId,
+                GetOptionalMemberId(),
+                guestSessionCookieService.GetValue(Request),
+                request.Quantity,
+                entityTagService.ParseOptional(expectedEntityTag)),
+            cancellationToken);
+        var response = CreateReservationResponse(result.Reservation);
+        Response.Headers.ETag = entityTagService.Format(result.Reservation.Version);
+        Response.Headers[RobotsHeaderName] = RobotsHeaderValue;
+        Response.Headers.CacheControl = NoStoreCacheControl;
+
+        if (!result.IsCreated)
+            return Ok(response);
+
+        return CreatedAtRoute(
+            GetCurrentReservationRouteName,
+            new
+            {
+                shareLinkId,
+                wishId
+            },
+            response);
     }
 
     private Guid? GetOptionalMemberId()
@@ -208,5 +328,18 @@ public class SharedWishlistsController(
         return new WishlistParticipantResponse(
             participant.Id,
             participant.DisplayName);
+    }
+
+    private static GiftReservationResponse CreateReservationResponse(
+        GiftReservationDetails reservation)
+    {
+        return new GiftReservationResponse
+        {
+            Id = reservation.Id,
+            WishId = reservation.WishId,
+            Quantity = reservation.Quantity,
+            CreatedAt = reservation.CreatedAt,
+            UpdatedAt = reservation.UpdatedAt
+        };
     }
 }
