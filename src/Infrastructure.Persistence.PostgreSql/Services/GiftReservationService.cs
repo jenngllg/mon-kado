@@ -15,6 +15,8 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Service
 /// </summary>
 public class GiftReservationService : IGiftReservationService
 {
+    private const string PostgreSqlDependencyName = "PostgreSQL";
+
     private readonly IGiftReservationRepository _giftReservationRepository;
     private readonly IGuestSessionRepository _guestSessionRepository;
     private readonly IGuestSessionTokenService _guestSessionTokenService;
@@ -81,7 +83,7 @@ public class GiftReservationService : IGiftReservationService
         catch (Exception exception) when (PostgreSqlFailureClassifier.IsUnavailable(exception))
         {
             throw new DependencyUnavailableException(
-                "PostgreSQL",
+                PostgreSqlDependencyName,
                 exception);
         }
     }
@@ -102,7 +104,7 @@ public class GiftReservationService : IGiftReservationService
         catch (Exception exception) when (PostgreSqlFailureClassifier.IsUnavailable(exception))
         {
             throw new DependencyUnavailableException(
-                "PostgreSQL",
+                PostgreSqlDependencyName,
                 exception);
         }
     }
@@ -172,7 +174,7 @@ public class GiftReservationService : IGiftReservationService
         catch (Exception exception) when (PostgreSqlFailureClassifier.IsUnavailable(exception))
         {
             throw new DependencyUnavailableException(
-                "PostgreSQL",
+                PostgreSqlDependencyName,
                 exception);
         }
 
@@ -244,7 +246,7 @@ public class GiftReservationService : IGiftReservationService
             if (!commitAttempted)
             {
                 throw new DependencyUnavailableException(
-                    "PostgreSQL",
+                    PostgreSqlDependencyName,
                     exception);
             }
 
@@ -388,7 +390,7 @@ public class GiftReservationService : IGiftReservationService
             throw new GiftReservationVersionConflictException();
 
         throw new DependencyUnavailableException(
-            "PostgreSQL",
+            PostgreSqlDependencyName,
             originalException);
     }
 
@@ -409,7 +411,7 @@ public class GiftReservationService : IGiftReservationService
         catch (Exception exception) when (PostgreSqlFailureClassifier.IsUnavailable(exception))
         {
             throw new DependencyUnavailableException(
-                "PostgreSQL",
+                PostgreSqlDependencyName,
                 exception);
         }
     }
