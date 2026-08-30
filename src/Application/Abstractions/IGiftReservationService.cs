@@ -3,7 +3,7 @@ using JennGllg.Fr.MonKado.Back.Application.Models;
 namespace JennGllg.Fr.MonKado.Back.Application.Abstractions;
 
 /// <summary>
-/// Retrieves and replaces gift reservations for shared-wishlist participants.
+/// Retrieves, replaces and cancels gift reservations for shared-wishlist participants.
 /// </summary>
 public interface IGiftReservationService
 {
@@ -35,5 +35,13 @@ public interface IGiftReservationService
     /// <returns>The current reservation and whether it was created.</returns>
     Task<GiftReservationMutationResult> UpsertAsync(
         GiftReservationMutationRequest request,
+        CancellationToken cancellationToken);
+
+    /// <summary>Cancels the current participant's reservation.</summary>
+    /// <param name="request">The reservation cancellation.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns><see langword="true" /> when the reservation was deleted.</returns>
+    Task<bool> CancelAsync(
+        GiftReservationCancellationRequest request,
         CancellationToken cancellationToken);
 }

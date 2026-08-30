@@ -36,6 +36,7 @@ public class WishlistShareLinkOpenApiTests
             .GetProperty("/api/v1/shared-wishlists/{shareLinkId}/wishes/{wishId}/reservations/current");
         var getCurrentReservation = reservationsPath.GetProperty("get");
         var upsertCurrentReservation = reservationsPath.GetProperty("put");
+        var cancelCurrentReservation = reservationsPath.GetProperty("delete");
 
         // Assert
         Assert.Equal(
@@ -275,6 +276,41 @@ public class WishlistShareLinkOpenApiTests
             upsertCurrentReservation,
             "201",
             includesLocation: true);
+
+        Assert.Equal(
+            "Cancels the current participant's reservation for one shared gift.",
+            cancelCurrentReservation.GetProperty("summary").GetString());
+        AssertOptionalBearerAndGuestCookie(
+            cancelCurrentReservation,
+            expectsAntiforgery: true);
+        AssertRequiredIfMatch(cancelCurrentReservation);
+        AssertResponses(
+            cancelCurrentReservation,
+            "204",
+            "400",
+            "401",
+            "404",
+            "412",
+            "428",
+            "429",
+            "500",
+            "503");
+        var cancellationSuccess = cancelCurrentReservation
+            .GetProperty("responses")
+            .GetProperty("204");
+        Assert.True(cancellationSuccess
+            .GetProperty("headers")
+            .TryGetProperty(
+                "Cache-Control",
+                out _));
+        Assert.False(cancellationSuccess
+            .GetProperty("headers")
+            .TryGetProperty(
+                "ETag",
+                out _));
+        Assert.False(cancellationSuccess.TryGetProperty(
+            "content",
+            out _));
     }
 
     private static void AssertBearerWithoutAntiforgery(JsonElement operation)

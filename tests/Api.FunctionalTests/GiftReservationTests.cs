@@ -190,6 +190,188 @@ public class GiftReservationTests
             factory.GiftReservationService.Retrievals);
     }
 
+    [Fact]
+    public async Task CancelCurrentReservationAsync_WhenMemberReservationExists_ReturnsNoContent()
+    {
+        // Arrange
+        await using var factory = new RegistrationApiFactory();
+        var memberId = Guid.CreateVersion7();
+        var shareLinkId = Guid.CreateVersion7();
+        var wishId = Guid.CreateVersion7();
+        using var client = CreateAuthorizedClient(
+            factory,
+            memberId);
+
+        // Act
+        using var response = await SendDeleteAsync(
+            client,
+            shareLinkId,
+            wishId,
+            "\"0000002a\"",
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.NoContent,
+            response.StatusCode);
+        Assert.Equal(
+            0,
+            response.Content.Headers.ContentLength);
+        Assert.True(response.Headers.CacheControl?.NoStore);
+        Assert.Equal(
+            "noindex, nofollow, noarchive",
+            response.Headers.GetValues("X-Robots-Tag").Single());
+        var cancellation = Assert.Single(factory.GiftReservationService.Cancellations);
+        Assert.Equal(
+            shareLinkId,
+            cancellation.ShareLinkId);
+        Assert.Equal(
+            ShareSecret,
+            cancellation.ShareSecret);
+        Assert.Equal(
+            wishId,
+            cancellation.WishId);
+        Assert.Equal(
+            memberId,
+            cancellation.MemberId);
+        Assert.Null(cancellation.GuestToken);
+        Assert.Equal(
+            42u,
+            cancellation.ExpectedVersion);
+    }
+
+    [Fact]
+    public async Task CancelCurrentReservationAsync_WhenGuestReservationExists_UsesGuestCookie()
+    {
+        // Arrange
+        await using var factory = new RegistrationApiFactory();
+        using var client = factory.CreateClient();
+        var shareLinkId = Guid.CreateVersion7();
+        var wishId = Guid.CreateVersion7();
+        using var joinResponse = await SendJoinAsync(
+            client,
+            shareLinkId,
+            TestContext.Current.CancellationToken);
+        Assert.Equal(
+            HttpStatusCode.Created,
+            joinResponse.StatusCode);
+
+        // Act
+        using var response = await SendDeleteAsync(
+            client,
+            shareLinkId,
+            wishId,
+            "\"0000002a\"",
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.NoContent,
+            response.StatusCode);
+        var cancellation = Assert.Single(factory.GiftReservationService.Cancellations);
+        Assert.Null(cancellation.MemberId);
+        Assert.NotNull(cancellation.GuestToken);
+    }
+
+    [Theory]
+    [InlineData(typeof(GiftReservationNotFoundException), HttpStatusCode.NotFound, ErrorCodes.GiftReservationNotFound)]
+    [InlineData(typeof(GiftReservationVersionConflictException), HttpStatusCode.PreconditionFailed, ErrorCodes.GiftReservationVersionConflict)]
+    [InlineData(typeof(DependencyUnavailableException), HttpStatusCode.ServiceUnavailable, ErrorCodes.TechnicalDependencyUnavailable)]
+    public async Task CancelCurrentReservationAsync_WhenServiceRejectsCancellation_ReturnsStructuredError(
+        Type exceptionType,
+        HttpStatusCode expectedStatusCode,
+        string expectedErrorCode)
+    {
+        // Arrange
+        await using var factory = new RegistrationApiFactory();
+        factory.GiftReservationService.Exception = CreateException(exceptionType);
+        using var client = CreateAuthorizedClient(
+            factory,
+            Guid.CreateVersion7());
+
+        // Act
+        using var response = await SendDeleteAsync(
+            client,
+            Guid.CreateVersion7(),
+            Guid.CreateVersion7(),
+            "\"0000002a\"",
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(
+            expectedStatusCode,
+            response.StatusCode);
+        var error = await response.Content.ReadFromJsonAsync<ErrorResponse>(
+            TestContext.Current.CancellationToken);
+        Assert.NotNull(error);
+        Assert.Equal(
+            expectedErrorCode,
+            error.ErrorCode);
+    }
+
+    [Theory]
+    [InlineData(null, HttpStatusCode.PreconditionRequired, ErrorCodes.RequestPreconditionRequired)]
+    [InlineData("invalid", HttpStatusCode.BadRequest, ErrorCodes.RequestValidationError)]
+    public async Task CancelCurrentReservationAsync_WhenEntityTagIsInvalid_ReturnsStructuredError(
+        string? entityTag,
+        HttpStatusCode expectedStatusCode,
+        string expectedErrorCode)
+    {
+        // Arrange
+        await using var factory = new RegistrationApiFactory();
+        using var client = CreateAuthorizedClient(
+            factory,
+            Guid.CreateVersion7());
+
+        // Act
+        using var response = await SendDeleteAsync(
+            client,
+            Guid.CreateVersion7(),
+            Guid.CreateVersion7(),
+            entityTag,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(
+            expectedStatusCode,
+            response.StatusCode);
+        var error = await response.Content.ReadFromJsonAsync<ErrorResponse>(
+            TestContext.Current.CancellationToken);
+        Assert.NotNull(error);
+        Assert.Equal(
+            expectedErrorCode,
+            error.ErrorCode);
+        Assert.Empty(factory.GiftReservationService.Cancellations);
+    }
+
+    [Fact]
+    public async Task CancelCurrentReservationAsync_WhenAntiforgeryTokenIsMissing_ReturnsBadRequest()
+    {
+        // Arrange
+        await using var factory = new RegistrationApiFactory();
+        using var client = CreateAuthorizedClient(
+            factory,
+            Guid.CreateVersion7());
+        using var request = CreateSharedRequest(
+            HttpMethod.Delete,
+            Guid.CreateVersion7(),
+            Guid.CreateVersion7());
+        request.Headers.TryAddWithoutValidation(
+            "If-Match",
+            "\"0000002a\"");
+
+        // Act
+        using var response = await client.SendAsync(
+            request,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.BadRequest,
+            response.StatusCode);
+        Assert.Empty(factory.GiftReservationService.Cancellations);
+    }
+
     [Theory]
     [InlineData(typeof(GiftReservationNotFoundException), HttpStatusCode.NotFound, ErrorCodes.GiftReservationNotFound)]
     [InlineData(typeof(GiftReservationQuantityUnavailableException), HttpStatusCode.Conflict, ErrorCodes.GiftReservationQuantityUnavailable)]
@@ -366,6 +548,63 @@ public class GiftReservationTests
             quantity,
             entityTag,
             csrfToken,
+            cancellationToken);
+    }
+
+    private static async Task<HttpResponseMessage> SendDeleteAsync(
+        HttpClient client,
+        Guid shareLinkId,
+        Guid wishId,
+        string? entityTag,
+        CancellationToken cancellationToken)
+    {
+        var csrfToken = await GetCsrfTokenAsync(
+            client,
+            cancellationToken);
+        using var request = CreateSharedRequest(
+            HttpMethod.Delete,
+            shareLinkId,
+            wishId);
+        request.Headers.Add(
+            WebSecurityOptions.AntiforgeryHeaderName,
+            csrfToken);
+
+        if (entityTag is not null)
+        {
+            request.Headers.TryAddWithoutValidation(
+                "If-Match",
+                entityTag);
+        }
+
+        return await client.SendAsync(
+            request,
+            cancellationToken);
+    }
+
+    private static async Task<HttpResponseMessage> SendJoinAsync(
+        HttpClient client,
+        Guid shareLinkId,
+        CancellationToken cancellationToken)
+    {
+        var csrfToken = await GetCsrfTokenAsync(
+            client,
+            cancellationToken);
+        using var request = new HttpRequestMessage(
+            HttpMethod.Post,
+            $"/api/v1/shared-wishlists/{shareLinkId}/participants");
+        request.Headers.TryAddWithoutValidation(
+            "X-MonKado-Share-Token",
+            ShareSecret);
+        request.Headers.Add(
+            WebSecurityOptions.AntiforgeryHeaderName,
+            csrfToken);
+        request.Content = JsonContent.Create(new
+        {
+            displayName = "Guest Jenn"
+        });
+
+        return await client.SendAsync(
+            request,
             cancellationToken);
     }
 

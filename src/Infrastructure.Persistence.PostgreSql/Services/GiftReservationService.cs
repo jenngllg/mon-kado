@@ -179,18 +179,111 @@ public class GiftReservationService : IGiftReservationService
         return result;
     }
 
+    /// <inheritdoc />
+    public async Task<bool> CancelAsync(
+        GiftReservationCancellationRequest request,
+        CancellationToken cancellationToken)
+    {
+        bool result;
+        var participantId = Guid.Empty;
+        var reservationId = Guid.Empty;
+        var commitAttempted = false;
+
+        try
+        {
+            await using var transaction = await _transactionFactory.BeginAsync(cancellationToken);
+            await ValidateShareLinkAsync(
+                request.ShareLinkId,
+                request.WishlistId,
+                request.ShareSecret,
+                cancellationToken);
+            var participant = await ResolveParticipantAsync(
+                request.MemberId,
+                request.GuestToken,
+                request.WishlistId,
+                cancellationToken);
+            participantId = participant.Id;
+            _ = await _transactionFactory.LockWishAsync(
+                request.WishlistId,
+                request.WishId,
+                cancellationToken) ?? throw new WishNotFoundException();
+            var reservation = await _giftReservationRepository.GetForUpdateAsync(
+                request.WishlistId,
+                request.WishId,
+                participantId,
+                cancellationToken);
+
+            if (reservation is null)
+                return false;
+
+            if (reservation.Version != request.ExpectedVersion)
+                throw new GiftReservationVersionConflictException();
+
+            reservationId = reservation.Id;
+            _giftReservationRepository.Remove(reservation);
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+            commitAttempted = true;
+            await transaction.CommitAsync(cancellationToken);
+            result = true;
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            result = await ResolveConcurrentCancellationAsync(
+                request,
+                participantId,
+                cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            if (exception is DependencyUnavailableException ||
+                !PostgreSqlFailureClassifier.IsUnavailable(exception))
+            {
+                throw;
+            }
+
+            if (!commitAttempted)
+            {
+                throw new DependencyUnavailableException(
+                    "PostgreSQL",
+                    exception);
+            }
+
+            result = await ResolveAmbiguousCancellationAsync(
+                request,
+                participantId,
+                reservationId,
+                exception,
+                cancellationToken);
+        }
+
+        return result;
+    }
+
     private async Task ValidateShareLinkAsync(
         GiftReservationMutationRequest request,
         CancellationToken cancellationToken)
     {
-        var shareLink = await _transactionFactory.LockShareLinkAsync(
+        await ValidateShareLinkAsync(
             request.ShareLinkId,
+            request.WishlistId,
+            request.ShareSecret,
+            cancellationToken);
+    }
+
+    private async Task ValidateShareLinkAsync(
+        Guid shareLinkId,
+        Guid wishlistId,
+        string shareSecret,
+        CancellationToken cancellationToken)
+    {
+        var shareLink = await _transactionFactory.LockShareLinkAsync(
+            shareLinkId,
             cancellationToken);
 
         if (shareLink is null ||
-            shareLink.WishlistId != request.WishlistId ||
+            shareLink.WishlistId != wishlistId ||
             !_wishlistShareTokenService.Verify(
-                request.ShareSecret,
+                shareSecret,
                 shareLink.SecretHash))
         {
             throw new SharedWishlistNotFoundException();
@@ -201,7 +294,20 @@ public class GiftReservationService : IGiftReservationService
         GiftReservationMutationRequest request,
         CancellationToken cancellationToken)
     {
-        if (request.MemberId is Guid memberId)
+        return await ResolveParticipantAsync(
+            request.MemberId,
+            request.GuestToken,
+            request.WishlistId,
+            cancellationToken);
+    }
+
+    private async Task<WishlistParticipant> ResolveParticipantAsync(
+        Guid? memberIdValue,
+        string? guestToken,
+        Guid wishlistId,
+        CancellationToken cancellationToken)
+    {
+        if (memberIdValue is Guid memberId)
         {
             var displayName = await _participantRepository.GetMemberDisplayNameAsync(
                 memberId,
@@ -211,14 +317,14 @@ public class GiftReservationService : IGiftReservationService
                 throw new InvalidAuthenticationSessionException();
 
             return await _participantRepository.GetByMemberForUpdateAsync(
-                request.WishlistId,
+                wishlistId,
                 memberId,
                 cancellationToken) ?? throw new WishlistParticipantNotFoundException();
         }
 
-        if (request.GuestToken is null ||
+        if (guestToken is null ||
             !_guestSessionTokenService.TryParse(
-                request.GuestToken,
+                guestToken,
                 out var guestSessionId,
                 out var presentedHash))
         {
@@ -240,9 +346,72 @@ public class GiftReservationService : IGiftReservationService
         }
 
         return await _participantRepository.GetByGuestSessionForUpdateAsync(
-            request.WishlistId,
+            wishlistId,
             guestSessionId,
             cancellationToken) ?? throw new WishlistParticipantNotFoundException();
+    }
+
+    private async Task<bool> ResolveConcurrentCancellationAsync(
+        GiftReservationCancellationRequest request,
+        Guid participantId,
+        CancellationToken cancellationToken)
+    {
+        var currentReservation = await GetReservationSafelyAsync(
+            request.WishlistId,
+            request.WishId,
+            participantId,
+            cancellationToken);
+
+        if (currentReservation is null)
+            return false;
+
+        throw new GiftReservationVersionConflictException();
+    }
+
+    private async Task<bool> ResolveAmbiguousCancellationAsync(
+        GiftReservationCancellationRequest request,
+        Guid participantId,
+        Guid reservationId,
+        Exception originalException,
+        CancellationToken cancellationToken)
+    {
+        var currentReservation = await GetReservationSafelyAsync(
+            request.WishlistId,
+            request.WishId,
+            participantId,
+            cancellationToken);
+
+        if (currentReservation is null)
+            return true;
+
+        if (currentReservation.Id != reservationId)
+            throw new GiftReservationVersionConflictException();
+
+        throw new DependencyUnavailableException(
+            "PostgreSQL",
+            originalException);
+    }
+
+    private async Task<GiftReservation?> GetReservationSafelyAsync(
+        Guid wishlistId,
+        Guid wishId,
+        Guid participantId,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await _giftReservationRepository.GetAsync(
+                wishlistId,
+                wishId,
+                participantId,
+                cancellationToken);
+        }
+        catch (Exception exception) when (PostgreSqlFailureClassifier.IsUnavailable(exception))
+        {
+            throw new DependencyUnavailableException(
+                "PostgreSQL",
+                exception);
+        }
     }
 
     private static void ValidateVersion(
