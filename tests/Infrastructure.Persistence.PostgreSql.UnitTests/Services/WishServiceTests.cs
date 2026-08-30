@@ -2013,6 +2013,7 @@ public class WishServiceTests
             data.Note,
             data.Url,
             data.Price,
+            1,
             data.CancellationToken);
     }
 
@@ -2032,6 +2033,7 @@ public class WishServiceTests
             note,
             url,
             price,
+            1,
             expectedVersion,
             data.CancellationToken);
     }

@@ -20,6 +20,11 @@ public class WishlistParticipantConfiguration : IEntityTypeConfiguration<Wishlis
                 "ck_wishlist_participants_identity",
                 "member_id IS NULL OR guest_session_id IS NULL"));
         builder.HasKey(participant => participant.Id);
+        builder.HasAlternateKey(participant => new
+        {
+            participant.WishlistId,
+            participant.Id
+        });
         builder.Property(participant => participant.GuestDisplayName)
             .HasMaxLength(80)
             .IsRequired();

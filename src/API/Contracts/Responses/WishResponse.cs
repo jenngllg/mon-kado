@@ -14,6 +14,7 @@ namespace JennGllg.Fr.MonKado.Back.Api.Contracts.Responses;
 /// <param name="position">The stable position inside the parent wishlist.</param>
 /// <param name="createdAt">The UTC creation date and time.</param>
 /// <param name="updatedAt">The optional UTC update date and time.</param>
+/// <param name="quantity">The total desired quantity.</param>
 [ExcludeFromCodeCoverage]
 public class WishResponse(
     Guid id,
@@ -24,7 +25,8 @@ public class WishResponse(
     decimal? price,
     long position,
     DateTime createdAt,
-    DateTime? updatedAt)
+    DateTime? updatedAt,
+    int quantity = 1)
 {
     /// <summary>
     /// Gets the wish identifier.
@@ -55,6 +57,11 @@ public class WishResponse(
     /// Gets the optional price in euros.
     /// </summary>
     public decimal? Price { get; } = price;
+
+    /// <summary>
+    /// Gets the total desired quantity.
+    /// </summary>
+    public int Quantity { get; } = quantity;
 
     /// <summary>
     /// Gets the stable position inside the parent wishlist.

@@ -23,6 +23,64 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Migrati
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("JennGllg.Fr.MonKado.Back.Domain.Entities.GiftReservation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<int>("Quantity")
+                        .HasColumnType("integer")
+                        .HasColumnName("quantity");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.Property<Guid>("WishId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("wish_id");
+
+                    b.Property<Guid>("WishlistId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("wishlist_id");
+
+                    b.Property<Guid>("WishlistParticipantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("wishlist_participant_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_gift_reservations");
+
+                    b.HasIndex("WishlistId", "WishId")
+                        .HasDatabaseName("ix_gift_reservations_wishlist_id_wish_id");
+
+                    b.HasIndex("WishlistId", "WishlistParticipantId")
+                        .HasDatabaseName("ix_gift_reservations_wishlist_id_wishlist_participant_id");
+
+                    b.HasIndex("WishlistParticipantId", "WishId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_gift_reservations_participant_wish");
+
+                    b.ToTable("gift_reservations", "public", t =>
+                        {
+                            t.HasCheckConstraint("ck_gift_reservations_quantity_valid", "quantity BETWEEN 1 AND 100");
+
+                            t.HasCheckConstraint("ck_gift_reservations_timestamps_consistent", "updated_at IS NULL OR updated_at >= created_at");
+                        });
+                });
+
             modelBuilder.Entity("JennGllg.Fr.MonKado.Back.Domain.Entities.GuestSession", b =>
                 {
                     b.Property<Guid>("Id")
@@ -91,6 +149,10 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Migrati
                         .HasColumnType("numeric(10,2)")
                         .HasColumnName("price");
 
+                    b.Property<int>("Quantity")
+                        .HasColumnType("integer")
+                        .HasColumnName("quantity");
+
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("updated_at");
@@ -113,6 +175,9 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Migrati
                     b.HasKey("Id")
                         .HasName("pk_wishes");
 
+                    b.HasAlternateKey("WishlistId", "Id")
+                        .HasName("ak_wishes_wishlist_id_id");
+
                     b.HasIndex("WishlistId", "Position")
                         .IsUnique()
                         .HasDatabaseName("ux_wishes_wishlist_position");
@@ -124,6 +189,8 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Migrati
                             t.HasCheckConstraint("ck_wishes_position_valid", "position > 0");
 
                             t.HasCheckConstraint("ck_wishes_price_valid", "price IS NULL OR price > 0");
+
+                            t.HasCheckConstraint("ck_wishes_quantity_valid", "quantity BETWEEN 1 AND 100");
 
                             t.HasCheckConstraint("ck_wishes_timestamps_consistent", "updated_at IS NULL OR updated_at >= created_at");
 
@@ -235,6 +302,9 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Migrati
 
                     b.HasKey("Id")
                         .HasName("pk_wishlist_participants");
+
+                    b.HasAlternateKey("WishlistId", "Id")
+                        .HasName("ak_wishlist_participants_wishlist_id_id");
 
                     b.HasIndex("GuestSessionId")
                         .HasDatabaseName("ix_wishlist_participants_guest_session_id");
@@ -852,6 +922,25 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Migrati
                         .HasName("pk_user_tokens");
 
                     b.ToTable("user_tokens", "public");
+                });
+
+            modelBuilder.Entity("JennGllg.Fr.MonKado.Back.Domain.Entities.GiftReservation", b =>
+                {
+                    b.HasOne("JennGllg.Fr.MonKado.Back.Domain.Entities.Wish", null)
+                        .WithMany()
+                        .HasForeignKey("WishlistId", "WishId")
+                        .HasPrincipalKey("WishlistId", "Id")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_gift_reservations_wishes_wishlist_id_wish_id");
+
+                    b.HasOne("JennGllg.Fr.MonKado.Back.Domain.Entities.WishlistParticipant", null)
+                        .WithMany()
+                        .HasForeignKey("WishlistId", "WishlistParticipantId")
+                        .HasPrincipalKey("WishlistId", "Id")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_gift_reservations_participants_wishlist_id_participant_id");
                 });
 
             modelBuilder.Entity("JennGllg.Fr.MonKado.Back.Domain.Entities.Wish", b =>

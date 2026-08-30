@@ -54,6 +54,15 @@ public class EntityTagService : IEntityTagService
         return version;
     }
 
+    /// <inheritdoc />
+    public uint? ParseOptional(string? value)
+    {
+        if (value is null)
+            return null;
+
+        return Parse(value);
+    }
+
     private static RequestValidationException CreateValidationException()
     {
 

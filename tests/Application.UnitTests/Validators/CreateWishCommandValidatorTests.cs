@@ -171,6 +171,33 @@ public class CreateWishCommandValidatorTests
             error => error.PropertyName == nameof(command.Price));
     }
 
+    [Theory]
+    [InlineData(0)]
+    [InlineData(101)]
+    public async Task ValidateAsync_WhenQuantityIsOutsideAllowedRange_ReturnsQuantityFailure(
+        int quantity)
+    {
+        // Arrange
+        var command = new CreateWishCommand(
+            Guid.CreateVersion7(),
+            Guid.CreateVersion7(),
+            "Cadeau",
+            null,
+            null,
+            null,
+            quantity);
+
+        // Act
+        var result = await _validator.ValidateAsync(
+            command,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Contains(
+            result.Errors,
+            error => error.PropertyName == nameof(command.Quantity));
+    }
+
     private static CreateWishCommand CreateCommand(
         string? name,
         string? note,

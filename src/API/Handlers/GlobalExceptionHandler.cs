@@ -217,6 +217,24 @@ public class GlobalExceptionHandler(
                 "The wishlist already contains the maximum number of active participants.",
                 ErrorCodes.WishlistParticipantLimitReached,
                 null),
+            GiftReservationNotFoundException => new ErrorResponse(
+                StatusCodes.Status404NotFound,
+                "Gift reservation not found",
+                "The current participant has no reservation for the requested gift.",
+                ErrorCodes.GiftReservationNotFound,
+                null),
+            GiftReservationQuantityUnavailableException => new ErrorResponse(
+                StatusCodes.Status409Conflict,
+                "Gift reservation quantity unavailable",
+                "The requested gift quantity is no longer available.",
+                ErrorCodes.GiftReservationQuantityUnavailable,
+                null),
+            GiftReservationVersionConflictException => new ErrorResponse(
+                StatusCodes.Status412PreconditionFailed,
+                "Gift reservation version conflict",
+                "The gift reservation has changed. Retrieve it again before retrying.",
+                ErrorCodes.GiftReservationVersionConflict,
+                null),
             PreconditionRequiredException => new ErrorResponse(
                 StatusCodes.Status428PreconditionRequired,
                 "Precondition required",

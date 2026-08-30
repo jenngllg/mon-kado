@@ -69,10 +69,12 @@ public class GetSharedWishlistQuery : IRequest<SharedWishlistResult>, IGenericVa
 /// </summary>
 /// <param name="shareService">The wishlist share-link service.</param>
 /// <param name="participantService">The wishlist participant service.</param>
+/// <param name="reservationService">The gift reservation service.</param>
 /// <param name="logger">The logger.</param>
 public class GetSharedWishlistQueryHandler(
     IWishlistShareService shareService,
     IWishlistParticipantService participantService,
+    IGiftReservationService reservationService,
     ILogger<GetSharedWishlistQueryHandler> logger)
     : IRequestHandler<GetSharedWishlistQuery, SharedWishlistResult>
 {
@@ -102,15 +104,55 @@ public class GetSharedWishlistQueryHandler(
         if (participantLookup.Outcome is WishlistParticipantLookupOutcome.MemberNotFound)
             throw new InvalidAuthenticationSessionException();
 
+        WishlistParticipantDetails? currentParticipant = null;
+        IReadOnlyDictionary<Guid, int>? currentQuantities = null;
+
+        if (participantLookup.Outcome is WishlistParticipantLookupOutcome.Found &&
+            participantLookup.Participant is WishlistParticipantDetails participant)
+        {
+            currentParticipant = participant;
+            currentQuantities = await reservationService.GetQuantitiesAsync(
+                wishlist.Id,
+                participant.Id,
+                cancellationToken);
+        }
+
+        var enrichedWishlist = CreateWishlistDetails(
+            wishlist,
+            currentQuantities);
+
         ApplicationLogMessages.SharedWishlistRetrieved(
             logger,
             request.ShareLinkId,
             wishlist.Id);
 
         return new SharedWishlistResult(
-            wishlist,
-            participantLookup.Outcome is WishlistParticipantLookupOutcome.Found
-                ? participantLookup.Participant
-                : null);
+            enrichedWishlist,
+            currentParticipant);
+    }
+
+    private static SharedWishlistDetails CreateWishlistDetails(
+        SharedWishlistDetails wishlist,
+        IReadOnlyDictionary<Guid, int>? currentQuantities)
+    {
+        var wishes = wishlist.Wishes
+            .Select(wish => new SharedWishDetails(
+                wish.Id,
+                wish.Name,
+                wish.Url,
+                wish.Price,
+                wish.Quantity,
+                wish.ReservedQuantity,
+                currentQuantities?.GetValueOrDefault(wish.Id)))
+            .ToArray();
+
+        return new SharedWishlistDetails(
+            wishlist.Id,
+            wishlist.OwnerDisplayName,
+            wishlist.Name,
+            wishlist.Occasion,
+            wishlist.EventDate,
+            wishlist.Message,
+            wishes);
     }
 }

@@ -13,6 +13,7 @@ namespace JennGllg.Fr.MonKado.Back.Application.UnitTests.Queries;
 public class GetSharedWishlistQueryHandlerTests
 {
     private readonly GetSharedWishlistQueryHandler _handler;
+    private readonly Mock<IGiftReservationService> _reservationServiceMock;
     private readonly Mock<IWishlistParticipantService> _participantServiceMock;
     private readonly Mock<IWishlistShareService> _shareServiceMock;
 
@@ -20,9 +21,11 @@ public class GetSharedWishlistQueryHandlerTests
     {
         _shareServiceMock = new Mock<IWishlistShareService>(MockBehavior.Strict);
         _participantServiceMock = new Mock<IWishlistParticipantService>(MockBehavior.Strict);
+        _reservationServiceMock = new Mock<IGiftReservationService>(MockBehavior.Strict);
         _handler = new GetSharedWishlistQueryHandler(
             _shareServiceMock.Object,
             _participantServiceMock.Object,
+            _reservationServiceMock.Object,
             NullLogger<GetSharedWishlistQueryHandler>.Instance);
     }
 
@@ -59,6 +62,7 @@ public class GetSharedWishlistQueryHandlerTests
             Times.Once);
         _shareServiceMock.VerifyNoOtherCalls();
         _participantServiceMock.VerifyNoOtherCalls();
+        _reservationServiceMock.VerifyNoOtherCalls();
     }
 
     [Theory]
@@ -75,6 +79,13 @@ public class GetSharedWishlistQueryHandlerTests
             "secret",
             memberId,
             "guest");
+        var wish = new SharedWishDetails(
+            Guid.CreateVersion7(),
+            "Gift",
+            null,
+            null,
+            3,
+            2);
         var wishlist = new SharedWishlistDetails(
             Guid.CreateVersion7(),
             "Owner",
@@ -82,7 +93,7 @@ public class GetSharedWishlistQueryHandlerTests
             WishlistOccasion.Birthday,
             null,
             null,
-            []);
+            [wish]);
         var participant = participantExists
             ? new WishlistParticipantDetails(
                 Guid.CreateVersion7(),
@@ -107,18 +118,44 @@ public class GetSharedWishlistQueryHandlerTests
                 outcome,
                 participant));
 
+        if (participant is not null)
+        {
+            _reservationServiceMock
+                .Setup(service => service.GetQuantitiesAsync(
+                    wishlist.Id,
+                    participant.Id,
+                    cancellationToken))
+                .ReturnsAsync(new Dictionary<Guid, int>
+                {
+                    [wish.Id] = 1
+                });
+        }
+
         // Act
         var result = await _handler.Handle(
             query,
             cancellationToken);
 
         // Assert
-        Assert.Same(
-            wishlist,
-            result.Wishlist);
+        Assert.Equal(
+            wishlist.Id,
+            result.Wishlist.Id);
         Assert.Same(
             participant,
             result.CurrentParticipant);
+        var enrichedWish = Assert.Single(result.Wishlist.Wishes);
+        Assert.Equal(
+            wish.Id,
+            enrichedWish.Id);
+        Assert.Equal(
+            3,
+            enrichedWish.Quantity);
+        Assert.Equal(
+            2,
+            enrichedWish.ReservedQuantity);
+        Assert.Equal(
+            participantExists ? 1 : null,
+            enrichedWish.CurrentParticipantReservedQuantity);
         _shareServiceMock.Verify(
             service => service.GetSharedAsync(
                 shareLinkId,
@@ -132,8 +169,20 @@ public class GetSharedWishlistQueryHandlerTests
                 "guest",
                 cancellationToken),
             Times.Once);
+
+        if (participant is not null)
+        {
+            _reservationServiceMock.Verify(
+                service => service.GetQuantitiesAsync(
+                    wishlist.Id,
+                    participant.Id,
+                    cancellationToken),
+                Times.Once);
+        }
+
         _shareServiceMock.VerifyNoOtherCalls();
         _participantServiceMock.VerifyNoOtherCalls();
+        _reservationServiceMock.VerifyNoOtherCalls();
     }
 
     [Fact]
@@ -194,5 +243,6 @@ public class GetSharedWishlistQueryHandlerTests
             Times.Once);
         _shareServiceMock.VerifyNoOtherCalls();
         _participantServiceMock.VerifyNoOtherCalls();
+        _reservationServiceMock.VerifyNoOtherCalls();
     }
 }

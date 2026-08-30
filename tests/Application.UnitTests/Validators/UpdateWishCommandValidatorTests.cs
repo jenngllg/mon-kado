@@ -70,7 +70,8 @@ public class UpdateWishCommandValidatorTests
             null,
             null,
             null,
-            42);
+            42,
+            1);
 
         // Act
         var result = await _validator.ValidateAsync(
@@ -177,6 +178,35 @@ public class UpdateWishCommandValidatorTests
             error => error.PropertyName == nameof(command.Price));
     }
 
+    [Theory]
+    [InlineData(null)]
+    [InlineData(0)]
+    [InlineData(101)]
+    public async Task ValidateAsync_WhenQuantityIsInvalid_ReturnsSingleQuantityFailure(int? quantity)
+    {
+        // Arrange
+        var command = new UpdateWishCommand(
+            Guid.CreateVersion7(),
+            Guid.CreateVersion7(),
+            Guid.CreateVersion7(),
+            "Cadeau",
+            null,
+            null,
+            null,
+            42,
+            quantity);
+
+        // Act
+        var result = await _validator.ValidateAsync(
+            command,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Single(
+            result.Errors,
+            error => error.PropertyName == nameof(command.Quantity));
+    }
+
     private static UpdateWishCommand CreateCommand(
         string? name,
         string? note,
@@ -191,6 +221,7 @@ public class UpdateWishCommandValidatorTests
             note,
             url,
             price,
-            42);
+            42,
+            1);
     }
 }

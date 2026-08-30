@@ -1,4 +1,6 @@
 using JennGllg.Fr.MonKado.Back.Application.Common.Constants;
+using JennGllg.Fr.MonKado.Back.Domain.Entities;
+using JennGllg.Fr.MonKado.Back.Domain.Enums;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Configurations;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Constants;
@@ -110,6 +112,10 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
             migration => Assert.EndsWith(
                 "_AddWishlistParticipants",
                 migration,
+                StringComparison.Ordinal),
+            migration => Assert.EndsWith(
+                "_AddGiftReservations",
+                migration,
                 StringComparison.Ordinal));
         Assert.False(context.Database.HasPendingModelChanges());
 
@@ -121,6 +127,7 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
                 "__EFMigrationsHistory",
                 "authentication_email_outbox",
                 "authentication_sessions",
+                "gift_reservations",
                 "guest_sessions",
                 "member_email_change_requests",
                 "role_claims",
@@ -211,6 +218,9 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
             "ck_wishes_price_valid",
             constraints);
         Assert.Contains(
+            "ck_wishes_quantity_valid",
+            constraints);
+        Assert.Contains(
             "ck_wishes_timestamps_consistent",
             constraints);
         Assert.Contains(
@@ -242,6 +252,18 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
             constraints);
         Assert.Contains(
             "fk_wishlist_participants_wishlists_wishlist_id",
+            constraints);
+        Assert.Contains(
+            "ck_gift_reservations_quantity_valid",
+            constraints);
+        Assert.Contains(
+            "ck_gift_reservations_timestamps_consistent",
+            constraints);
+        Assert.Contains(
+            "fk_gift_reservations_participants_wishlist_id_participant_id",
+            constraints);
+        Assert.Contains(
+            "fk_gift_reservations_wishes_wishlist_id_wish_id",
             constraints);
 
         var indexes = await GetPublicIndexesAsync(
@@ -282,6 +304,9 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
             indexes);
         Assert.Contains(
             "ux_user_logins_user_id_login_provider",
+            indexes);
+        Assert.Contains(
+            "ux_gift_reservations_participant_wish",
             indexes);
         Assert.Contains(
             "ux_wishlists_owner_normalized_name",
@@ -454,6 +479,115 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
         Assert.Contains(
             "ux_wishes_wishlist_position",
             indexesAfterUp);
+    }
+
+    [Fact]
+    public async Task MigrateAsync_WhenExistingWishIsMigrated_BackfillsQuantityWithoutKeepingDatabaseDefault()
+    {
+        // Arrange
+        const string PreviousMigration = "20260826210949_AddWishlistParticipants";
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var provider = CreateServiceProvider();
+        await using var scope = provider.CreateAsyncScope();
+        var context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
+        await context.Database.MigrateAsync(
+            PreviousMigration,
+            cancellationToken);
+        var ownerId = Guid.CreateVersion7();
+        var wishlistId = Guid.CreateVersion7();
+        var wishId = Guid.CreateVersion7();
+        context.Users.Add(new MonKadoUser
+        {
+            Id = ownerId,
+            DisplayName = "Gift reservation migration",
+            Email = "gift-reservation-migration@example.test",
+            NormalizedEmail = "GIFT-RESERVATION-MIGRATION@EXAMPLE.TEST",
+            UserName = "gift-reservation-migration@example.test",
+            NormalizedUserName = "GIFT-RESERVATION-MIGRATION@EXAMPLE.TEST",
+            EmailConfirmed = true
+        });
+        context.Wishlists.Add(new Wishlist(
+            wishlistId,
+            ownerId,
+            "Migration wishlist",
+            "MIGRATION WISHLIST",
+            WishlistOccasion.Other,
+            null,
+            null));
+        await context.SaveChangesAsync(cancellationToken);
+        var createdAt = new DateTime(
+            2026,
+            8,
+            30,
+            8,
+            0,
+            0,
+            DateTimeKind.Utc);
+        await context.Database.ExecuteSqlInterpolatedAsync(
+            $"""
+            INSERT INTO public.wishes (
+                id,
+                wishlist_id,
+                name,
+                position,
+                created_at)
+            VALUES (
+                {wishId},
+                {wishlistId},
+                {"Existing gift"},
+                {1L},
+                {createdAt});
+            """,
+            cancellationToken);
+        bool quantityColumnExistsAfterDown;
+        int quantityAfterFirstUp;
+        int quantityAfterSecondUp;
+        bool quantityHasDefault;
+
+        try
+        {
+            // Act
+            await context.Database.MigrateAsync(cancellationToken);
+            context.ChangeTracker.Clear();
+            quantityAfterFirstUp = await context.Wishes
+                .AsNoTracking()
+                .Where(wish => wish.Id == wishId)
+                .Select(wish => wish.Quantity)
+                .SingleAsync(cancellationToken);
+            quantityHasDefault = await HasWishQuantityDefaultAsync(
+                context,
+                cancellationToken);
+            await context.Database.MigrateAsync(
+                PreviousMigration,
+                cancellationToken);
+            quantityColumnExistsAfterDown = await HasWishQuantityColumnAsync(
+                context,
+                cancellationToken);
+            await context.Database.MigrateAsync(cancellationToken);
+            context.ChangeTracker.Clear();
+            quantityAfterSecondUp = await context.Wishes
+                .AsNoTracking()
+                .Where(wish => wish.Id == wishId)
+                .Select(wish => wish.Quantity)
+                .SingleAsync(cancellationToken);
+        }
+        finally
+        {
+            await context.Database.MigrateAsync(cancellationToken);
+            await context.Users
+                .Where(user => user.Id == ownerId)
+                .ExecuteDeleteAsync(cancellationToken);
+        }
+
+        // Assert
+        Assert.Equal(
+            1,
+            quantityAfterFirstUp);
+        Assert.False(quantityHasDefault);
+        Assert.False(quantityColumnExistsAfterDown);
+        Assert.Equal(
+            1,
+            quantityAfterSecondUp);
     }
 
     [Fact]
@@ -1478,5 +1612,52 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
 
         return (bool)(await command.ExecuteScalarAsync(cancellationToken)
             ?? throw new InvalidOperationException("The users table could not be inspected."));
+    }
+
+    private static async Task<bool> HasWishQuantityColumnAsync(
+        MonKadoDbContext context,
+        CancellationToken cancellationToken)
+    {
+        var connection = context.Database.GetDbConnection();
+
+        if (connection.State != System.Data.ConnectionState.Open)
+            await connection.OpenAsync(cancellationToken);
+
+        await using var command = connection.CreateCommand();
+        command.CommandText =
+            """
+            SELECT EXISTS (
+                SELECT 1
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = 'wishes'
+                  AND column_name = 'quantity');
+            """;
+
+        return (bool)(await command.ExecuteScalarAsync(cancellationToken)
+            ?? throw new InvalidOperationException("The wishes table could not be inspected."));
+    }
+
+    private static async Task<bool> HasWishQuantityDefaultAsync(
+        MonKadoDbContext context,
+        CancellationToken cancellationToken)
+    {
+        var connection = context.Database.GetDbConnection();
+
+        if (connection.State != System.Data.ConnectionState.Open)
+            await connection.OpenAsync(cancellationToken);
+
+        await using var command = connection.CreateCommand();
+        command.CommandText =
+            """
+            SELECT column_default IS NOT NULL
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'wishes'
+              AND column_name = 'quantity';
+            """;
+
+        return (bool)(await command.ExecuteScalarAsync(cancellationToken)
+            ?? throw new InvalidOperationException("The wishes.quantity column is missing."));
     }
 }

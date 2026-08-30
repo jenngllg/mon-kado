@@ -32,6 +32,10 @@ public class WishlistShareLinkOpenApiTests
         var getCurrentParticipant = paths
             .GetProperty("/api/v1/shared-wishlists/{shareLinkId}/participants/current")
             .GetProperty("get");
+        var reservationsPath = paths
+            .GetProperty("/api/v1/shared-wishlists/{shareLinkId}/wishes/{wishId}/reservations/current");
+        var getCurrentReservation = reservationsPath.GetProperty("get");
+        var upsertCurrentReservation = reservationsPath.GetProperty("put");
 
         // Assert
         Assert.Equal(
@@ -198,6 +202,79 @@ public class WishlistShareLinkOpenApiTests
             "200",
             includesLocation: false,
             includesGuestCookie: false);
+
+        Assert.Equal(
+            "Gets the current participant's reservation for one shared gift.",
+            getCurrentReservation.GetProperty("summary").GetString());
+        AssertOptionalBearerAndGuestCookie(
+            getCurrentReservation,
+            expectsAntiforgery: false);
+        AssertResponses(
+            getCurrentReservation,
+            "200",
+            "400",
+            "401",
+            "404",
+            "429",
+            "500",
+            "503");
+        AssertReservationSuccessResponse(
+            document.RootElement,
+            getCurrentReservation,
+            "200",
+            includesLocation: false);
+
+        Assert.Equal(
+            "Creates or replaces the current participant's reservation for one shared gift.",
+            upsertCurrentReservation.GetProperty("summary").GetString());
+        AssertOptionalBearerAndGuestCookie(
+            upsertCurrentReservation,
+            expectsAntiforgery: true);
+        var optionalIfMatch = Assert.Single(
+            upsertCurrentReservation.GetProperty("parameters").EnumerateArray(),
+            parameter => parameter.GetProperty("name").GetString() == "If-Match");
+        Assert.False(optionalIfMatch.TryGetProperty(
+            "required",
+            out var optionalIfMatchIsRequired) &&
+            optionalIfMatchIsRequired.GetBoolean());
+        var reservationRequest = ResolveSchema(
+            document.RootElement,
+            upsertCurrentReservation
+                .GetProperty("requestBody")
+                .GetProperty("content")
+                .GetProperty("application/json")
+                .GetProperty("schema"));
+        Assert.Equal(
+            ["quantity"],
+            reservationRequest
+                .GetProperty("properties")
+                .EnumerateObject()
+                .Select(property => property.Name));
+        AssertResponses(
+            upsertCurrentReservation,
+            "200",
+            "201",
+            "400",
+            "401",
+            "404",
+            "409",
+            "412",
+            "413",
+            "415",
+            "428",
+            "429",
+            "500",
+            "503");
+        AssertReservationSuccessResponse(
+            document.RootElement,
+            upsertCurrentReservation,
+            "200",
+            includesLocation: false);
+        AssertReservationSuccessResponse(
+            document.RootElement,
+            upsertCurrentReservation,
+            "201",
+            includesLocation: true);
     }
 
     private static void AssertBearerWithoutAntiforgery(JsonElement operation)
@@ -307,6 +384,48 @@ public class WishlistShareLinkOpenApiTests
                 .OrderBy(property => property));
     }
 
+    private static void AssertReservationSuccessResponse(
+        JsonElement document,
+        JsonElement operation,
+        string statusCode,
+        bool includesLocation)
+    {
+        var success = operation
+            .GetProperty("responses")
+            .GetProperty(statusCode);
+        var headers = success.GetProperty("headers");
+        Assert.True(headers.TryGetProperty(
+            "Cache-Control",
+            out _));
+        Assert.True(headers.TryGetProperty(
+            "ETag",
+            out _));
+        Assert.Equal(
+            includesLocation,
+            headers.TryGetProperty(
+                "Location",
+                out _));
+        var schema = ResolveSchema(
+            document,
+            success
+                .GetProperty("content")
+                .GetProperty("application/json")
+                .GetProperty("schema"));
+        Assert.Equal(
+            [
+                "createdAt",
+                "id",
+                "quantity",
+                "updatedAt",
+                "wishId"
+            ],
+            schema
+                .GetProperty("properties")
+                .EnumerateObject()
+                .Select(property => property.Name)
+                .OrderBy(property => property));
+    }
+
     private static void AssertSharedSuccessResponse(
         JsonElement document,
         JsonElement operation)
@@ -337,6 +456,28 @@ public class WishlistShareLinkOpenApiTests
                 "wishes"
             ],
             schema
+                .GetProperty("properties")
+                .EnumerateObject()
+                .Select(property => property.Name)
+                .OrderBy(property => property));
+        var wishSchema = ResolveSchema(
+            document,
+            schema
+                .GetProperty("properties")
+                .GetProperty("wishes")
+                .GetProperty("items"));
+        Assert.Equal(
+            [
+                "availableQuantity",
+                "currentParticipantReservedQuantity",
+                "id",
+                "name",
+                "price",
+                "quantity",
+                "reservedQuantity",
+                "url"
+            ],
+            wishSchema
                 .GetProperty("properties")
                 .EnumerateObject()
                 .Select(property => property.Name)

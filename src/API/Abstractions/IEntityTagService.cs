@@ -24,4 +24,14 @@ public interface IEntityTagService
     /// The If-Match header is malformed.
     /// </exception>
     uint Parse(string? value);
+
+    /// <summary>
+    /// Parses an optional strong entity tag.
+    /// </summary>
+    /// <param name="value">The raw optional If-Match header value.</param>
+    /// <returns>The resource version, or <see langword="null" /> when absent.</returns>
+    /// <exception cref="Application.Common.Exceptions.RequestValidationException">
+    /// The If-Match header is malformed.
+    /// </exception>
+    uint? ParseOptional(string? value);
 }

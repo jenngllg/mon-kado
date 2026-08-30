@@ -88,4 +88,49 @@ public class EntityTagServiceTests
             "ifMatch",
             error.PropertyName);
     }
+
+    [Fact]
+    public void ParseOptional_WhenEntityTagIsMissing_ReturnsNull()
+    {
+        // Arrange
+
+        // Act
+        var result = _entityTagService.ParseOptional(null);
+
+        // Assert
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public void ParseOptional_WhenEntityTagIsValid_ReturnsVersion()
+    {
+        // Arrange
+
+        // Act
+        var result = _entityTagService.ParseOptional("\"0000002a\"");
+
+        // Assert
+        Assert.Equal(
+            42u,
+            result);
+    }
+
+    [Fact]
+    public void ParseOptional_WhenEntityTagIsMalformed_ThrowsRequestValidationException()
+    {
+        // Arrange
+
+        // Act
+        var action = () =>
+        {
+            _ = _entityTagService.ParseOptional("invalid");
+        };
+
+        // Assert
+        var exception = Assert.Throws<RequestValidationException>(action);
+        var error = Assert.Single(exception.ValidationErrors);
+        Assert.Equal(
+            "ifMatch",
+            error.PropertyName);
+    }
 }

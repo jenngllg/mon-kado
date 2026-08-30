@@ -5,6 +5,27 @@ namespace JennGllg.Fr.MonKado.Back.Domain.UnitTests.Entities;
 public class WishTests
 {
     [Fact]
+    public void Update_WhenQuantityChanges_ReplacesQuantity()
+    {
+        // Arrange
+        var wish = CreateWish();
+
+        // Act
+        var changed = wish.Update(
+            wish.Name,
+            wish.Note,
+            wish.Url,
+            wish.Price,
+            4);
+
+        // Assert
+        Assert.True(changed);
+        Assert.Equal(
+            4,
+            wish.Quantity);
+    }
+
+    [Fact]
     public void Constructor_WhenValuesAreProvided_InitializesWish()
     {
         // Arrange

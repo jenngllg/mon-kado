@@ -9,12 +9,14 @@ namespace JennGllg.Fr.MonKado.Back.Api.Contracts.Requests;
 /// <param name="note">The optional owner note.</param>
 /// <param name="url">The optional product URL.</param>
 /// <param name="price">The optional price in euros.</param>
+/// <param name="quantity">The required total desired quantity.</param>
 [ExcludeFromCodeCoverage]
 public class UpdateWishRequest(
     string? name,
     string? note,
     string? url,
-    decimal? price)
+    decimal? price,
+    int? quantity = null)
 {
     /// <summary>
     /// Gets the requested name.
@@ -35,4 +37,9 @@ public class UpdateWishRequest(
     /// Gets the optional price in euros.
     /// </summary>
     public decimal? Price { get; } = price;
+
+    /// <summary>
+    /// Gets the required total desired quantity.
+    /// </summary>
+    public int? Quantity { get; } = quantity;
 }

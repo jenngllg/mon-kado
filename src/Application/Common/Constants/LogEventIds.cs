@@ -365,6 +365,18 @@ public static class LogEventIds
     /// <summary>Identifies an expired guest-session cleanup failure.</summary>
     public const int ExpiredGuestSessionCleanupFailed = 2037;
 
+    /// <summary>Identifies the start of a gift-reservation mutation.</summary>
+    public const int GiftReservationMutationStarted = 2038;
+
+    /// <summary>Identifies a created or replaced gift reservation.</summary>
+    public const int GiftReservationMutated = 2039;
+
+    /// <summary>Identifies the start of a current gift-reservation retrieval.</summary>
+    public const int GiftReservationRetrievalStarted = 2040;
+
+    /// <summary>Identifies a retrieved current gift reservation.</summary>
+    public const int GiftReservationRetrieved = 2041;
+
     #endregion
 
     #region Technical

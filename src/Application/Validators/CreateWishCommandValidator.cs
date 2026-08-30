@@ -41,5 +41,10 @@ public class CreateWishCommandValidator : AbstractValidator<CreateWishCommand>
                 WishTextValidation.MaximumPriceScale,
                 ignoreTrailingZeros: false)
             .WithMessage(ValidationMessages.InvalidWishPrice);
+        RuleFor(command => command.Quantity)
+            .InclusiveBetween(
+                WishTextValidation.MinimumQuantity,
+                WishTextValidation.MaximumQuantity)
+            .WithMessage(ValidationMessages.InvalidGiftQuantity);
     }
 }

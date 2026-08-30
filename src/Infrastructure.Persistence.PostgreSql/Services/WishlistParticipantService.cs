@@ -21,6 +21,7 @@ public class WishlistParticipantService : IWishlistParticipantService
 
     private readonly IGuestSessionRepository _guestSessionRepository;
     private readonly IGuestSessionTokenService _guestSessionTokenService;
+    private readonly IGiftReservationRepository _giftReservationRepository;
     private readonly GuestSessionOptions _options;
     private readonly IWishlistParticipantRepository _participantRepository;
     private readonly IWishlistParticipantTransactionFactory _transactionFactory;
@@ -32,6 +33,7 @@ public class WishlistParticipantService : IWishlistParticipantService
     /// <param name="participantRepository">The participant repository.</param>
     /// <param name="guestSessionRepository">The guest-session repository.</param>
     /// <param name="guestSessionTokenService">The guest-session token service.</param>
+    /// <param name="giftReservationRepository">The gift reservation repository.</param>
     /// <param name="wishlistShareTokenService">The share-link token service.</param>
     /// <param name="transactionFactory">The participant transaction factory.</param>
     /// <param name="unitOfWork">The unit of work.</param>
@@ -45,6 +47,7 @@ public class WishlistParticipantService : IWishlistParticipantService
         IWishlistParticipantRepository participantRepository,
         IGuestSessionRepository guestSessionRepository,
         IGuestSessionTokenService guestSessionTokenService,
+        IGiftReservationRepository giftReservationRepository,
         IWishlistShareTokenService wishlistShareTokenService,
         IWishlistParticipantTransactionFactory transactionFactory,
         IUnitOfWork unitOfWork,
@@ -54,6 +57,7 @@ public class WishlistParticipantService : IWishlistParticipantService
         _participantRepository = participantRepository;
         _guestSessionRepository = guestSessionRepository;
         _guestSessionTokenService = guestSessionTokenService;
+        _giftReservationRepository = giftReservationRepository;
         _wishlistShareTokenService = wishlistShareTokenService;
         _transactionFactory = transactionFactory;
         _unitOfWork = unitOfWork;
@@ -288,6 +292,10 @@ public class WishlistParticipantService : IWishlistParticipantService
         {
             if (guestParticipant is not null && guestParticipant.Id != memberParticipant.Id)
             {
+                await MergeReservationsAsync(
+                    guestParticipant.Id,
+                    memberParticipant.Id,
+                    cancellationToken);
                 _participantRepository.Remove(guestParticipant);
                 await _unitOfWork.SaveChangesAsync(cancellationToken);
             }
@@ -365,6 +373,37 @@ public class WishlistParticipantService : IWishlistParticipantService
                 new WishlistParticipantDetails(
                     participant.Id,
                     displayName));
+    }
+
+    private async Task MergeReservationsAsync(
+        Guid guestParticipantId,
+        Guid memberParticipantId,
+        CancellationToken cancellationToken)
+    {
+        var guestReservations = await _giftReservationRepository.GetByParticipantForUpdateAsync(
+            guestParticipantId,
+            cancellationToken);
+        var memberReservations = await _giftReservationRepository.GetByParticipantForUpdateAsync(
+            memberParticipantId,
+            cancellationToken);
+        var memberReservationsByWishId = memberReservations.ToDictionary(
+            reservation => reservation.WishId);
+
+        foreach (var guestReservation in guestReservations)
+        {
+            if (memberReservationsByWishId.TryGetValue(
+                guestReservation.WishId,
+                out var memberReservation))
+            {
+                memberReservation.UpdateQuantity(
+                    memberReservation.Quantity + guestReservation.Quantity);
+                _giftReservationRepository.Remove(guestReservation);
+
+                continue;
+            }
+
+            guestReservation.TransferTo(memberParticipantId);
+        }
     }
 
     private async Task<Guid?> ResolveGuestSessionIdAsync(

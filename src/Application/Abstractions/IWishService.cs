@@ -53,6 +53,7 @@ public interface IWishService
     /// <param name="note">The normalized optional note.</param>
     /// <param name="url">The normalized optional product URL.</param>
     /// <param name="price">The optional price in euros.</param>
+    /// <param name="quantity">The total desired quantity.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>The created wish, or <see langword="null" /> when the wishlist is unavailable to the owner.</returns>
     /// <exception cref="Common.Exceptions.InvalidAuthenticationSessionException">The authenticated member no longer exists.</exception>
@@ -65,6 +66,7 @@ public interface IWishService
         string? note,
         string? url,
         decimal? price,
+        int quantity,
         CancellationToken cancellationToken);
 
     /// <summary>
@@ -90,6 +92,7 @@ public interface IWishService
     /// <param name="note">The normalized optional note.</param>
     /// <param name="url">The normalized optional product URL.</param>
     /// <param name="price">The optional price in euros.</param>
+    /// <param name="quantity">The total desired quantity.</param>
     /// <param name="expectedVersion">The version supplied by the client.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>The updated wish, or <see langword="null" /> when the wish does not exist under an owned parent.</returns>
@@ -105,6 +108,7 @@ public interface IWishService
         string? note,
         string? url,
         decimal? price,
+        int quantity,
         uint expectedVersion,
         CancellationToken cancellationToken);
 

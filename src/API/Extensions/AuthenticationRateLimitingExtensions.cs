@@ -76,6 +76,10 @@ public static class AuthenticationRateLimitingExtensions
     /// </summary>
     public const string SharedWishlistJoinPolicy = "SharedWishlistJoin";
     /// <summary>
+    /// Identifies shared-wishlist reservation mutation policy.
+    /// </summary>
+    public const string SharedWishlistReservationPolicy = "SharedWishlistReservation";
+    /// <summary>
     /// Gets the per-minute Google callback and completion limit for one remote address.
     /// </summary>
     public const int GoogleTransientFlowPermitLimit = 10;
@@ -87,6 +91,10 @@ public static class AuthenticationRateLimitingExtensions
     /// Gets the per-minute shared-wishlist join limit for one address and share link.
     /// </summary>
     public const int SharedWishlistJoinPermitLimit = 10;
+    /// <summary>
+    /// Gets the per-minute reservation mutation limit for one address and share link.
+    /// </summary>
+    public const int SharedWishlistReservationPermitLimit = 20;
 
     private static readonly TimeSpan _window = TimeSpan.FromMinutes(1);
     /// <summary>
@@ -176,7 +184,14 @@ public static class AuthenticationRateLimitingExtensions
                     SharedWishlistPermitLimit));
             options.AddPolicy(
                 SharedWishlistJoinPolicy,
-                CreateSharedWishlistJoinLimiter);
+                context => CreateSharedWishlistScopedLimiter(
+                    context,
+                    SharedWishlistJoinPermitLimit));
+            options.AddPolicy(
+                SharedWishlistReservationPolicy,
+                context => CreateSharedWishlistScopedLimiter(
+                    context,
+                    SharedWishlistReservationPermitLimit));
 
             options.OnRejected = async (
                 rejectionContext,
@@ -235,7 +250,9 @@ public static class AuthenticationRateLimitingExtensions
             });
     }
 
-    private static RateLimitPartition<string> CreateSharedWishlistJoinLimiter(HttpContext context)
+    private static RateLimitPartition<string> CreateSharedWishlistScopedLimiter(
+        HttpContext context,
+        int permitLimit)
     {
         var remoteAddress = context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
         var shareLinkId = Convert.ToString(
@@ -251,7 +268,7 @@ public static class AuthenticationRateLimitingExtensions
             _ => new FixedWindowRateLimiterOptions
             {
                 AutoReplenishment = true,
-                PermitLimit = SharedWishlistJoinPermitLimit,
+                PermitLimit = permitLimit,
                 QueueLimit = 0,
                 QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
                 Window = _window

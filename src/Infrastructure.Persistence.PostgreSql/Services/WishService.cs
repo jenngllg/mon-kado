@@ -198,6 +198,7 @@ public class WishService(
         string? note,
         string? url,
         decimal? price,
+        int quantity,
         CancellationToken cancellationToken)
     {
         Wish? attemptedWish = null;
@@ -214,7 +215,8 @@ public class WishService(
                 note,
                 url,
                 price,
-                position);
+                position,
+                quantity);
             attemptedWish = wish;
             wishRepository.Add(wish);
             await unitOfWork.SaveChangesAsync(cancellationToken);
@@ -430,6 +432,7 @@ public class WishService(
         string? note,
         string? url,
         decimal? price,
+        int quantity,
         uint expectedVersion,
         CancellationToken cancellationToken)
     {
@@ -456,7 +459,8 @@ public class WishService(
                 name,
                 note,
                 url,
-                price);
+                price,
+                quantity);
 
             if (!hasChanged)
                 return CreateDetails(wish);
@@ -793,7 +797,8 @@ public class WishService(
             wish.Note,
             wish.Url,
             wish.Price,
-            wish.Position);
+            wish.Position,
+            wish.Quantity);
     }
 
     /// <summary>
@@ -938,7 +943,8 @@ public class WishService(
             wish.Position,
             wish.CreatedAt,
             wish.UpdatedAt,
-            wish.Version);
+            wish.Version,
+            wish.Quantity);
     }
 
     /// <summary>

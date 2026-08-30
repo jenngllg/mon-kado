@@ -158,7 +158,8 @@ public class WishesController(
                 request.Name,
                 request.Note,
                 request.Url,
-                request.Price),
+                request.Price,
+                request.Quantity),
             cancellationToken);
         var response = CreateResponse(wish);
         Response.Headers.ETag = entityTagService.Format(wish.Version);
@@ -252,7 +253,8 @@ public class WishesController(
                 request.Note,
                 request.Url,
                 request.Price,
-                expectedVersion),
+                expectedVersion,
+                request.Quantity),
             cancellationToken);
         var response = CreateResponse(wish);
         Response.Headers.ETag = entityTagService.Format(wish.Version);
@@ -350,6 +352,7 @@ public class WishesController(
             wish.Price,
             wish.Position,
             wish.CreatedAt,
-            wish.UpdatedAt);
+            wish.UpdatedAt,
+            wish.Quantity);
     }
 }

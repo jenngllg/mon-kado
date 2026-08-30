@@ -902,4 +902,60 @@ public static partial class ApplicationLogMessages
         Guid memberId,
         Guid wishlistId,
         Guid wishId);
+
+    /// <summary>Logs the start of a gift-reservation mutation.</summary>
+    /// <param name="logger">The logger.</param>
+    /// <param name="shareLinkId">The share-link identifier.</param>
+    /// <param name="wishId">The gift-wish identifier.</param>
+    [LoggerMessage(
+        EventId = LogEventIds.GiftReservationMutationStarted,
+        Level = LogLevel.Debug,
+        Message = "Mutating a reservation for wish {WishId} through share link {ShareLinkId}.")]
+    public static partial void GiftReservationMutationStarted(
+        ILogger logger,
+        Guid shareLinkId,
+        Guid wishId);
+
+    /// <summary>Logs a created or replaced gift reservation.</summary>
+    /// <param name="logger">The logger.</param>
+    /// <param name="wishlistId">The wishlist identifier.</param>
+    /// <param name="wishId">The gift-wish identifier.</param>
+    /// <param name="reservationId">The reservation identifier.</param>
+    [LoggerMessage(
+        EventId = LogEventIds.GiftReservationMutated,
+        Level = LogLevel.Information,
+        Message = "Reservation {ReservationId} for wish {WishId} in wishlist {WishlistId} was created or replaced.")]
+    public static partial void GiftReservationMutated(
+        ILogger logger,
+        Guid wishlistId,
+        Guid wishId,
+        Guid reservationId);
+
+    /// <summary>Logs the start of a current gift-reservation retrieval.</summary>
+    /// <param name="logger">The logger.</param>
+    /// <param name="shareLinkId">The share-link identifier.</param>
+    /// <param name="wishId">The gift-wish identifier.</param>
+    [LoggerMessage(
+        EventId = LogEventIds.GiftReservationRetrievalStarted,
+        Level = LogLevel.Debug,
+        Message = "Retrieving the current reservation for wish {WishId} through share link {ShareLinkId}.")]
+    public static partial void GiftReservationRetrievalStarted(
+        ILogger logger,
+        Guid shareLinkId,
+        Guid wishId);
+
+    /// <summary>Logs a retrieved current gift reservation.</summary>
+    /// <param name="logger">The logger.</param>
+    /// <param name="wishlistId">The wishlist identifier.</param>
+    /// <param name="wishId">The gift-wish identifier.</param>
+    /// <param name="reservationId">The reservation identifier.</param>
+    [LoggerMessage(
+        EventId = LogEventIds.GiftReservationRetrieved,
+        Level = LogLevel.Information,
+        Message = "Reservation {ReservationId} for wish {WishId} in wishlist {WishlistId} was retrieved.")]
+    public static partial void GiftReservationRetrieved(
+        ILogger logger,
+        Guid wishlistId,
+        Guid wishId,
+        Guid reservationId);
 }

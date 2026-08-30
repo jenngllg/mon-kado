@@ -115,6 +115,7 @@ public class WishOpenApiTests
                 "name",
                 "note",
                 "price",
+                "quantity",
                 "url"
             ],
             requestSchema
@@ -183,6 +184,7 @@ public class WishOpenApiTests
                 "name",
                 "note",
                 "price",
+                "quantity",
                 "url"
             ],
             updateSchema
@@ -319,6 +321,7 @@ public class WishOpenApiTests
                 "note",
                 "position",
                 "price",
+                "quantity",
                 "updatedAt",
                 "url",
                 "wishlistId"
