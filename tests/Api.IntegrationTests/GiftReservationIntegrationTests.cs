@@ -355,6 +355,191 @@ public class GiftReservationIntegrationTests(PostgreSqlContainerFixture fixture)
     }
 
     [Fact]
+    public async Task DeleteAsync_WhenReservationExists_DeletesCurrentReservationAndFreesCapacity()
+    {
+        // Arrange
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var factory = await CreateFactoryAsync(cancellationToken);
+        var ownerId = Guid.CreateVersion7();
+        var firstMemberId = Guid.CreateVersion7();
+        var secondMemberId = Guid.CreateVersion7();
+        var wishlistId = Guid.CreateVersion7();
+        var wishId = Guid.CreateVersion7();
+        await SeedAsync(
+            factory,
+            ownerId,
+            [
+                (firstMemberId, "first@example.test", "First participant"),
+                (secondMemberId, "second@example.test", "Second participant")
+            ],
+            wishlistId,
+            wishId,
+            2,
+            cancellationToken);
+        using var ownerClient = CreateAuthorizedClient(
+            factory,
+            ownerId);
+        var shareLink = await CreateShareLinkAsync(
+            ownerClient,
+            wishlistId,
+            cancellationToken);
+        using var firstClient = CreateAuthorizedClient(
+            factory,
+            firstMemberId);
+        using var secondClient = CreateAuthorizedClient(
+            factory,
+            secondMemberId);
+        var firstCsrfToken = await GetCsrfTokenAsync(
+            firstClient,
+            cancellationToken);
+        var secondCsrfToken = await GetCsrfTokenAsync(
+            secondClient,
+            cancellationToken);
+        using var firstJoin = await JoinAsync(
+            firstClient,
+            shareLink.Id,
+            shareLink.Secret,
+            firstCsrfToken,
+            cancellationToken);
+        using var secondJoin = await JoinAsync(
+            secondClient,
+            shareLink.Id,
+            shareLink.Secret,
+            secondCsrfToken,
+            cancellationToken);
+        using var creation = await UpsertAsync(
+            firstClient,
+            shareLink.Id,
+            wishId,
+            shareLink.Secret,
+            firstCsrfToken,
+            1,
+            null,
+            cancellationToken);
+        var firstEntityTag = creation.Headers.ETag?.Tag;
+        using var replacement = await UpsertAsync(
+            firstClient,
+            shareLink.Id,
+            wishId,
+            shareLink.Secret,
+            firstCsrfToken,
+            2,
+            firstEntityTag,
+            cancellationToken);
+        var secondEntityTag = replacement.Headers.ETag?.Tag;
+
+        // Act
+        using var missingEntityTag = await CancelAsync(
+            firstClient,
+            shareLink.Id,
+            wishId,
+            shareLink.Secret,
+            firstCsrfToken,
+            entityTag: null,
+            cancellationToken);
+        using var staleCancellation = await CancelAsync(
+            firstClient,
+            shareLink.Id,
+            wishId,
+            shareLink.Secret,
+            firstCsrfToken,
+            firstEntityTag,
+            cancellationToken);
+        using var cancellation = await CancelAsync(
+            firstClient,
+            shareLink.Id,
+            wishId,
+            shareLink.Secret,
+            firstCsrfToken,
+            secondEntityTag,
+            cancellationToken);
+        using var repeatedCancellation = await CancelAsync(
+            firstClient,
+            shareLink.Id,
+            wishId,
+            shareLink.Secret,
+            firstCsrfToken,
+            secondEntityTag,
+            cancellationToken);
+        using var missingReservation = await GetCurrentAsync(
+            firstClient,
+            shareLink.Id,
+            wishId,
+            shareLink.Secret,
+            cancellationToken);
+        using var secondReservation = await UpsertAsync(
+            secondClient,
+            shareLink.Id,
+            wishId,
+            shareLink.Secret,
+            secondCsrfToken,
+            2,
+            null,
+            cancellationToken);
+        using var sharedWishlist = await GetSharedWishlistAsync(
+            secondClient,
+            shareLink.Id,
+            shareLink.Secret,
+            cancellationToken);
+        var storedReservations = await GetStoredReservationsAsync(
+            factory,
+            cancellationToken);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.Created,
+            firstJoin.StatusCode);
+        Assert.Equal(
+            HttpStatusCode.Created,
+            secondJoin.StatusCode);
+        Assert.Equal(
+            HttpStatusCode.Created,
+            creation.StatusCode);
+        Assert.Equal(
+            HttpStatusCode.OK,
+            replacement.StatusCode);
+        Assert.NotEqual(
+            firstEntityTag,
+            secondEntityTag);
+        Assert.Equal(
+            HttpStatusCode.PreconditionRequired,
+            missingEntityTag.StatusCode);
+        Assert.Equal(
+            HttpStatusCode.PreconditionFailed,
+            staleCancellation.StatusCode);
+        Assert.Equal(
+            HttpStatusCode.NoContent,
+            cancellation.StatusCode);
+        Assert.Equal(
+            HttpStatusCode.NotFound,
+            repeatedCancellation.StatusCode);
+        Assert.Equal(
+            HttpStatusCode.NotFound,
+            missingReservation.StatusCode);
+        Assert.Equal(
+            HttpStatusCode.Created,
+            secondReservation.StatusCode);
+        Assert.Equal(
+            HttpStatusCode.OK,
+            sharedWishlist.StatusCode);
+        var sharedBody = await sharedWishlist.Content.ReadFromJsonAsync<JsonElement>(cancellationToken);
+        var sharedWish = Assert.Single(sharedBody.GetProperty("wishes").EnumerateArray());
+        Assert.Equal(
+            2,
+            sharedWish.GetProperty("reservedQuantity").GetInt32());
+        Assert.Equal(
+            0,
+            sharedWish.GetProperty("availableQuantity").GetInt32());
+        Assert.Equal(
+            2,
+            sharedWish.GetProperty("currentParticipantReservedQuantity").GetInt32());
+        var storedReservation = Assert.Single(storedReservations);
+        Assert.Equal(
+            2,
+            storedReservation.Quantity);
+    }
+
+    [Fact]
     public async Task JoinAsync_WhenGuestBecomesExistingMember_MergesReservationsWithoutChangingAggregate()
     {
         // Arrange
@@ -784,6 +969,37 @@ public class GiftReservationIntegrationTests(PostgreSqlContainerFixture fixture)
         request.Headers.TryAddWithoutValidation(
             "X-MonKado-Share-Token",
             secret);
+
+        return await client.SendAsync(
+            request,
+            cancellationToken);
+    }
+
+    private static async Task<HttpResponseMessage> CancelAsync(
+        HttpClient client,
+        Guid shareLinkId,
+        Guid wishId,
+        string secret,
+        string csrfToken,
+        string? entityTag,
+        CancellationToken cancellationToken)
+    {
+        using var request = new HttpRequestMessage(
+            HttpMethod.Delete,
+            $"/api/v1/shared-wishlists/{shareLinkId}/wishes/{wishId}/reservations/current");
+        request.Headers.TryAddWithoutValidation(
+            "X-MonKado-Share-Token",
+            secret);
+        request.Headers.Add(
+            WebSecurityOptions.AntiforgeryHeaderName,
+            csrfToken);
+
+        if (entityTag is not null)
+        {
+            request.Headers.TryAddWithoutValidation(
+                "If-Match",
+                entityTag);
+        }
 
         return await client.SendAsync(
             request,

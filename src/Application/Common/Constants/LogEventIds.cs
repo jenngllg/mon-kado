@@ -377,6 +377,12 @@ public static class LogEventIds
     /// <summary>Identifies a retrieved current gift reservation.</summary>
     public const int GiftReservationRetrieved = 2041;
 
+    /// <summary>Identifies the start of a gift-reservation cancellation.</summary>
+    public const int GiftReservationCancellationStarted = 2042;
+
+    /// <summary>Identifies a cancelled gift reservation.</summary>
+    public const int GiftReservationCancelled = 2043;
+
     #endregion
 
     #region Technical

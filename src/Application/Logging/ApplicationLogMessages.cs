@@ -958,4 +958,30 @@ public static partial class ApplicationLogMessages
         Guid wishlistId,
         Guid wishId,
         Guid reservationId);
+
+    /// <summary>Logs the start of a gift-reservation cancellation.</summary>
+    /// <param name="logger">The logger.</param>
+    /// <param name="shareLinkId">The share-link identifier.</param>
+    /// <param name="wishId">The gift-wish identifier.</param>
+    [LoggerMessage(
+        EventId = LogEventIds.GiftReservationCancellationStarted,
+        Level = LogLevel.Debug,
+        Message = "Cancelling a reservation for wish {WishId} through share link {ShareLinkId}.")]
+    public static partial void GiftReservationCancellationStarted(
+        ILogger logger,
+        Guid shareLinkId,
+        Guid wishId);
+
+    /// <summary>Logs a cancelled gift reservation.</summary>
+    /// <param name="logger">The logger.</param>
+    /// <param name="wishlistId">The wishlist identifier.</param>
+    /// <param name="wishId">The gift-wish identifier.</param>
+    [LoggerMessage(
+        EventId = LogEventIds.GiftReservationCancelled,
+        Level = LogLevel.Information,
+        Message = "The current participant's reservation for wish {WishId} in wishlist {WishlistId} was cancelled.")]
+    public static partial void GiftReservationCancelled(
+        ILogger logger,
+        Guid wishlistId,
+        Guid wishId);
 }

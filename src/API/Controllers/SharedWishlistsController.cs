@@ -309,6 +309,48 @@ public class SharedWishlistsController(
             response);
     }
 
+    /// <summary>Cancels the current participant's reservation for one shared gift.</summary>
+    /// <param name="shareLinkId">The public share-link identifier.</param>
+    /// <param name="wishId">The gift-wish identifier.</param>
+    /// <param name="shareToken">The bearer secret contained in the URL fragment.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>No content after cancellation.</returns>
+    [HttpDelete("{shareLinkId:guid}/wishes/{wishId:guid}/reservations/current")]
+    [ValidateAntiForgeryToken]
+    [EnableRateLimiting(AuthenticationRateLimitingExtensions.SharedWishlistReservationPolicy)]
+    [OptionalBearer]
+    [GuestSessionCookie(isRequired: false)]
+    [EntityTag(isRequired: true, returnsEntityTag: false)]
+    [NoStoreResponse(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status412PreconditionFailed, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status428PreconditionRequired, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status429TooManyRequests, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status503ServiceUnavailable, "application/json")]
+    public async Task<IActionResult> CancelCurrentReservationAsync(
+        Guid shareLinkId,
+        Guid wishId,
+        [FromHeader(Name = ShareTokenHeaderName)] string? shareToken,
+        CancellationToken cancellationToken)
+    {
+        await sender.Send(
+            new CancelGiftReservationCommand(
+                shareLinkId,
+                shareToken,
+                wishId,
+                GetOptionalMemberId(),
+                guestSessionCookieService.GetValue(Request),
+                entityTagService.Parse(Request.Headers.IfMatch)),
+            cancellationToken);
+        Response.Headers[RobotsHeaderName] = RobotsHeaderValue;
+        Response.Headers.CacheControl = NoStoreCacheControl;
+
+        return NoContent();
+    }
+
     private Guid? GetOptionalMemberId()
     {
         if (User.Identity?.IsAuthenticated is not true)

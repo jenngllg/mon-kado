@@ -26,6 +26,9 @@ public class RecordingGiftReservationService : IGiftReservationService
     /// <summary>Gets recorded reservation mutations.</summary>
     public List<GiftReservationMutationRequest> Mutations { get; } = [];
 
+    /// <summary>Gets recorded reservation cancellations.</summary>
+    public List<GiftReservationCancellationRequest> Cancellations { get; } = [];
+
     /// <summary>Gets or sets the current reservation returned by retrieval.</summary>
     public GiftReservationDetails? Reservation
     {
@@ -34,6 +37,9 @@ public class RecordingGiftReservationService : IGiftReservationService
 
     /// <summary>Gets or sets whether the next mutation creates a reservation.</summary>
     public bool IsCreated { get; set; } = true;
+
+    /// <summary>Gets or sets whether the next cancellation deletes a reservation.</summary>
+    public bool IsCancelled { get; set; } = true;
 
     /// <summary>Gets or sets an exception thrown by reservation operations.</summary>
     public Exception? Exception
@@ -105,5 +111,19 @@ public class RecordingGiftReservationService : IGiftReservationService
             Reservation = reservation,
             IsCreated = IsCreated
         });
+    }
+
+    /// <inheritdoc />
+    public Task<bool> CancelAsync(
+        GiftReservationCancellationRequest request,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        Cancellations.Add(request);
+
+        if (Exception is not null)
+            throw Exception;
+
+        return Task.FromResult(IsCancelled);
     }
 }
