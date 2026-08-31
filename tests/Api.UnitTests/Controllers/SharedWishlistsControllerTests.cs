@@ -42,8 +42,13 @@ public class SharedWishlistsControllerTests
         };
     }
 
-    [Fact]
-    public async Task GetAsync_WhenPrincipalHasNoIdentity_UsesAnonymousGuestContext()
+    [Theory]
+    [InlineData(null, false)]
+    [InlineData(false, false)]
+    [InlineData(true, true)]
+    public async Task GetAsync_WhenPrincipalHasNoIdentity_UsesAnonymousGuestContext(
+        bool? availableOnly,
+        bool expectedAvailableOnly)
     {
         // Arrange
         var shareLinkId = Guid.CreateVersion7();
@@ -65,7 +70,8 @@ public class SharedWishlistsControllerTests
                     query.ShareLinkId == shareLinkId &&
                     query.Secret == "secret" &&
                     query.MemberId.GetValueOrDefault() == Guid.Empty &&
-                    string.IsNullOrEmpty(query.GuestToken)),
+                    string.IsNullOrEmpty(query.GuestToken) &&
+                    query.AvailableOnly == expectedAvailableOnly),
                 cancellationToken))
             .ReturnsAsync(new SharedWishlistResult(
                 wishlist,
@@ -75,6 +81,7 @@ public class SharedWishlistsControllerTests
         var result = await _controller.GetAsync(
             shareLinkId,
             "secret",
+            availableOnly,
             cancellationToken);
 
         // Assert
@@ -90,7 +97,8 @@ public class SharedWishlistsControllerTests
         _senderMock.Verify(
             sender => sender.Send(
                 It.Is<GetSharedWishlistQuery>(query =>
-                    query.MemberId.GetValueOrDefault() == Guid.Empty),
+                    query.MemberId.GetValueOrDefault() == Guid.Empty &&
+                    query.AvailableOnly == expectedAvailableOnly),
                 cancellationToken),
             Times.Once);
         _guestSessionCookieServiceMock.VerifyNoOtherCalls();

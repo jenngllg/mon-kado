@@ -15,7 +15,8 @@ public class GetSharedWishlistQueryTests
             Guid.Empty,
             null,
             null,
-            null);
+            null,
+            availableOnly: false);
 
         // Act
         var exception = ((IGenericValidationFailure)query).CreateValidationException(

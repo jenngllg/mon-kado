@@ -21,16 +21,19 @@ public class GetSharedWishlistQuery : IRequest<SharedWishlistResult>, IGenericVa
     /// <param name="secret">The nullable bearer secret received from the client.</param>
     /// <param name="memberId">The optional authenticated member identifier.</param>
     /// <param name="guestToken">The optional browser guest token.</param>
+    /// <param name="availableOnly">Whether to return only gifts available to the current participant.</param>
     public GetSharedWishlistQuery(
         Guid shareLinkId,
         string? secret,
         Guid? memberId,
-        string? guestToken)
+        string? guestToken,
+        bool availableOnly)
     {
         ShareLinkId = shareLinkId;
         Secret = secret;
         MemberId = memberId;
         GuestToken = guestToken;
+        AvailableOnly = availableOnly;
     }
 
     /// <summary>Gets the share-link identifier.</summary>
@@ -52,6 +55,12 @@ public class GetSharedWishlistQuery : IRequest<SharedWishlistResult>, IGenericVa
 
     /// <summary>Gets the optional browser guest token.</summary>
     public string? GuestToken
+    {
+        get;
+    }
+
+    /// <summary>Gets whether only gifts available to the current participant are returned.</summary>
+    public bool AvailableOnly
     {
         get;
     }
@@ -119,7 +128,8 @@ public class GetSharedWishlistQueryHandler(
 
         var enrichedWishlist = CreateWishlistDetails(
             wishlist,
-            currentQuantities);
+            currentQuantities,
+            request.AvailableOnly);
 
         ApplicationLogMessages.SharedWishlistRetrieved(
             logger,
@@ -133,7 +143,8 @@ public class GetSharedWishlistQueryHandler(
 
     private static SharedWishlistDetails CreateWishlistDetails(
         SharedWishlistDetails wishlist,
-        IReadOnlyDictionary<Guid, int>? currentQuantities)
+        IReadOnlyDictionary<Guid, int>? currentQuantities,
+        bool availableOnly)
     {
         var wishes = wishlist.Wishes
             .Select(wish => new SharedWishDetails(
@@ -144,6 +155,10 @@ public class GetSharedWishlistQueryHandler(
                 wish.Quantity,
                 wish.ReservedQuantity,
                 currentQuantities?.GetValueOrDefault(wish.Id)))
+            .Where(wish =>
+                !availableOnly ||
+                wish.ReservedQuantity < wish.Quantity ||
+                wish.CurrentParticipantReservedQuantity > 0)
             .ToArray();
 
         return new SharedWishlistDetails(

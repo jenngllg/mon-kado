@@ -135,9 +135,29 @@ public class WishlistShareLinkOpenApiTests
             "required",
             out var shareTokenIsRequired) &&
             shareTokenIsRequired.GetBoolean());
+        var availableOnly = Assert.Single(
+            getSharedWishlist.GetProperty("parameters").EnumerateArray(),
+            parameter => parameter.GetProperty("name").GetString() == "availableOnly");
+        Assert.Equal(
+            "query",
+            availableOnly.GetProperty("in").GetString());
+        Assert.Equal(
+            "Whether to return only gifts available to the current participant.",
+            availableOnly.GetProperty("description").GetString());
+        Assert.False(availableOnly.TryGetProperty(
+            "required",
+            out var availableOnlyIsRequired) &&
+            availableOnlyIsRequired.GetBoolean());
+        var availableOnlySchema = ResolveSchema(
+            document.RootElement,
+            availableOnly.GetProperty("schema"));
+        Assert.Equal(
+            "boolean",
+            availableOnlySchema.GetProperty("type").GetString());
         AssertResponses(
             getSharedWishlist,
             "200",
+            "400",
             "401",
             "404",
             "429",
