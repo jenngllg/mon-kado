@@ -47,6 +47,7 @@ public class SharedWishlistsController(
     /// <summary>Gets a wishlist through its active share link.</summary>
     /// <param name="shareLinkId">The public share-link identifier.</param>
     /// <param name="shareToken">The bearer secret contained in the URL fragment.</param>
+    /// <param name="availableOnly">Whether to return only gifts available to the current participant.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>The publicly shared wishlist content.</returns>
     [HttpGet("{shareLinkId:guid}")]
@@ -55,6 +56,7 @@ public class SharedWishlistsController(
     [GuestSessionCookie(isRequired: false)]
     [NoStoreResponse(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(SharedWishlistResponse), StatusCodes.Status200OK, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest, "application/json")]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized, "application/json")]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound, "application/json")]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status429TooManyRequests, "application/json")]
@@ -62,6 +64,7 @@ public class SharedWishlistsController(
     public async Task<ActionResult<SharedWishlistResponse>> GetAsync(
         Guid shareLinkId,
         [FromHeader(Name = ShareTokenHeaderName)] string? shareToken,
+        [FromQuery] bool? availableOnly,
         CancellationToken cancellationToken)
     {
         var result = await sender.Send(
@@ -69,7 +72,8 @@ public class SharedWishlistsController(
                 shareLinkId,
                 shareToken,
                 GetOptionalMemberId(),
-                guestSessionCookieService.GetValue(Request)),
+                guestSessionCookieService.GetValue(Request),
+                availableOnly is true),
             cancellationToken);
         var wishlist = result.Wishlist;
         var response = new SharedWishlistResponse

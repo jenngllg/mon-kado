@@ -39,7 +39,8 @@ public class GetSharedWishlistQueryHandlerTests
             shareLinkId,
             null,
             null,
-            null);
+            null,
+            availableOnly: false);
         _shareServiceMock
             .Setup(service => service.GetSharedAsync(
                 shareLinkId,
@@ -78,7 +79,8 @@ public class GetSharedWishlistQueryHandlerTests
             shareLinkId,
             "secret",
             memberId,
-            "guest");
+            "guest",
+            availableOnly: false);
         var wish = new SharedWishDetails(
             Guid.CreateVersion7(),
             "Gift",
@@ -186,6 +188,123 @@ public class GetSharedWishlistQueryHandlerTests
     }
 
     [Fact]
+    public async Task Handle_WhenAvailableOnlyIsTrue_ReturnsAvailableAndCurrentlyReservedWishesInOriginalOrder()
+    {
+        // Arrange
+        var shareLinkId = Guid.CreateVersion7();
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var availableWish = new SharedWishDetails(
+            Guid.CreateVersion7(),
+            "Available gift",
+            null,
+            null,
+            2,
+            1);
+        var currentlyReservedWish = new SharedWishDetails(
+            Guid.CreateVersion7(),
+            "Currently reserved gift",
+            null,
+            null,
+            1,
+            1);
+        var unavailableWish = new SharedWishDetails(
+            Guid.CreateVersion7(),
+            "Unavailable gift",
+            null,
+            null,
+            1,
+            1);
+        var overreservedWish = new SharedWishDetails(
+            Guid.CreateVersion7(),
+            "Overreserved gift",
+            null,
+            null,
+            1,
+            2);
+        var wishlist = new SharedWishlistDetails(
+            Guid.CreateVersion7(),
+            "Owner",
+            "Birthday",
+            WishlistOccasion.Birthday,
+            null,
+            null,
+            [
+                availableWish,
+                currentlyReservedWish,
+                unavailableWish,
+                overreservedWish
+            ]);
+        var participant = new WishlistParticipantDetails(
+            Guid.CreateVersion7(),
+            "Participant");
+        var query = new GetSharedWishlistQuery(
+            shareLinkId,
+            "secret",
+            null,
+            "guest",
+            availableOnly: true);
+        _shareServiceMock
+            .Setup(service => service.GetSharedAsync(
+                shareLinkId,
+                "secret",
+                cancellationToken))
+            .ReturnsAsync(wishlist);
+        _participantServiceMock
+            .Setup(service => service.GetCurrentAsync(
+                wishlist.Id,
+                null,
+                "guest",
+                cancellationToken))
+            .ReturnsAsync(new WishlistParticipantLookupResult(
+                WishlistParticipantLookupOutcome.Found,
+                participant));
+        _reservationServiceMock
+            .Setup(service => service.GetQuantitiesAsync(
+                wishlist.Id,
+                participant.Id,
+                cancellationToken))
+            .ReturnsAsync(new Dictionary<Guid, int>
+            {
+                [currentlyReservedWish.Id] = 1
+            });
+
+        // Act
+        var result = await _handler.Handle(
+            query,
+            cancellationToken);
+
+        // Assert
+        Assert.Equal(
+            [
+                availableWish.Id,
+                currentlyReservedWish.Id
+            ],
+            result.Wishlist.Wishes.Select(wish => wish.Id));
+        _shareServiceMock.Verify(
+            service => service.GetSharedAsync(
+                shareLinkId,
+                "secret",
+                cancellationToken),
+            Times.Once);
+        _participantServiceMock.Verify(
+            service => service.GetCurrentAsync(
+                wishlist.Id,
+                null,
+                "guest",
+                cancellationToken),
+            Times.Once);
+        _reservationServiceMock.Verify(
+            service => service.GetQuantitiesAsync(
+                wishlist.Id,
+                participant.Id,
+                cancellationToken),
+            Times.Once);
+        _shareServiceMock.VerifyNoOtherCalls();
+        _participantServiceMock.VerifyNoOtherCalls();
+        _reservationServiceMock.VerifyNoOtherCalls();
+    }
+
+    [Fact]
     public async Task Handle_WhenMemberNoLongerExists_ThrowsInvalidSession()
     {
         // Arrange
@@ -196,7 +315,8 @@ public class GetSharedWishlistQueryHandlerTests
             shareLinkId,
             "secret",
             memberId,
-            null);
+            null,
+            availableOnly: false);
         var wishlist = new SharedWishlistDetails(
             Guid.CreateVersion7(),
             "Owner",

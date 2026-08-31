@@ -121,6 +121,7 @@ public class GiftReservationIntegrationTests(PostgreSqlContainerFixture fixture)
             participantClient,
             shareLink.Id,
             shareLink.Secret,
+            availableOnly: false,
             cancellationToken);
         using var rotation = await RotateShareLinkAsync(
             ownerClient,
@@ -239,6 +240,116 @@ public class GiftReservationIntegrationTests(PostgreSqlContainerFixture fixture)
             HttpStatusCode.NoContent,
             wishDeletion.StatusCode);
         Assert.Empty(reservationsAfterWishDeletion);
+    }
+
+    [Fact]
+    public async Task GetAsync_WhenAvailableOnlyIsTrue_HidesFullyReservedGiftExceptForCurrentParticipant()
+    {
+        // Arrange
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var factory = await CreateFactoryAsync(cancellationToken);
+        var ownerId = Guid.CreateVersion7();
+        var firstMemberId = Guid.CreateVersion7();
+        var secondMemberId = Guid.CreateVersion7();
+        var wishlistId = Guid.CreateVersion7();
+        var wishId = Guid.CreateVersion7();
+        await SeedAsync(
+            factory,
+            ownerId,
+            [
+                (firstMemberId, "first@example.test", "First participant"),
+                (secondMemberId, "second@example.test", "Second participant")
+            ],
+            wishlistId,
+            wishId,
+            2,
+            cancellationToken);
+        using var ownerClient = CreateAuthorizedClient(
+            factory,
+            ownerId);
+        var shareLink = await CreateShareLinkAsync(
+            ownerClient,
+            wishlistId,
+            cancellationToken);
+        using var firstClient = CreateAuthorizedClient(
+            factory,
+            firstMemberId);
+        using var secondClient = CreateAuthorizedClient(
+            factory,
+            secondMemberId);
+        var firstCsrfToken = await GetCsrfTokenAsync(
+            firstClient,
+            cancellationToken);
+        var secondCsrfToken = await GetCsrfTokenAsync(
+            secondClient,
+            cancellationToken);
+        using var firstJoin = await JoinAsync(
+            firstClient,
+            shareLink.Id,
+            shareLink.Secret,
+            firstCsrfToken,
+            cancellationToken);
+        using var secondJoin = await JoinAsync(
+            secondClient,
+            shareLink.Id,
+            shareLink.Secret,
+            secondCsrfToken,
+            cancellationToken);
+        using var reservation = await UpsertAsync(
+            secondClient,
+            shareLink.Id,
+            wishId,
+            shareLink.Secret,
+            secondCsrfToken,
+            2,
+            entityTag: null,
+            cancellationToken);
+
+        // Act
+        using var unavailableForFirstParticipant = await GetSharedWishlistAsync(
+            firstClient,
+            shareLink.Id,
+            shareLink.Secret,
+            availableOnly: true,
+            cancellationToken);
+        using var reservedBySecondParticipant = await GetSharedWishlistAsync(
+            secondClient,
+            shareLink.Id,
+            shareLink.Secret,
+            availableOnly: true,
+            cancellationToken);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.Created,
+            firstJoin.StatusCode);
+        Assert.Equal(
+            HttpStatusCode.Created,
+            secondJoin.StatusCode);
+        Assert.Equal(
+            HttpStatusCode.Created,
+            reservation.StatusCode);
+        Assert.Equal(
+            HttpStatusCode.OK,
+            unavailableForFirstParticipant.StatusCode);
+        var unavailableBody = await unavailableForFirstParticipant.Content.ReadFromJsonAsync<JsonElement>(
+            cancellationToken);
+        Assert.Empty(unavailableBody.GetProperty("wishes").EnumerateArray());
+        Assert.Equal(
+            HttpStatusCode.OK,
+            reservedBySecondParticipant.StatusCode);
+        var reservedBody = await reservedBySecondParticipant.Content.ReadFromJsonAsync<JsonElement>(
+            cancellationToken);
+        var reservedWish = Assert.Single(reservedBody.GetProperty("wishes").EnumerateArray());
+        Assert.Equal(
+            wishId,
+            reservedWish.GetProperty("id").GetGuid());
+        Assert.Equal(
+            0,
+            reservedWish.GetProperty("availableQuantity").GetInt32());
+        Assert.Equal(
+            2,
+            reservedWish.GetProperty("currentParticipantReservedQuantity").GetInt32());
     }
 
     [Fact]
@@ -480,6 +591,7 @@ public class GiftReservationIntegrationTests(PostgreSqlContainerFixture fixture)
             secondClient,
             shareLink.Id,
             shareLink.Secret,
+            availableOnly: false,
             cancellationToken);
         var storedReservations = await GetStoredReservationsAsync(
             factory,
@@ -1010,11 +1122,12 @@ public class GiftReservationIntegrationTests(PostgreSqlContainerFixture fixture)
         HttpClient client,
         Guid shareLinkId,
         string secret,
+        bool availableOnly,
         CancellationToken cancellationToken)
     {
         using var request = new HttpRequestMessage(
             HttpMethod.Get,
-            $"/api/v1/shared-wishlists/{shareLinkId}");
+            $"/api/v1/shared-wishlists/{shareLinkId}?availableOnly={availableOnly}");
         request.Headers.TryAddWithoutValidation(
             "X-MonKado-Share-Token",
             secret);

@@ -28,7 +28,8 @@ public class GetSharedWishlistQueryValidatorTests
             memberIdIsEmpty
                 ? Guid.Empty
                 : null,
-            null);
+            null,
+            availableOnly: false);
 
         // Act
         var result = await _validator.ValidateAsync(
