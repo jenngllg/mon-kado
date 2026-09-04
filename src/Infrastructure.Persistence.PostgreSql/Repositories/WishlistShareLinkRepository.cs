@@ -96,4 +96,30 @@ public class WishlistShareLinkRepository(MonKadoDbContext context) : IWishlistSh
                     .ToArray()))
             .SingleOrDefaultAsync(cancellationToken);
     }
+
+    /// <inheritdoc />
+    public Task<SharedWishDetail?> GetSharedWishAsync(
+        Guid wishlistId,
+        Guid wishId,
+        CancellationToken cancellationToken)
+    {
+        return context.Wishes
+            .AsNoTracking()
+            .Where(wish =>
+                wish.WishlistId == wishlistId &&
+                wish.Id == wishId)
+            .Select(wish => new SharedWishDetail(
+                wish.Id,
+                wish.Name,
+                wish.Note,
+                wish.Url,
+                wish.Price,
+                wish.Quantity,
+                context.Set<GiftReservation>()
+                    .Where(reservation => reservation.WishId == wish.Id)
+                    .Select(reservation => (int?)reservation.Quantity)
+                    .Sum() ?? 0,
+                null))
+            .SingleOrDefaultAsync(cancellationToken);
+    }
 }

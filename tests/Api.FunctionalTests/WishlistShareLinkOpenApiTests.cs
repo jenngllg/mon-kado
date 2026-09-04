@@ -26,6 +26,9 @@ public class WishlistShareLinkOpenApiTests
         var getSharedWishlist = paths
             .GetProperty("/api/v1/shared-wishlists/{shareLinkId}")
             .GetProperty("get");
+        var getSharedWish = paths
+            .GetProperty("/api/v1/shared-wishlists/{shareLinkId}/wishes/{wishId}")
+            .GetProperty("get");
         var participantsPath = paths
             .GetProperty("/api/v1/shared-wishlists/{shareLinkId}/participants");
         var joinSharedWishlist = participantsPath.GetProperty("post");
@@ -166,6 +169,32 @@ public class WishlistShareLinkOpenApiTests
         AssertSharedSuccessResponse(
             document.RootElement,
             getSharedWishlist);
+
+        Assert.Equal(
+            "Gets detailed information about one gift wish through an active share link.",
+            getSharedWish.GetProperty("summary").GetString());
+        AssertOptionalBearerAndGuestCookie(
+            getSharedWish,
+            expectsAntiforgery: false);
+        var wishId = Assert.Single(
+            getSharedWish.GetProperty("parameters").EnumerateArray(),
+            parameter => parameter.GetProperty("name").GetString() == "wishId");
+        Assert.Equal(
+            "path",
+            wishId.GetProperty("in").GetString());
+        Assert.True(wishId.GetProperty("required").GetBoolean());
+        AssertResponses(
+            getSharedWish,
+            "200",
+            "400",
+            "401",
+            "404",
+            "429",
+            "500",
+            "503");
+        AssertSharedWishSuccessResponse(
+            document.RootElement,
+            getSharedWish);
 
         Assert.Equal(
             "Joins a wishlist through its active share link.",
@@ -574,6 +603,43 @@ public class WishlistShareLinkOpenApiTests
             [
                 "displayName",
                 "id"
+            ],
+            schema
+                .GetProperty("properties")
+                .EnumerateObject()
+                .Select(property => property.Name)
+                .OrderBy(property => property));
+    }
+
+    private static void AssertSharedWishSuccessResponse(
+        JsonElement document,
+        JsonElement operation)
+    {
+        var success = operation
+            .GetProperty("responses")
+            .GetProperty("200");
+        Assert.True(success
+            .GetProperty("headers")
+            .TryGetProperty(
+                "Cache-Control",
+                out _));
+        var schema = ResolveSchema(
+            document,
+            success
+                .GetProperty("content")
+                .GetProperty("application/json")
+                .GetProperty("schema"));
+        Assert.Equal(
+            [
+                "availableQuantity",
+                "currentParticipantReservedQuantity",
+                "id",
+                "name",
+                "note",
+                "price",
+                "quantity",
+                "reservedQuantity",
+                "url"
             ],
             schema
                 .GetProperty("properties")

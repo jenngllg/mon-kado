@@ -168,6 +168,9 @@ public static class ErrorCodes
     /// <summary>Identifies public wishlist content unavailable through a share link.</summary>
     public const string SharedWishlistNotFound = "SHARED_WISHLIST_NOT_FOUND";
 
+    /// <summary>Identifies a gift wish unavailable under a shared wishlist.</summary>
+    public const string SharedWishNotFound = "SHARED_WISH_NOT_FOUND";
+
     /// <summary>Identifies a current identity that has not joined the wishlist.</summary>
     public const string WishlistParticipantNotFound = "WISHLIST_PARTICIPANT_NOT_FOUND";
 

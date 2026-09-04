@@ -758,6 +758,249 @@ public class WishlistShareServiceTests
     }
 
     [Fact]
+    public async Task GetSharedWishAsync_WhenWishExists_ReturnsFoundResult()
+    {
+        // Arrange
+        var wishlistId = Guid.CreateVersion7();
+        var shareLink = CreateShareLink(wishlistId);
+        var wish = CreateSharedWish();
+        var cancellationToken = TestContext.Current.CancellationToken;
+        _shareLinkRepositoryMock
+            .Setup(repository => repository.GetByIdAsync(
+                shareLink.Id,
+                cancellationToken))
+            .ReturnsAsync(shareLink);
+        _tokenServiceMock
+            .Setup(service => service.Verify(
+                "valid-secret",
+                shareLink.SecretHash))
+            .Returns(true);
+        _shareLinkRepositoryMock
+            .Setup(repository => repository.GetSharedWishAsync(
+                wishlistId,
+                wish.Id,
+                cancellationToken))
+            .ReturnsAsync(wish);
+
+        // Act
+        var result = await _shareService.GetSharedWishAsync(
+            shareLink.Id,
+            "valid-secret",
+            wish.Id,
+            cancellationToken);
+
+        // Assert
+        Assert.Equal(
+            SharedWishLookupOutcome.Found,
+            result.Outcome);
+        Assert.Equal(
+            wishlistId,
+            result.WishlistId);
+        Assert.Same(
+            wish,
+            result.Wish);
+        VerifySharedWishLookup(
+            shareLink,
+            "valid-secret",
+            wish.Id,
+            cancellationToken,
+            verifiesContent: true);
+    }
+
+    [Fact]
+    public async Task GetSharedWishAsync_WhenShareLinkDoesNotExist_ReturnsSharedWishlistNotFound()
+    {
+        // Arrange
+        var shareLinkId = Guid.CreateVersion7();
+        var wishId = Guid.CreateVersion7();
+        var cancellationToken = TestContext.Current.CancellationToken;
+        _shareLinkRepositoryMock
+            .Setup(repository => repository.GetByIdAsync(
+                shareLinkId,
+                cancellationToken))
+            .ReturnsAsync((WishlistShareLink?)null);
+
+        // Act
+        var result = await _shareService.GetSharedWishAsync(
+            shareLinkId,
+            "secret",
+            wishId,
+            cancellationToken);
+
+        // Assert
+        Assert.Equal(
+            SharedWishLookupOutcome.SharedWishlistNotFound,
+            result.Outcome);
+        Assert.Null(result.WishlistId);
+        Assert.Null(result.Wish);
+        _shareLinkRepositoryMock.Verify(
+            repository => repository.GetByIdAsync(
+                shareLinkId,
+                cancellationToken),
+            Times.Once);
+        VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task GetSharedWishAsync_WhenSecretIsInvalid_ReturnsSharedWishlistNotFound()
+    {
+        // Arrange
+        var shareLink = CreateShareLink(Guid.CreateVersion7());
+        var wishId = Guid.CreateVersion7();
+        var cancellationToken = TestContext.Current.CancellationToken;
+        _shareLinkRepositoryMock
+            .Setup(repository => repository.GetByIdAsync(
+                shareLink.Id,
+                cancellationToken))
+            .ReturnsAsync(shareLink);
+        _tokenServiceMock
+            .Setup(service => service.Verify(
+                "invalid-secret",
+                shareLink.SecretHash))
+            .Returns(false);
+
+        // Act
+        var result = await _shareService.GetSharedWishAsync(
+            shareLink.Id,
+            "invalid-secret",
+            wishId,
+            cancellationToken);
+
+        // Assert
+        Assert.Equal(
+            SharedWishLookupOutcome.SharedWishlistNotFound,
+            result.Outcome);
+        Assert.Null(result.WishlistId);
+        Assert.Null(result.Wish);
+        VerifySharedWishLookup(
+            shareLink,
+            "invalid-secret",
+            wishId,
+            cancellationToken,
+            verifiesContent: false);
+    }
+
+    [Fact]
+    public async Task GetSharedWishAsync_WhenWishDoesNotExist_ReturnsWishNotFound()
+    {
+        // Arrange
+        var wishlistId = Guid.CreateVersion7();
+        var shareLink = CreateShareLink(wishlistId);
+        var wishId = Guid.CreateVersion7();
+        var cancellationToken = TestContext.Current.CancellationToken;
+        _shareLinkRepositoryMock
+            .Setup(repository => repository.GetByIdAsync(
+                shareLink.Id,
+                cancellationToken))
+            .ReturnsAsync(shareLink);
+        _tokenServiceMock
+            .Setup(service => service.Verify(
+                "valid-secret",
+                shareLink.SecretHash))
+            .Returns(true);
+        _shareLinkRepositoryMock
+            .Setup(repository => repository.GetSharedWishAsync(
+                wishlistId,
+                wishId,
+                cancellationToken))
+            .ReturnsAsync((SharedWishDetail?)null);
+
+        // Act
+        var result = await _shareService.GetSharedWishAsync(
+            shareLink.Id,
+            "valid-secret",
+            wishId,
+            cancellationToken);
+
+        // Assert
+        Assert.Equal(
+            SharedWishLookupOutcome.WishNotFound,
+            result.Outcome);
+        Assert.Equal(
+            wishlistId,
+            result.WishlistId);
+        Assert.Null(result.Wish);
+        VerifySharedWishLookup(
+            shareLink,
+            "valid-secret",
+            wishId,
+            cancellationToken,
+            verifiesContent: true);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task GetSharedWishAsync_WhenPostgreSqlTimesOut_ThrowsDependencyUnavailableException(
+        bool failsDuringLinkLookup)
+    {
+        // Arrange
+        var shareLink = CreateShareLink(Guid.CreateVersion7());
+        var wishId = Guid.CreateVersion7();
+        var cancellationToken = TestContext.Current.CancellationToken;
+
+        if (failsDuringLinkLookup)
+        {
+            _shareLinkRepositoryMock
+                .Setup(repository => repository.GetByIdAsync(
+                    shareLink.Id,
+                    cancellationToken))
+                .ThrowsAsync(new TimeoutException());
+        }
+        else
+        {
+            _shareLinkRepositoryMock
+                .Setup(repository => repository.GetByIdAsync(
+                    shareLink.Id,
+                    cancellationToken))
+                .ReturnsAsync(shareLink);
+            _tokenServiceMock
+                .Setup(service => service.Verify(
+                    "secret",
+                    shareLink.SecretHash))
+                .Returns(true);
+            _shareLinkRepositoryMock
+                .Setup(repository => repository.GetSharedWishAsync(
+                    shareLink.WishlistId,
+                    wishId,
+                    cancellationToken))
+                .ThrowsAsync(new TimeoutException());
+        }
+
+        // Act
+        var action = () => _shareService.GetSharedWishAsync(
+            shareLink.Id,
+            "secret",
+            wishId,
+            cancellationToken);
+
+        // Assert
+        await Assert.ThrowsAsync<DependencyUnavailableException>(action);
+        _shareLinkRepositoryMock.Verify(
+            repository => repository.GetByIdAsync(
+                shareLink.Id,
+                cancellationToken),
+            Times.Once);
+
+        if (!failsDuringLinkLookup)
+        {
+            _tokenServiceMock.Verify(
+                service => service.Verify(
+                    "secret",
+                    shareLink.SecretHash),
+                Times.Once);
+            _shareLinkRepositoryMock.Verify(
+                repository => repository.GetSharedWishAsync(
+                    shareLink.WishlistId,
+                    wishId,
+                    cancellationToken),
+                Times.Once);
+        }
+
+        VerifyNoOtherCalls();
+    }
+
+    [Fact]
     public async Task RotateAsync_WhenSaveSucceeds_ReturnsRotatedShareLink()
     {
         // Arrange
@@ -1634,6 +1877,19 @@ public class WishlistShareServiceTests
             []);
     }
 
+    private static SharedWishDetail CreateSharedWish()
+    {
+        return new SharedWishDetail(
+            Guid.CreateVersion7(),
+            "Gift",
+            "Public note",
+            "https://example.test/gift",
+            12.34m,
+            2,
+            1,
+            null);
+    }
+
     private static DbUpdateException CreatePostgreSqlException(
         string sqlState,
         string constraintName)
@@ -1803,6 +2059,37 @@ public class WishlistShareServiceTests
             _shareLinkRepositoryMock.Verify(
                 repository => repository.GetSharedWishlistAsync(
                     shareLink.WishlistId,
+                    cancellationToken),
+                Times.Once);
+        }
+
+        VerifyNoOtherCalls();
+    }
+
+    private void VerifySharedWishLookup(
+        WishlistShareLink shareLink,
+        string secret,
+        Guid wishId,
+        CancellationToken cancellationToken,
+        bool verifiesContent)
+    {
+        _shareLinkRepositoryMock.Verify(
+            repository => repository.GetByIdAsync(
+                shareLink.Id,
+                cancellationToken),
+            Times.Once);
+        _tokenServiceMock.Verify(
+            service => service.Verify(
+                secret,
+                shareLink.SecretHash),
+            Times.Once);
+
+        if (verifiesContent)
+        {
+            _shareLinkRepositoryMock.Verify(
+                repository => repository.GetSharedWishAsync(
+                    shareLink.WishlistId,
+                    wishId,
                     cancellationToken),
                 Times.Once);
         }

@@ -33,6 +33,9 @@ public class RecordingWishlistShareService : IWishlistShareService
     /// <summary>Gets recorded public retrieval calls.</summary>
     public List<(Guid ShareLinkId, string Secret)> PublicRetrievals { get; } = [];
 
+    /// <summary>Gets recorded public gift-wish retrieval calls.</summary>
+    public List<(Guid ShareLinkId, string Secret, Guid WishId)> PublicWishRetrievals { get; } = [];
+
     /// <summary>Gets active fake share links keyed by wishlist.</summary>
     public Dictionary<Guid, WishlistShareLinkDetails> ShareLinks { get; } = [];
 
@@ -63,6 +66,23 @@ public class RecordingWishlistShareService : IWishlistShareService
                 "https://example.com/book",
                 19.99m)
         ]);
+
+    /// <summary>Gets or sets the public gift-wish lookup result returned by the fake.</summary>
+    public SharedWishLookupResult SharedWishLookupResult
+    {
+        get; set;
+    } = new(
+        SharedWishLookupOutcome.Found,
+        Guid.Parse("0198e75d-8280-7000-8000-000000000001"),
+        new SharedWishDetail(
+            Guid.Parse("0198e75d-8280-7000-8000-000000000002"),
+            "Livre",
+            "Édition illustrée",
+            "https://example.com/book",
+            19.99m,
+            1,
+            0,
+            null));
 
     /// <inheritdoc />
     public Task<WishlistShareLinkDetails?> CreateAsync(
@@ -166,6 +186,23 @@ public class RecordingWishlistShareService : IWishlistShareService
         ThrowIfConfigured();
 
         return Task.FromResult(SharedWishlist);
+    }
+
+    /// <inheritdoc />
+    public Task<SharedWishLookupResult> GetSharedWishAsync(
+        Guid shareLinkId,
+        string secret,
+        Guid wishId,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        PublicWishRetrievals.Add((
+            shareLinkId,
+            secret,
+            wishId));
+        ThrowIfConfigured();
+
+        return Task.FromResult(SharedWishLookupResult);
     }
 
     /// <summary>

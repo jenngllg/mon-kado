@@ -109,6 +109,55 @@ public class SharedWishlistsController(
         return Ok(response);
     }
 
+    /// <summary>Gets detailed information about one gift wish through an active share link.</summary>
+    /// <param name="shareLinkId">The public share-link identifier.</param>
+    /// <param name="wishId">The gift-wish identifier.</param>
+    /// <param name="shareToken">The bearer secret contained in the URL fragment.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The detailed public gift-wish information.</returns>
+    [HttpGet("{shareLinkId:guid}/wishes/{wishId:guid}")]
+    [EnableRateLimiting(AuthenticationRateLimitingExtensions.SharedWishlistPolicy)]
+    [OptionalBearer]
+    [GuestSessionCookie(isRequired: false)]
+    [NoStoreResponse(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(SharedWishDetailResponse), StatusCodes.Status200OK, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status429TooManyRequests, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status503ServiceUnavailable, "application/json")]
+    public async Task<ActionResult<SharedWishDetailResponse>> GetWishAsync(
+        Guid shareLinkId,
+        Guid wishId,
+        [FromHeader(Name = ShareTokenHeaderName)] string? shareToken,
+        CancellationToken cancellationToken)
+    {
+        var wish = await sender.Send(
+            new GetSharedWishQuery(
+                shareLinkId,
+                shareToken,
+                wishId,
+                GetOptionalMemberId(),
+                guestSessionCookieService.GetValue(Request)),
+            cancellationToken);
+        var response = new SharedWishDetailResponse(
+            wish.Id,
+            wish.Name,
+            wish.Note,
+            wish.Url,
+            wish.Price,
+            wish.Quantity,
+            wish.ReservedQuantity,
+            Math.Max(
+                0,
+                wish.Quantity - wish.ReservedQuantity),
+            wish.CurrentParticipantReservedQuantity);
+        Response.Headers[RobotsHeaderName] = RobotsHeaderValue;
+        Response.Headers.CacheControl = NoStoreCacheControl;
+
+        return Ok(response);
+    }
+
     /// <summary>Joins a wishlist through its active share link.</summary>
     /// <param name="shareLinkId">The public share-link identifier.</param>
     /// <param name="shareToken">The bearer secret contained in the URL fragment.</param>

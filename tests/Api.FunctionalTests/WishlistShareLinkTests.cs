@@ -553,6 +553,361 @@ public class WishlistShareLinkTests
     }
 
     [Fact]
+    public async Task GetWishAsync_WhenShareTokenIsValid_ReturnsDetailedPublicContent()
+    {
+        // Arrange
+        await using var factory = new RegistrationApiFactory();
+        using var client = factory.CreateClient();
+        var lookup = factory.WishlistShareService.SharedWishLookupResult;
+        var wishlistId = lookup.WishlistId
+            ?? throw new InvalidOperationException("The fake shared wishlist is missing.");
+        var wish = lookup.Wish
+            ?? throw new InvalidOperationException("The fake shared wish is missing.");
+
+        // Act
+        using var response = await SendPublicWishRequestAsync(
+            client,
+            Guid.CreateVersion7(),
+            wish.Id,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.OK,
+            response.StatusCode);
+        Assert.True(response.Headers.CacheControl?.NoStore);
+        Assert.Equal(
+            "noindex, nofollow, noarchive",
+            response.Headers.GetValues("X-Robots-Tag").Single());
+        using var document = await response.Content.ReadFromJsonAsync<JsonDocument>(
+            TestContext.Current.CancellationToken)
+            ?? throw new InvalidOperationException("The shared-wish response is empty.");
+        Assert.Equal(
+            [
+                "id",
+                "name",
+                "note",
+                "url",
+                "price",
+                "quantity",
+                "reservedQuantity",
+                "availableQuantity",
+                "currentParticipantReservedQuantity"
+            ],
+            document.RootElement
+                .EnumerateObject()
+                .Select(property => property.Name));
+        Assert.Equal(
+            wish.Id,
+            document.RootElement.GetProperty("id").GetGuid());
+        Assert.Equal(
+            wish.Note,
+            document.RootElement.GetProperty("note").GetString());
+        Assert.Equal(
+            1,
+            document.RootElement.GetProperty("availableQuantity").GetInt32());
+        Assert.Equal(
+            JsonValueKind.Null,
+            document.RootElement.GetProperty("currentParticipantReservedQuantity").ValueKind);
+        var retrieval = Assert.Single(factory.WishlistShareService.PublicWishRetrievals);
+        Assert.Equal(
+            wish.Id,
+            retrieval.WishId);
+        Assert.Equal(
+            "public-secret",
+            retrieval.Secret);
+        Assert.Equal(
+            [(wishlistId, null, null)],
+            factory.WishlistParticipantService.Retrievals);
+        Assert.Empty(factory.GiftReservationService.Retrievals);
+    }
+
+    [Fact]
+    public async Task GetWishAsync_WhenParticipantReservedOverreservedWish_ReturnsCurrentQuantity()
+    {
+        // Arrange
+        await using var factory = new RegistrationApiFactory();
+        var memberId = Guid.CreateVersion7();
+        var shareLinkId = Guid.CreateVersion7();
+        var wishlistId = Guid.CreateVersion7();
+        var wishId = Guid.CreateVersion7();
+        var participant = new WishlistParticipantDetails(
+            Guid.CreateVersion7(),
+            "Participant");
+        factory.WishlistShareService.SharedWishLookupResult = new SharedWishLookupResult(
+            SharedWishLookupOutcome.Found,
+            wishlistId,
+            new SharedWishDetail(
+                wishId,
+                "Gift",
+                null,
+                null,
+                null,
+                1,
+                3,
+                null));
+        factory.WishlistParticipantService.LookupResult = new WishlistParticipantLookupResult(
+            WishlistParticipantLookupOutcome.Found,
+            participant);
+        factory.GiftReservationService.Reservation = new GiftReservationDetails
+        {
+            Id = Guid.CreateVersion7(),
+            WishId = wishId,
+            Quantity = 2
+        };
+        using var client = CreateAuthorizedClient(
+            factory,
+            memberId);
+
+        // Act
+        using var response = await SendPublicWishRequestAsync(
+            client,
+            shareLinkId,
+            wishId,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.OK,
+            response.StatusCode);
+        using var document = await response.Content.ReadFromJsonAsync<JsonDocument>(
+            TestContext.Current.CancellationToken)
+            ?? throw new InvalidOperationException("The shared-wish response is empty.");
+        Assert.Equal(
+            0,
+            document.RootElement.GetProperty("availableQuantity").GetInt32());
+        Assert.Equal(
+            JsonValueKind.Null,
+            document.RootElement.GetProperty("note").ValueKind);
+        Assert.Equal(
+            2,
+            document.RootElement.GetProperty("currentParticipantReservedQuantity").GetInt32());
+        Assert.Equal(
+            [(wishlistId, memberId, null)],
+            factory.WishlistParticipantService.Retrievals);
+        Assert.Equal(
+            [(wishlistId, wishId, participant.Id)],
+            factory.GiftReservationService.Retrievals);
+    }
+
+    [Theory]
+    [InlineData(SharedWishLookupOutcome.SharedWishlistNotFound, "SHARED_WISHLIST_NOT_FOUND")]
+    [InlineData(SharedWishLookupOutcome.WishNotFound, "SHARED_WISH_NOT_FOUND")]
+    public async Task GetWishAsync_WhenLookupFails_ReturnsExpectedStructuredNotFound(
+        SharedWishLookupOutcome outcome,
+        string expectedErrorCode)
+    {
+        // Arrange
+        await using var factory = new RegistrationApiFactory();
+        var wishlistId = outcome is SharedWishLookupOutcome.WishNotFound
+            ? Guid.CreateVersion7()
+            : (Guid?)null;
+        factory.WishlistShareService.SharedWishLookupResult = new SharedWishLookupResult(
+            outcome,
+            wishlistId,
+            null);
+        using var client = factory.CreateClient();
+
+        // Act
+        using var response = await SendPublicWishRequestAsync(
+            client,
+            Guid.CreateVersion7(),
+            Guid.CreateVersion7(),
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.NotFound,
+            response.StatusCode);
+        using var document = await response.Content.ReadFromJsonAsync<JsonDocument>(
+            TestContext.Current.CancellationToken)
+            ?? throw new InvalidOperationException("The error response is empty.");
+        Assert.Equal(
+            expectedErrorCode,
+            document.RootElement.GetProperty("errorCode").GetString());
+        Assert.Empty(factory.WishlistParticipantService.Retrievals);
+        Assert.Empty(factory.GiftReservationService.Retrievals);
+    }
+
+    [Fact]
+    public async Task GetWishAsync_WhenShareTokenIsMissing_ReturnsNonDisclosingNotFound()
+    {
+        // Arrange
+        await using var factory = new RegistrationApiFactory();
+        using var client = factory.CreateClient();
+
+        // Act
+        using var response = await client.GetAsync(
+            $"/api/v1/shared-wishlists/{Guid.CreateVersion7()}/wishes/{Guid.CreateVersion7()}",
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.NotFound,
+            response.StatusCode);
+        var error = await response.Content.ReadFromJsonAsync<ErrorResponse>(
+            TestContext.Current.CancellationToken);
+        Assert.NotNull(error);
+        Assert.Equal(
+            ErrorCodes.SharedWishlistNotFound,
+            error.ErrorCode);
+        Assert.Empty(factory.WishlistShareService.PublicWishRetrievals);
+    }
+
+    [Fact]
+    public async Task GetWishAsync_WhenPostgreSqlIsUnavailable_ReturnsServiceUnavailable()
+    {
+        // Arrange
+        await using var factory = new RegistrationApiFactory();
+        factory.WishlistShareService.Exception = new DependencyUnavailableException(
+            "PostgreSQL",
+            new TimeoutException());
+        using var client = factory.CreateClient();
+
+        // Act
+        using var response = await SendPublicWishRequestAsync(
+            client,
+            Guid.CreateVersion7(),
+            Guid.CreateVersion7(),
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.ServiceUnavailable,
+            response.StatusCode);
+        var error = await response.Content.ReadFromJsonAsync<ErrorResponse>(
+            TestContext.Current.CancellationToken);
+        Assert.NotNull(error);
+        Assert.Equal(
+            ErrorCodes.TechnicalDependencyUnavailable,
+            error.ErrorCode);
+    }
+
+    [Fact]
+    public async Task GetWishAsync_WhenAuthenticatedMemberNoLongerExists_ReturnsUnauthorized()
+    {
+        // Arrange
+        await using var factory = new RegistrationApiFactory();
+        var memberId = Guid.CreateVersion7();
+        var wish = factory.WishlistShareService.SharedWishLookupResult.Wish
+            ?? throw new InvalidOperationException("The fake shared wish is missing.");
+        factory.WishlistParticipantService.LookupResult = new WishlistParticipantLookupResult(
+            WishlistParticipantLookupOutcome.MemberNotFound,
+            null);
+        using var client = CreateAuthorizedClient(
+            factory,
+            memberId);
+
+        // Act
+        using var response = await SendPublicWishRequestAsync(
+            client,
+            Guid.CreateVersion7(),
+            wish.Id,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.Unauthorized,
+            response.StatusCode);
+        using var document = await response.Content.ReadFromJsonAsync<JsonDocument>(
+            TestContext.Current.CancellationToken)
+            ?? throw new InvalidOperationException("The error response is empty.");
+        Assert.Equal(
+            "ACCOUNT_AUTHENTICATION_SESSION_INVALID",
+            document.RootElement.GetProperty("errorCode").GetString());
+        Assert.Empty(factory.GiftReservationService.Retrievals);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task GetWishAsync_WhenIdentifierIsEmpty_ReturnsStructuredBadRequest(
+        bool shareLinkIdIsEmpty)
+    {
+        // Arrange
+        await using var factory = new RegistrationApiFactory();
+        using var client = factory.CreateClient();
+        var shareLinkId = shareLinkIdIsEmpty
+            ? Guid.Empty
+            : Guid.CreateVersion7();
+        var wishId = shareLinkIdIsEmpty
+            ? Guid.CreateVersion7()
+            : Guid.Empty;
+
+        // Act
+        using var response = await SendPublicWishRequestAsync(
+            client,
+            shareLinkId,
+            wishId,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.BadRequest,
+            response.StatusCode);
+        var error = await response.Content.ReadFromJsonAsync<ErrorResponse>(
+            TestContext.Current.CancellationToken);
+        Assert.NotNull(error);
+        Assert.Equal(
+            StatusCodes.Status400BadRequest,
+            error.StatusCode);
+        var validationError = Assert.Single(error.ValidationErrors ?? []);
+        Assert.Equal(
+            shareLinkIdIsEmpty
+                ? "shareLinkId"
+                : "wishId",
+            validationError.PropertyName);
+    }
+
+    [Fact]
+    public async Task GetWishAsync_WhenPublicRateLimitIsExceeded_ReturnsStructuredTooManyRequests()
+    {
+        // Arrange
+        await using var factory = new RegistrationApiFactory();
+        using var client = factory.CreateClient();
+        var shareLinkId = Guid.CreateVersion7();
+        var wishId = Guid.CreateVersion7();
+
+        // Act
+        var response = await SendPublicWishRequestAsync(
+            client,
+            shareLinkId,
+            wishId,
+            TestContext.Current.CancellationToken);
+
+        try
+        {
+            for (var requestNumber = 1;
+                requestNumber <= AuthenticationRateLimitingExtensions.SharedWishlistPermitLimit;
+                requestNumber++)
+            {
+                response.Dispose();
+                response = await SendPublicWishRequestAsync(
+                    client,
+                    shareLinkId,
+                    wishId,
+                    TestContext.Current.CancellationToken);
+            }
+
+            // Assert
+            Assert.Equal(
+                HttpStatusCode.TooManyRequests,
+                response.StatusCode);
+            Assert.True(response.Headers.CacheControl?.NoStore);
+            using var document = await response.Content.ReadFromJsonAsync<JsonDocument>(
+                TestContext.Current.CancellationToken)
+                ?? throw new InvalidOperationException("The error response is empty.");
+            Assert.Equal(
+                "REQUEST_RATE_LIMIT_EXCEEDED",
+                document.RootElement.GetProperty("errorCode").GetString());
+        }
+        finally
+        {
+            response.Dispose();
+        }
+    }
+
+    [Fact]
     public async Task GetAsync_WhenShareTokenIsInvalid_ReturnsNonDisclosingNotFound()
     {
         // Arrange
@@ -694,6 +1049,24 @@ public class WishlistShareLinkTests
         using var request = new HttpRequestMessage(
             HttpMethod.Get,
             $"/api/v1/shared-wishlists/{shareLinkId}");
+        request.Headers.TryAddWithoutValidation(
+            "X-MonKado-Share-Token",
+            "public-secret");
+
+        return await client.SendAsync(
+            request,
+            cancellationToken);
+    }
+
+    private static async Task<HttpResponseMessage> SendPublicWishRequestAsync(
+        HttpClient client,
+        Guid shareLinkId,
+        Guid wishId,
+        CancellationToken cancellationToken)
+    {
+        using var request = new HttpRequestMessage(
+            HttpMethod.Get,
+            $"/api/v1/shared-wishlists/{shareLinkId}/wishes/{wishId}");
         request.Headers.TryAddWithoutValidation(
             "X-MonKado-Share-Token",
             "public-secret");
