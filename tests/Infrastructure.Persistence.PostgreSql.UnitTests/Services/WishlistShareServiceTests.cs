@@ -803,8 +803,8 @@ public class WishlistShareServiceTests
             shareLink,
             "valid-secret",
             wish.Id,
-            cancellationToken,
-            verifiesContent: true);
+            verifiesContent: true,
+            cancellationToken);
     }
 
     [Fact]
@@ -876,8 +876,8 @@ public class WishlistShareServiceTests
             shareLink,
             "invalid-secret",
             wishId,
-            cancellationToken,
-            verifiesContent: false);
+            verifiesContent: false,
+            cancellationToken);
     }
 
     [Fact]
@@ -924,8 +924,8 @@ public class WishlistShareServiceTests
             shareLink,
             "valid-secret",
             wishId,
-            cancellationToken,
-            verifiesContent: true);
+            verifiesContent: true,
+            cancellationToken);
     }
 
     [Theory]
@@ -1879,15 +1879,17 @@ public class WishlistShareServiceTests
 
     private static SharedWishDetail CreateSharedWish()
     {
-        return new SharedWishDetail(
-            Guid.CreateVersion7(),
-            "Gift",
-            "Public note",
-            "https://example.test/gift",
-            12.34m,
-            2,
-            1,
-            null);
+        return new SharedWishDetail
+        {
+            Id = Guid.CreateVersion7(),
+            Name = "Gift",
+            Note = "Public note",
+            Url = "https://example.test/gift",
+            Price = 12.34m,
+            Quantity = 2,
+            ReservedQuantity = 1,
+            CurrentParticipantReservedQuantity = null
+        };
     }
 
     private static DbUpdateException CreatePostgreSqlException(
@@ -2070,8 +2072,8 @@ public class WishlistShareServiceTests
         WishlistShareLink shareLink,
         string secret,
         Guid wishId,
-        CancellationToken cancellationToken,
-        bool verifiesContent)
+        bool verifiesContent,
+        CancellationToken cancellationToken)
     {
         _shareLinkRepositoryMock.Verify(
             repository => repository.GetByIdAsync(

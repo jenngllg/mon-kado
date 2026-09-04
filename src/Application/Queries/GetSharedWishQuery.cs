@@ -153,15 +153,17 @@ public class GetSharedWishQueryHandler(
             currentQuantity = reservation?.Quantity ?? 0;
         }
 
-        var result = new SharedWishDetail(
-            wish.Id,
-            wish.Name,
-            wish.Note,
-            wish.Url,
-            wish.Price,
-            wish.Quantity,
-            wish.ReservedQuantity,
-            currentQuantity);
+        var result = new SharedWishDetail
+        {
+            Id = wish.Id,
+            Name = wish.Name,
+            Note = wish.Note,
+            Url = wish.Url,
+            Price = wish.Price,
+            Quantity = wish.Quantity,
+            ReservedQuantity = wish.ReservedQuantity,
+            CurrentParticipantReservedQuantity = currentQuantity
+        };
 
         ApplicationLogMessages.SharedWishRetrieved(
             logger,

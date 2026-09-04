@@ -637,15 +637,17 @@ public class WishlistShareLinkTests
         factory.WishlistShareService.SharedWishLookupResult = new SharedWishLookupResult(
             SharedWishLookupOutcome.Found,
             wishlistId,
-            new SharedWishDetail(
-                wishId,
-                "Gift",
-                null,
-                null,
-                null,
-                1,
-                3,
-                null));
+            new SharedWishDetail
+            {
+                Id = wishId,
+                Name = "Gift",
+                Note = null,
+                Url = null,
+                Price = null,
+                Quantity = 1,
+                ReservedQuantity = 3,
+                CurrentParticipantReservedQuantity = null
+            });
         factory.WishlistParticipantService.LookupResult = new WishlistParticipantLookupResult(
             WishlistParticipantLookupOutcome.Found,
             participant);

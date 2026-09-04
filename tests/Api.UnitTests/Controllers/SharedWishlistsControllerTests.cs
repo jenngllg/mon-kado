@@ -112,15 +112,17 @@ public class SharedWishlistsControllerTests
         var shareLinkId = Guid.CreateVersion7();
         var wishId = Guid.CreateVersion7();
         var cancellationToken = TestContext.Current.CancellationToken;
-        var wish = new SharedWishDetail(
-            wishId,
-            "Gift",
-            "Public note",
-            "https://example.test/gift",
-            12.34m,
-            1,
-            3,
-            null);
+        var wish = new SharedWishDetail
+        {
+            Id = wishId,
+            Name = "Gift",
+            Note = "Public note",
+            Url = "https://example.test/gift",
+            Price = 12.34m,
+            Quantity = 1,
+            ReservedQuantity = 3,
+            CurrentParticipantReservedQuantity = null
+        };
         _guestSessionCookieServiceMock
             .Setup(service => service.GetValue(_controller.Request))
             .Returns("guest");

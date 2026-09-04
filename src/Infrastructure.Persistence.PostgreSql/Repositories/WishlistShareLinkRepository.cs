@@ -108,18 +108,20 @@ public class WishlistShareLinkRepository(MonKadoDbContext context) : IWishlistSh
             .Where(wish =>
                 wish.WishlistId == wishlistId &&
                 wish.Id == wishId)
-            .Select(wish => new SharedWishDetail(
-                wish.Id,
-                wish.Name,
-                wish.Note,
-                wish.Url,
-                wish.Price,
-                wish.Quantity,
-                context.Set<GiftReservation>()
+            .Select(wish => new SharedWishDetail
+            {
+                Id = wish.Id,
+                Name = wish.Name,
+                Note = wish.Note,
+                Url = wish.Url,
+                Price = wish.Price,
+                Quantity = wish.Quantity,
+                ReservedQuantity = context.Set<GiftReservation>()
                     .Where(reservation => reservation.WishId == wish.Id)
                     .Select(reservation => (int?)reservation.Quantity)
                     .Sum() ?? 0,
-                null))
+                CurrentParticipantReservedQuantity = null
+            })
             .SingleOrDefaultAsync(cancellationToken);
     }
 }

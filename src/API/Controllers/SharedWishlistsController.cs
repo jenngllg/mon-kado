@@ -140,18 +140,20 @@ public class SharedWishlistsController(
                 GetOptionalMemberId(),
                 guestSessionCookieService.GetValue(Request)),
             cancellationToken);
-        var response = new SharedWishDetailResponse(
-            wish.Id,
-            wish.Name,
-            wish.Note,
-            wish.Url,
-            wish.Price,
-            wish.Quantity,
-            wish.ReservedQuantity,
-            Math.Max(
+        var response = new SharedWishDetailResponse
+        {
+            Id = wish.Id,
+            Name = wish.Name,
+            Note = wish.Note,
+            Url = wish.Url,
+            Price = wish.Price,
+            Quantity = wish.Quantity,
+            ReservedQuantity = wish.ReservedQuantity,
+            AvailableQuantity = Math.Max(
                 0,
                 wish.Quantity - wish.ReservedQuantity),
-            wish.CurrentParticipantReservedQuantity);
+            CurrentParticipantReservedQuantity = wish.CurrentParticipantReservedQuantity
+        };
         Response.Headers[RobotsHeaderName] = RobotsHeaderValue;
         Response.Headers.CacheControl = NoStoreCacheControl;
 

@@ -374,15 +374,17 @@ public class GetSharedWishQueryHandlerTests
 
     private static SharedWishDetail CreateWish(Guid wishId)
     {
-        return new SharedWishDetail(
-            wishId,
-            "Gift",
-            "Public note",
-            "https://example.test/gift",
-            12.34m,
-            3,
-            1,
-            null);
+        return new SharedWishDetail
+        {
+            Id = wishId,
+            Name = "Gift",
+            Note = "Public note",
+            Url = "https://example.test/gift",
+            Price = 12.34m,
+            Quantity = 3,
+            ReservedQuantity = 1,
+            CurrentParticipantReservedQuantity = null
+        };
     }
 
     private void SetupFoundWish(

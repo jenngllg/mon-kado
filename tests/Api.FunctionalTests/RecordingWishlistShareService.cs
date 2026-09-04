@@ -74,15 +74,17 @@ public class RecordingWishlistShareService : IWishlistShareService
     } = new(
         SharedWishLookupOutcome.Found,
         Guid.Parse("0198e75d-8280-7000-8000-000000000001"),
-        new SharedWishDetail(
-            Guid.Parse("0198e75d-8280-7000-8000-000000000002"),
-            "Livre",
-            "Édition illustrée",
-            "https://example.com/book",
-            19.99m,
-            1,
-            0,
-            null));
+        new SharedWishDetail
+        {
+            Id = Guid.Parse("0198e75d-8280-7000-8000-000000000002"),
+            Name = "Livre",
+            Note = "Édition illustrée",
+            Url = "https://example.com/book",
+            Price = 19.99m,
+            Quantity = 1,
+            ReservedQuantity = 0,
+            CurrentParticipantReservedQuantity = null
+        });
 
     /// <inheritdoc />
     public Task<WishlistShareLinkDetails?> CreateAsync(
