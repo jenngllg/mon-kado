@@ -138,6 +138,7 @@ public static class InfrastructureInjectionConfiguration
         services.AddSingleton<IGuestSessionTokenService, GuestSessionTokenService>();
         services.AddScoped<IWishlistParticipantService, WishlistParticipantService>();
         services.AddScoped<IGiftReservationService, GiftReservationService>();
+        services.AddScoped<IGiftReservationHistoryService, GiftReservationHistoryService>();
         services.AddScoped<IWishlistReportService, WishlistReportService>();
         services.AddScoped<IExpiredGuestSessionCleanup, ExpiredGuestSessionCleanup>();
         services.AddScoped<

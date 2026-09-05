@@ -6,6 +6,8 @@ using JennGllg.Fr.MonKado.Back.Api.Contracts.Responses;
 using JennGllg.Fr.MonKado.Back.Api.Errors;
 using JennGllg.Fr.MonKado.Back.Api.Extensions;
 using JennGllg.Fr.MonKado.Back.Application.Commands;
+using JennGllg.Fr.MonKado.Back.Application.Models;
+using JennGllg.Fr.MonKado.Back.Application.Queries;
 
 using MediatR;
 
@@ -34,6 +36,46 @@ public class MembersController(
     IRefreshTokenCookieService refreshTokenCookieService) : ControllerBase
 {
     private const int MaximumRequestBodySize = 4 * 1024;
+
+    /// <summary>
+    /// Gets one page of the current member's reservation history.
+    /// </summary>
+    /// <param name="page">The optional one-based page number. The default is 1.</param>
+    /// <param name="pageSize">The optional page size. The default is 20 and the maximum is 100.</param>
+    /// <param name="status">The optional status filter: active, cancelled or unavailable.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The requested reservation history page ordered by latest activity.</returns>
+    [HttpGet("current/reservations")]
+    [NoStoreResponse(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(PaginatedResponse<GiftReservationHistoryResponse>), StatusCodes.Status200OK, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status503ServiceUnavailable, "application/json")]
+    public async Task<ActionResult<PaginatedResponse<GiftReservationHistoryResponse>>> GetReservationHistoryAsync(
+        [FromQuery] int? page,
+        [FromQuery] int? pageSize,
+        [FromQuery] string? status,
+        CancellationToken cancellationToken)
+    {
+        var subject = User.FindFirstValue(JwtRegisteredClaimNames.Sub);
+        _ = Guid.TryParse(
+            subject,
+            out var memberId);
+        var history = await sender.Send(
+            new GetGiftReservationHistoryQuery(
+                memberId,
+                page,
+                pageSize,
+                status),
+            cancellationToken);
+        var response = new PaginatedResponse<GiftReservationHistoryResponse>(
+            history.Items.Select(CreateHistoryResponse),
+            history.CurrentPage,
+            history.PageSize,
+            history.TotalCount);
+        Response.Headers.CacheControl = "no-store";
+
+        return Ok(response);
+    }
 
     /// <summary>
     /// Updates the display name of the current authenticated member.
@@ -153,5 +195,22 @@ public class MembersController(
         Response.Headers.CacheControl = "no-store";
 
         return NoContent();
+    }
+
+    private static GiftReservationHistoryResponse CreateHistoryResponse(
+        GiftReservationHistoryDetails history)
+    {
+        return new GiftReservationHistoryResponse(
+            history.Id,
+            history.WishlistId,
+            history.WishlistName,
+            history.WishId,
+            history.WishName,
+            history.ShareLinkId,
+            history.Quantity,
+            history.Status,
+            history.CreatedAt,
+            history.LastActivityAt,
+            history.EndedAt);
     }
 }

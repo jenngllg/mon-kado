@@ -2,6 +2,7 @@ using JennGllg.Fr.MonKado.Back.Application.Abstractions;
 using JennGllg.Fr.MonKado.Back.Application.Common.Exceptions;
 using JennGllg.Fr.MonKado.Back.Application.Models;
 using JennGllg.Fr.MonKado.Back.Domain.Entities;
+using JennGllg.Fr.MonKado.Back.Domain.Enums;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Abstractions;
 
 using Microsoft.EntityFrameworkCore;
@@ -159,6 +160,16 @@ public class GiftReservationService : IGiftReservationService
 
             var hasChanged = isCreated || reservation.UpdateQuantity(request.Quantity);
 
+            if (hasChanged && participant.MemberId is Guid memberId)
+            {
+                await TrackUpsertAsync(
+                    reservation,
+                    memberId,
+                    isCreated,
+                    _timeProvider.GetUtcNow().UtcDateTime,
+                    cancellationToken);
+            }
+
             if (hasChanged)
                 await _unitOfWork.SaveChangesAsync(cancellationToken);
 
@@ -221,6 +232,15 @@ public class GiftReservationService : IGiftReservationService
             if (reservation.Version != request.ExpectedVersion)
                 throw new GiftReservationVersionConflictException();
 
+            if (participant.MemberId is Guid memberId)
+            {
+                await TrackCancellationAsync(
+                    reservation,
+                    memberId,
+                    _timeProvider.GetUtcNow().UtcDateTime,
+                    cancellationToken);
+            }
+
             reservationId = reservation.Id;
             _giftReservationRepository.Remove(reservation);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -259,6 +279,101 @@ public class GiftReservationService : IGiftReservationService
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// Creates or updates the durable history for a member reservation.
+    /// </summary>
+    /// <param name="reservation">The current reservation.</param>
+    /// <param name="memberId">The member identifier.</param>
+    /// <param name="isCreated">Whether the reservation has just been created.</param>
+    /// <param name="activityAt">The UTC activity date and time.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
+    /// <exception cref="WishNotFoundException">The reservation source no longer exists.</exception>
+    private async Task TrackUpsertAsync(
+        GiftReservation reservation,
+        Guid memberId,
+        bool isCreated,
+        DateTime activityAt,
+        CancellationToken cancellationToken)
+    {
+        var history = isCreated
+            ? null
+            : await _giftReservationRepository.GetHistoryForUpdateAsync(
+                reservation.Id,
+                cancellationToken);
+
+        if (history is not null)
+        {
+            history.UpdateQuantity(
+                reservation.Quantity,
+                activityAt);
+
+            return;
+        }
+
+        var source = await _giftReservationRepository.GetHistorySourceAsync(
+            reservation.WishlistId,
+            reservation.WishId,
+            cancellationToken) ?? throw new WishNotFoundException();
+        var createdAt = isCreated
+            ? activityAt
+            : reservation.CreatedAt;
+        var newHistory = new GiftReservationHistory(
+            reservation.Id,
+            memberId,
+            reservation.WishlistId,
+            source.WishlistName,
+            reservation.WishId,
+            source.WishName,
+            reservation.Quantity,
+            createdAt,
+            activityAt);
+        _giftReservationRepository.AddHistory(newHistory);
+    }
+
+    /// <summary>
+    /// Ends the durable history for a cancelled member reservation.
+    /// </summary>
+    /// <param name="reservation">The reservation being cancelled.</param>
+    /// <param name="memberId">The member identifier.</param>
+    /// <param name="cancelledAt">The UTC cancellation date and time.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
+    /// <exception cref="WishNotFoundException">The reservation source no longer exists.</exception>
+    private async Task TrackCancellationAsync(
+        GiftReservation reservation,
+        Guid memberId,
+        DateTime cancelledAt,
+        CancellationToken cancellationToken)
+    {
+        var history = await _giftReservationRepository.GetHistoryForUpdateAsync(
+            reservation.Id,
+            cancellationToken);
+
+        if (history is null)
+        {
+            var source = await _giftReservationRepository.GetHistorySourceAsync(
+                reservation.WishlistId,
+                reservation.WishId,
+                cancellationToken) ?? throw new WishNotFoundException();
+            history = new GiftReservationHistory(
+                reservation.Id,
+                memberId,
+                reservation.WishlistId,
+                source.WishlistName,
+                reservation.WishId,
+                source.WishName,
+                reservation.Quantity,
+                reservation.CreatedAt,
+                reservation.CreatedAt);
+            _giftReservationRepository.AddHistory(history);
+        }
+
+        history.End(
+            GiftReservationHistoryStatus.Cancelled,
+            cancelledAt);
     }
 
     private async Task ValidateShareLinkAsync(

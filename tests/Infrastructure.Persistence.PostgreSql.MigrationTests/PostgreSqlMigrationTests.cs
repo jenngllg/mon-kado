@@ -120,6 +120,10 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
             migration => Assert.EndsWith(
                 "_AddWishlistReports",
                 migration,
+                StringComparison.Ordinal),
+            migration => Assert.EndsWith(
+                "_AddGiftReservationHistory",
+                migration,
                 StringComparison.Ordinal));
         Assert.False(context.Database.HasPendingModelChanges());
 
@@ -131,6 +135,7 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
                 "__EFMigrationsHistory",
                 "authentication_email_outbox",
                 "authentication_sessions",
+                "gift_reservation_histories",
                 "gift_reservations",
                 "guest_sessions",
                 "member_email_change_requests",
@@ -271,6 +276,24 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
             "fk_gift_reservations_wishes_wishlist_id_wish_id",
             constraints);
         Assert.Contains(
+            "ck_gift_reservation_histories_lifecycle_consistent",
+            constraints);
+        Assert.Contains(
+            "ck_gift_reservation_histories_quantity_valid",
+            constraints);
+        Assert.Contains(
+            "ck_gift_reservation_histories_status_valid",
+            constraints);
+        Assert.Contains(
+            "ck_gift_reservation_histories_wish_name_valid",
+            constraints);
+        Assert.Contains(
+            "ck_gift_reservation_histories_wishlist_name_valid",
+            constraints);
+        Assert.Contains(
+            "fk_gift_reservation_histories_users_member_id",
+            constraints);
+        Assert.Contains(
             "ck_wishlist_reports_reason_valid",
             constraints);
         Assert.Contains(
@@ -321,6 +344,12 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
             indexes);
         Assert.Contains(
             "ux_gift_reservations_participant_wish",
+            indexes);
+        Assert.Contains(
+            "ix_gift_reservation_histories_member_activity",
+            indexes);
+        Assert.Contains(
+            "ix_gift_reservation_histories_member_status_activity",
             indexes);
         Assert.Contains(
             "ux_wishlists_owner_normalized_name",
@@ -1314,6 +1343,120 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
         await context.Users
             .Where(user => user.Id == member.Id)
             .ExecuteDeleteAsync(cancellationToken);
+    }
+
+    [Fact]
+    public async Task MigrateAsync_WhenActiveMemberReservationExists_BackfillsDurableHistory()
+    {
+        // Arrange
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var provider = CreateServiceProvider();
+        await using var scope = provider.CreateAsyncScope();
+        var context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
+        await context.Database.MigrateAsync(
+            "20260905100841_AddWishlistReports",
+            cancellationToken);
+        var ownerId = Guid.CreateVersion7();
+        var memberId = Guid.CreateVersion7();
+        var wishlistId = Guid.CreateVersion7();
+        var wishId = Guid.CreateVersion7();
+        var participantId = Guid.CreateVersion7();
+        var reservationId = Guid.CreateVersion7();
+        context.Users.AddRange(
+            CreateMigrationMember(
+                ownerId,
+                "history-owner@example.test",
+                "History owner"),
+            CreateMigrationMember(
+                memberId,
+                "history-member@example.test",
+                "History member"));
+        context.Wishlists.Add(new Wishlist(
+            wishlistId,
+            ownerId,
+            "Birthday",
+            "BIRTHDAY",
+            WishlistOccasion.Birthday,
+            null,
+            null));
+        context.Wishes.Add(new Wish(
+            wishId,
+            wishlistId,
+            "Book",
+            null,
+            null,
+            null,
+            1,
+            3));
+        context.WishlistParticipants.Add(WishlistParticipant.CreateMember(
+            participantId,
+            wishlistId,
+            memberId));
+        context.GiftReservations.Add(new GiftReservation(
+            reservationId,
+            wishlistId,
+            wishId,
+            participantId,
+            2));
+        await context.SaveChangesAsync(cancellationToken);
+        context.ChangeTracker.Clear();
+
+        // Act
+        await context.Database.MigrateAsync(cancellationToken);
+        var history = await context.GiftReservationHistories
+            .AsNoTracking()
+            .SingleAsync(cancellationToken);
+
+        // Assert
+        Assert.Equal(
+            reservationId,
+            history.Id);
+        Assert.Equal(
+            memberId,
+            history.MemberId);
+        Assert.Equal(
+            wishlistId,
+            history.WishlistId);
+        Assert.Equal(
+            "Birthday",
+            history.WishlistName);
+        Assert.Equal(
+            wishId,
+            history.WishId);
+        Assert.Equal(
+            "Book",
+            history.WishName);
+        Assert.Equal(
+            2,
+            history.Quantity);
+        Assert.Equal(
+            GiftReservationHistoryStatus.Active,
+            history.Status);
+        Assert.Equal(
+            history.CreatedAt,
+            history.LastActivityAt);
+        Assert.Null(history.EndedAt);
+        await context.Users
+            .Where(user => user.Id == ownerId || user.Id == memberId)
+            .ExecuteDeleteAsync(cancellationToken);
+    }
+
+    private static MonKadoUser CreateMigrationMember(
+        Guid id,
+        string email,
+        string displayName)
+    {
+        return new MonKadoUser
+        {
+            Id = id,
+            UserName = email,
+            NormalizedUserName = email.ToUpperInvariant(),
+            Email = email,
+            NormalizedEmail = email.ToUpperInvariant(),
+            EmailConfirmed = true,
+            DisplayName = displayName,
+            SecurityStamp = Guid.CreateVersion7().ToString()
+        };
     }
 
     private static async Task<IReadOnlyList<string>> GetAuthenticationEmailOutboxColumnsAsync(

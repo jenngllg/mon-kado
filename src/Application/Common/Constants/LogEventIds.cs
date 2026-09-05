@@ -395,6 +395,12 @@ public static class LogEventIds
     /// <summary>Identifies a created anonymous wishlist report.</summary>
     public const int WishlistReportCreated = 2047;
 
+    /// <summary>Identifies the start of a member reservation history retrieval.</summary>
+    public const int GiftReservationHistoryRetrievalStarted = 2048;
+
+    /// <summary>Identifies a retrieved member reservation history page.</summary>
+    public const int GiftReservationHistoryRetrieved = 2049;
+
     #endregion
 
     #region Technical

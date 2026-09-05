@@ -76,6 +76,11 @@ public class MonKadoDbContext(DbContextOptions<MonKadoDbContext> options)
     public DbSet<GiftReservation> GiftReservations => Set<GiftReservation>();
 
     /// <summary>
+    /// Gets durable member gift reservation histories.
+    /// </summary>
+    public DbSet<GiftReservationHistory> GiftReservationHistories => Set<GiftReservationHistory>();
+
+    /// <summary>
     /// Gets anonymous wishlist reports.
     /// </summary>
     public DbSet<WishlistReport> WishlistReports => Set<WishlistReport>();
