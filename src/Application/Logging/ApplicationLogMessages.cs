@@ -1042,4 +1042,28 @@ public static partial class ApplicationLogMessages
         ILogger logger,
         Guid wishlistId,
         Guid wishId);
+
+    /// <summary>Logs the start of a member reservation history retrieval.</summary>
+    /// <param name="logger">The logger.</param>
+    /// <param name="memberId">The member identifier.</param>
+    [LoggerMessage(
+        EventId = LogEventIds.GiftReservationHistoryRetrievalStarted,
+        Level = LogLevel.Debug,
+        Message = "Retrieving reservation history for member {MemberId}.")]
+    public static partial void GiftReservationHistoryRetrievalStarted(
+        ILogger logger,
+        Guid memberId);
+
+    /// <summary>Logs a retrieved member reservation history page.</summary>
+    /// <param name="logger">The logger.</param>
+    /// <param name="memberId">The member identifier.</param>
+    /// <param name="totalCount">The total matching history entry count.</param>
+    [LoggerMessage(
+        EventId = LogEventIds.GiftReservationHistoryRetrieved,
+        Level = LogLevel.Information,
+        Message = "Reservation history containing {TotalCount} matching entries was retrieved for member {MemberId}.")]
+    public static partial void GiftReservationHistoryRetrieved(
+        ILogger logger,
+        Guid memberId,
+        int totalCount);
 }

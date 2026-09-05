@@ -47,6 +47,8 @@ public class RegistrationApiFactory(
 
     public RecordingGiftReservationService GiftReservationService { get; } = new();
 
+    public RecordingGiftReservationHistoryService GiftReservationHistoryService { get; } = new();
+
     public RecordingWishlistReportService WishlistReportService { get; } = new();
 
     public RecordingAccountSessionService SessionService { get; } = new();
@@ -124,6 +126,8 @@ public class RegistrationApiFactory(
             services.AddSingleton<IWishlistParticipantService>(WishlistParticipantService);
             services.RemoveAll<IGiftReservationService>();
             services.AddSingleton<IGiftReservationService>(GiftReservationService);
+            services.RemoveAll<IGiftReservationHistoryService>();
+            services.AddSingleton<IGiftReservationHistoryService>(GiftReservationHistoryService);
             services.RemoveAll<IWishlistReportService>();
             services.AddSingleton<IWishlistReportService>(WishlistReportService);
             services.AddSingleton<IEmailConfirmationService>(EmailConfirmationService);

@@ -88,6 +88,21 @@ public static class ValidationMessages
     public const string InvalidGiftQuantity = "The gift quantity must be between 1 and 100.";
 
     /// <summary>
+    /// Identifies an invalid one-based page number.
+    /// </summary>
+    public const string InvalidPage = "The page must be greater than or equal to 1.";
+
+    /// <summary>
+    /// Identifies an invalid page size.
+    /// </summary>
+    public const string InvalidPageSize = "The page size must be between 1 and 100.";
+
+    /// <summary>
+    /// Identifies an invalid reservation history status.
+    /// </summary>
+    public const string InvalidGiftReservationHistoryStatus = "The reservation history status must be active, cancelled or unavailable.";
+
+    /// <summary>
     /// Identifies an invalid wishlist report reason.
     /// </summary>
     public const string InvalidWishlistReportReason = "The wishlist report reason is invalid.";

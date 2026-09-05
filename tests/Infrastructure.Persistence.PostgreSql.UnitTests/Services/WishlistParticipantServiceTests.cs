@@ -3,6 +3,7 @@ using JennGllg.Fr.MonKado.Back.Application.Common.Exceptions;
 using JennGllg.Fr.MonKado.Back.Application.Models;
 using JennGllg.Fr.MonKado.Back.Domain.Entities;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Abstractions;
+using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Models;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Options;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Services;
 
@@ -372,6 +373,11 @@ public class WishlistParticipantServiceTests
                 guestSessionId,
                 cancellationToken))
             .ReturnsAsync(guestParticipant);
+        _giftReservationRepositoryMock
+            .Setup(repository => repository.GetByParticipantForUpdateAsync(
+                guestParticipant.Id,
+                cancellationToken))
+            .ReturnsAsync([]);
         SetupSaveAndCommit(cancellationToken);
 
         // Act
@@ -414,6 +420,11 @@ public class WishlistParticipantServiceTests
                 guestSessionId,
                 cancellationToken),
             Times.Once);
+        _giftReservationRepositoryMock.Verify(
+            repository => repository.GetByParticipantForUpdateAsync(
+                guestParticipant.Id,
+                cancellationToken),
+            Times.Once);
         VerifySave(cancellationToken);
         VerifyNoOtherCalls();
     }
@@ -454,6 +465,17 @@ public class WishlistParticipantServiceTests
             sharedWishId,
             memberParticipant.Id,
             3);
+        var memberHistory = new GiftReservationHistory(
+            memberSharedReservation.Id,
+            memberId,
+            wishlistId,
+            "Birthday",
+            sharedWishId,
+            "Shared gift",
+            memberSharedReservation.Quantity,
+            _now.AddHours(-1),
+            _now.AddHours(-1));
+        var addedHistory = (GiftReservationHistory?)null;
         var cancellationToken = TestContext.Current.CancellationToken;
         var token = SetupValidGuest(
             guestSessionId,
@@ -494,6 +516,22 @@ public class WishlistParticipantServiceTests
             ]);
         _giftReservationRepositoryMock
             .Setup(repository => repository.Remove(guestSharedReservation));
+        _giftReservationRepositoryMock
+            .Setup(repository => repository.GetHistoryForUpdateAsync(
+                memberSharedReservation.Id,
+                cancellationToken))
+            .ReturnsAsync(memberHistory);
+        _giftReservationRepositoryMock
+            .Setup(repository => repository.GetHistorySourceAsync(
+                wishlistId,
+                guestUniqueReservation.WishId,
+                cancellationToken))
+            .ReturnsAsync(new GiftReservationHistorySource(
+                "Birthday",
+                "Unique gift"));
+        _giftReservationRepositoryMock
+            .Setup(repository => repository.AddHistory(It.IsAny<GiftReservationHistory>()))
+            .Callback<GiftReservationHistory>(history => addedHistory = history);
         SetupSaveAndCommit(cancellationToken);
 
         // Act
@@ -521,6 +559,19 @@ public class WishlistParticipantServiceTests
         Assert.Equal(
             memberParticipant.Id,
             guestUniqueReservation.WishlistParticipantId);
+        Assert.Equal(
+            5,
+            memberHistory.Quantity);
+        Assert.Equal(
+            _now,
+            memberHistory.LastActivityAt);
+        Assert.NotNull(addedHistory);
+        Assert.Equal(
+            guestUniqueReservation.Id,
+            addedHistory.Id);
+        Assert.Equal(
+            memberId,
+            addedHistory.MemberId);
         VerifyTransaction(
             wishlistId,
             commits: true,
@@ -554,7 +605,289 @@ public class WishlistParticipantServiceTests
         _giftReservationRepositoryMock.Verify(
             repository => repository.Remove(guestSharedReservation),
             Times.Once);
+        _giftReservationRepositoryMock.Verify(
+            repository => repository.GetHistoryForUpdateAsync(
+                memberSharedReservation.Id,
+                cancellationToken),
+            Times.Once);
+        _giftReservationRepositoryMock.Verify(
+            repository => repository.GetHistorySourceAsync(
+                wishlistId,
+                guestUniqueReservation.WishId,
+                cancellationToken),
+            Times.Once);
+        _giftReservationRepositoryMock.Verify(
+            repository => repository.AddHistory(addedHistory),
+            Times.Once);
         VerifySave(cancellationToken);
+        VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task JoinAsync_WhenMergedMemberHistoryIsMissing_RecreatesHistory()
+    {
+        // Arrange
+        var wishlistId = Guid.CreateVersion7();
+        var memberId = Guid.CreateVersion7();
+        var ownerId = Guid.CreateVersion7();
+        var guestSessionId = Guid.CreateVersion7();
+        var memberParticipant = WishlistParticipant.CreateMember(
+            Guid.CreateVersion7(),
+            wishlistId,
+            memberId);
+        var guestParticipant = new WishlistParticipant(
+            Guid.CreateVersion7(),
+            wishlistId,
+            guestSessionId,
+            "Guest");
+        var wishId = Guid.CreateVersion7();
+        var guestReservation = new GiftReservation(
+            Guid.CreateVersion7(),
+            wishlistId,
+            wishId,
+            guestParticipant.Id,
+            2);
+        var memberReservation = new GiftReservation(
+            Guid.CreateVersion7(),
+            wishlistId,
+            wishId,
+            memberParticipant.Id,
+            3);
+        var addedHistory = (GiftReservationHistory?)null;
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var token = SetupValidGuest(
+            guestSessionId,
+            cancellationToken);
+        SetupTransaction(
+            wishlistId,
+            ownerId,
+            cancellationToken);
+        SetupMember(
+            wishlistId,
+            memberId,
+            memberParticipant,
+            cancellationToken);
+        _participantRepositoryMock
+            .Setup(repository => repository.GetByGuestSessionForUpdateAsync(
+                wishlistId,
+                guestSessionId,
+                cancellationToken))
+            .ReturnsAsync(guestParticipant);
+        _participantRepositoryMock
+            .Setup(repository => repository.Remove(guestParticipant));
+        _giftReservationRepositoryMock
+            .Setup(repository => repository.GetByParticipantForUpdateAsync(
+                guestParticipant.Id,
+                cancellationToken))
+            .ReturnsAsync(
+            [
+                guestReservation
+            ]);
+        _giftReservationRepositoryMock
+            .Setup(repository => repository.GetByParticipantForUpdateAsync(
+                memberParticipant.Id,
+                cancellationToken))
+            .ReturnsAsync(
+            [
+                memberReservation
+            ]);
+        _giftReservationRepositoryMock
+            .Setup(repository => repository.GetHistoryForUpdateAsync(
+                memberReservation.Id,
+                cancellationToken))
+            .ReturnsAsync((GiftReservationHistory?)null);
+        _giftReservationRepositoryMock
+            .Setup(repository => repository.GetHistorySourceAsync(
+                wishlistId,
+                wishId,
+                cancellationToken))
+            .ReturnsAsync(new GiftReservationHistorySource(
+                "Birthday",
+                "Gift"));
+        _giftReservationRepositoryMock
+            .Setup(repository => repository.AddHistory(It.IsAny<GiftReservationHistory>()))
+            .Callback<GiftReservationHistory>(history => addedHistory = history);
+        _giftReservationRepositoryMock
+            .Setup(repository => repository.Remove(guestReservation));
+        SetupSaveAndCommit(cancellationToken);
+
+        // Act
+        var result = await _service.JoinAsync(
+            new WishlistParticipantJoinRequest
+            {
+                ParticipantId = Guid.CreateVersion7(),
+                GuestSessionId = Guid.CreateVersion7(),
+                WishlistId = wishlistId,
+                ShareLinkId = wishlistId,
+                ShareSecret = "share-secret",
+                MemberId = memberId,
+                GuestToken = token.Secret
+            },
+            cancellationToken);
+
+        // Assert
+        Assert.False(result.IsCreated);
+        Assert.Equal(
+            5,
+            memberReservation.Quantity);
+        Assert.NotNull(addedHistory);
+        Assert.Equal(
+            memberReservation.Id,
+            addedHistory.Id);
+        Assert.Equal(
+            5,
+            addedHistory.Quantity);
+        Assert.Equal(
+            _now,
+            addedHistory.LastActivityAt);
+        VerifyTransaction(
+            wishlistId,
+            commits: true,
+            cancellationToken: cancellationToken);
+        VerifyValidGuest(
+            guestSessionId,
+            cancellationToken);
+        VerifyMember(
+            wishlistId,
+            memberId,
+            cancellationToken);
+        _participantRepositoryMock.Verify(
+            repository => repository.GetByGuestSessionForUpdateAsync(
+                wishlistId,
+                guestSessionId,
+                cancellationToken),
+            Times.Once);
+        _participantRepositoryMock.Verify(
+            repository => repository.Remove(guestParticipant),
+            Times.Once);
+        _giftReservationRepositoryMock.Verify(
+            repository => repository.GetByParticipantForUpdateAsync(
+                guestParticipant.Id,
+                cancellationToken),
+            Times.Once);
+        _giftReservationRepositoryMock.Verify(
+            repository => repository.GetByParticipantForUpdateAsync(
+                memberParticipant.Id,
+                cancellationToken),
+            Times.Once);
+        _giftReservationRepositoryMock.Verify(
+            repository => repository.GetHistoryForUpdateAsync(
+                memberReservation.Id,
+                cancellationToken),
+            Times.Once);
+        _giftReservationRepositoryMock.Verify(
+            repository => repository.GetHistorySourceAsync(
+                wishlistId,
+                wishId,
+                cancellationToken),
+            Times.Once);
+        _giftReservationRepositoryMock.Verify(
+            repository => repository.AddHistory(addedHistory),
+            Times.Once);
+        _giftReservationRepositoryMock.Verify(
+            repository => repository.Remove(guestReservation),
+            Times.Once);
+        VerifySave(cancellationToken);
+        VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task JoinAsync_WhenAdoptedReservationSourceIsMissing_ThrowsWishNotFound()
+    {
+        // Arrange
+        var wishlistId = Guid.CreateVersion7();
+        var memberId = Guid.CreateVersion7();
+        var ownerId = Guid.CreateVersion7();
+        var guestSessionId = Guid.CreateVersion7();
+        var guestParticipant = new WishlistParticipant(
+            Guid.CreateVersion7(),
+            wishlistId,
+            guestSessionId,
+            "Guest");
+        var reservation = new GiftReservation(
+            Guid.CreateVersion7(),
+            wishlistId,
+            Guid.CreateVersion7(),
+            guestParticipant.Id,
+            2);
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var token = SetupValidGuest(
+            guestSessionId,
+            cancellationToken);
+        SetupTransaction(
+            wishlistId,
+            ownerId,
+            cancellationToken);
+        SetupMember(
+            wishlistId,
+            memberId,
+            null,
+            cancellationToken);
+        _participantRepositoryMock
+            .Setup(repository => repository.GetByGuestSessionForUpdateAsync(
+                wishlistId,
+                guestSessionId,
+                cancellationToken))
+            .ReturnsAsync(guestParticipant);
+        _giftReservationRepositoryMock
+            .Setup(repository => repository.GetByParticipantForUpdateAsync(
+                guestParticipant.Id,
+                cancellationToken))
+            .ReturnsAsync(
+            [
+                reservation
+            ]);
+        _giftReservationRepositoryMock
+            .Setup(repository => repository.GetHistorySourceAsync(
+                wishlistId,
+                reservation.WishId,
+                cancellationToken))
+            .ReturnsAsync((GiftReservationHistorySource?)null);
+
+        // Act
+        var action = () => _service.JoinAsync(
+            new WishlistParticipantJoinRequest
+            {
+                ParticipantId = Guid.CreateVersion7(),
+                GuestSessionId = Guid.CreateVersion7(),
+                WishlistId = wishlistId,
+                ShareLinkId = wishlistId,
+                ShareSecret = "share-secret",
+                MemberId = memberId,
+                GuestToken = token.Secret
+            },
+            cancellationToken);
+
+        // Assert
+        await Assert.ThrowsAsync<WishNotFoundException>(action);
+        VerifyTransaction(
+            wishlistId,
+            commits: false,
+            cancellationToken: cancellationToken);
+        VerifyValidGuest(
+            guestSessionId,
+            cancellationToken);
+        VerifyMember(
+            wishlistId,
+            memberId,
+            cancellationToken);
+        _participantRepositoryMock.Verify(
+            repository => repository.GetByGuestSessionForUpdateAsync(
+                wishlistId,
+                guestSessionId,
+                cancellationToken),
+            Times.Once);
+        _giftReservationRepositoryMock.Verify(
+            repository => repository.GetByParticipantForUpdateAsync(
+                guestParticipant.Id,
+                cancellationToken),
+            Times.Once);
+        _giftReservationRepositoryMock.Verify(
+            repository => repository.GetHistorySourceAsync(
+                wishlistId,
+                reservation.WishId,
+                cancellationToken),
+            Times.Once);
         VerifyNoOtherCalls();
     }
 

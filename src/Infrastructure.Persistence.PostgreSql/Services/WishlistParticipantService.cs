@@ -112,6 +112,7 @@ public class WishlistParticipantService : IWishlistParticipantService
                     request.MemberId.Value,
                     ownerId,
                     validGuestSessionId,
+                    now,
                     cancellationToken);
             await transaction.CommitAsync(cancellationToken);
         }
@@ -268,6 +269,7 @@ public class WishlistParticipantService : IWishlistParticipantService
         Guid memberId,
         Guid ownerId,
         Guid? validGuestSessionId,
+        DateTime now,
         CancellationToken cancellationToken)
     {
         var displayName = await _participantRepository.GetMemberDisplayNameAsync(
@@ -295,6 +297,8 @@ public class WishlistParticipantService : IWishlistParticipantService
                 await MergeReservationsAsync(
                     guestParticipant.Id,
                     memberParticipant.Id,
+                    memberId,
+                    now,
                     cancellationToken);
                 _participantRepository.Remove(guestParticipant);
                 await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -312,6 +316,10 @@ public class WishlistParticipantService : IWishlistParticipantService
         if (guestParticipant is not null)
         {
             guestParticipant.AttachToMember(memberId);
+            await AdoptReservationsAsync(
+                guestParticipant.Id,
+                memberId,
+                cancellationToken);
             await _unitOfWork.SaveChangesAsync(cancellationToken);
 
             return new WishlistParticipantJoinResult(
@@ -325,7 +333,7 @@ public class WishlistParticipantService : IWishlistParticipantService
 
         await EnsureCapacityAsync(
             wishlistId,
-            _timeProvider.GetUtcNow().UtcDateTime,
+            now,
             cancellationToken);
         var participant = WishlistParticipant.CreateMember(
             participantId,
@@ -375,9 +383,21 @@ public class WishlistParticipantService : IWishlistParticipantService
                     displayName));
     }
 
+    /// <summary>
+    /// Merges guest reservations into an existing member participant.
+    /// </summary>
+    /// <param name="guestParticipantId">The guest participant identifier.</param>
+    /// <param name="memberParticipantId">The member participant identifier.</param>
+    /// <param name="memberId">The member identifier.</param>
+    /// <param name="activityAt">The UTC merge date and time.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
+    /// <exception cref="WishNotFoundException">A reservation source no longer exists.</exception>
     private async Task MergeReservationsAsync(
         Guid guestParticipantId,
         Guid memberParticipantId,
+        Guid memberId,
+        DateTime activityAt,
         CancellationToken cancellationToken)
     {
         var guestReservations = await _giftReservationRepository.GetByParticipantForUpdateAsync(
@@ -395,15 +415,98 @@ public class WishlistParticipantService : IWishlistParticipantService
                 guestReservation.WishId,
                 out var memberReservation))
             {
-                memberReservation.UpdateQuantity(
-                    memberReservation.Quantity + guestReservation.Quantity);
+                var quantity = memberReservation.Quantity + guestReservation.Quantity;
+                memberReservation.UpdateQuantity(quantity);
+                var history = await _giftReservationRepository.GetHistoryForUpdateAsync(
+                    memberReservation.Id,
+                    cancellationToken);
+
+                if (history is null)
+                {
+                    await AddHistoryAsync(
+                        memberReservation,
+                        memberId,
+                        activityAt,
+                        cancellationToken);
+                }
+                else
+                {
+                    history.UpdateQuantity(
+                        quantity,
+                        activityAt);
+                }
+
                 _giftReservationRepository.Remove(guestReservation);
 
                 continue;
             }
 
             guestReservation.TransferTo(memberParticipantId);
+            await AddHistoryAsync(
+                guestReservation,
+                memberId,
+                guestReservation.UpdatedAt.GetValueOrDefault(guestReservation.CreatedAt),
+                cancellationToken);
         }
+    }
+
+    /// <summary>
+    /// Assigns active guest reservation histories to the authenticated member.
+    /// </summary>
+    /// <param name="participantId">The participant identifier.</param>
+    /// <param name="memberId">The member identifier.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
+    /// <exception cref="WishNotFoundException">A reservation source no longer exists.</exception>
+    private async Task AdoptReservationsAsync(
+        Guid participantId,
+        Guid memberId,
+        CancellationToken cancellationToken)
+    {
+        var reservations = await _giftReservationRepository.GetByParticipantForUpdateAsync(
+            participantId,
+            cancellationToken);
+
+        foreach (var reservation in reservations)
+        {
+            await AddHistoryAsync(
+                reservation,
+                memberId,
+                reservation.UpdatedAt.GetValueOrDefault(reservation.CreatedAt),
+                cancellationToken);
+        }
+    }
+
+    /// <summary>
+    /// Adds a durable history entry for a reservation adopted by a member.
+    /// </summary>
+    /// <param name="reservation">The adopted reservation.</param>
+    /// <param name="memberId">The member identifier.</param>
+    /// <param name="lastActivityAt">The UTC date and time of the latest reservation activity.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
+    /// <exception cref="WishNotFoundException">The reservation source no longer exists.</exception>
+    private async Task AddHistoryAsync(
+        GiftReservation reservation,
+        Guid memberId,
+        DateTime lastActivityAt,
+        CancellationToken cancellationToken)
+    {
+        var source = await _giftReservationRepository.GetHistorySourceAsync(
+            reservation.WishlistId,
+            reservation.WishId,
+            cancellationToken) ?? throw new WishNotFoundException();
+        var history = new GiftReservationHistory(
+            reservation.Id,
+            memberId,
+            reservation.WishlistId,
+            source.WishlistName,
+            reservation.WishId,
+            source.WishName,
+            reservation.Quantity,
+            reservation.CreatedAt,
+            lastActivityAt);
+        _giftReservationRepository.AddHistory(history);
     }
 
     private async Task<Guid?> ResolveGuestSessionIdAsync(
