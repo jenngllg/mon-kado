@@ -1173,6 +1173,608 @@ public class WishlistParticipantServiceTests
         VerifyNoOtherCalls();
     }
 
+    [Fact]
+    public async Task JoinAsync_WhenNewGuestCommitAcknowledgementIsLost_ReturnsOriginalGuestToken()
+    {
+        // Arrange
+        var participantId = Guid.CreateVersion7();
+        var guestSessionId = Guid.CreateVersion7();
+        var wishlistId = Guid.CreateVersion7();
+        var cancellationToken = TestContext.Current.CancellationToken;
+        GuestSession? addedSession = null;
+        WishlistParticipant? addedParticipant = null;
+        SetupTransaction(
+            wishlistId,
+            Guid.CreateVersion7(),
+            cancellationToken);
+        SetupCapacity(
+            wishlistId,
+            0,
+            cancellationToken);
+        _guestSessionRepositoryMock
+            .Setup(repository => repository.Add(It.IsAny<GuestSession>()))
+            .Callback<GuestSession>(session => addedSession = session);
+        _participantRepositoryMock
+            .Setup(repository => repository.Add(It.IsAny<WishlistParticipant>()))
+            .Callback<WishlistParticipant>(participant => addedParticipant = participant);
+        _unitOfWorkMock
+            .Setup(unitOfWork => unitOfWork.SaveChangesAsync(cancellationToken))
+            .ReturnsAsync(1);
+        _transactionMock
+            .Setup(transaction => transaction.CommitAsync(cancellationToken))
+            .ThrowsAsync(new TimeoutException());
+        _participantRepositoryMock
+            .Setup(repository => repository.GetByIdAsync(
+                wishlistId,
+                participantId,
+                cancellationToken))
+            .ReturnsAsync(() => addedParticipant);
+        _guestSessionRepositoryMock
+            .Setup(repository => repository.GetByIdAsync(
+                guestSessionId,
+                cancellationToken))
+            .ReturnsAsync(() => addedSession);
+
+        // Act
+        var result = await _service.JoinAsync(
+            new WishlistParticipantJoinRequest
+            {
+                ParticipantId = participantId,
+                GuestSessionId = guestSessionId,
+                WishlistId = wishlistId,
+                ShareLinkId = wishlistId,
+                ShareSecret = "share-secret",
+                DisplayName = "Jenn"
+            },
+            cancellationToken);
+
+        // Assert
+        Assert.True(result.IsCreated);
+        Assert.Equal(
+            participantId,
+            result.Participant.Id);
+        Assert.NotNull(result.GuestToken);
+        VerifyTransaction(
+            wishlistId,
+            commits: true,
+            cancellationToken: cancellationToken);
+        _participantRepositoryMock.Verify(
+            repository => repository.CountActiveAsync(
+                wishlistId,
+                _now,
+                cancellationToken),
+            Times.Once);
+        _participantRepositoryMock.Verify(
+            repository => repository.Add(It.IsAny<WishlistParticipant>()),
+            Times.Once);
+        _guestSessionRepositoryMock.Verify(
+            repository => repository.Add(It.IsAny<GuestSession>()),
+            Times.Once);
+        VerifySave(cancellationToken);
+        _participantRepositoryMock.Verify(
+            repository => repository.GetByIdAsync(
+                wishlistId,
+                participantId,
+                cancellationToken),
+            Times.Once);
+        _guestSessionRepositoryMock.Verify(
+            repository => repository.GetByIdAsync(
+                guestSessionId,
+                cancellationToken),
+            Times.Once);
+        VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task JoinAsync_WhenGuestAttachmentCommitAcknowledgementIsLost_ReturnsMemberParticipant()
+    {
+        // Arrange
+        var wishlistId = Guid.CreateVersion7();
+        var memberId = Guid.CreateVersion7();
+        var guestSessionId = Guid.CreateVersion7();
+        var guestParticipant = new WishlistParticipant(
+            Guid.CreateVersion7(),
+            wishlistId,
+            guestSessionId,
+            "Guest");
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var token = SetupValidGuest(
+            guestSessionId,
+            cancellationToken);
+        SetupTransaction(
+            wishlistId,
+            Guid.CreateVersion7(),
+            cancellationToken);
+        SetupMember(
+            wishlistId,
+            memberId,
+            null,
+            cancellationToken);
+        _participantRepositoryMock
+            .Setup(repository => repository.GetByGuestSessionForUpdateAsync(
+                wishlistId,
+                guestSessionId,
+                cancellationToken))
+            .ReturnsAsync(guestParticipant);
+        _giftReservationRepositoryMock
+            .Setup(repository => repository.GetByParticipantForUpdateAsync(
+                guestParticipant.Id,
+                cancellationToken))
+            .ReturnsAsync([]);
+        _unitOfWorkMock
+            .Setup(unitOfWork => unitOfWork.SaveChangesAsync(cancellationToken))
+            .ReturnsAsync(1);
+        _transactionMock
+            .Setup(transaction => transaction.CommitAsync(cancellationToken))
+            .ThrowsAsync(new TimeoutException());
+        _participantRepositoryMock
+            .Setup(repository => repository.GetByIdAsync(
+                wishlistId,
+                guestParticipant.Id,
+                cancellationToken))
+            .ReturnsAsync(guestParticipant);
+        _participantRepositoryMock
+            .Setup(repository => repository.GetByGuestSessionAsync(
+                wishlistId,
+                guestSessionId,
+                cancellationToken))
+            .ReturnsAsync((WishlistParticipant?)null);
+
+        // Act
+        var result = await _service.JoinAsync(
+            new WishlistParticipantJoinRequest
+            {
+                ParticipantId = Guid.CreateVersion7(),
+                GuestSessionId = Guid.CreateVersion7(),
+                WishlistId = wishlistId,
+                ShareLinkId = wishlistId,
+                ShareSecret = "share-secret",
+                MemberId = memberId,
+                GuestToken = token.Secret
+            },
+            cancellationToken);
+
+        // Assert
+        Assert.False(result.IsCreated);
+        Assert.Equal(
+            memberId,
+            guestParticipant.MemberId);
+        VerifyTransaction(
+            wishlistId,
+            commits: true,
+            cancellationToken: cancellationToken);
+        VerifyValidGuest(
+            guestSessionId,
+            cancellationToken);
+        VerifyMember(
+            wishlistId,
+            memberId,
+            cancellationToken);
+        _participantRepositoryMock.Verify(
+            repository => repository.GetByGuestSessionForUpdateAsync(
+                wishlistId,
+                guestSessionId,
+                cancellationToken),
+            Times.Once);
+        _giftReservationRepositoryMock.Verify(
+            repository => repository.GetByParticipantForUpdateAsync(
+                guestParticipant.Id,
+                cancellationToken),
+            Times.Once);
+        VerifySave(cancellationToken);
+        _participantRepositoryMock.Verify(
+            repository => repository.GetByIdAsync(
+                wishlistId,
+                guestParticipant.Id,
+                cancellationToken),
+            Times.Once);
+        _participantRepositoryMock.Verify(
+            repository => repository.GetByGuestSessionAsync(
+                wishlistId,
+                guestSessionId,
+                cancellationToken),
+            Times.Once);
+        VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task JoinAsync_WhenKnownGuestCommitAcknowledgementIsLost_ReturnsExistingParticipant()
+    {
+        // Arrange
+        var wishlistId = Guid.CreateVersion7();
+        var guestSessionId = Guid.CreateVersion7();
+        var participant = new WishlistParticipant(
+            Guid.CreateVersion7(),
+            wishlistId,
+            guestSessionId,
+            "Jenn");
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var token = SetupValidGuest(
+            guestSessionId,
+            cancellationToken);
+        SetupTransaction(
+            wishlistId,
+            Guid.CreateVersion7(),
+            cancellationToken);
+        _participantRepositoryMock
+            .Setup(repository => repository.GetByGuestSessionForUpdateAsync(
+                wishlistId,
+                guestSessionId,
+                cancellationToken))
+            .ReturnsAsync(participant);
+        _transactionMock
+            .Setup(transaction => transaction.CommitAsync(cancellationToken))
+            .ThrowsAsync(new TimeoutException());
+        _participantRepositoryMock
+            .Setup(repository => repository.GetByIdAsync(
+                wishlistId,
+                participant.Id,
+                cancellationToken))
+            .ReturnsAsync(participant);
+
+        // Act
+        var result = await _service.JoinAsync(
+            new WishlistParticipantJoinRequest
+            {
+                ParticipantId = Guid.CreateVersion7(),
+                GuestSessionId = Guid.CreateVersion7(),
+                WishlistId = wishlistId,
+                ShareLinkId = wishlistId,
+                ShareSecret = "share-secret",
+                GuestToken = token.Secret
+            },
+            cancellationToken);
+
+        // Assert
+        Assert.False(result.IsCreated);
+        Assert.Equal(
+            participant.Id,
+            result.Participant.Id);
+        VerifyTransaction(
+            wishlistId,
+            commits: true,
+            cancellationToken: cancellationToken);
+        VerifyValidGuest(
+            guestSessionId,
+            cancellationToken);
+        _participantRepositoryMock.Verify(
+            repository => repository.GetByGuestSessionForUpdateAsync(
+                wishlistId,
+                guestSessionId,
+                cancellationToken),
+            Times.Once);
+        _participantRepositoryMock.Verify(
+            repository => repository.GetByIdAsync(
+                wishlistId,
+                participant.Id,
+                cancellationToken),
+            Times.Once);
+        VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task JoinAsync_WhenTransactionDisposalFailsAfterCommit_ReturnsCommittedParticipant()
+    {
+        // Arrange
+        var wishlistId = Guid.CreateVersion7();
+        var guestSessionId = Guid.CreateVersion7();
+        var participant = new WishlistParticipant(
+            Guid.CreateVersion7(),
+            wishlistId,
+            guestSessionId,
+            "Jenn");
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var token = SetupValidGuest(
+            guestSessionId,
+            cancellationToken);
+        SetupTransaction(
+            wishlistId,
+            Guid.CreateVersion7(),
+            cancellationToken);
+        _participantRepositoryMock
+            .Setup(repository => repository.GetByGuestSessionForUpdateAsync(
+                wishlistId,
+                guestSessionId,
+                cancellationToken))
+            .ReturnsAsync(participant);
+        SetupCommit(cancellationToken);
+        _transactionMock
+            .Setup(transaction => transaction.DisposeAsync())
+            .Returns(() => ValueTask.FromException(new TimeoutException()));
+        _participantRepositoryMock
+            .Setup(repository => repository.GetByIdAsync(
+                wishlistId,
+                participant.Id,
+                cancellationToken))
+            .ReturnsAsync(participant);
+
+        // Act
+        var result = await _service.JoinAsync(
+            new WishlistParticipantJoinRequest
+            {
+                ParticipantId = Guid.CreateVersion7(),
+                GuestSessionId = Guid.CreateVersion7(),
+                WishlistId = wishlistId,
+                ShareLinkId = wishlistId,
+                ShareSecret = "share-secret",
+                GuestToken = token.Secret
+            },
+            cancellationToken);
+
+        // Assert
+        Assert.False(result.IsCreated);
+        Assert.Equal(
+            participant.Id,
+            result.Participant.Id);
+        VerifyTransaction(
+            wishlistId,
+            commits: true,
+            cancellationToken: cancellationToken);
+        VerifyValidGuest(
+            guestSessionId,
+            cancellationToken);
+        _participantRepositoryMock.Verify(
+            repository => repository.GetByGuestSessionForUpdateAsync(
+                wishlistId,
+                guestSessionId,
+                cancellationToken),
+            Times.Once);
+        _participantRepositoryMock.Verify(
+            repository => repository.GetByIdAsync(
+                wishlistId,
+                participant.Id,
+                cancellationToken),
+            Times.Once);
+        VerifyNoOtherCalls();
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(3)]
+    [InlineData(4)]
+    public async Task JoinAsync_WhenAmbiguousMemberCommitCannotBeVerified_ThrowsDependencyUnavailable(
+        int scenario)
+    {
+        // Arrange
+        var wishlistId = Guid.CreateVersion7();
+        var memberId = Guid.CreateVersion7();
+        var guestSessionId = Guid.CreateVersion7();
+        var memberParticipant = WishlistParticipant.CreateMember(
+            Guid.CreateVersion7(),
+            wishlistId,
+            memberId);
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var token = SetupValidGuest(
+            guestSessionId,
+            cancellationToken);
+        SetupTransaction(
+            wishlistId,
+            Guid.CreateVersion7(),
+            cancellationToken);
+        SetupMember(
+            wishlistId,
+            memberId,
+            memberParticipant,
+            cancellationToken);
+        _participantRepositoryMock
+            .Setup(repository => repository.GetByGuestSessionForUpdateAsync(
+                wishlistId,
+                guestSessionId,
+                cancellationToken))
+            .ReturnsAsync((WishlistParticipant?)null);
+        _transactionMock
+            .Setup(transaction => transaction.CommitAsync(cancellationToken))
+            .ThrowsAsync(new TimeoutException());
+        var participantLookup = _participantRepositoryMock
+            .Setup(repository => repository.GetByIdAsync(
+                wishlistId,
+                memberParticipant.Id,
+                cancellationToken));
+
+        if (scenario == 3)
+        {
+            participantLookup.ThrowsAsync(new TimeoutException());
+        }
+        else
+        {
+            participantLookup.ReturnsAsync(scenario switch
+            {
+                0 => null,
+                1 => WishlistParticipant.CreateMember(
+                    memberParticipant.Id,
+                    wishlistId,
+                    Guid.CreateVersion7()),
+                4 => new WishlistParticipant(
+                    memberParticipant.Id,
+                    wishlistId,
+                    Guid.CreateVersion7(),
+                    "Guest"),
+                _ => memberParticipant
+            });
+        }
+
+        if (scenario == 2)
+        {
+            _participantRepositoryMock
+                .Setup(repository => repository.GetByGuestSessionAsync(
+                    wishlistId,
+                    guestSessionId,
+                    cancellationToken))
+                .ReturnsAsync(new WishlistParticipant(
+                    Guid.CreateVersion7(),
+                    wishlistId,
+                    guestSessionId,
+                    "Guest"));
+        }
+
+        // Act
+        var action = () => _service.JoinAsync(
+            new WishlistParticipantJoinRequest
+            {
+                ParticipantId = Guid.CreateVersion7(),
+                GuestSessionId = Guid.CreateVersion7(),
+                WishlistId = wishlistId,
+                ShareLinkId = wishlistId,
+                ShareSecret = "share-secret",
+                MemberId = memberId,
+                GuestToken = token.Secret
+            },
+            cancellationToken);
+
+        // Assert
+        await Assert.ThrowsAsync<DependencyUnavailableException>(action);
+        VerifyTransaction(
+            wishlistId,
+            commits: true,
+            cancellationToken: cancellationToken);
+        VerifyValidGuest(
+            guestSessionId,
+            cancellationToken);
+        VerifyMember(
+            wishlistId,
+            memberId,
+            cancellationToken);
+        _participantRepositoryMock.Verify(
+            repository => repository.GetByGuestSessionForUpdateAsync(
+                wishlistId,
+                guestSessionId,
+                cancellationToken),
+            Times.Once);
+        _participantRepositoryMock.Verify(
+            repository => repository.GetByIdAsync(
+                wishlistId,
+                memberParticipant.Id,
+                cancellationToken),
+            Times.Once);
+        _participantRepositoryMock.Verify(
+            repository => repository.GetByGuestSessionAsync(
+                wishlistId,
+                guestSessionId,
+                cancellationToken),
+            scenario == 2
+                ? Times.Once()
+                : Times.Never());
+        VerifyNoOtherCalls();
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(3)]
+    public async Task JoinAsync_WhenAmbiguousGuestCommitCannotBeVerified_ThrowsDependencyUnavailable(
+        int scenario)
+    {
+        // Arrange
+        var participantId = Guid.CreateVersion7();
+        var guestSessionId = Guid.CreateVersion7();
+        var wishlistId = Guid.CreateVersion7();
+        var cancellationToken = TestContext.Current.CancellationToken;
+        GuestSession? addedSession = null;
+        WishlistParticipant? addedParticipant = null;
+        SetupTransaction(
+            wishlistId,
+            Guid.CreateVersion7(),
+            cancellationToken);
+        SetupCapacity(
+            wishlistId,
+            0,
+            cancellationToken);
+        _guestSessionRepositoryMock
+            .Setup(repository => repository.Add(It.IsAny<GuestSession>()))
+            .Callback<GuestSession>(session => addedSession = session);
+        _participantRepositoryMock
+            .Setup(repository => repository.Add(It.IsAny<WishlistParticipant>()))
+            .Callback<WishlistParticipant>(participant => addedParticipant = participant);
+        _unitOfWorkMock
+            .Setup(unitOfWork => unitOfWork.SaveChangesAsync(cancellationToken))
+            .ReturnsAsync(1);
+        _transactionMock
+            .Setup(transaction => transaction.CommitAsync(cancellationToken))
+            .ThrowsAsync(new TimeoutException());
+        _participantRepositoryMock
+            .Setup(repository => repository.GetByIdAsync(
+                wishlistId,
+                participantId,
+                cancellationToken))
+            .ReturnsAsync(() => scenario switch
+            {
+                0 => new WishlistParticipant(
+                    participantId,
+                    wishlistId,
+                    Guid.CreateVersion7(),
+                    "Jenn"),
+                3 => WishlistParticipant.CreateMember(
+                    participantId,
+                    wishlistId,
+                    Guid.CreateVersion7()),
+                _ => addedParticipant
+            });
+
+        if (scenario is 1 or 2)
+        {
+            _guestSessionRepositoryMock
+                .Setup(repository => repository.GetByIdAsync(
+                    guestSessionId,
+                    cancellationToken))
+                .ReturnsAsync(() => scenario == 1
+                    ? null
+                    : new GuestSession(
+                        guestSessionId,
+                        new byte[32],
+                        addedSession?.ExpiresAt ?? _now.AddDays(180)));
+        }
+
+        // Act
+        var action = () => _service.JoinAsync(
+            new WishlistParticipantJoinRequest
+            {
+                ParticipantId = participantId,
+                GuestSessionId = guestSessionId,
+                WishlistId = wishlistId,
+                ShareLinkId = wishlistId,
+                ShareSecret = "share-secret",
+                DisplayName = "Jenn"
+            },
+            cancellationToken);
+
+        // Assert
+        await Assert.ThrowsAsync<DependencyUnavailableException>(action);
+        VerifyTransaction(
+            wishlistId,
+            commits: true,
+            cancellationToken: cancellationToken);
+        _participantRepositoryMock.Verify(
+            repository => repository.CountActiveAsync(
+                wishlistId,
+                _now,
+                cancellationToken),
+            Times.Once);
+        _participantRepositoryMock.Verify(
+            repository => repository.Add(It.IsAny<WishlistParticipant>()),
+            Times.Once);
+        _guestSessionRepositoryMock.Verify(
+            repository => repository.Add(It.IsAny<GuestSession>()),
+            Times.Once);
+        VerifySave(cancellationToken);
+        _participantRepositoryMock.Verify(
+            repository => repository.GetByIdAsync(
+                wishlistId,
+                participantId,
+                cancellationToken),
+            Times.Once);
+        _guestSessionRepositoryMock.Verify(
+            repository => repository.GetByIdAsync(
+                guestSessionId,
+                cancellationToken),
+            scenario is 1 or 2
+                ? Times.Once()
+                : Times.Never());
+        VerifyNoOtherCalls();
+    }
+
     [Theory]
     [InlineData(true)]
     [InlineData(false)]

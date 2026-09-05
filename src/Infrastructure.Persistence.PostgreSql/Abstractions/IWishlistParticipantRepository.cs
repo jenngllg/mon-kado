@@ -15,6 +15,26 @@ public interface IWishlistParticipantRepository
     /// <param name="participant">The participant.</param>
     void Remove(WishlistParticipant participant);
 
+    /// <summary>Gets a participant without tracking it.</summary>
+    /// <param name="wishlistId">The wishlist identifier.</param>
+    /// <param name="participantId">The participant identifier.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The participant when found.</returns>
+    Task<WishlistParticipant?> GetByIdAsync(
+        Guid wishlistId,
+        Guid participantId,
+        CancellationToken cancellationToken);
+
+    /// <summary>Gets a guest participant without tracking it.</summary>
+    /// <param name="wishlistId">The wishlist identifier.</param>
+    /// <param name="guestSessionId">The guest session identifier.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The participant when found.</returns>
+    Task<WishlistParticipant?> GetByGuestSessionAsync(
+        Guid wishlistId,
+        Guid guestSessionId,
+        CancellationToken cancellationToken);
+
     /// <summary>Gets a tracked member participant.</summary>
     /// <param name="wishlistId">The wishlist identifier.</param>
     /// <param name="memberId">The member identifier.</param>

@@ -169,6 +169,12 @@ public class GlobalExceptionHandler(
                 "The wishlist already contains the maximum number of wishes.",
                 ErrorCodes.WishLimitReached,
                 null),
+            WishQuantityBelowReservedException => new ErrorResponse(
+                StatusCodes.Status409Conflict,
+                "Wish quantity unavailable",
+                "The gift quantity cannot be lower than the quantity already reserved.",
+                ErrorCodes.WishQuantityBelowReserved,
+                null),
             WishlistShareLinkNotFoundException => new ErrorResponse(
                 StatusCodes.Status404NotFound,
                 "Wishlist share link not found",

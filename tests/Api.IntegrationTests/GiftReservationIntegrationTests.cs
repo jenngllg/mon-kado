@@ -674,6 +674,435 @@ public class GiftReservationIntegrationTests(PostgreSqlContainerFixture fixture)
     }
 
     [Fact]
+    public async Task UpdateWishAsync_WhenQuantityFallsBelowReservations_ReturnsConflictAndPreservesWish()
+    {
+        // Arrange
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var factory = await CreateFactoryAsync(cancellationToken);
+        var ownerId = Guid.CreateVersion7();
+        var memberId = Guid.CreateVersion7();
+        var wishlistId = Guid.CreateVersion7();
+        var wishId = Guid.CreateVersion7();
+        await SeedAsync(
+            factory,
+            ownerId,
+            [
+                (memberId, "participant@example.test", "Participant")
+            ],
+            wishlistId,
+            wishId,
+            3,
+            cancellationToken);
+        using var ownerClient = CreateAuthorizedClient(
+            factory,
+            ownerId);
+        var shareLink = await CreateShareLinkAsync(
+            ownerClient,
+            wishlistId,
+            cancellationToken);
+        using var participantClient = CreateAuthorizedClient(
+            factory,
+            memberId);
+        var csrfToken = await GetCsrfTokenAsync(
+            participantClient,
+            cancellationToken);
+        using var join = await JoinAsync(
+            participantClient,
+            shareLink.Id,
+            shareLink.Secret,
+            csrfToken,
+            cancellationToken);
+        using var reservation = await UpsertAsync(
+            participantClient,
+            shareLink.Id,
+            wishId,
+            shareLink.Secret,
+            csrfToken,
+            2,
+            null,
+            cancellationToken);
+        var wishEntityTag = await GetWishEntityTagAsync(
+            ownerClient,
+            wishlistId,
+            wishId,
+            cancellationToken);
+
+        // Act
+        using var response = await UpdateWishQuantityAsync(
+            ownerClient,
+            wishlistId,
+            wishId,
+            1,
+            wishEntityTag,
+            cancellationToken);
+        var storedWish = await GetStoredWishAsync(
+            factory,
+            wishlistId,
+            wishId,
+            cancellationToken);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.Conflict,
+            response.StatusCode);
+        var error = await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken);
+        Assert.Equal(
+            "WISH_QUANTITY_BELOW_RESERVED",
+            error.GetProperty("errorCode").GetString());
+        Assert.Equal(
+            3,
+            storedWish.Quantity);
+    }
+
+    [Fact]
+    public async Task UpdateWishAsync_WhenReservationIsCreatedConcurrently_PreservesQuantityInvariant()
+    {
+        // Arrange
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var factory = await CreateFactoryAsync(cancellationToken);
+        var ownerId = Guid.CreateVersion7();
+        var firstMemberId = Guid.CreateVersion7();
+        var secondMemberId = Guid.CreateVersion7();
+        var wishlistId = Guid.CreateVersion7();
+        var wishId = Guid.CreateVersion7();
+        await SeedAsync(
+            factory,
+            ownerId,
+            [
+                (firstMemberId, "first@example.test", "First participant"),
+                (secondMemberId, "second@example.test", "Second participant")
+            ],
+            wishlistId,
+            wishId,
+            2,
+            cancellationToken);
+        using var ownerClient = CreateAuthorizedClient(
+            factory,
+            ownerId);
+        var shareLink = await CreateShareLinkAsync(
+            ownerClient,
+            wishlistId,
+            cancellationToken);
+        using var firstClient = CreateAuthorizedClient(
+            factory,
+            firstMemberId);
+        using var secondClient = CreateAuthorizedClient(
+            factory,
+            secondMemberId);
+        var firstCsrfToken = await GetCsrfTokenAsync(
+            firstClient,
+            cancellationToken);
+        var secondCsrfToken = await GetCsrfTokenAsync(
+            secondClient,
+            cancellationToken);
+        using var firstJoin = await JoinAsync(
+            firstClient,
+            shareLink.Id,
+            shareLink.Secret,
+            firstCsrfToken,
+            cancellationToken);
+        using var secondJoin = await JoinAsync(
+            secondClient,
+            shareLink.Id,
+            shareLink.Secret,
+            secondCsrfToken,
+            cancellationToken);
+        using var firstReservation = await UpsertAsync(
+            firstClient,
+            shareLink.Id,
+            wishId,
+            shareLink.Secret,
+            firstCsrfToken,
+            1,
+            null,
+            cancellationToken);
+        var wishEntityTag = await GetWishEntityTagAsync(
+            ownerClient,
+            wishlistId,
+            wishId,
+            cancellationToken);
+
+        // Act
+        var operations = new[]
+        {
+            UpdateWishQuantityAsync(
+                ownerClient,
+                wishlistId,
+                wishId,
+                1,
+                wishEntityTag,
+                cancellationToken),
+            UpsertAsync(
+                secondClient,
+                shareLink.Id,
+                wishId,
+                shareLink.Secret,
+                secondCsrfToken,
+                1,
+                null,
+                cancellationToken)
+        };
+        var responses = await Task.WhenAll(operations);
+        var storedWish = await GetStoredWishAsync(
+            factory,
+            wishlistId,
+            wishId,
+            cancellationToken);
+        var storedReservations = await GetStoredReservationsAsync(
+            factory,
+            cancellationToken);
+        try
+        {
+            // Assert
+            Assert.Equal(
+                [
+                    HttpStatusCode.Created,
+                    HttpStatusCode.Conflict
+                ],
+                responses
+                    .Select(response => response.StatusCode)
+                    .Order());
+            Assert.True(storedReservations.Sum(item => item.Quantity) <= storedWish.Quantity);
+        }
+        finally
+        {
+            foreach (var response in responses)
+                response.Dispose();
+        }
+    }
+
+    [Fact]
+    public async Task PutAsync_WhenCommitAcknowledgementIsLost_ReturnsSingleCommittedReservation()
+    {
+        // Arrange
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var interceptor = new AmbiguousCommitInterceptor();
+        await using var factory = await CreateFactoryAsync(
+            cancellationToken,
+            services =>
+            {
+                services.AddSingleton(interceptor);
+                services.AddDbContextPool<MonKadoDbContext>((
+                    _,
+                    options) => options.AddInterceptors(interceptor));
+            });
+        var ownerId = Guid.CreateVersion7();
+        var memberId = Guid.CreateVersion7();
+        var wishlistId = Guid.CreateVersion7();
+        var wishId = Guid.CreateVersion7();
+        await SeedAsync(
+            factory,
+            ownerId,
+            [
+                (memberId, "participant@example.test", "Participant")
+            ],
+            wishlistId,
+            wishId,
+            2,
+            cancellationToken);
+        using var ownerClient = CreateAuthorizedClient(
+            factory,
+            ownerId);
+        var shareLink = await CreateShareLinkAsync(
+            ownerClient,
+            wishlistId,
+            cancellationToken);
+        using var participantClient = CreateAuthorizedClient(
+            factory,
+            memberId);
+        var csrfToken = await GetCsrfTokenAsync(
+            participantClient,
+            cancellationToken);
+        using var join = await JoinAsync(
+            participantClient,
+            shareLink.Id,
+            shareLink.Secret,
+            csrfToken,
+            cancellationToken);
+        interceptor.Arm();
+
+        // Act
+        using var response = await UpsertAsync(
+            participantClient,
+            shareLink.Id,
+            wishId,
+            shareLink.Secret,
+            csrfToken,
+            1,
+            null,
+            cancellationToken);
+        var reservations = await GetStoredReservationsAsync(
+            factory,
+            cancellationToken);
+        var histories = await GetStoredHistoriesAsync(
+            factory,
+            cancellationToken);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.Created,
+            response.StatusCode);
+        var reservation = Assert.Single(reservations);
+        Assert.Equal(
+            1,
+            reservation.Quantity);
+        var history = Assert.Single(histories);
+        Assert.Equal(
+            reservation.Id,
+            history.Id);
+    }
+
+    [Fact]
+    public async Task JoinAsync_WhenGuestCommitAcknowledgementIsLost_ReturnsUsableOriginalSession()
+    {
+        // Arrange
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var interceptor = new AmbiguousCommitInterceptor();
+        await using var factory = await CreateFactoryAsync(
+            cancellationToken,
+            services =>
+            {
+                services.AddSingleton(interceptor);
+                services.AddDbContextPool<MonKadoDbContext>((
+                    _,
+                    options) => options.AddInterceptors(interceptor));
+            });
+        var ownerId = Guid.CreateVersion7();
+        var wishlistId = Guid.CreateVersion7();
+        await SeedAsync(
+            factory,
+            ownerId,
+            [],
+            wishlistId,
+            Guid.CreateVersion7(),
+            1,
+            cancellationToken);
+        using var ownerClient = CreateAuthorizedClient(
+            factory,
+            ownerId);
+        var shareLink = await CreateShareLinkAsync(
+            ownerClient,
+            wishlistId,
+            cancellationToken);
+        using var guestClient = factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            HandleCookies = true
+        });
+        var csrfToken = await GetCsrfTokenAsync(
+            guestClient,
+            cancellationToken);
+        interceptor.Arm();
+
+        // Act
+        using var response = await JoinGuestAsync(
+            guestClient,
+            shareLink.Id,
+            shareLink.Secret,
+            csrfToken,
+            cancellationToken);
+        using var currentParticipant = await GetCurrentParticipantAsync(
+            guestClient,
+            shareLink.Id,
+            shareLink.Secret,
+            cancellationToken);
+        var participants = await GetStoredParticipantsAsync(
+            factory,
+            cancellationToken);
+        var guestSessions = await GetStoredGuestSessionsAsync(
+            factory,
+            cancellationToken);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.Created,
+            response.StatusCode);
+        Assert.Equal(
+            HttpStatusCode.OK,
+            currentParticipant.StatusCode);
+        Assert.Single(participants);
+        Assert.Single(guestSessions);
+    }
+
+    [Fact]
+    public async Task JoinAsync_WhenGuestAttachmentCommitAcknowledgementIsLost_ReturnsCommittedMemberParticipant()
+    {
+        // Arrange
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var interceptor = new AmbiguousCommitInterceptor();
+        await using var factory = await CreateFactoryAsync(
+            cancellationToken,
+            services =>
+            {
+                services.AddSingleton(interceptor);
+                services.AddDbContextPool<MonKadoDbContext>((
+                    _,
+                    options) => options.AddInterceptors(interceptor));
+            });
+        var ownerId = Guid.CreateVersion7();
+        var memberId = Guid.CreateVersion7();
+        var wishlistId = Guid.CreateVersion7();
+        await SeedAsync(
+            factory,
+            ownerId,
+            [
+                (memberId, "participant@example.test", "Participant")
+            ],
+            wishlistId,
+            Guid.CreateVersion7(),
+            1,
+            cancellationToken);
+        using var ownerClient = CreateAuthorizedClient(
+            factory,
+            ownerId);
+        var shareLink = await CreateShareLinkAsync(
+            ownerClient,
+            wishlistId,
+            cancellationToken);
+        using var participantClient = factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            HandleCookies = true
+        });
+        var guestCsrfToken = await GetCsrfTokenAsync(
+            participantClient,
+            cancellationToken);
+        using var guestJoin = await JoinGuestAsync(
+            participantClient,
+            shareLink.Id,
+            shareLink.Secret,
+            guestCsrfToken,
+            cancellationToken);
+        AuthorizeClient(
+            factory,
+            participantClient,
+            memberId);
+        var memberCsrfToken = await GetCsrfTokenAsync(
+            participantClient,
+            cancellationToken);
+        interceptor.Arm();
+
+        // Act
+        using var response = await JoinAsync(
+            participantClient,
+            shareLink.Id,
+            shareLink.Secret,
+            memberCsrfToken,
+            cancellationToken);
+        var participants = await GetStoredParticipantsAsync(
+            factory,
+            cancellationToken);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.OK,
+            response.StatusCode);
+        var participant = Assert.Single(participants);
+        Assert.Equal(
+            memberId,
+            participant.MemberId);
+        Assert.Null(participant.GuestSessionId);
+    }
+
+    [Fact]
     public async Task DeleteAsync_WhenReservationExists_DeletesCurrentReservationAndFreesCapacity()
     {
         // Arrange
@@ -1222,9 +1651,13 @@ public class GiftReservationIntegrationTests(PostgreSqlContainerFixture fixture)
             history.GetProperty("status").GetString());
     }
 
-    private async Task<PostgreSqlApiFactory> CreateFactoryAsync(CancellationToken cancellationToken)
+    private async Task<PostgreSqlApiFactory> CreateFactoryAsync(
+        CancellationToken cancellationToken,
+        Action<IServiceCollection>? configureServices = null)
     {
-        var factory = new PostgreSqlApiFactory(fixture.Container.GetConnectionString());
+        var factory = new PostgreSqlApiFactory(
+            fixture.Container.GetConnectionString(),
+            configureServices: configureServices);
         await using var scope = factory.Services.CreateAsyncScope();
         var context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
         await context.Database.MigrateAsync(cancellationToken);
@@ -1407,6 +1840,33 @@ public class GiftReservationIntegrationTests(PostgreSqlContainerFixture fixture)
             cancellationToken);
     }
 
+    private static async Task<HttpResponseMessage> UpdateWishQuantityAsync(
+        HttpClient ownerClient,
+        Guid wishlistId,
+        Guid wishId,
+        int quantity,
+        string? entityTag,
+        CancellationToken cancellationToken)
+    {
+        using var request = new HttpRequestMessage(
+            HttpMethod.Put,
+            $"/api/v1/wishlists/{wishlistId}/wishes/{wishId}")
+        {
+            Content = JsonContent.Create(new
+            {
+                name = "Gift",
+                quantity
+            })
+        };
+        request.Headers.TryAddWithoutValidation(
+            "If-Match",
+            entityTag);
+
+        return await ownerClient.SendAsync(
+            request,
+            cancellationToken);
+    }
+
     private static async Task<string> GetCsrfTokenAsync(
         HttpClient client,
         CancellationToken cancellationToken)
@@ -1527,6 +1987,24 @@ public class GiftReservationIntegrationTests(PostgreSqlContainerFixture fixture)
             cancellationToken);
     }
 
+    private static async Task<HttpResponseMessage> GetCurrentParticipantAsync(
+        HttpClient client,
+        Guid shareLinkId,
+        string secret,
+        CancellationToken cancellationToken)
+    {
+        using var request = new HttpRequestMessage(
+            HttpMethod.Get,
+            $"/api/v1/shared-wishlists/{shareLinkId}/participants/current");
+        request.Headers.TryAddWithoutValidation(
+            "X-MonKado-Share-Token",
+            secret);
+
+        return await client.SendAsync(
+            request,
+            cancellationToken);
+    }
+
     private static Task<HttpResponseMessage> GetHistoryAsync(
         HttpClient client,
         CancellationToken cancellationToken)
@@ -1598,6 +2076,22 @@ public class GiftReservationIntegrationTests(PostgreSqlContainerFixture fixture)
             .ToArrayAsync(cancellationToken);
     }
 
+    private static async Task<Wish> GetStoredWishAsync(
+        PostgreSqlApiFactory factory,
+        Guid wishlistId,
+        Guid wishId,
+        CancellationToken cancellationToken)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
+
+        return await context.Wishes
+            .AsNoTracking()
+            .SingleAsync(
+                wish => wish.WishlistId == wishlistId && wish.Id == wishId,
+                cancellationToken);
+    }
+
     private static async Task<IReadOnlyCollection<WishlistParticipant>> GetStoredParticipantsAsync(
         PostgreSqlApiFactory factory,
         CancellationToken cancellationToken)
@@ -1606,6 +2100,18 @@ public class GiftReservationIntegrationTests(PostgreSqlContainerFixture fixture)
         var context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
 
         return await context.WishlistParticipants
+            .AsNoTracking()
+            .ToArrayAsync(cancellationToken);
+    }
+
+    private static async Task<IReadOnlyCollection<GuestSession>> GetStoredGuestSessionsAsync(
+        PostgreSqlApiFactory factory,
+        CancellationToken cancellationToken)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
+
+        return await context.GuestSessions
             .AsNoTracking()
             .ToArrayAsync(cancellationToken);
     }

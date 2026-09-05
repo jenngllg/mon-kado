@@ -25,6 +25,34 @@ public class WishlistParticipantRepository(MonKadoDbContext context) : IWishlist
     }
 
     /// <inheritdoc />
+    public Task<WishlistParticipant?> GetByIdAsync(
+        Guid wishlistId,
+        Guid participantId,
+        CancellationToken cancellationToken)
+    {
+        return context.WishlistParticipants
+            .AsNoTracking()
+            .SingleOrDefaultAsync(
+                participant => participant.WishlistId == wishlistId &&
+                    participant.Id == participantId,
+                cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public Task<WishlistParticipant?> GetByGuestSessionAsync(
+        Guid wishlistId,
+        Guid guestSessionId,
+        CancellationToken cancellationToken)
+    {
+        return context.WishlistParticipants
+            .AsNoTracking()
+            .SingleOrDefaultAsync(
+                participant => participant.WishlistId == wishlistId &&
+                    participant.GuestSessionId == guestSessionId,
+                cancellationToken);
+    }
+
+    /// <inheritdoc />
     public Task<WishlistParticipant?> GetByMemberForUpdateAsync(
         Guid wishlistId,
         Guid memberId,

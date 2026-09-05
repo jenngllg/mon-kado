@@ -28,6 +28,7 @@ public class WishService(
     private const string WishlistForeignKeyName = "fk_wishes_wishlists_wishlist_id";
     private const string PositionWishlistForeignKeyName = "fk_wish_position_sequences_wishlists_wishlist_id";
     private const string WishCountConstraintName = "ck_wish_position_sequences_current_count_limit";
+    private const string WishQuantityConstraintName = "ck_wishes_quantity_not_below_reserved";
 
     /// <inheritdoc />
     public async Task<WishCollectionDetails> GetCollectionAsync(
@@ -479,6 +480,10 @@ public class WishService(
                 wishlistId,
                 wishId,
                 cancellationToken);
+        }
+        catch (Exception exception) when (IsWishQuantityBelowReserved(exception))
+        {
+            throw new WishQuantityBelowReservedException();
         }
         catch (Exception exception)
         {
@@ -986,6 +991,27 @@ public class WishService(
         {
             SqlState: PostgresErrorCodes.CheckViolation,
             ConstraintName: WishCountConstraintName
+        };
+    }
+
+    /// <summary>
+    /// Determines whether a database update reduced a wish below its reserved quantity.
+    /// </summary>
+    /// <param name="exception">The database update exception.</param>
+    /// <returns><see langword="true" /> for the expected reservation invariant violation.</returns>
+    private static bool IsWishQuantityBelowReserved(Exception exception)
+    {
+        var postgresException = exception switch
+        {
+            PostgresException directException => directException,
+            DbUpdateException { InnerException: PostgresException innerException } => innerException,
+            _ => null
+        };
+
+        return postgresException is
+        {
+            SqlState: PostgresErrorCodes.CheckViolation,
+            ConstraintName: WishQuantityConstraintName
         };
     }
 

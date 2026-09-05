@@ -116,6 +116,11 @@ public class GiftReservationService : IGiftReservationService
         CancellationToken cancellationToken)
     {
         GiftReservationMutationResult result;
+        var participantId = Guid.Empty;
+        var reservationId = Guid.Empty;
+        var attemptedQuantity = 0;
+        var isCreated = false;
+        var commitAttempted = false;
 
         try
         {
@@ -126,6 +131,7 @@ public class GiftReservationService : IGiftReservationService
             var participant = await ResolveParticipantAsync(
                 request,
                 cancellationToken);
+            participantId = participant.Id;
             var wish = await _transactionFactory.LockWishAsync(
                 request.WishlistId,
                 request.WishId,
@@ -139,6 +145,7 @@ public class GiftReservationService : IGiftReservationService
                 currentReservation,
                 request.ExpectedVersion);
             var totalQuantity = await _giftReservationRepository.GetTotalQuantityAsync(
+                request.WishlistId,
                 request.WishId,
                 cancellationToken);
             var currentQuantity = currentReservation?.Quantity ?? 0;
@@ -147,7 +154,7 @@ public class GiftReservationService : IGiftReservationService
             if (requestedTotal > wish.Quantity && request.Quantity > currentQuantity)
                 throw new GiftReservationQuantityUnavailableException();
 
-            var isCreated = currentReservation is null;
+            isCreated = currentReservation is null;
             var reservation = currentReservation ?? new GiftReservation(
                     request.ReservationId,
                     request.WishlistId,
@@ -173,6 +180,9 @@ public class GiftReservationService : IGiftReservationService
             if (hasChanged)
                 await _unitOfWork.SaveChangesAsync(cancellationToken);
 
+            reservationId = reservation.Id;
+            attemptedQuantity = reservation.Quantity;
+            commitAttempted = true;
             await transaction.CommitAsync(cancellationToken);
             result = CreateResult(
                 reservation,
@@ -182,11 +192,29 @@ public class GiftReservationService : IGiftReservationService
         {
             throw new GiftReservationVersionConflictException();
         }
-        catch (Exception exception) when (PostgreSqlFailureClassifier.IsUnavailable(exception))
+        catch (Exception exception)
         {
-            throw new DependencyUnavailableException(
-                PostgreSqlDependencyName,
-                exception);
+            if (exception is DependencyUnavailableException ||
+                !PostgreSqlFailureClassifier.IsUnavailable(exception))
+            {
+                throw;
+            }
+
+            if (!commitAttempted)
+            {
+                throw new DependencyUnavailableException(
+                    PostgreSqlDependencyName,
+                    exception);
+            }
+
+            result = await ResolveAmbiguousUpsertAsync(
+                request,
+                participantId,
+                reservationId,
+                attemptedQuantity,
+                isCreated,
+                exception,
+                cancellationToken);
         }
 
         return result;
@@ -483,6 +511,47 @@ public class GiftReservationService : IGiftReservationService
             return false;
 
         throw new GiftReservationVersionConflictException();
+    }
+
+    /// <summary>
+    /// Resolves whether a reservation mutation committed after its acknowledgement was lost.
+    /// </summary>
+    /// <param name="request">The attempted mutation.</param>
+    /// <param name="participantId">The resolved participant identifier.</param>
+    /// <param name="reservationId">The attempted reservation identifier.</param>
+    /// <param name="attemptedQuantity">The attempted quantity.</param>
+    /// <param name="isCreated">Whether the attempted mutation created the reservation.</param>
+    /// <param name="originalException">The transient commit exception.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The committed mutation result.</returns>
+    /// <exception cref="DependencyUnavailableException">The attempted mutation cannot be verified.</exception>
+    private async Task<GiftReservationMutationResult> ResolveAmbiguousUpsertAsync(
+        GiftReservationMutationRequest request,
+        Guid participantId,
+        Guid reservationId,
+        int attemptedQuantity,
+        bool isCreated,
+        Exception originalException,
+        CancellationToken cancellationToken)
+    {
+        var currentReservation = await GetReservationSafelyAsync(
+            request.WishlistId,
+            request.WishId,
+            participantId,
+            cancellationToken);
+
+        if (currentReservation is not null &&
+            currentReservation.Id == reservationId &&
+            currentReservation.Quantity == attemptedQuantity)
+        {
+            return CreateResult(
+                currentReservation,
+                isCreated);
+        }
+
+        throw new DependencyUnavailableException(
+            PostgreSqlDependencyName,
+            originalException);
     }
 
     private async Task<bool> ResolveAmbiguousCancellationAsync(

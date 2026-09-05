@@ -65,10 +65,12 @@ public interface IGiftReservationRepository
         CancellationToken cancellationToken);
 
     /// <summary>Gets the total quantity reserved for one gift.</summary>
+    /// <param name="wishlistId">The wishlist identifier.</param>
     /// <param name="wishId">The gift-wish identifier.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>The total reserved quantity.</returns>
     Task<int> GetTotalQuantityAsync(
+        Guid wishlistId,
         Guid wishId,
         CancellationToken cancellationToken);
 
