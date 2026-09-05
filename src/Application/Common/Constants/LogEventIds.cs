@@ -383,6 +383,12 @@ public static class LogEventIds
     /// <summary>Identifies a cancelled gift reservation.</summary>
     public const int GiftReservationCancelled = 2043;
 
+    /// <summary>Identifies the start of an anonymous wishlist report creation.</summary>
+    public const int WishlistReportCreationStarted = 2046;
+
+    /// <summary>Identifies a created anonymous wishlist report.</summary>
+    public const int WishlistReportCreated = 2047;
+
     #endregion
 
     #region Technical

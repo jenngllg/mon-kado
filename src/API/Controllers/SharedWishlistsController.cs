@@ -44,6 +44,44 @@ public class SharedWishlistsController(
     /// <summary>Identifies the bearer share-secret request header.</summary>
     public const string ShareTokenHeaderName = "X-MonKado-Share-Token";
 
+    /// <summary>Reports a wishlist through its active share link.</summary>
+    /// <param name="shareLinkId">The public share-link identifier.</param>
+    /// <param name="shareToken">The bearer secret contained in the URL fragment.</param>
+    /// <param name="request">The anonymous report details.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>No content after the report is accepted.</returns>
+    [HttpPost("{shareLinkId:guid}/reports")]
+    [ValidateAntiForgeryToken]
+    [EnableRateLimiting(AuthenticationRateLimitingExtensions.SharedWishlistReportPolicy)]
+    [NoStoreResponse(StatusCodes.Status204NoContent)]
+    [RequestSizeLimit(MaximumRequestBodySize)]
+    [Consumes("application/json")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status413PayloadTooLarge, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status415UnsupportedMediaType, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status429TooManyRequests, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status503ServiceUnavailable, "application/json")]
+    public async Task<IActionResult> ReportAsync(
+        Guid shareLinkId,
+        [FromHeader(Name = ShareTokenHeaderName)] string? shareToken,
+        ReportSharedWishlistRequest request,
+        CancellationToken cancellationToken)
+    {
+        await sender.Send(
+            new ReportSharedWishlistCommand(
+                shareLinkId,
+                shareToken,
+                request.Reason,
+                request.Details),
+            cancellationToken);
+        Response.Headers[RobotsHeaderName] = RobotsHeaderValue;
+        Response.Headers.CacheControl = NoStoreCacheControl;
+
+        return NoContent();
+    }
+
     /// <summary>Gets a wishlist through its active share link.</summary>
     /// <param name="shareLinkId">The public share-link identifier.</param>
     /// <param name="shareToken">The bearer secret contained in the URL fragment.</param>
