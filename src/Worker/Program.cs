@@ -1,5 +1,6 @@
 using JennGllg.Fr.MonKado.Back.Application.Configurations;
 using JennGllg.Fr.MonKado.Back.Domain.Configurations;
+using JennGllg.Fr.MonKado.Back.Infrastructure.Images.Configurations;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Configurations;
 using JennGllg.Fr.MonKado.Back.Worker.Configurations;
 
@@ -55,6 +56,7 @@ public static class Program
 
         builder.Services.ConfigureDomainInjection();
         builder.Services.ConfigureApplicationInjection();
+        builder.Services.ConfigureImageInfrastructureInjection(builder.Configuration);
         builder.Services.ConfigureDataProtection(
             builder.Configuration,
             builder.Environment);

@@ -154,7 +154,8 @@ public class GetSharedWishlistQueryHandler(
                 wish.Price,
                 wish.Quantity,
                 wish.ReservedQuantity,
-                currentQuantities?.GetValueOrDefault(wish.Id)))
+                currentQuantities?.GetValueOrDefault(wish.Id),
+                wish.ImageId))
             .Where(wish =>
                 !availableOnly ||
                 wish.ReservedQuantity < wish.Quantity ||

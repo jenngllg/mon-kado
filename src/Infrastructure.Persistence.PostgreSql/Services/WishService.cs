@@ -3,11 +3,13 @@ using JennGllg.Fr.MonKado.Back.Application.Common.Exceptions;
 using JennGllg.Fr.MonKado.Back.Application.Models;
 using JennGllg.Fr.MonKado.Back.Domain.Entities;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Abstractions;
+using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Entities;
 
 using Microsoft.EntityFrameworkCore;
 
 using Npgsql;
 
+using System.Collections;
 using System.Data;
 
 namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Services;
@@ -19,11 +21,15 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Service
 /// <param name="wishlistRepository">The wishlist repository.</param>
 /// <param name="unitOfWork">The unit of work.</param>
 /// <param name="wishTransactionFactory">The gift wish transaction factory.</param>
+/// <param name="giftImageDeletionOutboxRepository">The obsolete image deletion outbox repository.</param>
+/// <param name="timeProvider">The time provider.</param>
 public class WishService(
     IWishRepository wishRepository,
     IWishlistRepository wishlistRepository,
     IUnitOfWork unitOfWork,
-    IWishTransactionFactory wishTransactionFactory) : IWishService
+    IWishTransactionFactory wishTransactionFactory,
+    IGiftImageDeletionOutboxRepository giftImageDeletionOutboxRepository,
+    TimeProvider timeProvider) : IWishService
 {
     private const string WishlistForeignKeyName = "fk_wishes_wishlists_wishlist_id";
     private const string PositionWishlistForeignKeyName = "fk_wish_position_sequences_wishlists_wishlist_id";
@@ -509,6 +515,162 @@ public class WishService(
     }
 
     /// <inheritdoc />
+    public async Task<WishDetails?> UpsertImageAsync(
+        Guid ownerId,
+        Guid wishlistId,
+        Guid wishId,
+        Guid imageId,
+        byte[] contentHash,
+        uint expectedVersion,
+        CancellationToken cancellationToken)
+    {
+        Guid? originalImageId = null;
+        var saveAttempted = false;
+
+        try
+        {
+            var wish = await wishRepository.GetByIdForUpdateAsync(
+                wishlistId,
+                wishId,
+                cancellationToken);
+
+            if (wish is null)
+                return await ResolveMissingWishAsync(
+                    ownerId,
+                    wishlistId,
+                    cancellationToken);
+
+            if (wish.Version != expectedVersion)
+                throw new WishVersionConflictException();
+
+            if (wish.HasImageContentHash(contentHash))
+                return CreateDetails(wish);
+
+            originalImageId = wish.ReplaceImage(
+                imageId,
+                contentHash);
+
+            if (originalImageId is Guid replacedImageId)
+            {
+                giftImageDeletionOutboxRepository.Add(
+                    GiftImageDeletionOutboxMessage.Create(
+                        replacedImageId,
+                        timeProvider.GetUtcNow().UtcDateTime));
+            }
+
+            saveAttempted = true;
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+
+            return CreateDetails(wish);
+        }
+        catch (Exception exception) when (IsImageWriteConflict(exception))
+        {
+            return await ResolveConcurrentUpdateAsync(
+                ownerId,
+                wishlistId,
+                wishId,
+                cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            if (exception is DependencyUnavailableException ||
+                !PostgreSqlFailureClassifier.IsUnavailable(exception))
+                throw;
+
+            if (!saveAttempted)
+            {
+                throw new DependencyUnavailableException(
+                    "PostgreSQL",
+                    exception);
+            }
+
+            return await ResolveAmbiguousImageUpsertAsync(
+                ownerId,
+                wishlistId,
+                wishId,
+                imageId,
+                originalImageId,
+                exception,
+                cancellationToken);
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task<WishDetails?> DeleteImageAsync(
+        Guid ownerId,
+        Guid wishlistId,
+        Guid wishId,
+        uint expectedVersion,
+        CancellationToken cancellationToken)
+    {
+        var saveAttempted = false;
+
+        try
+        {
+            var wish = await wishRepository.GetByIdForUpdateAsync(
+                wishlistId,
+                wishId,
+                cancellationToken);
+
+            if (wish is null)
+                return await ResolveMissingWishAsync(
+                    ownerId,
+                    wishlistId,
+                    cancellationToken);
+
+            if (wish.Version != expectedVersion)
+                throw new WishVersionConflictException();
+
+            if (wish.RemoveImage() is not Guid imageId)
+                throw new GiftImageNotFoundException();
+
+            giftImageDeletionOutboxRepository.Add(
+                GiftImageDeletionOutboxMessage.Create(
+                    imageId,
+                    timeProvider.GetUtcNow().UtcDateTime));
+            saveAttempted = true;
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+
+            return CreateDetails(wish);
+        }
+        catch (Exception exception) when (IsImageWriteConflict(exception))
+        {
+            return await ResolveConcurrentUpdateAsync(
+                ownerId,
+                wishlistId,
+                wishId,
+                cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            if (!PostgreSqlFailureClassifier.IsUnavailable(exception))
+                throw;
+
+            if (saveAttempted)
+            {
+                await EnsureOwnedWishlistAsync(
+                    ownerId,
+                    wishlistId,
+                    cancellationToken);
+                var currentWish = await GetByIdSafelyAsync(
+                    wishlistId,
+                    wishId,
+                    cancellationToken);
+
+                if (currentWish is null)
+                    return null;
+
+                if (currentWish.ImageId is null)
+                    return CreateDetails(currentWish);
+            }
+
+            throw new DependencyUnavailableException(
+                "PostgreSQL",
+                exception);
+        }
+    }
+
+    /// <inheritdoc />
     public async Task<bool> DeleteAsync(
         Guid ownerId,
         Guid wishlistId,
@@ -544,13 +706,21 @@ public class WishService(
             if (wish.Version != expectedVersion)
                 throw new WishVersionConflictException();
 
+            if (wish.ImageId is Guid imageId)
+            {
+                giftImageDeletionOutboxRepository.Add(
+                    GiftImageDeletionOutboxMessage.Create(
+                        imageId,
+                        timeProvider.GetUtcNow().UtcDateTime));
+            }
+
             wishRepository.Remove(wish);
             saveAttempted = true;
             await unitOfWork.SaveChangesAsync(cancellationToken);
 
             return true;
         }
-        catch (DbUpdateConcurrencyException)
+        catch (Exception exception) when (IsImageWriteConflict(exception))
         {
             return await ResolveConcurrentDeletionAsync(
                 ownerId,
@@ -578,6 +748,61 @@ public class WishService(
                 exception,
                 cancellationToken);
         }
+    }
+
+    /// <summary>
+    /// Resolves whether an image replacement committed after its acknowledgement was lost.
+    /// </summary>
+    /// <param name="ownerId">The authenticated owner identifier.</param>
+    /// <param name="wishlistId">The parent wishlist identifier.</param>
+    /// <param name="wishId">The gift-wish identifier.</param>
+    /// <param name="attemptedImageId">The attempted image identifier.</param>
+    /// <param name="originalImageId">The optional image identifier before the attempt.</param>
+    /// <param name="originalException">The transient save exception.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The committed wish, or <see langword="null" /> when it disappeared.</returns>
+    private async Task<WishDetails?> ResolveAmbiguousImageUpsertAsync(
+        Guid ownerId,
+        Guid wishlistId,
+        Guid wishId,
+        Guid attemptedImageId,
+        Guid? originalImageId,
+        Exception originalException,
+        CancellationToken cancellationToken)
+    {
+        var currentWish = await GetByIdSafelyAsync(
+            wishlistId,
+            wishId,
+            cancellationToken);
+
+        if (currentWish?.ImageId == attemptedImageId)
+            return CreateDetails(currentWish);
+
+        if (currentWish is not null &&
+            Nullable.Equals(
+                currentWish.ImageId,
+                originalImageId))
+        {
+            throw new DependencyUnavailableException(
+                "PostgreSQL",
+                originalException);
+        }
+
+        var access = await GetAccessSafelyAsync(
+            ownerId,
+            wishlistId,
+            cancellationToken);
+
+        if (access is WishlistAccess.MemberNotFound)
+            throw new InvalidAuthenticationSessionException();
+
+        if (access is WishlistAccess.NotOwned)
+            throw new WishlistNotFoundException();
+
+        if (currentWish is null)
+            return null;
+
+        throw new WishVersionConflictException();
     }
 
     /// <summary>
@@ -795,7 +1020,7 @@ public class WishService(
     /// <returns>A detached copy of the client-controlled state.</returns>
     private static Wish CopyClientState(Wish wish)
     {
-        return new Wish(
+        var copy = new Wish(
             wish.Id,
             wish.WishlistId,
             wish.Name,
@@ -804,6 +1029,17 @@ public class WishService(
             wish.Price,
             wish.Position,
             wish.Quantity);
+
+        var contentHash = wish.ImageContentHash;
+
+        if (contentHash is null)
+            return copy;
+
+        copy.ReplaceImage(
+            wish.ImageId.GetValueOrDefault(),
+            contentHash);
+
+        return copy;
     }
 
     /// <summary>
@@ -949,7 +1185,8 @@ public class WishService(
             wish.CreatedAt,
             wish.UpdatedAt,
             wish.Version,
-            wish.Quantity);
+            wish.Quantity,
+            wish.ImageId);
     }
 
     /// <summary>
@@ -1031,15 +1268,42 @@ public class WishService(
             first.Name,
             first.Note,
             first.Url,
-            first.Price);
+            first.Price,
+            first.Quantity,
+            first.Position,
+            first.ImageId);
         var secondValues = (
             second.Id,
             second.WishlistId,
             second.Name,
             second.Note,
             second.Url,
-            second.Price);
+            second.Price,
+            second.Quantity,
+            second.Position,
+            second.ImageId);
 
-        return firstValues == secondValues;
+        if (!firstValues.Equals(secondValues))
+            return false;
+
+        return StructuralComparisons.StructuralEqualityComparer.Equals(
+            first.ImageContentHash,
+            second.ImageContentHash);
+    }
+
+    /// <summary>Identifies optimistic conflicts, including a competing cleanup enqueue.</summary>
+    /// <param name="exception">The persistence exception.</param>
+    /// <returns>Whether another request won the image mutation.</returns>
+    private static bool IsImageWriteConflict(Exception exception)
+    {
+
+        return exception is DbUpdateConcurrencyException or DbUpdateException
+        {
+            InnerException: PostgresException
+            {
+                SqlState: PostgresErrorCodes.UniqueViolation,
+                ConstraintName: "ux_gift_image_deletion_outbox_image_id"
+            }
+        };
     }
 }

@@ -18,7 +18,8 @@ public sealed class PostgreSqlApiFactory(
     string connectionString,
     TimeProvider? timeProvider = null,
     TimeSpan? emailConfirmationTokenLifespan = null,
-    Action<IServiceCollection>? configureServices = null) : WebApplicationFactory<Program>
+    Action<IServiceCollection>? configureServices = null,
+    string? giftImageStoragePath = null) : WebApplicationFactory<Program>
 {
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -38,6 +39,12 @@ public sealed class PostgreSqlApiFactory(
         builder.UseSetting(
             "Jwt:SigningKey",
             "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA=");
+
+        if (giftImageStoragePath is not null)
+            builder.UseSetting(
+                "GiftImages:StoragePath",
+                giftImageStoragePath);
+
         builder.ConfigureTestServices(services =>
         {
 

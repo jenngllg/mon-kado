@@ -15,6 +15,7 @@ namespace JennGllg.Fr.MonKado.Back.Api.Contracts.Responses;
 /// <param name="createdAt">The UTC creation date and time.</param>
 /// <param name="updatedAt">The optional UTC update date and time.</param>
 /// <param name="quantity">The total desired quantity.</param>
+/// <param name="imageUrl">The optional short-lived absolute image URL.</param>
 [ExcludeFromCodeCoverage]
 public class WishResponse(
     Guid id,
@@ -26,7 +27,8 @@ public class WishResponse(
     long position,
     DateTime createdAt,
     DateTime? updatedAt,
-    int quantity = 1)
+    int quantity = 1,
+    string? imageUrl = null)
 {
     /// <summary>
     /// Gets the wish identifier.
@@ -77,4 +79,9 @@ public class WishResponse(
     /// Gets the optional UTC update date and time.
     /// </summary>
     public DateTime? UpdatedAt { get; } = updatedAt;
+
+    /// <summary>
+    /// Gets the optional short-lived absolute image URL.
+    /// </summary>
+    public string? ImageUrl { get; } = imageUrl;
 }

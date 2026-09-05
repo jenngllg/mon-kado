@@ -7,6 +7,20 @@ namespace JennGllg.Fr.MonKado.Back.Application.Abstractions;
 /// </summary>
 public interface IWishService
 {
+    /// <summary>Removes a gift image and schedules durable file cleanup.</summary>
+    /// <param name="ownerId">The owner identifier.</param>
+    /// <param name="wishlistId">The parent wishlist identifier.</param>
+    /// <param name="wishId">The gift identifier.</param>
+    /// <param name="expectedVersion">The expected gift version.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The updated gift, or null when the gift does not exist.</returns>
+    Task<WishDetails?> DeleteImageAsync(
+        Guid ownerId,
+        Guid wishlistId,
+        Guid wishId,
+        uint expectedVersion,
+        CancellationToken cancellationToken);
+
     /// <summary>
     /// Gets all gift wishes from an owned private wishlist.
     /// </summary>
@@ -109,6 +123,30 @@ public interface IWishService
         string? url,
         decimal? price,
         int quantity,
+        uint expectedVersion,
+        CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Adds or replaces the normalized image of an owned gift wish.
+    /// </summary>
+    /// <param name="ownerId">The authenticated owner identifier.</param>
+    /// <param name="wishlistId">The parent wishlist identifier.</param>
+    /// <param name="wishId">The wish identifier.</param>
+    /// <param name="imageId">The generated immutable image identifier.</param>
+    /// <param name="contentHash">The SHA-256 hash of the normalized WebP content.</param>
+    /// <param name="expectedVersion">The version supplied by the client.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The updated wish, or <see langword="null" /> when the wish is unavailable.</returns>
+    /// <exception cref="Common.Exceptions.InvalidAuthenticationSessionException">The authenticated member no longer exists.</exception>
+    /// <exception cref="Common.Exceptions.WishlistNotFoundException">The parent wishlist is unavailable to the owner.</exception>
+    /// <exception cref="Common.Exceptions.WishVersionConflictException">The wish version is stale.</exception>
+    /// <exception cref="Common.Exceptions.DependencyUnavailableException">PostgreSQL is unavailable.</exception>
+    Task<WishDetails?> UpsertImageAsync(
+        Guid ownerId,
+        Guid wishlistId,
+        Guid wishId,
+        Guid imageId,
+        byte[] contentHash,
         uint expectedVersion,
         CancellationToken cancellationToken);
 

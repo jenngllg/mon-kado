@@ -207,6 +207,14 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Migrati
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
+                    b.Property<byte[]>("ImageContentHash")
+                        .HasColumnType("bytea")
+                        .HasColumnName("image_content_hash");
+
+                    b.Property<Guid?>("ImageId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("image_id");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(100)
@@ -256,12 +264,19 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Migrati
                     b.HasAlternateKey("WishlistId", "Id")
                         .HasName("ak_wishes_wishlist_id_id");
 
+                    b.HasIndex("ImageId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_wishes_image_id")
+                        .HasFilter("image_id IS NOT NULL");
+
                     b.HasIndex("WishlistId", "Position")
                         .IsUnique()
                         .HasDatabaseName("ux_wishes_wishlist_position");
 
                     b.ToTable("wishes", "public", t =>
                         {
+                            t.HasCheckConstraint("ck_wishes_image_fields_consistent", "(image_id IS NULL AND image_content_hash IS NULL) OR (image_id IS NOT NULL AND image_content_hash IS NOT NULL AND octet_length(image_content_hash) = 32)");
+
                             t.HasCheckConstraint("ck_wishes_name_valid", "char_length(btrim(name)) > 0 AND name !~ '[[:cntrl:]]'");
 
                             t.HasCheckConstraint("ck_wishes_position_valid", "position > 0");
@@ -653,6 +668,51 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Migrati
                             t.HasCheckConstraint("ck_authentication_sessions_refresh_token_hash_length", "octet_length(refresh_token_hash) = 32");
 
                             t.HasCheckConstraint("ck_authentication_sessions_timestamps_consistent", "renewed_at >= created_at AND expires_at > created_at AND expires_at >= renewed_at AND (revoked_at IS NULL OR revoked_at >= created_at)");
+                        });
+                });
+
+            modelBuilder.Entity("JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Entities.GiftImageDeletionOutboxMessage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<int>("AttemptCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("attempt_count");
+
+                    b.Property<DateTime>("AvailableAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("available_at");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("ImageId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("image_id");
+
+                    b.Property<DateTime?>("LockedUntil")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("locked_until");
+
+                    b.HasKey("Id")
+                        .HasName("pk_gift_image_deletion_outbox");
+
+                    b.HasIndex("ImageId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_gift_image_deletion_outbox_image_id");
+
+                    b.HasIndex("AvailableAt", "CreatedAt")
+                        .HasDatabaseName("ix_gift_image_deletion_outbox_available");
+
+                    b.ToTable("gift_image_deletion_outbox", "public", t =>
+                        {
+                            t.HasCheckConstraint("ck_gift_image_deletion_outbox_attempt_count_non_negative", "attempt_count >= 0");
+
+                            t.HasCheckConstraint("ck_gift_image_deletion_outbox_timestamps_consistent", "available_at >= created_at");
                         });
                 });
 

@@ -103,6 +103,7 @@ public static class InfrastructureInjectionConfiguration
         services.AddScoped<IMemberRepository, MemberRepository>();
         services.AddScoped<IAuthenticationEmailOutboxRepository, AuthenticationEmailOutboxRepository>();
         services.AddScoped<IAuthenticationSessionRepository, AuthenticationSessionRepository>();
+        services.AddScoped<IGiftImageDeletionOutboxRepository, GiftImageDeletionOutboxRepository>();
         services.AddScoped<IGoogleAccountRepository, GoogleAccountRepository>();
         services.AddScoped<IMemberEmailChangeRequestRepository, MemberEmailChangeRequestRepository>();
         services.AddScoped<IWishlistRepository, WishlistRepository>();
@@ -133,6 +134,8 @@ public static class InfrastructureInjectionConfiguration
         services.AddScoped<IProcessedAuthenticationEmailCleanup, ProcessedAuthenticationEmailCleanup>();
         services.AddScoped<IWishlistService, WishlistService>();
         services.AddScoped<IWishService, WishService>();
+        services.AddScoped<IWishImageAccessService, WishImageAccessService>();
+        services.AddScoped<IGiftImageCleanupService, GiftImageCleanupService>();
         services.AddScoped<IWishlistShareService, WishlistShareService>();
         services.AddSingleton<IWishlistShareTokenService, WishlistShareTokenService>();
         services.AddSingleton<IGuestSessionTokenService, GuestSessionTokenService>();

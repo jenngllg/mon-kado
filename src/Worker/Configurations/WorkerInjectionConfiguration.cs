@@ -24,6 +24,7 @@ public static class WorkerInjectionConfiguration
         IHostEnvironment environment)
     {
         services.ConfigureAuthenticationCleanup(configuration);
+        services.ConfigureGiftImageCleanup(configuration);
         services.ConfigureAuthenticationEmailDelivery(
             configuration,
             environment);
@@ -32,6 +33,7 @@ public static class WorkerInjectionConfiguration
         services.AddHostedService<ExpiredMemberEmailChangeRequestCleanupWorker>();
         services.AddHostedService<ProcessedAuthenticationEmailCleanupWorker>();
         services.AddHostedService<ExpiredGuestSessionCleanupWorker>();
+        services.AddHostedService<GiftImageCleanupWorker>();
 
         return services;
     }
