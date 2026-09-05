@@ -317,6 +317,73 @@ public class RequestBodyLimitExtensionsTests
         Assert.True(nextCalled);
     }
 
+    [Theory]
+    [InlineData("/api/v1/shared-wishlists/0198eaa7-1d33-7769-a9f8-9df63504b6f1/reports")]
+    [InlineData("/API/V1/SHARED-WISHLISTS/0198eaa7-1d33-7769-a9f8-9df63504b6f1/REPORTS/")]
+    public async Task UseRequestBodyLimits_WhenPostTargetsSharedWishlistReports_ConfiguresMaximumSize(
+        string requestPath)
+    {
+        // Arrange
+        var featureMock = new Mock<IHttpMaxRequestBodySizeFeature>(MockBehavior.Strict);
+        featureMock
+            .SetupGet(feature => feature.IsReadOnly)
+            .Returns(false);
+        featureMock
+            .SetupSet(feature => feature.MaxRequestBodySize = MaximumRequestBodySize);
+        var context = CreateContext();
+        context.Request.Path = requestPath;
+        context.Request.ContentLength = 0;
+        context.Features.Set(featureMock.Object);
+        var nextCalled = false;
+        var application = new ApplicationBuilder(context.RequestServices);
+        application.UseRequestBodyLimits();
+        application.Run(_ =>
+        {
+            nextCalled = true;
+
+            return Task.CompletedTask;
+        });
+        var pipeline = application.Build();
+
+        // Act
+        await pipeline(context);
+
+        // Assert
+        Assert.True(nextCalled);
+        featureMock.VerifyGet(
+            feature => feature.IsReadOnly,
+            Times.Once);
+        featureMock.VerifySet(
+            feature => feature.MaxRequestBodySize = MaximumRequestBodySize,
+            Times.Once);
+        featureMock.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task UseRequestBodyLimits_WhenSharedWishlistPathIsNotReport_DoesNotConfigureMaximumSize()
+    {
+        // Arrange
+        var context = CreateContext();
+        context.Request.Path = "/api/v1/shared-wishlists/0198eaa7-1d33-7769-a9f8-9df63504b6f1/details";
+        context.Request.ContentLength = 0;
+        var nextCalled = false;
+        var application = new ApplicationBuilder(context.RequestServices);
+        application.UseRequestBodyLimits();
+        application.Run(_ =>
+        {
+            nextCalled = true;
+
+            return Task.CompletedTask;
+        });
+        var pipeline = application.Build();
+
+        // Act
+        await pipeline(context);
+
+        // Assert
+        Assert.True(nextCalled);
+    }
+
     private static DefaultHttpContext CreateContext()
     {
         var services = new ServiceCollection();

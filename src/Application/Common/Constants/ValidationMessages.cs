@@ -86,4 +86,14 @@ public static class ValidationMessages
     /// Identifies an invalid gift quantity message.
     /// </summary>
     public const string InvalidGiftQuantity = "The gift quantity must be between 1 and 100.";
+
+    /// <summary>
+    /// Identifies an invalid wishlist report reason.
+    /// </summary>
+    public const string InvalidWishlistReportReason = "The wishlist report reason is invalid.";
+
+    /// <summary>
+    /// Identifies invalid wishlist report details.
+    /// </summary>
+    public const string InvalidWishlistReportDetails = "The wishlist report details must not exceed 1000 characters or contain unsupported control characters.";
 }

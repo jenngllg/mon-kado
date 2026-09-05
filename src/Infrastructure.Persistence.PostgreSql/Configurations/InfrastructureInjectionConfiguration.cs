@@ -111,9 +111,11 @@ public static class InfrastructureInjectionConfiguration
         services.AddScoped<IGuestSessionRepository, GuestSessionRepository>();
         services.AddScoped<IWishlistParticipantRepository, WishlistParticipantRepository>();
         services.AddScoped<IGiftReservationRepository, GiftReservationRepository>();
+        services.AddScoped<IWishlistReportRepository, WishlistReportRepository>();
         services.AddScoped<IWishTransactionFactory, WishTransactionFactory>();
         services.AddScoped<IWishlistParticipantTransactionFactory, WishlistParticipantTransactionFactory>();
         services.AddScoped<IGiftReservationTransactionFactory, GiftReservationTransactionFactory>();
+        services.AddScoped<IWishlistReportTransactionFactory, WishlistReportTransactionFactory>();
         services.AddScoped<IAccountRegistrationService, AccountRegistrationService>();
         services.AddScoped<IEmailConfirmationService, EmailConfirmationService>();
         services.AddScoped<IExpiredAccountCleanup, ExpiredAccountCleanup>();
@@ -136,6 +138,7 @@ public static class InfrastructureInjectionConfiguration
         services.AddSingleton<IGuestSessionTokenService, GuestSessionTokenService>();
         services.AddScoped<IWishlistParticipantService, WishlistParticipantService>();
         services.AddScoped<IGiftReservationService, GiftReservationService>();
+        services.AddScoped<IWishlistReportService, WishlistReportService>();
         services.AddScoped<IExpiredGuestSessionCleanup, ExpiredGuestSessionCleanup>();
         services.AddScoped<
             IExpiredMemberEmailChangeRequestCleanup,

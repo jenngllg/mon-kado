@@ -131,6 +131,7 @@ public static class OpenApiExtensions
                 return Task.CompletedTask;
             });
             options.AddOperationTransformer<CommonErrorResponsesOperationTransformer>();
+            options.AddSchemaTransformer<JsonStringEnumSchemaTransformer>();
         });
 
         return services;

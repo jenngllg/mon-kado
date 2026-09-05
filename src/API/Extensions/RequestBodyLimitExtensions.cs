@@ -33,6 +33,7 @@ public static class RequestBodyLimitExtensions
     private static readonly PathString _memberPasswordPath =
         new("/api/v1/members/current/password");
     private static readonly PathString _wishlistsPath = new("/api/v1/wishlists");
+    private static readonly PathString _sharedWishlistsPath = new("/api/v1/shared-wishlists");
 
     /// <summary>
     /// Enforces the request body limit for bounded JSON endpoints.
@@ -190,13 +191,30 @@ public static class RequestBodyLimitExtensions
                 MatchesPath(request.Path, _googleCallbackPath) ||
                 MatchesPath(request.Path, _loginPath) ||
                 MatchesPath(request.Path, _wishlistsPath) ||
-                MatchesWishCollectionPath(request.Path))) ||
+                MatchesWishCollectionPath(request.Path) ||
+                MatchesSharedWishlistReportPath(request.Path))) ||
             (HttpMethods.IsPut(request.Method) &&
                 (MatchesPath(request.Path, _memberProfilePath) ||
                     MatchesPath(request.Path, _memberEmailPath) ||
                     MatchesPath(request.Path, _memberPasswordPath) ||
                     MatchesWishlistResourcePath(request.Path) ||
                     MatchesWishResourcePath(request.Path)));
+    }
+
+    /// <summary>
+    /// Matches an anonymous shared-wishlist report endpoint.
+    /// </summary>
+    /// <param name="requestPath">The request path.</param>
+    /// <returns><see langword="true" /> when the path identifies a report collection.</returns>
+    private static bool MatchesSharedWishlistReportPath(PathString requestPath)
+    {
+
+        return requestPath.StartsWithSegments(_sharedWishlistsPath) &&
+            requestPath.ToString()
+                .TrimEnd('/')
+                .EndsWith(
+                    "/reports",
+                    StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>

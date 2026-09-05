@@ -75,6 +75,11 @@ public class MonKadoDbContext(DbContextOptions<MonKadoDbContext> options)
     /// </summary>
     public DbSet<GiftReservation> GiftReservations => Set<GiftReservation>();
 
+    /// <summary>
+    /// Gets anonymous wishlist reports.
+    /// </summary>
+    public DbSet<WishlistReport> WishlistReports => Set<WishlistReport>();
+
     /// <inheritdoc />
     protected override void OnModelCreating(ModelBuilder builder)
     {

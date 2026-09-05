@@ -9,6 +9,32 @@ namespace JennGllg.Fr.MonKado.Back.Application.Logging;
 /// </summary>
 public static partial class ApplicationLogMessages
 {
+    /// <summary>Logs the start of an anonymous wishlist report creation.</summary>
+    /// <param name="logger">The logger.</param>
+    /// <param name="shareLinkId">The share-link identifier.</param>
+    /// <param name="reportId">The report identifier.</param>
+    [LoggerMessage(
+        EventId = LogEventIds.WishlistReportCreationStarted,
+        Level = LogLevel.Debug,
+        Message = "Creating report {ReportId} through share link {ShareLinkId}.")]
+    public static partial void WishlistReportCreationStarted(
+        ILogger logger,
+        Guid shareLinkId,
+        Guid reportId);
+
+    /// <summary>Logs a created anonymous wishlist report.</summary>
+    /// <param name="logger">The logger.</param>
+    /// <param name="wishlistId">The wishlist identifier.</param>
+    /// <param name="reportId">The report identifier.</param>
+    [LoggerMessage(
+        EventId = LogEventIds.WishlistReportCreated,
+        Level = LogLevel.Information,
+        Message = "Report {ReportId} created for wishlist {WishlistId}.")]
+    public static partial void WishlistReportCreated(
+        ILogger logger,
+        Guid wishlistId,
+        Guid reportId);
+
     /// <summary>Logs the start of a shared-wishlist participant join.</summary>
     /// <param name="logger">The logger.</param>
     /// <param name="shareLinkId">The share-link identifier.</param>
