@@ -8,6 +8,33 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Migrati
     /// <inheritdoc />
     public partial class AddGiftReservationHistory : Migration
     {
+        private static readonly string[] _memberActivityColumns =
+        [
+            "member_id",
+            "last_activity_at",
+            "id"
+        ];
+        private static readonly bool[] _memberActivityDescending =
+        [
+            false,
+            true,
+            true
+        ];
+        private static readonly string[] _memberStatusActivityColumns =
+        [
+            "member_id",
+            "status",
+            "last_activity_at",
+            "id"
+        ];
+        private static readonly bool[] _memberStatusActivityDescending =
+        [
+            false,
+            false,
+            true,
+            true
+        ];
+
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
@@ -49,15 +76,15 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Migrati
                 name: "ix_gift_reservation_histories_member_activity",
                 schema: "public",
                 table: "gift_reservation_histories",
-                columns: new[] { "member_id", "last_activity_at", "id" },
-                descending: new[] { false, true, true });
+                columns: _memberActivityColumns,
+                descending: _memberActivityDescending);
 
             migrationBuilder.CreateIndex(
                 name: "ix_gift_reservation_histories_member_status_activity",
                 schema: "public",
                 table: "gift_reservation_histories",
-                columns: new[] { "member_id", "status", "last_activity_at", "id" },
-                descending: new[] { false, false, true, true });
+                columns: _memberStatusActivityColumns,
+                descending: _memberStatusActivityDescending);
 
             migrationBuilder.Sql(
                 """
