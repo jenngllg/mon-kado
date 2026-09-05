@@ -274,6 +274,48 @@ public class WishlistReportTests
     }
 
     [Fact]
+    public async Task ReportAsync_WhenLinkIdentifiersVary_IsLimitedByRemoteAddress()
+    {
+        // Arrange
+        await using var factory = new RegistrationApiFactory(
+            remoteIpAddress: IPAddress.Parse("192.0.2.90"));
+        using var client = factory.CreateClient();
+        var csrfToken = await GetCsrfTokenAsync(client);
+        var permitLimit = AuthenticationRateLimitingExtensions.SharedWishlistPermitLimit;
+        HttpResponseMessage? response = null;
+
+        try
+        {
+            // Act
+            for (var requestNumber = 0;
+                requestNumber <= permitLimit;
+                requestNumber++)
+            {
+                response?.Dispose();
+                response = await SendReportAsync(
+                    client,
+                    Guid.CreateVersion7(),
+                    "spamOrScam",
+                    null,
+                    csrfToken);
+            }
+
+            // Assert
+            Assert.NotNull(response);
+            Assert.Equal(
+                HttpStatusCode.TooManyRequests,
+                response.StatusCode);
+            Assert.Equal(
+                permitLimit,
+                factory.WishlistReportService.Creations.Count);
+        }
+        finally
+        {
+            response?.Dispose();
+        }
+    }
+
+    [Fact]
     public async Task ReportAsync_WhenMediaTypeIsUnsupported_ReturnsUnsupportedMediaType()
     {
         // Arrange
@@ -327,6 +369,9 @@ public class WishlistReportTests
         Assert.Equal(
             HttpStatusCode.RequestEntityTooLarge,
             response.StatusCode);
+        Assert.Equal(
+            "noindex, nofollow, noarchive",
+            response.Headers.GetValues("X-Robots-Tag").Single());
         Assert.Empty(factory.WishlistReportService.Creations);
     }
 

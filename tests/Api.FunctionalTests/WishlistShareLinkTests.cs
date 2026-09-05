@@ -305,6 +305,48 @@ public class WishlistShareLinkTests
         Assert.Empty(factory.WishlistShareService.Deletions);
     }
 
+    [Theory]
+    [InlineData("PUT")]
+    [InlineData("DELETE")]
+    public async Task MutateAsync_WhenIfMatchIsMalformed_ReturnsValidationError(string method)
+    {
+        // Arrange
+        await using var factory = new RegistrationApiFactory();
+        var ownerId = Guid.CreateVersion7();
+        var wishlistId = Guid.CreateVersion7();
+        using var client = CreateAuthorizedClient(
+            factory,
+            ownerId);
+        using var request = new HttpRequestMessage(
+            new HttpMethod(method),
+            $"/api/v1/wishlists/{wishlistId}/share-link");
+        request.Headers.TryAddWithoutValidation(
+            HeaderNames.IfMatch,
+            "invalid");
+
+        // Act
+        using var response = await client.SendAsync(
+            request,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.BadRequest,
+            response.StatusCode);
+        var error = await response.Content.ReadFromJsonAsync<ErrorResponse>(
+            TestContext.Current.CancellationToken);
+        Assert.NotNull(error);
+        Assert.Equal(
+            ErrorCodes.RequestValidationError,
+            error.ErrorCode);
+        var validationError = Assert.Single(error.ValidationErrors ?? []);
+        Assert.Equal(
+            "ifMatch",
+            validationError.PropertyName);
+        Assert.Empty(factory.WishlistShareService.Rotations);
+        Assert.Empty(factory.WishlistShareService.Deletions);
+    }
+
     [Fact]
     public async Task GetAsync_WhenShareTokenIsValid_ReturnsOnlyPublicContent()
     {
@@ -721,6 +763,9 @@ public class WishlistShareLinkTests
         Assert.Equal(
             HttpStatusCode.NotFound,
             response.StatusCode);
+        Assert.Equal(
+            "noindex, nofollow, noarchive",
+            response.Headers.GetValues("X-Robots-Tag").Single());
         using var document = await response.Content.ReadFromJsonAsync<JsonDocument>(
             TestContext.Current.CancellationToken)
             ?? throw new InvalidOperationException("The error response is empty.");

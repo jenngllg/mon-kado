@@ -50,6 +50,8 @@ public class WishlistSharingOptionsValidatorTests
     [Theory]
     [InlineData("https://app.example.test/path")]
     [InlineData("http://app.example.test")]
+    [InlineData(" https://app.example.test")]
+    [InlineData("https://app.example.test ")]
     public void Validate_WhenOriginViolatesEnvironmentPolicy_ReturnsFailure(string origin)
     {
         // Arrange

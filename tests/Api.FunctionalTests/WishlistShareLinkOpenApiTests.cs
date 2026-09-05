@@ -89,6 +89,7 @@ public class WishlistShareLinkOpenApiTests
             "200",
             "401",
             "403",
+            "400",
             "404",
             "412",
             "428",
@@ -110,6 +111,7 @@ public class WishlistShareLinkOpenApiTests
             "204",
             "401",
             "403",
+            "400",
             "404",
             "412",
             "428",
@@ -360,6 +362,30 @@ public class WishlistShareLinkOpenApiTests
         Assert.False(cancellationSuccess.TryGetProperty(
             "content",
             out _));
+        AssertNoIndexResponses(
+            getSharedWishlist,
+            getSharedWish,
+            joinSharedWishlist,
+            getCurrentParticipant,
+            getCurrentReservation,
+            upsertCurrentReservation,
+            cancelCurrentReservation);
+    }
+
+    private static void AssertNoIndexResponses(params JsonElement[] operations)
+    {
+        foreach (var operation in operations)
+        {
+            foreach (var response in operation.GetProperty("responses").EnumerateObject())
+            {
+                var header = response.Value
+                    .GetProperty("headers")
+                    .GetProperty("X-Robots-Tag");
+                Assert.Equal(
+                    "Prevents indexing and archiving of shared-wishlist responses.",
+                    header.GetProperty("description").GetString());
+            }
+        }
     }
 
     private static void AssertBearerWithoutAntiforgery(JsonElement operation)
