@@ -109,6 +109,9 @@ public static class OpenApiExtensions
                 if (ReturnsRedirect(metadata))
                     AddRedirectResponseHeaders(operation);
 
+                if (metadata.OfType<GiftImageUploadAttribute>().Any())
+                    AddGiftImageUploadRequestBody(operation);
+
                 if (CreatesResource(metadata))
                     AddCreatedResourceResponseHeaders(operation);
 
@@ -188,6 +191,39 @@ public static class OpenApiExtensions
         return metadata.OfType<ProducesResponseTypeAttribute>().Any(attribute =>
             attribute.StatusCode == StatusCodes.Status200OK &&
             attribute.Type == typeof(AccessTokenResponse));
+    }
+
+    private static void AddGiftImageUploadRequestBody(OpenApiOperation operation)
+    {
+        operation.RequestBody = new OpenApiRequestBody
+        {
+            Required = true,
+            Content = new Dictionary<string, OpenApiMediaType>
+            {
+                ["multipart/form-data"] = new()
+                {
+                    Schema = new OpenApiSchema
+                    {
+                        Type = JsonSchemaType.Object,
+                        Required = new HashSet<string>
+                        {
+                            "image"
+                        },
+                        Properties = new Dictionary<string, IOpenApiSchema>
+                        {
+                            ["image"] = new OpenApiSchema
+                            {
+                                Type = JsonSchemaType.String,
+                                Format = "binary",
+                                Description =
+                                    "A JPEG, PNG, or non-animated WebP image of at most 10 MiB. " +
+                                    "The declared filename and media type are not trusted."
+                            }
+                        }
+                    }
+                }
+            }
+        };
     }
 
     private static void AddAccessTokenResponseHeaders(OpenApiOperation operation)

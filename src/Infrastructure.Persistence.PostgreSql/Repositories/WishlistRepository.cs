@@ -14,6 +14,22 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Reposit
 public class WishlistRepository(MonKadoDbContext context) : IWishlistRepository
 {
     /// <inheritdoc />
+    public Task<Wishlist?> GetByIdForDeletionAsync(
+        Guid ownerId,
+        Guid wishlistId,
+        CancellationToken cancellationToken)
+    {
+        return context.Wishlists
+            .FromSqlInterpolated($"""
+                SELECT wishlist.*, wishlist.xmin
+                FROM public.wishlists AS wishlist
+                WHERE wishlist.id = {wishlistId} AND wishlist.owner_id = {ownerId}
+                FOR UPDATE
+                """)
+            .SingleOrDefaultAsync(cancellationToken);
+    }
+
+    /// <inheritdoc />
     public void Add(Wishlist wishlist)
     {
         context.Wishlists.Add(wishlist);

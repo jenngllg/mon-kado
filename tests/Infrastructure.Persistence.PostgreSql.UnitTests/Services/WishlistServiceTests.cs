@@ -4,6 +4,7 @@ using JennGllg.Fr.MonKado.Back.Application.Models;
 using JennGllg.Fr.MonKado.Back.Domain.Entities;
 using JennGllg.Fr.MonKado.Back.Domain.Enums;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Abstractions;
+using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Entities;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Services;
 
 using Microsoft.EntityFrameworkCore;
@@ -12,21 +13,149 @@ using Moq;
 
 using Npgsql;
 
+using System.Data;
+
 namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.UnitTests.Services;
 
 public class WishlistServiceTests
 {
+
+    [Fact]
+    public async Task DeleteAsync_WhenWishlistContainsImages_QueuesEachImageBeforeCommitting()
+    {
+        // Arrange
+        var ownerId = Guid.CreateVersion7();
+        var wishlistId = Guid.CreateVersion7();
+        var wishlist = CreateWishlist(wishlistId);
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var first = new Wish(
+            Guid.CreateVersion7(),
+            wishlistId,
+            "First gift",
+            null,
+            null,
+            null,
+            1);
+        var second = new Wish(
+            Guid.CreateVersion7(),
+            wishlistId,
+            "Second gift",
+            null,
+            null,
+            null,
+            2);
+        var withoutImage = new Wish(
+            Guid.CreateVersion7(),
+            wishlistId,
+            "No image",
+            null,
+            null,
+            null,
+            3);
+        first.ReplaceImage(
+            Guid.CreateVersion7(),
+            new byte[Wish.ImageContentHashLength]);
+        second.ReplaceImage(
+            Guid.CreateVersion7(),
+            new byte[Wish.ImageContentHashLength]);
+        _wishlistRepositoryMock
+            .Setup(repository => repository.GetByIdForDeletionAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken))
+            .ReturnsAsync(wishlist);
+        _wishRepositoryMock
+            .Setup(repository => repository.GetByWishlistIdForUpdateAsync(
+                wishlistId,
+                cancellationToken))
+            .ReturnsAsync([
+                first,
+                second,
+                withoutImage
+            ]);
+        _imageDeletionRepositoryMock
+            .Setup(repository => repository.Add(It.IsAny<GiftImageDeletionOutboxMessage>()));
+        _wishlistRepositoryMock
+            .Setup(repository => repository.Remove(wishlist));
+        _unitOfWorkMock
+            .Setup(unitOfWork => unitOfWork.SaveChangesAsync(cancellationToken))
+            .ReturnsAsync(1);
+
+        // Act
+        var result = await _wishlistService.DeleteAsync(
+            ownerId,
+            wishlistId,
+            0,
+            cancellationToken);
+
+        // Assert
+        Assert.True(result);
+        _imageDeletionRepositoryMock.Verify(
+            repository => repository.Add(It.Is<GiftImageDeletionOutboxMessage>(
+                message => message.ImageId == first.ImageId)),
+            Times.Once);
+        _imageDeletionRepositoryMock.Verify(
+            repository => repository.Add(It.Is<GiftImageDeletionOutboxMessage>(
+                message => message.ImageId == second.ImageId)),
+            Times.Once);
+        _transactionFactoryMock.Verify(
+            factory => factory.BeginAsync(
+                IsolationLevel.ReadCommitted,
+                cancellationToken),
+            Times.Once);
+        _transactionMock.Verify(
+            transaction => transaction.CommitAsync(cancellationToken),
+            Times.Once);
+        _transactionMock.Verify(
+            transaction => transaction.DisposeAsync(),
+            Times.Once);
+        _wishRepositoryMock.Verify(
+            repository => repository.GetByWishlistIdForUpdateAsync(
+                wishlistId,
+                cancellationToken),
+            Times.Once);
+        VerifyDeletion(
+            ownerId,
+            wishlistId,
+            wishlist,
+            cancellationToken);
+    }
+
     private const string OwnerForeignKeyName = "fk_wishlists_users_owner_id";
     private const string OwnerNormalizedNameIndexName = "ux_wishlists_owner_normalized_name";
 
     private readonly Mock<IUnitOfWork> _unitOfWorkMock;
     private readonly Mock<IWishlistRepository> _wishlistRepositoryMock;
     private readonly WishlistService _wishlistService;
+    private readonly Mock<IWishRepository> _wishRepositoryMock;
+    private readonly Mock<IWishTransactionFactory> _transactionFactoryMock;
+    private readonly Mock<IWishTransaction> _transactionMock;
+    private readonly Mock<IGiftImageDeletionOutboxRepository> _imageDeletionRepositoryMock;
 
     public WishlistServiceTests()
     {
         _wishlistRepositoryMock = new Mock<IWishlistRepository>(MockBehavior.Strict);
         _unitOfWorkMock = new Mock<IUnitOfWork>(MockBehavior.Strict);
+        _wishRepositoryMock = new Mock<IWishRepository>(MockBehavior.Strict);
+        _transactionFactoryMock = new Mock<IWishTransactionFactory>(MockBehavior.Strict);
+        _transactionMock = new Mock<IWishTransaction>(MockBehavior.Strict);
+        _imageDeletionRepositoryMock = new Mock<IGiftImageDeletionOutboxRepository>(MockBehavior.Strict);
+        _transactionFactoryMock
+            .Setup(factory => factory.BeginAsync(
+                IsolationLevel.ReadCommitted,
+                TestContext.Current.CancellationToken))
+            .ReturnsAsync(_transactionMock.Object);
+        _transactionMock
+            .Setup(transaction => transaction.CommitAsync(TestContext.Current.CancellationToken))
+            .Returns(Task.CompletedTask);
+        _transactionMock
+            .Setup(transaction => transaction.DisposeAsync())
+            .Returns(ValueTask.CompletedTask);
+        _wishRepositoryMock
+            .Setup(repository => repository.GetByWishlistIdForUpdateAsync(
+                It.IsAny<Guid>(),
+                TestContext.Current.CancellationToken))
+            .ReturnsAsync([]);
         _wishlistService = new WishlistService(
             _wishlistRepositoryMock.Object,
             _unitOfWorkMock.Object,
@@ -37,7 +166,10 @@ public class WishlistServiceTests
                 10,
                 0,
                 0,
-                TimeSpan.Zero)));
+                TimeSpan.Zero)),
+            _wishRepositoryMock.Object,
+            _transactionFactoryMock.Object,
+            _imageDeletionRepositoryMock.Object);
     }
 
     [Fact]
@@ -1347,7 +1479,7 @@ public class WishlistServiceTests
         var wishlist = CreateWishlist(wishlistId);
         var cancellationToken = TestContext.Current.CancellationToken;
         _wishlistRepositoryMock
-            .Setup(repository => repository.GetByIdForUpdateAsync(
+            .Setup(repository => repository.GetByIdForDeletionAsync(
                 ownerId,
                 wishlistId,
                 cancellationToken))
@@ -1461,7 +1593,7 @@ public class WishlistServiceTests
         var wishlistId = Guid.CreateVersion7();
         var cancellationToken = TestContext.Current.CancellationToken;
         _wishlistRepositoryMock
-            .Setup(repository => repository.GetByIdForUpdateAsync(
+            .Setup(repository => repository.GetByIdForDeletionAsync(
                 ownerId,
                 wishlistId,
                 cancellationToken))
@@ -1483,7 +1615,7 @@ public class WishlistServiceTests
         // Assert
         Assert.False(result);
         _wishlistRepositoryMock.Verify(
-            repository => repository.GetByIdForUpdateAsync(
+            repository => repository.GetByIdForDeletionAsync(
                 ownerId,
                 wishlistId,
                 cancellationToken),
@@ -1505,7 +1637,7 @@ public class WishlistServiceTests
         var wishlistId = Guid.CreateVersion7();
         var cancellationToken = TestContext.Current.CancellationToken;
         _wishlistRepositoryMock
-            .Setup(repository => repository.GetByIdForUpdateAsync(
+            .Setup(repository => repository.GetByIdForDeletionAsync(
                 ownerId,
                 wishlistId,
                 cancellationToken))
@@ -1527,7 +1659,7 @@ public class WishlistServiceTests
         // Assert
         await Assert.ThrowsAsync<InvalidAuthenticationSessionException>(action);
         _wishlistRepositoryMock.Verify(
-            repository => repository.GetByIdForUpdateAsync(
+            repository => repository.GetByIdForDeletionAsync(
                 ownerId,
                 wishlistId,
                 cancellationToken),
@@ -1549,7 +1681,7 @@ public class WishlistServiceTests
         var wishlistId = Guid.CreateVersion7();
         var cancellationToken = TestContext.Current.CancellationToken;
         _wishlistRepositoryMock
-            .Setup(repository => repository.GetByIdForUpdateAsync(
+            .Setup(repository => repository.GetByIdForDeletionAsync(
                 ownerId,
                 wishlistId,
                 cancellationToken))
@@ -1565,7 +1697,7 @@ public class WishlistServiceTests
         // Assert
         await Assert.ThrowsAsync<WishlistVersionConflictException>(action);
         _wishlistRepositoryMock.Verify(
-            repository => repository.GetByIdForUpdateAsync(
+            repository => repository.GetByIdForDeletionAsync(
                 ownerId,
                 wishlistId,
                 cancellationToken),
@@ -1696,7 +1828,7 @@ public class WishlistServiceTests
         var wishlistId = Guid.CreateVersion7();
         var cancellationToken = TestContext.Current.CancellationToken;
         _wishlistRepositoryMock
-            .Setup(repository => repository.GetByIdForUpdateAsync(
+            .Setup(repository => repository.GetByIdForDeletionAsync(
                 ownerId,
                 wishlistId,
                 cancellationToken))
@@ -1712,7 +1844,7 @@ public class WishlistServiceTests
         // Assert
         await Assert.ThrowsAsync<DependencyUnavailableException>(action);
         _wishlistRepositoryMock.Verify(
-            repository => repository.GetByIdForUpdateAsync(
+            repository => repository.GetByIdForDeletionAsync(
                 ownerId,
                 wishlistId,
                 cancellationToken),
@@ -1730,7 +1862,7 @@ public class WishlistServiceTests
         var expected = new InvalidOperationException();
         var cancellationToken = TestContext.Current.CancellationToken;
         _wishlistRepositoryMock
-            .Setup(repository => repository.GetByIdForUpdateAsync(
+            .Setup(repository => repository.GetByIdForDeletionAsync(
                 ownerId,
                 wishlistId,
                 cancellationToken))
@@ -2042,7 +2174,7 @@ public class WishlistServiceTests
         CancellationToken cancellationToken)
     {
         _wishlistRepositoryMock
-            .Setup(repository => repository.GetByIdForUpdateAsync(
+            .Setup(repository => repository.GetByIdForDeletionAsync(
                 ownerId,
                 wishlistId,
                 cancellationToken))
@@ -2051,6 +2183,9 @@ public class WishlistServiceTests
             .Setup(repository => repository.Remove(wishlist));
         _unitOfWorkMock
             .Setup(unitOfWork => unitOfWork.SaveChangesAsync(cancellationToken))
+            .ReturnsAsync(1);
+        _transactionMock
+            .Setup(transaction => transaction.CommitAsync(cancellationToken))
             .ThrowsAsync(new TimeoutException());
     }
 
@@ -2084,7 +2219,7 @@ public class WishlistServiceTests
         CancellationToken cancellationToken)
     {
         _wishlistRepositoryMock
-            .Setup(repository => repository.GetByIdForUpdateAsync(
+            .Setup(repository => repository.GetByIdForDeletionAsync(
                 ownerId,
                 wishlistId,
                 cancellationToken))
@@ -2103,7 +2238,7 @@ public class WishlistServiceTests
         CancellationToken cancellationToken)
     {
         _wishlistRepositoryMock.Verify(
-            repository => repository.GetByIdForUpdateAsync(
+            repository => repository.GetByIdForDeletionAsync(
                 ownerId,
                 wishlistId,
                 cancellationToken),
@@ -2138,6 +2273,26 @@ public class WishlistServiceTests
 
     private void VerifyNoOtherCalls()
     {
+        _transactionFactoryMock.Verify(
+            factory => factory.BeginAsync(
+                IsolationLevel.ReadCommitted,
+                TestContext.Current.CancellationToken),
+            Times.AtMostOnce);
+        _transactionMock.Verify(
+            transaction => transaction.CommitAsync(TestContext.Current.CancellationToken),
+            Times.AtMostOnce);
+        _transactionMock.Verify(
+            transaction => transaction.DisposeAsync(),
+            Times.AtMostOnce);
+        _wishRepositoryMock.Verify(
+            repository => repository.GetByWishlistIdForUpdateAsync(
+                It.IsAny<Guid>(),
+                TestContext.Current.CancellationToken),
+            Times.AtMostOnce);
+        _transactionFactoryMock.VerifyNoOtherCalls();
+        _transactionMock.VerifyNoOtherCalls();
+        _wishRepositoryMock.VerifyNoOtherCalls();
+        _imageDeletionRepositoryMock.VerifyNoOtherCalls();
         _wishlistRepositoryMock.VerifyNoOtherCalls();
         _unitOfWorkMock.VerifyNoOtherCalls();
     }

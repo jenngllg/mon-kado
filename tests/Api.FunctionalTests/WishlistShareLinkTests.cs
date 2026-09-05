@@ -404,7 +404,8 @@ public class WishlistShareLinkTests
                 "quantity",
                 "reservedQuantity",
                 "availableQuantity",
-                "currentParticipantReservedQuantity"
+                "currentParticipantReservedQuantity",
+                "imageUrl"
             ],
             wish
                 .EnumerateObject()
@@ -424,6 +425,9 @@ public class WishlistShareLinkTests
         Assert.Equal(
             JsonValueKind.Null,
             wish.GetProperty("currentParticipantReservedQuantity").ValueKind);
+        Assert.Equal(
+            JsonValueKind.Null,
+            wish.GetProperty("imageUrl").ValueKind);
         Assert.Equal(
             "Jenn",
             document.RootElement.GetProperty("ownerDisplayName").GetString());
@@ -634,7 +638,8 @@ public class WishlistShareLinkTests
                 "quantity",
                 "reservedQuantity",
                 "availableQuantity",
-                "currentParticipantReservedQuantity"
+                "currentParticipantReservedQuantity",
+                "imageUrl"
             ],
             document.RootElement
                 .EnumerateObject()
@@ -651,6 +656,9 @@ public class WishlistShareLinkTests
         Assert.Equal(
             JsonValueKind.Null,
             document.RootElement.GetProperty("currentParticipantReservedQuantity").ValueKind);
+        Assert.Equal(
+            JsonValueKind.Null,
+            document.RootElement.GetProperty("imageUrl").ValueKind);
         var retrieval = Assert.Single(factory.WishlistShareService.PublicWishRetrievals);
         Assert.Equal(
             wish.Id,

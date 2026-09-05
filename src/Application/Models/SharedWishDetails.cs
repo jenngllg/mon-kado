@@ -12,6 +12,7 @@ namespace JennGllg.Fr.MonKado.Back.Application.Models;
 /// <param name="quantity">The total desired quantity.</param>
 /// <param name="reservedQuantity">The total quantity reserved by all participants.</param>
 /// <param name="currentParticipantReservedQuantity">The optional current-participant quantity.</param>
+/// <param name="imageId">The optional normalized image identifier.</param>
 [ExcludeFromCodeCoverage]
 public class SharedWishDetails(
     Guid id,
@@ -20,7 +21,8 @@ public class SharedWishDetails(
     decimal? price,
     int quantity = 1,
     int reservedQuantity = 0,
-    int? currentParticipantReservedQuantity = null)
+    int? currentParticipantReservedQuantity = null,
+    Guid? imageId = null)
 {
     /// <summary>Gets the gift-wish identifier.</summary>
     public Guid Id { get; } = id;
@@ -36,4 +38,6 @@ public class SharedWishDetails(
     public int ReservedQuantity { get; } = reservedQuantity;
     /// <summary>Gets the quantity reserved by the current participant when one is joined.</summary>
     public int? CurrentParticipantReservedQuantity { get; } = currentParticipantReservedQuantity;
+    /// <summary>Gets the optional normalized image identifier.</summary>
+    public Guid? ImageId { get; } = imageId;
 }

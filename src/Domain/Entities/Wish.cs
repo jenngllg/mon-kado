@@ -1,6 +1,7 @@
 using JennGllg.Fr.MonKado.Back.Domain.Abstractions;
 
 using System.Diagnostics.CodeAnalysis;
+using System.Security.Cryptography;
 
 namespace JennGllg.Fr.MonKado.Back.Domain.Entities;
 
@@ -9,6 +10,13 @@ namespace JennGllg.Fr.MonKado.Back.Domain.Entities;
 /// </summary>
 public class Wish : IAuditableEntity
 {
+    /// <summary>
+    /// Gets the required SHA-256 image content hash length.
+    /// </summary>
+    public const int ImageContentHashLength = 32;
+
+    private byte[]? _imageContentHash;
+
     private Wish()
     {
     }
@@ -110,6 +118,19 @@ public class Wish : IAuditableEntity
     }
 
     /// <summary>
+    /// Gets the optional immutable image identifier.
+    /// </summary>
+    public Guid? ImageId
+    {
+        get; private set;
+    }
+
+    /// <summary>
+    /// Gets a copy of the optional normalized image content hash.
+    /// </summary>
+    public byte[]? ImageContentHash => _imageContentHash?.ToArray();
+
+    /// <summary>
     /// Gets the UTC date and time when the wish was created.
     /// </summary>
     public DateTime CreatedAt
@@ -180,5 +201,60 @@ public class Wish : IAuditableEntity
         Position = position;
 
         return true;
+    }
+
+    /// <summary>
+    /// Determines whether the current image has the supplied normalized content hash.
+    /// </summary>
+    /// <param name="contentHash">The SHA-256 content hash.</param>
+    /// <returns><see langword="true" /> when the current image has the same content.</returns>
+    public bool HasImageContentHash(ReadOnlySpan<byte> contentHash)
+    {
+        if (_imageContentHash is null || contentHash.Length != ImageContentHashLength)
+            return false;
+
+        return CryptographicOperations.FixedTimeEquals(
+            _imageContentHash,
+            contentHash);
+    }
+
+    /// <summary>
+    /// Adds or replaces the normalized image attached to this gift wish.
+    /// </summary>
+    /// <param name="imageId">The immutable image identifier.</param>
+    /// <param name="contentHash">The SHA-256 hash of the normalized WebP content.</param>
+    /// <returns>The identifier of the replaced image, when one existed.</returns>
+    public Guid? ReplaceImage(
+        Guid imageId,
+        byte[] contentHash)
+    {
+        ArgumentOutOfRangeException.ThrowIfEqual(
+            imageId,
+            Guid.Empty);
+        ArgumentNullException.ThrowIfNull(contentHash);
+
+        if (contentHash.Length != ImageContentHashLength)
+        {
+            throw new ArgumentException(
+                $"The image content hash must contain exactly {ImageContentHashLength} bytes.",
+                nameof(contentHash));
+        }
+
+        var replacedImageId = ImageId;
+        ImageId = imageId;
+        _imageContentHash = contentHash.ToArray();
+
+        return replacedImageId;
+    }
+
+    /// <summary>Removes the image reference and its content hash.</summary>
+    /// <returns>The removed image identifier, when an image existed.</returns>
+    public Guid? RemoveImage()
+    {
+        var imageId = ImageId;
+        ImageId = null;
+        _imageContentHash = null;
+
+        return imageId;
     }
 }

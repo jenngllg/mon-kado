@@ -8,6 +8,16 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Abstrac
 /// </summary>
 public interface IWishlistRepository
 {
+    /// <summary>Locks an owned wishlist until the current deletion transaction ends.</summary>
+    /// <param name="ownerId">The owner identifier.</param>
+    /// <param name="wishlistId">The wishlist identifier.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The locked wishlist, or null when unavailable.</returns>
+    Task<Wishlist?> GetByIdForDeletionAsync(
+        Guid ownerId,
+        Guid wishlistId,
+        CancellationToken cancellationToken);
+
     /// <summary>
     /// Adds a wishlist to the current unit of work.
     /// </summary>

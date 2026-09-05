@@ -16,6 +16,7 @@ namespace JennGllg.Fr.MonKado.Back.Application.Models;
 /// <param name="updatedAt">The optional UTC update date and time.</param>
 /// <param name="version">The optimistic concurrency version.</param>
 /// <param name="quantity">The total desired quantity.</param>
+/// <param name="imageId">The optional normalized image identifier.</param>
 [ExcludeFromCodeCoverage]
 public class WishDetails(
     Guid id,
@@ -28,7 +29,8 @@ public class WishDetails(
     DateTime createdAt,
     DateTime? updatedAt,
     uint version,
-    int quantity = 1)
+    int quantity = 1,
+    Guid? imageId = null)
 {
     /// <summary>
     /// Gets the wish identifier.
@@ -84,4 +86,9 @@ public class WishDetails(
     /// Gets the optimistic concurrency version.
     /// </summary>
     public uint Version { get; } = version;
+
+    /// <summary>
+    /// Gets the optional normalized image identifier.
+    /// </summary>
+    public Guid? ImageId { get; } = imageId;
 }

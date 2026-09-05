@@ -18,6 +18,277 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.UnitTes
 
 public class WishServiceTests
 {
+
+    [Theory]
+    [InlineData("23505", "ux_gift_image_deletion_outbox_image_id", true)]
+    [InlineData("23505", "unrelated_unique_index", false)]
+    [InlineData("23514", "ux_gift_image_deletion_outbox_image_id", false)]
+    [InlineData("no-inner-exception", "unused", false)]
+    public async Task DeleteImageAsync_WhenOutboxInsertFails_OnlyMapsTheImageUniquenessConflict(
+        string sqlState,
+        string constraintName,
+        bool isConcurrencyConflict)
+    {
+        // Arrange
+        var data = CreateData();
+        var wish = CreateWish(data);
+        var imageId = Guid.CreateVersion7();
+        wish.ReplaceImage(
+            imageId,
+            CreateImageHash(1));
+        var innerException = sqlState == "no-inner-exception"
+            ? null
+            : new PostgresException(
+                "Constraint violation.",
+                "ERROR",
+                "ERROR",
+                sqlState,
+                constraintName: constraintName);
+        var failure = new DbUpdateException(
+            "Save failed.",
+            innerException);
+        _wishRepositoryMock
+            .Setup(repository => repository.GetByIdForUpdateAsync(
+                data.WishlistId,
+                data.Id,
+                data.CancellationToken))
+            .ReturnsAsync(wish);
+        _giftImageDeletionOutboxRepositoryMock
+            .Setup(repository => repository.Add(It.IsAny<GiftImageDeletionOutboxMessage>()));
+        _unitOfWorkMock
+            .Setup(unitOfWork => unitOfWork.SaveChangesAsync(data.CancellationToken))
+            .ThrowsAsync(failure);
+
+        if (isConcurrencyConflict)
+        {
+            SetupOwnedAccess(data);
+            _wishRepositoryMock
+                .Setup(repository => repository.GetByIdAsync(
+                    data.WishlistId,
+                    data.Id,
+                    data.CancellationToken))
+                .ReturnsAsync(CreateWish(data));
+        }
+
+        // Act
+        var action = () => _wishService.DeleteImageAsync(
+            data.OwnerId,
+            data.WishlistId,
+            data.Id,
+            0,
+            data.CancellationToken);
+
+        // Assert
+        if (isConcurrencyConflict)
+        {
+            await Assert.ThrowsAsync<WishVersionConflictException>(action);
+            _wishRepositoryMock.Verify(
+                repository => repository.GetByIdAsync(
+                    data.WishlistId,
+                    data.Id,
+                    data.CancellationToken),
+                Times.Once);
+            _wishlistRepositoryMock.Verify(
+                repository => repository.GetAccessAsync(
+                    data.OwnerId,
+                    data.WishlistId,
+                    data.CancellationToken),
+                Times.Once);
+        }
+        else
+            Assert.Same(
+                failure,
+                await Assert.ThrowsAsync<DbUpdateException>(action));
+        VerifyTrackedRetrieval(data);
+        _giftImageDeletionOutboxRepositoryMock.Verify(
+            repository => repository.Add(It.Is<GiftImageDeletionOutboxMessage>(
+                message => message.ImageId == imageId)),
+            Times.Once);
+        _unitOfWorkMock.Verify(
+            unitOfWork => unitOfWork.SaveChangesAsync(data.CancellationToken),
+            Times.Once);
+        VerifyNoOtherCalls();
+    }
+
+
+    [Theory]
+    [InlineData("success")]
+    [InlineData("commit-lost")]
+    [InlineData("commit-unknown")]
+    [InlineData("wish-deleted")]
+    [InlineData("concurrent")]
+    [InlineData("unexpected")]
+    public async Task DeleteImageAsync_WhenPersistenceCompletes_ResolvesOutcome(
+        string outcome)
+    {
+        // Arrange
+        var data = CreateData();
+        var wish = CreateWish(data);
+        var imageId = Guid.CreateVersion7();
+        wish.ReplaceImage(
+            imageId,
+            CreateImageHash(1));
+        _wishRepositoryMock
+            .Setup(repository => repository.GetByIdForUpdateAsync(
+                data.WishlistId,
+                data.Id,
+                data.CancellationToken))
+            .ReturnsAsync(wish);
+        _giftImageDeletionOutboxRepositoryMock
+            .Setup(repository => repository.Add(It.IsAny<GiftImageDeletionOutboxMessage>()));
+        var save = _unitOfWorkMock
+            .Setup(unitOfWork => unitOfWork.SaveChangesAsync(data.CancellationToken));
+
+        if (outcome == "success")
+            save.ReturnsAsync(1);
+        else if (outcome == "unexpected")
+            save.ThrowsAsync(new InvalidOperationException());
+        else if (outcome == "concurrent")
+            save.ThrowsAsync(new DbUpdateConcurrencyException());
+        else
+            save.ThrowsAsync(new TimeoutException());
+
+        var readsCurrent = outcome is "commit-lost" or "commit-unknown" or "wish-deleted" or "concurrent";
+
+        if (readsCurrent)
+        {
+            SetupOwnedAccess(data);
+            var current = CreateWish(data);
+
+            if (outcome is "commit-unknown" or "concurrent")
+                current.ReplaceImage(
+                    imageId,
+                    CreateImageHash(1));
+            _wishRepositoryMock
+                .Setup(repository => repository.GetByIdAsync(
+                    data.WishlistId,
+                    data.Id,
+                    data.CancellationToken))
+                .ReturnsAsync(outcome == "wish-deleted" ? null : current);
+        }
+
+        // Act
+        WishDetails? result = null;
+        var exception = await Record.ExceptionAsync(async () =>
+            result = await _wishService.DeleteImageAsync(
+                data.OwnerId,
+                data.WishlistId,
+                data.Id,
+                0,
+                data.CancellationToken));
+
+        // Assert
+        switch (outcome)
+        {
+            case "success":
+            case "commit-lost":
+                Assert.Null(exception);
+                Assert.NotNull(result);
+                Assert.Null(result.ImageId);
+                break;
+            case "wish-deleted":
+                Assert.Null(exception);
+                Assert.Null(result);
+                break;
+            case "concurrent":
+                Assert.IsType<WishVersionConflictException>(exception);
+                break;
+            case "unexpected":
+                Assert.IsType<InvalidOperationException>(exception);
+                break;
+            default:
+                Assert.IsType<DependencyUnavailableException>(exception);
+                break;
+        }
+        VerifyTrackedRetrieval(data);
+        _unitOfWorkMock.Verify(
+            unitOfWork => unitOfWork.SaveChangesAsync(data.CancellationToken),
+            Times.Once);
+        _giftImageDeletionOutboxRepositoryMock.Verify(
+            repository => repository.Add(It.Is<GiftImageDeletionOutboxMessage>(
+                message => message.ImageId == imageId)),
+            Times.Once);
+
+        if (readsCurrent)
+        {
+            _wishRepositoryMock.Verify(
+                repository => repository.GetByIdAsync(
+                    data.WishlistId,
+                    data.Id,
+                    data.CancellationToken),
+                Times.Once);
+            _wishlistRepositoryMock.Verify(
+                repository => repository.GetAccessAsync(
+                    data.OwnerId,
+                    data.WishlistId,
+                    data.CancellationToken),
+                Times.Once);
+        }
+        VerifyNoOtherCalls();
+    }
+
+    [Theory]
+    [InlineData("missing")]
+    [InlineData("stale")]
+    [InlineData("no-image")]
+    [InlineData("unavailable")]
+    public async Task DeleteImageAsync_WhenPreconditionFails_DoesNotSave(
+        string outcome)
+    {
+        // Arrange
+        var data = CreateData();
+        var wish = CreateWish(data);
+        var retrieval = _wishRepositoryMock
+            .Setup(repository => repository.GetByIdForUpdateAsync(
+                data.WishlistId,
+                data.Id,
+                data.CancellationToken));
+
+        if (outcome == "unavailable")
+            retrieval.ThrowsAsync(new TimeoutException());
+        else
+            retrieval.ReturnsAsync(outcome == "missing" ? null : wish);
+
+        if (outcome == "missing")
+            SetupOwnedAccess(data);
+
+        // Act
+        WishDetails? result = null;
+        var exception = await Record.ExceptionAsync(async () =>
+            result = await _wishService.DeleteImageAsync(
+                data.OwnerId,
+                data.WishlistId,
+                data.Id,
+                outcome == "stale" ? 1u : 0u,
+                data.CancellationToken));
+
+        // Assert
+        switch (outcome)
+        {
+            case "missing":
+                Assert.Null(exception);
+                Assert.Null(result);
+                _wishlistRepositoryMock.Verify(
+                    repository => repository.GetAccessAsync(
+                        data.OwnerId,
+                        data.WishlistId,
+                        data.CancellationToken),
+                    Times.Once);
+                break;
+            case "stale":
+                Assert.IsType<WishVersionConflictException>(exception);
+                break;
+            case "no-image":
+                Assert.IsType<GiftImageNotFoundException>(exception);
+                break;
+            default:
+                Assert.IsType<DependencyUnavailableException>(exception);
+                break;
+        }
+        VerifyTrackedRetrieval(data);
+        VerifyNoOtherCalls();
+    }
+
     private const string WishlistForeignKeyName = "fk_wishes_wishlists_wishlist_id";
     private const string PositionWishlistForeignKeyName = "fk_wish_position_sequences_wishlists_wishlist_id";
 
@@ -25,6 +296,7 @@ public class WishServiceTests
     private readonly Mock<IWishTransactionFactory> _wishTransactionFactoryMock;
     private readonly Mock<IWishlistRepository> _wishlistRepositoryMock;
     private readonly Mock<IWishRepository> _wishRepositoryMock;
+    private readonly Mock<IGiftImageDeletionOutboxRepository> _giftImageDeletionOutboxRepositoryMock;
     private readonly WishService _wishService;
 
     public WishServiceTests()
@@ -33,11 +305,15 @@ public class WishServiceTests
         _wishlistRepositoryMock = new Mock<IWishlistRepository>(MockBehavior.Strict);
         _unitOfWorkMock = new Mock<IUnitOfWork>(MockBehavior.Strict);
         _wishTransactionFactoryMock = new Mock<IWishTransactionFactory>(MockBehavior.Strict);
+        _giftImageDeletionOutboxRepositoryMock =
+            new Mock<IGiftImageDeletionOutboxRepository>(MockBehavior.Strict);
         _wishService = new WishService(
             _wishRepositoryMock.Object,
             _wishlistRepositoryMock.Object,
             _unitOfWorkMock.Object,
-            _wishTransactionFactoryMock.Object);
+            _wishTransactionFactoryMock.Object,
+            _giftImageDeletionOutboxRepositoryMock.Object,
+            TimeProvider.System);
     }
 
     [Fact]
@@ -1516,6 +1792,11 @@ public class WishServiceTests
         var attemptedWish = ConfigureFailedSave(
             data,
             new TimeoutException());
+        var imageId = Guid.CreateVersion7();
+        var contentHash = CreateImageHash(1);
+        attemptedWish.ReplaceImage(
+            imageId,
+            contentHash);
         var committedWish = new Wish(
             data.Id,
             data.WishlistId,
@@ -1524,6 +1805,9 @@ public class WishServiceTests
             null,
             null,
             1);
+        committedWish.ReplaceImage(
+            imageId,
+            contentHash);
         _wishRepositoryMock
             .Setup(repository => repository.GetByIdAsync(
                 data.WishlistId,
@@ -2169,6 +2453,423 @@ public class WishServiceTests
         VerifyNoOtherCalls();
     }
 
+    [Fact]
+    public async Task UpsertImageAsync_WhenWishHasNoImage_SavesImageWithoutDeletionOutbox()
+    {
+        // Arrange
+        var data = CreateData();
+        var wish = CreateWish(data);
+        var imageId = Guid.CreateVersion7();
+        var contentHash = CreateImageHash(1);
+        _wishRepositoryMock
+            .Setup(repository => repository.GetByIdForUpdateAsync(
+                data.WishlistId,
+                data.Id,
+                data.CancellationToken))
+            .ReturnsAsync(wish);
+        _unitOfWorkMock
+            .Setup(unitOfWork => unitOfWork.SaveChangesAsync(data.CancellationToken))
+            .ReturnsAsync(1);
+
+        // Act
+        var result = await UpsertImageAsync(
+            data,
+            imageId,
+            contentHash);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal(
+            imageId,
+            result.ImageId);
+        Assert.True(wish.HasImageContentHash(contentHash));
+        VerifyTrackedRetrieval(data);
+        _unitOfWorkMock.Verify(
+            unitOfWork => unitOfWork.SaveChangesAsync(data.CancellationToken),
+            Times.Once);
+        VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task UpsertImageAsync_WhenNormalizedContentIsUnchanged_ReturnsWithoutSaving()
+    {
+        // Arrange
+        var data = CreateData();
+        var wish = CreateWish(data);
+        var currentImageId = Guid.CreateVersion7();
+        var contentHash = CreateImageHash(1);
+        wish.ReplaceImage(
+            currentImageId,
+            contentHash);
+        _wishRepositoryMock
+            .Setup(repository => repository.GetByIdForUpdateAsync(
+                data.WishlistId,
+                data.Id,
+                data.CancellationToken))
+            .ReturnsAsync(wish);
+
+        // Act
+        var result = await UpsertImageAsync(
+            data,
+            Guid.CreateVersion7(),
+            contentHash);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal(
+            currentImageId,
+            result.ImageId);
+        VerifyTrackedRetrieval(data);
+        VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task UpsertImageAsync_WhenWishHasImage_QueuesReplacedImageInSameSave()
+    {
+        // Arrange
+        var data = CreateData();
+        var wish = CreateWish(data);
+        var oldImageId = Guid.CreateVersion7();
+        var newImageId = Guid.CreateVersion7();
+        wish.ReplaceImage(
+            oldImageId,
+            CreateImageHash(1));
+        GiftImageDeletionOutboxMessage? queuedMessage = null;
+        _wishRepositoryMock
+            .Setup(repository => repository.GetByIdForUpdateAsync(
+                data.WishlistId,
+                data.Id,
+                data.CancellationToken))
+            .ReturnsAsync(wish);
+        _giftImageDeletionOutboxRepositoryMock
+            .Setup(repository => repository.Add(It.IsAny<GiftImageDeletionOutboxMessage>()))
+            .Callback<GiftImageDeletionOutboxMessage>(message => queuedMessage = message);
+        _unitOfWorkMock
+            .Setup(unitOfWork => unitOfWork.SaveChangesAsync(data.CancellationToken))
+            .ReturnsAsync(2);
+
+        // Act
+        var result = await UpsertImageAsync(
+            data,
+            newImageId,
+            CreateImageHash(2));
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal(
+            newImageId,
+            result.ImageId);
+        Assert.NotNull(queuedMessage);
+        Assert.Equal(
+            oldImageId,
+            queuedMessage.ImageId);
+        Assert.Equal(
+            7,
+            queuedMessage.Id.Version);
+        VerifyTrackedRetrieval(data);
+        _giftImageDeletionOutboxRepositoryMock.Verify(
+            repository => repository.Add(queuedMessage),
+            Times.Once);
+        _unitOfWorkMock.Verify(
+            unitOfWork => unitOfWork.SaveChangesAsync(data.CancellationToken),
+            Times.Once);
+        VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task UpsertImageAsync_WhenVersionIsStale_ThrowsWishVersionConflictException()
+    {
+        // Arrange
+        var data = CreateData();
+        _wishRepositoryMock
+            .Setup(repository => repository.GetByIdForUpdateAsync(
+                data.WishlistId,
+                data.Id,
+                data.CancellationToken))
+            .ReturnsAsync(CreateWish(data));
+
+        // Act
+        var action = () => UpsertImageAsync(
+            data,
+            Guid.CreateVersion7(),
+            CreateImageHash(1),
+            expectedVersion: 1);
+
+        // Assert
+        await Assert.ThrowsAsync<WishVersionConflictException>(action);
+        VerifyTrackedRetrieval(data);
+        VerifyNoOtherCalls();
+    }
+
+    [Theory]
+    [InlineData(WishlistAccess.Owner, null)]
+    [InlineData(WishlistAccess.NotOwned, typeof(WishlistNotFoundException))]
+    [InlineData(WishlistAccess.MemberNotFound, typeof(InvalidAuthenticationSessionException))]
+    public async Task UpsertImageAsync_WhenWishIsMissing_ResolvesParentAccess(
+        WishlistAccess access,
+        Type? expectedExceptionType)
+    {
+        // Arrange
+        var data = CreateData();
+        ConfigureMissingTrackedWish(
+            data,
+            access);
+
+        // Act
+        var action = () => UpsertImageAsync(
+            data,
+            Guid.CreateVersion7(),
+            CreateImageHash(1));
+
+        // Assert
+        if (expectedExceptionType is null)
+        {
+            var result = await action();
+            Assert.Null(result);
+        }
+        else
+        {
+            var exception = await Assert.ThrowsAnyAsync<Exception>(action);
+            Assert.IsType(
+                expectedExceptionType,
+                exception);
+        }
+
+        VerifyTrackedRetrievalAndAccess(data);
+        VerifyNoOtherCalls();
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task UpsertImageAsync_WhenTrackedLookupFails_TranslatesOnlyUnavailableFailure(
+        bool isUnavailable)
+    {
+        // Arrange
+        var data = CreateData();
+        var expected = isUnavailable
+            ? (Exception)new TimeoutException()
+            : new InvalidOperationException();
+        _wishRepositoryMock
+            .Setup(repository => repository.GetByIdForUpdateAsync(
+                data.WishlistId,
+                data.Id,
+                data.CancellationToken))
+            .ThrowsAsync(expected);
+
+        // Act
+        var action = () => UpsertImageAsync(
+            data,
+            Guid.CreateVersion7(),
+            CreateImageHash(1));
+
+        // Assert
+        var exception = await Assert.ThrowsAnyAsync<Exception>(action);
+        Assert.IsType(
+            isUnavailable
+                ? typeof(DependencyUnavailableException)
+                : typeof(InvalidOperationException),
+            exception);
+        VerifyTrackedRetrieval(data);
+        VerifyNoOtherCalls();
+    }
+
+    [Theory]
+    [InlineData(WishlistAccess.MemberNotFound, false, typeof(InvalidAuthenticationSessionException))]
+    [InlineData(WishlistAccess.NotOwned, false, typeof(WishlistNotFoundException))]
+    [InlineData(WishlistAccess.Owner, false, null)]
+    [InlineData(WishlistAccess.Owner, true, typeof(WishVersionConflictException))]
+    public async Task UpsertImageAsync_WhenConcurrencyFails_ResolvesCurrentResource(
+        WishlistAccess access,
+        bool wishStillExists,
+        Type? expectedExceptionType)
+    {
+        // Arrange
+        var data = CreateData();
+        ConfigureConcurrencyFailure(
+            data,
+            access,
+            wishStillExists);
+
+        // Act
+        var action = () => UpsertImageAsync(
+            data,
+            Guid.CreateVersion7(),
+            CreateImageHash(1));
+
+        // Assert
+        if (expectedExceptionType is null)
+        {
+            var result = await action();
+            Assert.Null(result);
+        }
+        else
+        {
+            var exception = await Assert.ThrowsAnyAsync<Exception>(action);
+            Assert.IsType(
+                expectedExceptionType,
+                exception);
+        }
+
+        VerifyConcurrencyFailure(
+            data,
+            access is WishlistAccess.Owner);
+    }
+
+    [Fact]
+    public async Task UpsertImageAsync_WhenCommitAcknowledgementIsLostAndImageMatches_ReturnsCommittedWish()
+    {
+        // Arrange
+        var data = CreateData();
+        var attemptedImageId = Guid.CreateVersion7();
+        var attemptedWish = ConfigureFailedSave(
+            data,
+            new TimeoutException());
+        var committedWish = CreateWish(data);
+        committedWish.ReplaceImage(
+            attemptedImageId,
+            CreateImageHash(1));
+        _wishRepositoryMock
+            .Setup(repository => repository.GetByIdAsync(
+                data.WishlistId,
+                data.Id,
+                data.CancellationToken))
+            .ReturnsAsync(committedWish);
+
+        // Act
+        var result = await UpsertImageAsync(
+            data,
+            attemptedImageId,
+            CreateImageHash(1));
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal(
+            attemptedImageId,
+            result.ImageId);
+        VerifyImageFailedSave(
+            data,
+            attemptedWish);
+        _wishRepositoryMock.Verify(
+            repository => repository.GetByIdAsync(
+                data.WishlistId,
+                data.Id,
+                data.CancellationToken),
+            Times.Once);
+        VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task UpsertImageAsync_WhenCommitAcknowledgementIsLostAndOriginalRemains_ThrowsDependencyUnavailableException()
+    {
+        // Arrange
+        var data = CreateData();
+        var attemptedWish = ConfigureFailedSave(
+            data,
+            new TimeoutException());
+        _wishRepositoryMock
+            .Setup(repository => repository.GetByIdAsync(
+                data.WishlistId,
+                data.Id,
+                data.CancellationToken))
+            .ReturnsAsync(CreateWish(data));
+
+        // Act
+        var action = () => UpsertImageAsync(
+            data,
+            Guid.CreateVersion7(),
+            CreateImageHash(1));
+
+        // Assert
+        await Assert.ThrowsAsync<DependencyUnavailableException>(action);
+        VerifyImageFailedSave(
+            data,
+            attemptedWish);
+        _wishRepositoryMock.Verify(
+            repository => repository.GetByIdAsync(
+                data.WishlistId,
+                data.Id,
+                data.CancellationToken),
+            Times.Once);
+        VerifyNoOtherCalls();
+    }
+
+    [Theory]
+    [InlineData(WishlistAccess.MemberNotFound, false, typeof(InvalidAuthenticationSessionException))]
+    [InlineData(WishlistAccess.NotOwned, false, typeof(WishlistNotFoundException))]
+    [InlineData(WishlistAccess.Owner, false, null)]
+    [InlineData(WishlistAccess.Owner, true, typeof(WishVersionConflictException))]
+    public async Task UpsertImageAsync_WhenAmbiguousCurrentImageDiffers_ResolvesCurrentResource(
+        WishlistAccess access,
+        bool wishStillExists,
+        Type? expectedExceptionType)
+    {
+        // Arrange
+        var data = CreateData();
+        var attemptedWish = ConfigureFailedSave(
+            data,
+            new TimeoutException());
+        Wish? currentWish = null;
+
+        if (wishStillExists)
+        {
+            currentWish = CreateWish(data);
+            currentWish.ReplaceImage(
+                Guid.CreateVersion7(),
+                CreateImageHash(2));
+        }
+
+        _wishRepositoryMock
+            .Setup(repository => repository.GetByIdAsync(
+                data.WishlistId,
+                data.Id,
+                data.CancellationToken))
+            .ReturnsAsync(currentWish);
+        _wishlistRepositoryMock
+            .Setup(repository => repository.GetAccessAsync(
+                data.OwnerId,
+                data.WishlistId,
+                data.CancellationToken))
+            .ReturnsAsync(access);
+
+        // Act
+        var action = () => UpsertImageAsync(
+            data,
+            Guid.CreateVersion7(),
+            CreateImageHash(1));
+
+        // Assert
+        if (expectedExceptionType is null)
+        {
+            var result = await action();
+            Assert.Null(result);
+        }
+        else
+        {
+            var exception = await Assert.ThrowsAnyAsync<Exception>(action);
+            Assert.IsType(
+                expectedExceptionType,
+                exception);
+        }
+
+        VerifyImageFailedSave(
+            data,
+            attemptedWish);
+        _wishRepositoryMock.Verify(
+            repository => repository.GetByIdAsync(
+                data.WishlistId,
+                data.Id,
+                data.CancellationToken),
+            Times.Once);
+        _wishlistRepositoryMock.Verify(
+            repository => repository.GetAccessAsync(
+                data.OwnerId,
+                data.WishlistId,
+                data.CancellationToken),
+            Times.Once);
+        VerifyNoOtherCalls();
+    }
+
     private void ConfigureMissingTrackedWish(
         WishServiceTestData data,
         WishlistAccess access)
@@ -2277,6 +2978,17 @@ public class WishServiceTests
         Assert.Equal(
             "Nouvelle console",
             wish.Name);
+    }
+
+    private void VerifyImageFailedSave(
+        WishServiceTestData data,
+        Wish wish)
+    {
+        VerifyTrackedRetrieval(data);
+        _unitOfWorkMock.Verify(
+            unitOfWork => unitOfWork.SaveChangesAsync(data.CancellationToken),
+            Times.Once);
+        Assert.NotNull(wish.ImageId);
     }
 
     private void VerifyTrackedRetrieval(WishServiceTestData data)
@@ -2495,6 +3207,7 @@ public class WishServiceTests
         _wishlistRepositoryMock.VerifyNoOtherCalls();
         _unitOfWorkMock.VerifyNoOtherCalls();
         _wishTransactionFactoryMock.VerifyNoOtherCalls();
+        _giftImageDeletionOutboxRepositoryMock.VerifyNoOtherCalls();
     }
 
     private static WishServiceTestData CreateData()
@@ -2551,6 +3264,29 @@ public class WishServiceTests
                     $"Persisted {index}",
                     index + 1))
             .ToArray();
+    }
+
+    private Task<WishDetails?> UpsertImageAsync(
+        WishServiceTestData data,
+        Guid imageId,
+        byte[] contentHash,
+        uint expectedVersion = 0)
+    {
+        return _wishService.UpsertImageAsync(
+            data.OwnerId,
+            data.WishlistId,
+            data.Id,
+            imageId,
+            contentHash,
+            expectedVersion,
+            data.CancellationToken);
+    }
+
+    private static byte[] CreateImageHash(byte value)
+    {
+        return Enumerable.Repeat(
+            value,
+            Wish.ImageContentHashLength).ToArray();
     }
 
     private static Exception CreateForeignKeyException(

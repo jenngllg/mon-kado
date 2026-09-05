@@ -22,15 +22,18 @@ public class SharedWishlistsControllerTests
     private readonly SharedWishlistsController _controller;
     private readonly Mock<IGuestSessionCookieService> _guestSessionCookieServiceMock;
     private readonly Mock<ISender> _senderMock;
+    private readonly Mock<IWishImageUrlService> _wishImageUrlServiceMock;
 
     public SharedWishlistsControllerTests()
     {
         _senderMock = new Mock<ISender>(MockBehavior.Strict);
         _guestSessionCookieServiceMock = new Mock<IGuestSessionCookieService>(MockBehavior.Strict);
+        _wishImageUrlServiceMock = new Mock<IWishImageUrlService>(MockBehavior.Strict);
         _controller = new SharedWishlistsController(
             _senderMock.Object,
             _guestSessionCookieServiceMock.Object,
-            new EntityTagService())
+            new EntityTagService(),
+            _wishImageUrlServiceMock.Object)
         {
             ControllerContext = new ControllerContext
             {
@@ -103,6 +106,7 @@ public class SharedWishlistsControllerTests
             Times.Once);
         _guestSessionCookieServiceMock.VerifyNoOtherCalls();
         _senderMock.VerifyNoOtherCalls();
+        _wishImageUrlServiceMock.VerifyNoOtherCalls();
     }
 
     [Fact]
@@ -110,10 +114,14 @@ public class SharedWishlistsControllerTests
     {
         // Arrange
         var shareLinkId = Guid.CreateVersion7();
+        var wishlistId = Guid.CreateVersion7();
         var wishId = Guid.CreateVersion7();
+        var imageId = Guid.CreateVersion7();
+        const string imageUrl = "https://api.example.test/shared-image";
         var cancellationToken = TestContext.Current.CancellationToken;
         var wish = new SharedWishDetail
         {
+            WishlistId = wishlistId,
             Id = wishId,
             Name = "Gift",
             Note = "Public note",
@@ -121,7 +129,8 @@ public class SharedWishlistsControllerTests
             Price = 12.34m,
             Quantity = 1,
             ReservedQuantity = 3,
-            CurrentParticipantReservedQuantity = null
+            CurrentParticipantReservedQuantity = null,
+            ImageId = imageId
         };
         _guestSessionCookieServiceMock
             .Setup(service => service.GetValue(_controller.Request))
@@ -136,6 +145,13 @@ public class SharedWishlistsControllerTests
                     query.GuestToken == "guest"),
                 cancellationToken))
             .ReturnsAsync(wish);
+        _wishImageUrlServiceMock
+            .Setup(service => service.CreateSharedUrl(
+                shareLinkId,
+                wishlistId,
+                wish.Id,
+                imageId))
+            .Returns(imageUrl);
 
         // Act
         var result = await _controller.GetWishAsync(
@@ -173,6 +189,9 @@ public class SharedWishlistsControllerTests
             body.AvailableQuantity);
         Assert.Null(body.CurrentParticipantReservedQuantity);
         Assert.Equal(
+            imageUrl,
+            body.ImageUrl);
+        Assert.Equal(
             "no-store",
             _controller.Response.Headers.CacheControl);
         _guestSessionCookieServiceMock.Verify(
@@ -185,7 +204,15 @@ public class SharedWishlistsControllerTests
                     query.WishId == wishId),
                 cancellationToken),
             Times.Once);
+        _wishImageUrlServiceMock.Verify(
+            service => service.CreateSharedUrl(
+                shareLinkId,
+                wishlistId,
+                wish.Id,
+                imageId),
+            Times.Once);
         _guestSessionCookieServiceMock.VerifyNoOtherCalls();
         _senderMock.VerifyNoOtherCalls();
+        _wishImageUrlServiceMock.VerifyNoOtherCalls();
     }
 }

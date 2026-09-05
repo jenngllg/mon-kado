@@ -244,4 +244,41 @@ public static partial class WorkerLogMessages
         ILogger logger,
         string exceptionType,
         Exception exception);
+
+    /// <summary>Logs one physically deleted obsolete gift image.</summary>
+    /// <param name="logger">The logger.</param>
+    /// <param name="imageId">The immutable image identifier.</param>
+    [LoggerMessage(
+        EventId = LogEventIds.GiftImageDeleted,
+        Level = LogLevel.Information,
+        Message = "Deleted obsolete gift image {ImageId}.")]
+    public static partial void GiftImageDeleted(
+        ILogger logger,
+        Guid imageId);
+
+    /// <summary>Logs one reconciled pending gift image.</summary>
+    /// <param name="logger">The logger.</param>
+    /// <param name="imageId">The immutable image identifier.</param>
+    /// <param name="isReferenced">Whether PostgreSQL references the image.</param>
+    [LoggerMessage(
+        EventId = LogEventIds.PendingGiftImageReconciled,
+        Level = LogLevel.Information,
+        Message = "Reconciled pending gift image {ImageId}; referenced: {IsReferenced}.")]
+    public static partial void PendingGiftImageReconciled(
+        ILogger logger,
+        Guid imageId,
+        bool isReferenced);
+
+    /// <summary>Logs a gift-image cleanup cycle failure.</summary>
+    /// <param name="logger">The logger.</param>
+    /// <param name="exceptionType">The bounded exception type.</param>
+    /// <param name="exception">The cleanup exception.</param>
+    [LoggerMessage(
+        EventId = LogEventIds.GiftImageCleanupFailed,
+        Level = LogLevel.Error,
+        Message = "Gift-image cleanup failed and will be retried. Exception type: {ExceptionType}.")]
+    public static partial void GiftImageCleanupFailed(
+        ILogger logger,
+        string exceptionType,
+        Exception exception);
 }

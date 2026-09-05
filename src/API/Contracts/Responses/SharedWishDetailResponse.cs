@@ -61,4 +61,10 @@ public class SharedWishDetailResponse
     {
         get; init;
     }
+
+    /// <summary>Gets the optional short-lived absolute image URL.</summary>
+    public string? ImageUrl
+    {
+        get; init;
+    }
 }

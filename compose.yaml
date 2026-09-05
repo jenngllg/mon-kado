@@ -85,10 +85,12 @@ services:
       WebSecurity__AllowedOrigins__0: ${FRONTEND_ORIGIN:?Set FRONTEND_ORIGIN in .env}
       WishlistSharing__FrontendOrigin: ${FRONTEND_ORIGIN:?Set FRONTEND_ORIGIN in .env}
       DataProtection__KeysPath: /var/lib/mon-kado/data-protection-keys
+      GiftImages__StoragePath: /var/lib/mon-kado/gift-images
     expose:
       - "8080"
     volumes:
       - data_protection_keys:/var/lib/mon-kado/data-protection-keys
+      - gift_images:/var/lib/mon-kado/gift-images
     depends_on:
       migrations:
         condition: service_completed_successfully
@@ -132,8 +134,16 @@ services:
       Gmail__RefreshToken: ${GMAIL_REFRESH_TOKEN:-}
       Gmail__RequestTimeout: ${GMAIL_REQUEST_TIMEOUT:-00:00:15}
       DataProtection__KeysPath: /var/lib/mon-kado/data-protection-keys
+      GiftImages__StoragePath: /var/lib/mon-kado/gift-images
+      GiftImageCleanup__BatchSize: ${GIFT_IMAGE_CLEANUP_BATCH_SIZE:-100}
+      GiftImageCleanup__Interval: ${GIFT_IMAGE_CLEANUP_INTERVAL:-00:00:30}
+      GiftImageCleanup__FailureRetryInterval: ${GIFT_IMAGE_CLEANUP_FAILURE_RETRY_INTERVAL:-00:01:00}
+      GiftImageCleanup__LeaseDuration: ${GIFT_IMAGE_CLEANUP_LEASE_DURATION:-00:05:00}
+      GiftImageCleanup__PendingGracePeriod: ${GIFT_IMAGE_PENDING_GRACE_PERIOD:-01:00:00}
+      GiftImageCleanup__MaximumRetryDelay: ${GIFT_IMAGE_MAXIMUM_RETRY_DELAY:-01:00:00}
     volumes:
       - data_protection_keys:/var/lib/mon-kado/data-protection-keys
+      - gift_images:/var/lib/mon-kado/gift-images
     depends_on:
       migrations:
         condition: service_completed_successfully
@@ -174,3 +184,4 @@ volumes:
   caddy_data:
   caddy_config:
   data_protection_keys:
+  gift_images:

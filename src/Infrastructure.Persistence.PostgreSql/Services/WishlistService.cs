@@ -6,10 +6,13 @@ using JennGllg.Fr.MonKado.Back.Application.Models;
 using JennGllg.Fr.MonKado.Back.Domain.Entities;
 using JennGllg.Fr.MonKado.Back.Domain.Enums;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Abstractions;
+using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Entities;
 
 using Microsoft.EntityFrameworkCore;
 
 using Npgsql;
+
+using System.Data;
 
 namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Services;
 
@@ -19,10 +22,16 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Service
 /// <param name="wishlistRepository">The wishlist repository.</param>
 /// <param name="unitOfWork">The unit of work.</param>
 /// <param name="timeProvider">The time provider.</param>
+/// <param name="wishRepository">The gift repository.</param>
+/// <param name="transactionFactory">The deletion transaction factory.</param>
+/// <param name="imageDeletionRepository">The image deletion outbox repository.</param>
 public class WishlistService(
     IWishlistRepository wishlistRepository,
     IUnitOfWork unitOfWork,
-    TimeProvider timeProvider) : IWishlistService
+    TimeProvider timeProvider,
+    IWishRepository wishRepository,
+    IWishTransactionFactory transactionFactory,
+    IGiftImageDeletionOutboxRepository imageDeletionRepository) : IWishlistService
 {
     private const string OwnerForeignKeyName = "fk_wishlists_users_owner_id";
     private const string OwnerNormalizedNameIndexName = "ux_wishlists_owner_normalized_name";
@@ -180,7 +189,10 @@ public class WishlistService(
 
         try
         {
-            var wishlist = await wishlistRepository.GetByIdForUpdateAsync(
+            await using var transaction = await transactionFactory.BeginAsync(
+                IsolationLevel.ReadCommitted,
+                cancellationToken);
+            var wishlist = await wishlistRepository.GetByIdForDeletionAsync(
                 ownerId,
                 wishlistId,
                 cancellationToken);
@@ -201,11 +213,21 @@ public class WishlistService(
             if (wishlist.Version != expectedVersion)
                 throw new WishlistVersionConflictException();
 
-            wishlistRepository.Remove(wishlist);
-            saveAttempted = true;
-            await unitOfWork.SaveChangesAsync(cancellationToken);
+            var wishes = await wishRepository.GetByWishlistIdForUpdateAsync(
+                wishlistId,
+                cancellationToken);
+            foreach (var wish in wishes.Where(wish => wish.ImageId.HasValue))
+            {
+                imageDeletionRepository.Add(
+                    GiftImageDeletionOutboxMessage.Create(
+                        wish.ImageId.GetValueOrDefault(),
+                        timeProvider.GetUtcNow().UtcDateTime));
+            }
 
-            return true;
+            wishlistRepository.Remove(wishlist);
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+            saveAttempted = true;
+            await transaction.CommitAsync(cancellationToken);
         }
         catch (DbUpdateConcurrencyException)
         {
@@ -240,6 +262,8 @@ public class WishlistService(
                 exception,
                 cancellationToken);
         }
+
+        return true;
     }
 
     /// <inheritdoc />
