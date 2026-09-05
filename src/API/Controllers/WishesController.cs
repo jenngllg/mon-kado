@@ -283,6 +283,10 @@ public class WishesController(
     [EntityTag(isRequired: true)]
     [EnableRateLimiting(AuthenticationRateLimitingExtensions.GiftImageUploadPolicy)]
     [NoStoreResponse(StatusCodes.Status200OK)]
+    [System.Diagnostics.CodeAnalysis.SuppressMessage(
+        "Security",
+        "S5693:Request content length should be limited",
+        Justification = "MK-795 requires 10 MiB images plus bounded multipart overhead. RequestSizeLimit and RequestFormLimits enforce a finite cap; uploads require owner authorization and a per-member rate limit, and the processor caps decoded pixels.")]
     [RequestSizeLimit(MaximumImageRequestBodySize)]
     [RequestFormLimits(MultipartBodyLengthLimit = MaximumImageRequestBodySize)]
     [Consumes("multipart/form-data")]
@@ -308,8 +312,9 @@ public class WishesController(
         var imageContent = await ReadImageAsync(
             image,
             cancellationToken);
-        var hasValidMultipartShape = Request.Form.Files.Count == 1 &&
-            Request.Form.Count == 0 &&
+        var form = await Request.ReadFormAsync(cancellationToken);
+        var hasValidMultipartShape = form.Files.Count == 1 &&
+            form.Count == 0 &&
             string.Equals(
                 image?.Name,
                 "image",
