@@ -162,6 +162,10 @@ public class LocalGiftImageStore : IGiftImageStore
 
         try
         {
+            // Linux can report a file used as a directory as DirectoryNotFoundException.
+            if (File.Exists(_storagePath))
+                throw new IOException("The image storage path is not a directory.");
+
             var pendingImages = Directory
                 .EnumerateFiles(
                     _storagePath,
