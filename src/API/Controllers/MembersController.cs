@@ -36,6 +36,7 @@ public class MembersController(
     IRefreshTokenCookieService refreshTokenCookieService) : ControllerBase
 {
     private const int MaximumRequestBodySize = 4 * 1024;
+    private const string NoStoreCacheControl = "no-store";
 
     /// <summary>
     /// Gets one page of the current member's reservation history.
@@ -72,7 +73,7 @@ public class MembersController(
             history.CurrentPage,
             history.PageSize,
             history.TotalCount);
-        Response.Headers.CacheControl = "no-store";
+        Response.Headers.CacheControl = NoStoreCacheControl;
 
         return Ok(response);
     }
@@ -111,7 +112,7 @@ public class MembersController(
             cancellationToken);
         var response = new MemberProfileResponse(profile.DisplayName);
         Response.Headers.ETag = entityTagService.Format(profile.Version);
-        Response.Headers.CacheControl = "no-store";
+        Response.Headers.CacheControl = NoStoreCacheControl;
 
         return Ok(response);
     }
@@ -154,7 +155,7 @@ public class MembersController(
                 request.CurrentPassword,
                 expectedVersion),
             cancellationToken);
-        Response.Headers.CacheControl = "no-store";
+        Response.Headers.CacheControl = NoStoreCacheControl;
 
         return Accepted();
     }
@@ -192,7 +193,7 @@ public class MembersController(
                 request.NewPassword),
             cancellationToken);
         refreshTokenCookieService.Delete(HttpContext);
-        Response.Headers.CacheControl = "no-store";
+        Response.Headers.CacheControl = NoStoreCacheControl;
 
         return NoContent();
     }

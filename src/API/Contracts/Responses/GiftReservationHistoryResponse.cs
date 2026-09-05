@@ -19,6 +19,10 @@ namespace JennGllg.Fr.MonKado.Back.Api.Contracts.Responses;
 /// <param name="lastActivityAt">The UTC date and time of the latest lifecycle activity.</param>
 /// <param name="endedAt">The optional UTC lifecycle end date and time.</param>
 [ExcludeFromCodeCoverage]
+[method: SuppressMessage(
+    "CodeQuality",
+    "S107:Methods should not have too many parameters",
+    Justification = "The constructor represents the complete immutable reservation history response contract.")]
 public class GiftReservationHistoryResponse(
     Guid id,
     Guid wishlistId,

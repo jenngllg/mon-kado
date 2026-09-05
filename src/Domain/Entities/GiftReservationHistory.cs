@@ -1,5 +1,7 @@
 using JennGllg.Fr.MonKado.Back.Domain.Enums;
 
+using System.Diagnostics.CodeAnalysis;
+
 namespace JennGllg.Fr.MonKado.Back.Domain.Entities;
 
 /// <summary>
@@ -23,6 +25,10 @@ public class GiftReservationHistory
     /// <param name="quantity">The reserved quantity.</param>
     /// <param name="createdAt">The UTC lifecycle creation date and time.</param>
     /// <param name="lastActivityAt">The UTC date and time of the latest lifecycle activity.</param>
+    [SuppressMessage(
+        "CodeQuality",
+        "S107:Methods should not have too many parameters",
+        Justification = "The constructor captures the complete initial state of one reservation lifecycle.")]
     public GiftReservationHistory(
         Guid id,
         Guid memberId,
