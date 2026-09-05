@@ -175,9 +175,6 @@ public class SharedWishlistsControllerTests
         Assert.Equal(
             "no-store",
             _controller.Response.Headers.CacheControl);
-        Assert.Equal(
-            "noindex, nofollow, noarchive",
-            _controller.Response.Headers["X-Robots-Tag"]);
         _guestSessionCookieServiceMock.Verify(
             service => service.GetValue(_controller.Request),
             Times.Once);

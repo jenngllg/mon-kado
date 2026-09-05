@@ -17,6 +17,8 @@ public class WebSecurityExtensionsTests
     [InlineData("https://app.example.test?query=value")]
     [InlineData("https://app.example.test#fragment")]
     [InlineData("https://app.example.test/")]
+    [InlineData(" https://app.example.test")]
+    [InlineData("https://app.example.test ")]
     public void AddWebSecurity_WhenOriginIsInvalid_ThrowsInvalidOperationException(string origin)
     {
         // Arrange

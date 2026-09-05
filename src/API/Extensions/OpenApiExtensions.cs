@@ -21,6 +21,8 @@ public static class OpenApiExtensions
     internal const string BearerSecuritySchemeName = "Bearer";
     private const string DocumentName = "v1";
     private const string DocumentPath = "/openapi/{documentName}.json";
+    private const string RobotsHeaderName = "X-Robots-Tag";
+    private const string SharedWishlistsPath = "api/v1/shared-wishlists/";
     /// <summary>
     /// Executes the add api open api operation.
     /// </summary>
@@ -131,6 +133,18 @@ public static class OpenApiExtensions
                 return Task.CompletedTask;
             });
             options.AddOperationTransformer<CommonErrorResponsesOperationTransformer>();
+            options.AddOperationTransformer((
+                operation,
+                context,
+                _) =>
+            {
+                if (context.Description.RelativePath.AsSpan().StartsWith(
+                    SharedWishlistsPath,
+                    StringComparison.Ordinal))
+                    AddNoIndexResponseHeaders(operation);
+
+                return Task.CompletedTask;
+            });
             options.AddSchemaTransformer<JsonStringEnumSchemaTransformer>();
         });
 
@@ -471,6 +485,24 @@ public static class OpenApiExtensions
                 Description = "Always no-store for this response.",
                 Schema = new OpenApiSchema { Type = JsonSchemaType.String }
             });
+    }
+
+    private static void AddNoIndexResponseHeaders(OpenApiOperation operation)
+    {
+        ArgumentNullException.ThrowIfNull(operation.Responses);
+
+        foreach (var response in operation.Responses.Values)
+        {
+            var mutableResponse = (OpenApiResponse)response;
+            mutableResponse.Headers = AddOrReplace(
+                mutableResponse.Headers,
+                RobotsHeaderName,
+                new OpenApiHeader
+                {
+                    Description = "Prevents indexing and archiving of shared-wishlist responses.",
+                    Schema = new OpenApiSchema { Type = JsonSchemaType.String }
+                });
+        }
     }
 
     private static void AddEntityTagContract(

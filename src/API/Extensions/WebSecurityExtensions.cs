@@ -25,6 +25,8 @@ public static class WebSecurityExtensions
 
     private const string LocalAntiforgeryCookieName = "MonKado.Antiforgery";
     private const string ProductionAntiforgeryCookieName = "__Host-MonKado.Antiforgery";
+    private const string RobotsHeaderName = "X-Robots-Tag";
+    private const string RobotsHeaderValue = "noindex, nofollow, noarchive";
 
     private static readonly string[] _allowedMethods =
     [
@@ -35,6 +37,7 @@ public static class WebSecurityExtensions
         HttpMethods.Delete,
         HttpMethods.Options
     ];
+    private static readonly PathString _sharedWishlistsPath = new("/api/v1/shared-wishlists");
     /// <summary>
     /// Executes the add web security operation.
     /// </summary>
@@ -114,6 +117,9 @@ public static class WebSecurityExtensions
                 headers["Referrer-Policy"] = "no-referrer";
                 headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()";
                 headers["Cross-Origin-Resource-Policy"] = "same-site";
+
+                if (context.Request.Path.StartsWithSegments(_sharedWishlistsPath))
+                    headers[RobotsHeaderName] = RobotsHeaderValue;
 
                 if (ShouldAddStrictTransportSecurity(
                     app.Environment.IsProduction(),
@@ -223,6 +229,15 @@ public static class WebSecurityExtensions
             '*',
             StringComparison.Ordinal))
             throw new InvalidOperationException("Frontend origins must be explicit and cannot contain wildcards.");
+
+        if (!string.Equals(
+            origin,
+            origin.Trim(),
+            StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                "Frontend origins cannot contain leading or trailing whitespace.");
+        }
 
         if (!Uri.TryCreate(
             origin,

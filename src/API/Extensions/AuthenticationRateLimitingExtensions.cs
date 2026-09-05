@@ -11,6 +11,8 @@ namespace JennGllg.Fr.MonKado.Back.Api.Extensions;
 
 public static class AuthenticationRateLimitingExtensions
 {
+    private const string UnlimitedPartitionKey = "NonSharedWishlist";
+
     /// <summary>
     /// Identifies registration policy.
     /// </summary>
@@ -88,7 +90,7 @@ public static class AuthenticationRateLimitingExtensions
     /// </summary>
     public const int GoogleTransientFlowPermitLimit = 10;
     /// <summary>
-    /// Gets the per-minute public shared-wishlist limit for one remote address.
+    /// Gets the aggregate per-minute shared-wishlist limit for one remote address.
     /// </summary>
     public const int SharedWishlistPermitLimit = 60;
     /// <summary>
@@ -106,6 +108,7 @@ public static class AuthenticationRateLimitingExtensions
 
     private static readonly TimeSpan _window = TimeSpan.FromMinutes(1);
     private static readonly TimeSpan _wishlistReportWindow = TimeSpan.FromHours(1);
+    private static readonly PathString _sharedWishlistsPath = new("/api/v1/shared-wishlists");
     /// <summary>
     /// Executes the add authentication rate limiting operation.
     /// </summary>
@@ -116,6 +119,8 @@ public static class AuthenticationRateLimitingExtensions
     {
         services.AddRateLimiter(options =>
         {
+            options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(
+                CreateGlobalLimiterPartition);
             options.AddPolicy(
                 RegistrationPolicy,
                 context => CreateLimiter(
@@ -249,6 +254,17 @@ public static class AuthenticationRateLimitingExtensions
         });
 
         return services;
+    }
+
+    private static RateLimitPartition<string> CreateGlobalLimiterPartition(HttpContext context)
+    {
+
+        if (!context.Request.Path.StartsWithSegments(_sharedWishlistsPath))
+            return RateLimitPartition.GetNoLimiter(UnlimitedPartitionKey);
+
+        return CreateLimiter(
+            context,
+            SharedWishlistPermitLimit);
     }
 
     private static RateLimitPartition<string> CreateLimiter(

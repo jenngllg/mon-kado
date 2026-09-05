@@ -88,6 +88,16 @@ public class WishlistReportOpenApiTests
             operation.GetProperty("responses")
                 .EnumerateObject()
                 .Select(response => response.Name));
+
+        foreach (var response in operation.GetProperty("responses").EnumerateObject())
+        {
+            var header = response.Value
+                .GetProperty("headers")
+                .GetProperty("X-Robots-Tag");
+            Assert.Equal(
+                "Prevents indexing and archiving of shared-wishlist responses.",
+                header.GetProperty("description").GetString());
+        }
     }
 
     private static string[] GetEnumValues(

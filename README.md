@@ -113,6 +113,13 @@ The local launch profile listens on `http://localhost:7000` and uses the `Local`
 | `GET /api/v1/wishlists/{wishlistId}/wishes/{wishId}` | Returns one gift wish from an owned private wishlist |
 | `PUT /api/v1/wishlists/{wishlistId}/wishes/{wishId}` | Replaces an owned gift wish when `If-Match` is current |
 | `DELETE /api/v1/wishlists/{wishlistId}/wishes/{wishId}` | Deletes an owned gift wish when `If-Match` is current |
+| `POST /api/v1/wishlists/{wishlistId}/share-link` | Creates the active share link of an owned wishlist |
+| `GET /api/v1/wishlists/{wishlistId}/share-link` | Returns the active share link and its strong `ETag` |
+| `PUT /api/v1/wishlists/{wishlistId}/share-link` | Rotates the share secret when `If-Match` is current |
+| `DELETE /api/v1/wishlists/{wishlistId}/share-link` | Revokes the active share link when `If-Match` is current |
+| `GET /api/v1/shared-wishlists/{shareLinkId}` | Returns public wishlist content, optionally filtered with `availableOnly=true` |
+| `GET /api/v1/shared-wishlists/{shareLinkId}/wishes/{wishId}` | Returns the public details of one shared gift wish |
+| `POST /api/v1/shared-wishlists/{shareLinkId}/reports` | Accepts an anonymous report about a shared wishlist |
 
 Liveness never contacts PostgreSQL. Readiness allows at most two seconds for PostgreSQL to accept a connection and returns `503 Unhealthy` otherwise; it checks connectivity, not whether all migrations have been applied.
 
@@ -132,6 +139,14 @@ The frontend must initialize and refresh CSRF protection after login and logout:
 4. Fetch a new token after authentication state changes or after a `400` response caused by an expired token.
 
 Cookie-enabled unsafe endpoints declare antiforgery validation explicitly. Endpoints authenticated exclusively with an `Authorization: Bearer` header do not require an antiforgery token because browsers do not attach that header automatically.
+
+## Wishlist sharing security contract
+
+The owner-facing share-link response contains a copyable frontend URL whose 256-bit bearer secret appears only after the URL fragment marker (`#`). The frontend must remove that secret from browser history immediately, keep it in memory only, and send it to the API through `X-MonKado-Share-Token`. It must never place the secret in query parameters, persistent browser storage, analytics, telemetry, or logs.
+
+The API stores a SHA-256 hash for verification and a Data Protection payload solely so the owner can retrieve the same link again. Rotating the link preserves its identifier but invalidates the previous secret. Revoking it invalidates the complete public URL. Active links do not expire automatically.
+
+Shared-wishlist responses are returned with `Cache-Control: no-store` and `X-Robots-Tag: noindex, nofollow, noarchive`. The frontend hosting the shared route must independently prevent indexing of its HTML document because response headers returned by the API do not apply to the frontend page. Anonymous reports additionally require the standard CSRF token and are limited both per remote address and per share link.
 
 The antiforgery cookie is a strictly necessary session cookie used only for request security. It does not require prior consent while it remains limited to this purpose, but it must be described in the site's cookie and privacy information. Analytics, advertising, or affiliation cookies require a separate consent assessment.
 
