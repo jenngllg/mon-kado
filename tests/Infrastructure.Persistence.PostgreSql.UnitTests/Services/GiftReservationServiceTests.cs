@@ -1170,6 +1170,212 @@ public class GiftReservationServiceTests
     }
 
     [Fact]
+    public async Task UpsertAsync_WhenCommitAcknowledgementIsLostAndReservationMatches_ReturnsCommittedResult()
+    {
+        // Arrange
+        var request = CreateMemberRequest(1);
+        var participant = WishlistParticipant.CreateMember(
+            Guid.CreateVersion7(),
+            request.WishlistId,
+            request.MemberId.GetValueOrDefault());
+        var wish = CreateWish(
+            request,
+            2);
+        var cancellationToken = TestContext.Current.CancellationToken;
+        SetupMemberMutation(
+            request,
+            participant,
+            wish,
+            currentReservation: null,
+            totalQuantity: 0,
+            cancellationToken);
+        _giftReservationRepositoryMock
+            .Setup(repository => repository.Add(It.IsAny<GiftReservation>()));
+        _giftReservationRepositoryMock
+            .Setup(repository => repository.GetHistorySourceAsync(
+                request.WishlistId,
+                request.WishId,
+                cancellationToken))
+            .ReturnsAsync(new GiftReservationHistorySource(
+                "Birthday",
+                "Gift"));
+        _giftReservationRepositoryMock
+            .Setup(repository => repository.AddHistory(It.IsAny<GiftReservationHistory>()));
+        _unitOfWorkMock
+            .Setup(unitOfWork => unitOfWork.SaveChangesAsync(cancellationToken))
+            .ReturnsAsync(1);
+        _transactionMock
+            .Setup(transaction => transaction.CommitAsync(cancellationToken))
+            .ThrowsAsync(new TimeoutException());
+        var committedReservation = new GiftReservation(
+            request.ReservationId,
+            request.WishlistId,
+            request.WishId,
+            participant.Id,
+            request.Quantity);
+        _giftReservationRepositoryMock
+            .Setup(repository => repository.GetAsync(
+                request.WishlistId,
+                request.WishId,
+                participant.Id,
+                cancellationToken))
+            .ReturnsAsync(committedReservation);
+
+        // Act
+        var result = await _service.UpsertAsync(
+            request,
+            cancellationToken);
+
+        // Assert
+        Assert.True(result.IsCreated);
+        Assert.Equal(
+            request.ReservationId,
+            result.Reservation.Id);
+        Assert.Equal(
+            request.Quantity,
+            result.Reservation.Quantity);
+        VerifyMemberMutation(
+            request,
+            participant,
+            wish,
+            currentReservation: null,
+            cancellationToken);
+        _giftReservationRepositoryMock.Verify(
+            repository => repository.Add(It.IsAny<GiftReservation>()),
+            Times.Once);
+        _giftReservationRepositoryMock.Verify(
+            repository => repository.GetHistorySourceAsync(
+                request.WishlistId,
+                request.WishId,
+                cancellationToken),
+            Times.Once);
+        _giftReservationRepositoryMock.Verify(
+            repository => repository.AddHistory(It.IsAny<GiftReservationHistory>()),
+            Times.Once);
+        _unitOfWorkMock.Verify(
+            unitOfWork => unitOfWork.SaveChangesAsync(cancellationToken),
+            Times.Once);
+        _transactionMock.Verify(
+            transaction => transaction.CommitAsync(cancellationToken),
+            Times.Once);
+        _giftReservationRepositoryMock.Verify(
+            repository => repository.GetAsync(
+                request.WishlistId,
+                request.WishId,
+                participant.Id,
+                cancellationToken),
+            Times.Once);
+        VerifyNoOtherCalls();
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    public async Task UpsertAsync_WhenAmbiguousCommitDoesNotMatch_ThrowsDependencyUnavailable(
+        int scenario)
+    {
+        // Arrange
+        var request = CreateMemberRequest(1);
+        var participant = WishlistParticipant.CreateMember(
+            Guid.CreateVersion7(),
+            request.WishlistId,
+            request.MemberId.GetValueOrDefault());
+        var wish = CreateWish(
+            request,
+            2);
+        var cancellationToken = TestContext.Current.CancellationToken;
+        SetupMemberMutation(
+            request,
+            participant,
+            wish,
+            currentReservation: null,
+            totalQuantity: 0,
+            cancellationToken);
+        _giftReservationRepositoryMock
+            .Setup(repository => repository.Add(It.IsAny<GiftReservation>()));
+        _giftReservationRepositoryMock
+            .Setup(repository => repository.GetHistorySourceAsync(
+                request.WishlistId,
+                request.WishId,
+                cancellationToken))
+            .ReturnsAsync(new GiftReservationHistorySource(
+                "Birthday",
+                "Gift"));
+        _giftReservationRepositoryMock
+            .Setup(repository => repository.AddHistory(It.IsAny<GiftReservationHistory>()));
+        _unitOfWorkMock
+            .Setup(unitOfWork => unitOfWork.SaveChangesAsync(cancellationToken))
+            .ReturnsAsync(1);
+        _transactionMock
+            .Setup(transaction => transaction.CommitAsync(cancellationToken))
+            .ThrowsAsync(new TimeoutException());
+        var currentReservation = scenario switch
+        {
+            1 => new GiftReservation(
+                Guid.CreateVersion7(),
+                request.WishlistId,
+                request.WishId,
+                participant.Id,
+                request.Quantity),
+            2 => new GiftReservation(
+                request.ReservationId,
+                request.WishlistId,
+                request.WishId,
+                participant.Id,
+                request.Quantity + 1),
+            _ => null
+        };
+        _giftReservationRepositoryMock
+            .Setup(repository => repository.GetAsync(
+                request.WishlistId,
+                request.WishId,
+                participant.Id,
+                cancellationToken))
+            .ReturnsAsync(currentReservation);
+
+        // Act
+        var action = () => _service.UpsertAsync(
+            request,
+            cancellationToken);
+
+        // Assert
+        await Assert.ThrowsAsync<DependencyUnavailableException>(action);
+        VerifyMemberMutation(
+            request,
+            participant,
+            wish,
+            currentReservation: null,
+            cancellationToken);
+        _giftReservationRepositoryMock.Verify(
+            repository => repository.Add(It.IsAny<GiftReservation>()),
+            Times.Once);
+        _giftReservationRepositoryMock.Verify(
+            repository => repository.GetHistorySourceAsync(
+                request.WishlistId,
+                request.WishId,
+                cancellationToken),
+            Times.Once);
+        _giftReservationRepositoryMock.Verify(
+            repository => repository.AddHistory(It.IsAny<GiftReservationHistory>()),
+            Times.Once);
+        _unitOfWorkMock.Verify(
+            unitOfWork => unitOfWork.SaveChangesAsync(cancellationToken),
+            Times.Once);
+        _transactionMock.Verify(
+            transaction => transaction.CommitAsync(cancellationToken),
+            Times.Once);
+        _giftReservationRepositoryMock.Verify(
+            repository => repository.GetAsync(
+                request.WishlistId,
+                request.WishId,
+                participant.Id,
+                cancellationToken),
+            Times.Once);
+        VerifyNoOtherCalls();
+    }
+
+    [Fact]
     public async Task CancelAsync_WhenMemberReservationExists_RemovesReservationAndCommits()
     {
         // Arrange
@@ -1901,6 +2107,7 @@ public class GiftReservationServiceTests
             cancellationToken);
         _giftReservationRepositoryMock
             .Setup(repository => repository.GetTotalQuantityAsync(
+                request.WishlistId,
                 request.WishId,
                 cancellationToken))
             .ReturnsAsync(totalQuantity);
@@ -1983,6 +2190,7 @@ public class GiftReservationServiceTests
             .ReturnsAsync(currentReservation);
         _giftReservationRepositoryMock
             .Setup(repository => repository.GetTotalQuantityAsync(
+                request.WishlistId,
                 request.WishId,
                 cancellationToken))
             .ReturnsAsync(totalQuantity);
@@ -2046,6 +2254,7 @@ public class GiftReservationServiceTests
             cancellationToken);
         _giftReservationRepositoryMock.Verify(
             repository => repository.GetTotalQuantityAsync(
+                request.WishlistId,
                 request.WishId,
                 cancellationToken),
             Times.Once);
@@ -2123,6 +2332,7 @@ public class GiftReservationServiceTests
             Times.Once);
         _giftReservationRepositoryMock.Verify(
             repository => repository.GetTotalQuantityAsync(
+                request.WishlistId,
                 request.WishId,
                 cancellationToken),
             Times.Once);

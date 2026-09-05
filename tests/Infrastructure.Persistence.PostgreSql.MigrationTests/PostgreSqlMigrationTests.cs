@@ -124,6 +124,10 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
             migration => Assert.EndsWith(
                 "_AddGiftReservationHistory",
                 migration,
+                StringComparison.Ordinal),
+            migration => Assert.EndsWith(
+                "_EnforceWishReservationQuantity",
+                migration,
                 StringComparison.Ordinal));
         Assert.False(context.Database.HasPendingModelChanges());
 
@@ -634,6 +638,103 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
         Assert.Equal(
             1,
             quantityAfterSecondUp);
+    }
+
+    [Fact]
+    public async Task MigrateAsync_WhenReservationsExceedWishQuantity_NormalizesAndEnforcesInvariantAcrossUpAndDown()
+    {
+        // Arrange
+        const string PreviousMigration = "20260905130035_AddGiftReservationHistory";
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var provider = CreateServiceProvider();
+        await using var scope = provider.CreateAsyncScope();
+        var context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
+        await context.Database.MigrateAsync(
+            PreviousMigration,
+            cancellationToken);
+        var ownerId = Guid.CreateVersion7();
+        var memberId = Guid.CreateVersion7();
+        var wishlistId = Guid.CreateVersion7();
+        var wishId = Guid.CreateVersion7();
+        var participantId = Guid.CreateVersion7();
+        context.Users.AddRange(
+            CreateMigrationMember(
+                ownerId,
+                "quantity-owner@example.test",
+                "Quantity owner"),
+            CreateMigrationMember(
+                memberId,
+                "quantity-member@example.test",
+                "Quantity member"));
+        context.Wishlists.Add(new Wishlist(
+            wishlistId,
+            ownerId,
+            "Quantity migration",
+            "QUANTITY MIGRATION",
+            WishlistOccasion.Other,
+            null,
+            null));
+        context.Wishes.Add(new Wish(
+            wishId,
+            wishlistId,
+            "Reserved gift",
+            null,
+            null,
+            null,
+            1,
+            1));
+        context.WishlistParticipants.Add(WishlistParticipant.CreateMember(
+            participantId,
+            wishlistId,
+            memberId));
+        context.GiftReservations.Add(new GiftReservation(
+            Guid.CreateVersion7(),
+            wishlistId,
+            wishId,
+            participantId,
+            2));
+        await context.SaveChangesAsync(cancellationToken);
+        int quantityAfterMigration;
+        PostgresException? violation;
+
+        try
+        {
+            // Act
+            await context.Database.MigrateAsync(cancellationToken);
+            context.ChangeTracker.Clear();
+            quantityAfterMigration = await context.Wishes
+                .Where(wish => wish.Id == wishId)
+                .Select(wish => wish.Quantity)
+                .SingleAsync(cancellationToken);
+            violation = await Assert.ThrowsAsync<PostgresException>(() =>
+                context.Database.ExecuteSqlInterpolatedAsync(
+                    $"UPDATE public.wishes SET quantity = {1} WHERE id = {wishId};",
+                    cancellationToken));
+            await context.Database.MigrateAsync(
+                PreviousMigration,
+                cancellationToken);
+            await context.Database.ExecuteSqlInterpolatedAsync(
+                $"UPDATE public.wishes SET quantity = {1} WHERE id = {wishId};",
+                cancellationToken);
+        }
+        finally
+        {
+            await context.Database.MigrateAsync(cancellationToken);
+            await context.Users
+                .Where(user => user.Id == ownerId || user.Id == memberId)
+                .ExecuteDeleteAsync(cancellationToken);
+        }
+
+        // Assert
+        Assert.Equal(
+            2,
+            quantityAfterMigration);
+        Assert.Equal(
+            PostgresErrorCodes.CheckViolation,
+            violation.SqlState);
+        Assert.Equal(
+            "ck_wishes_quantity_not_below_reserved",
+            violation.ConstraintName);
     }
 
     [Fact]

@@ -1388,6 +1388,34 @@ public class WishServiceTests
     }
 
     [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task UpdateAsync_WhenQuantityFallsBelowReservations_ThrowsWishQuantityBelowReservedException(
+        bool directException)
+    {
+        // Arrange
+        var data = CreateData();
+        var attemptedWish = ConfigureFailedSave(
+            data,
+            CreateWishQuantityBelowReservedException(directException));
+
+        // Act
+        var action = () => UpdateAsync(
+            data,
+            "Nouvelle console",
+            null,
+            null,
+            null);
+
+        // Assert
+        await Assert.ThrowsAsync<WishQuantityBelowReservedException>(action);
+        VerifyFailedSave(
+            data,
+            attemptedWish);
+        VerifyNoOtherCalls();
+    }
+
+    [Theory]
     [InlineData(WishlistAccess.MemberNotFound, false, typeof(InvalidAuthenticationSessionException))]
     [InlineData(WishlistAccess.NotOwned, false, typeof(WishlistNotFoundException))]
     [InlineData(WishlistAccess.Owner, false, null)]
@@ -2556,6 +2584,22 @@ public class WishServiceTests
             ? postgresException
             : new DbUpdateException(
                 "Wishlist wish limit reached.",
+                postgresException);
+    }
+
+    private static Exception CreateWishQuantityBelowReservedException(bool directException)
+    {
+        var postgresException = new PostgresException(
+            "Wish quantity cannot be lower than its reserved quantity.",
+            "ERROR",
+            "ERROR",
+            PostgresErrorCodes.CheckViolation,
+            constraintName: "ck_wishes_quantity_not_below_reserved");
+
+        return directException
+            ? postgresException
+            : new DbUpdateException(
+                "Wish quantity cannot be lower than its reserved quantity.",
                 postgresException);
     }
 

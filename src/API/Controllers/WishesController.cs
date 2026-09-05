@@ -228,6 +228,7 @@ public class WishesController(
     [ProducesResponseType(typeof(WishResponse), StatusCodes.Status200OK, "application/json")]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest, "application/json")]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status409Conflict, "application/json")]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status412PreconditionFailed, "application/json")]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status413PayloadTooLarge, "application/json")]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status415UnsupportedMediaType, "application/json")]

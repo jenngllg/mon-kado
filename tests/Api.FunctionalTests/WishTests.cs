@@ -534,6 +534,45 @@ public class WishTests
     }
 
     [Fact]
+    public async Task UpdateAsync_WhenQuantityFallsBelowReservations_ReturnsConflict()
+    {
+        // Arrange
+        await using var factory = new RegistrationApiFactory();
+        var wishlistId = Guid.CreateVersion7();
+        var wishId = Guid.CreateVersion7();
+        factory.WishService.Wishes[(wishlistId, wishId)] = CreateDetails(
+            wishlistId,
+            wishId);
+        factory.WishService.Exception = new WishQuantityBelowReservedException();
+        using var client = CreateAuthorizedClient(
+            factory,
+            Guid.CreateVersion7());
+
+        // Act
+        using var response = await PutAsync(
+            client,
+            wishlistId,
+            wishId,
+            new
+            {
+                name = "Cadeau",
+                quantity = 1
+            },
+            "\"0000002a\"");
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.Conflict,
+            response.StatusCode);
+        var error = await response.Content.ReadFromJsonAsync<ErrorResponse>(
+            TestContext.Current.CancellationToken);
+        Assert.NotNull(error);
+        Assert.Equal(
+            ErrorCodes.WishQuantityBelowReserved,
+            error.ErrorCode);
+    }
+
+    [Fact]
     public async Task UpdateAsync_WhenWishlistIsNotOwned_ReturnsWishlistNotFoundBeforeUpdate()
     {
         // Arrange

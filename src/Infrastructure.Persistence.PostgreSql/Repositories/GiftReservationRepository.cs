@@ -102,11 +102,13 @@ public class GiftReservationRepository(MonKadoDbContext context) : IGiftReservat
 
     /// <inheritdoc />
     public Task<int> GetTotalQuantityAsync(
+        Guid wishlistId,
         Guid wishId,
         CancellationToken cancellationToken)
     {
         return context.GiftReservations
-            .Where(reservation => reservation.WishId == wishId)
+            .Where(reservation => reservation.WishlistId == wishlistId &&
+                reservation.WishId == wishId)
             .SumAsync(
                 reservation => reservation.Quantity,
                 cancellationToken);

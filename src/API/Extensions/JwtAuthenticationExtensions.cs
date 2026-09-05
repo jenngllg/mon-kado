@@ -1,4 +1,5 @@
 using JennGllg.Fr.MonKado.Back.Api.Authorization;
+using JennGllg.Fr.MonKado.Back.Api.Middleware;
 using JennGllg.Fr.MonKado.Back.Application.Common.Exceptions;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Options;
 
@@ -66,6 +67,7 @@ public static class JwtAuthenticationExtensions
     public static WebApplication UseJwtAuthentication(this WebApplication app)
     {
         app.UseAuthentication();
+        app.UseMiddleware<OptionalBearerMiddleware>();
         app.UseAuthorization();
 
         return app;

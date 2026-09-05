@@ -156,6 +156,9 @@ public static class ErrorCodes
     /// </summary>
     public const string WishLimitReached = "WISH_LIMIT_REACHED";
 
+    /// <summary>Identifies a gift quantity lower than the quantity already reserved.</summary>
+    public const string WishQuantityBelowReserved = "WISH_QUANTITY_BELOW_RESERVED";
+
     /// <summary>Identifies an active wishlist share link that was not found.</summary>
     public const string WishlistShareLinkNotFound = "WISHLIST_SHARE_LINK_NOT_FOUND";
 

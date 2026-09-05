@@ -221,6 +221,41 @@ public class WishlistParticipantTests
     }
 
     [Fact]
+    public async Task GetCurrentAsync_WhenOptionalBearerIsInvalid_ReturnsUnauthorizedWithoutUsingGuestIdentity()
+    {
+        // Arrange
+        await using var factory = new RegistrationApiFactory();
+        using var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            JwtBearerDefaults.AuthenticationScheme,
+            "invalid-access-token");
+        using var request = CreateSharedRequest(
+            HttpMethod.Get,
+            Guid.CreateVersion7(),
+            "participants/current");
+        request.Headers.Add(
+            "Cookie",
+            $"{GuestSessionCookieService.LocalCookieName}=valid-looking-guest-token");
+
+        // Act
+        using var response = await client.SendAsync(
+            request,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.Unauthorized,
+            response.StatusCode);
+        using var document = await response.Content.ReadFromJsonAsync<JsonDocument>(
+            TestContext.Current.CancellationToken)
+            ?? throw new InvalidOperationException("The error response is empty.");
+        Assert.Equal(
+            "SECURITY_UNAUTHORIZED",
+            document.RootElement.GetProperty("errorCode").GetString());
+        Assert.Empty(factory.WishlistParticipantService.Retrievals);
+    }
+
+    [Fact]
     public async Task GetSharedAsync_WhenCurrentParticipantExists_IncludesOnlyThatParticipant()
     {
         // Arrange

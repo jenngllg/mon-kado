@@ -71,6 +71,13 @@ public class WishlistParticipantService : IWishlistParticipantService
         CancellationToken cancellationToken)
     {
         WishlistParticipantJoinResult result;
+        var attemptedParticipantId = Guid.Empty;
+        var attemptedDisplayName = string.Empty;
+        var attemptedIsCreated = false;
+        string? attemptedGuestToken = null;
+        DateTime? attemptedGuestTokenExpiresAt = null;
+        Guid? validGuestSessionId = null;
+        var commitAttempted = false;
 
         try
         {
@@ -93,7 +100,7 @@ public class WishlistParticipantService : IWishlistParticipantService
                 cancellationToken);
 
             var now = _timeProvider.GetUtcNow().UtcDateTime;
-            var validGuestSessionId = await ResolveGuestSessionIdAsync(
+            validGuestSessionId = await ResolveGuestSessionIdAsync(
                 request.GuestToken,
                 now,
                 cancellationToken);
@@ -114,16 +121,128 @@ public class WishlistParticipantService : IWishlistParticipantService
                     validGuestSessionId,
                     now,
                     cancellationToken);
+            attemptedParticipantId = result.Participant.Id;
+            attemptedDisplayName = result.Participant.DisplayName;
+            attemptedIsCreated = result.IsCreated;
+            attemptedGuestToken = result.GuestToken;
+            attemptedGuestTokenExpiresAt = result.GuestTokenExpiresAt;
+            commitAttempted = true;
             await transaction.CommitAsync(cancellationToken);
         }
-        catch (Exception exception) when (PostgreSqlFailureClassifier.IsUnavailable(exception))
+        catch (Exception exception)
         {
-            throw new DependencyUnavailableException(
-                "PostgreSQL",
-                exception);
+            if (exception is DependencyUnavailableException ||
+                !PostgreSqlFailureClassifier.IsUnavailable(exception))
+            {
+                throw;
+            }
+
+            if (!commitAttempted)
+                throw CreateUnavailableException(exception);
+
+            return await ResolveAmbiguousJoinAsync(
+                request,
+                validGuestSessionId,
+                new WishlistParticipantJoinResult(
+                    new WishlistParticipantDetails(
+                        attemptedParticipantId,
+                        attemptedDisplayName),
+                    attemptedIsCreated,
+                    attemptedGuestToken,
+                    attemptedGuestTokenExpiresAt),
+                exception,
+                cancellationToken);
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// Resolves whether a participant join committed after its acknowledgement was lost.
+    /// </summary>
+    /// <param name="request">The attempted join.</param>
+    /// <param name="validGuestSessionId">The guest session validated before the attempt.</param>
+    /// <param name="attemptedResult">The result produced before commit.</param>
+    /// <param name="originalException">The transient commit exception.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The original committed join result.</returns>
+    /// <exception cref="DependencyUnavailableException">The attempted join cannot be verified.</exception>
+    private async Task<WishlistParticipantJoinResult> ResolveAmbiguousJoinAsync(
+        WishlistParticipantJoinRequest request,
+        Guid? validGuestSessionId,
+        WishlistParticipantJoinResult attemptedResult,
+        Exception originalException,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var participant = await _participantRepository.GetByIdAsync(
+                request.WishlistId,
+                attemptedResult.Participant.Id,
+                cancellationToken);
+
+            if (participant is null)
+                throw CreateUnavailableException(originalException);
+
+            if (request.MemberId is Guid memberId)
+            {
+                if (participant.MemberId != memberId)
+                    throw CreateUnavailableException(originalException);
+
+                if (validGuestSessionId is not null)
+                {
+                    var guestParticipant = await _participantRepository.GetByGuestSessionAsync(
+                        request.WishlistId,
+                        validGuestSessionId.Value,
+                        cancellationToken);
+
+                    if (guestParticipant is not null)
+                        throw CreateUnavailableException(originalException);
+                }
+
+                return attemptedResult;
+            }
+
+            var expectedGuestSessionId = validGuestSessionId ?? request.GuestSessionId;
+
+            if (participant.GuestSessionId != expectedGuestSessionId)
+                throw CreateUnavailableException(originalException);
+
+            if (attemptedResult.GuestToken is null)
+                return attemptedResult;
+
+            _ = _guestSessionTokenService.TryParse(
+                attemptedResult.GuestToken,
+                out _,
+                out var tokenHash);
+
+            var guestSession = await _guestSessionRepository.GetByIdAsync(
+                expectedGuestSessionId,
+                cancellationToken);
+
+            if (guestSession is null ||
+                !_guestSessionTokenService.Verify(
+                    tokenHash,
+                    guestSession.SecretHash))
+            {
+                throw CreateUnavailableException(originalException);
+            }
+
+            return attemptedResult;
+        }
+        catch (Exception exception) when (
+            exception is not DependencyUnavailableException &&
+            PostgreSqlFailureClassifier.IsUnavailable(exception))
+        {
+            throw CreateUnavailableException(exception);
+        }
+    }
+
+    private static DependencyUnavailableException CreateUnavailableException(Exception exception)
+    {
+        return new DependencyUnavailableException(
+            "PostgreSQL",
+            exception);
     }
 
     /// <inheritdoc />
