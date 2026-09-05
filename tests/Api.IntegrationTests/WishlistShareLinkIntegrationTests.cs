@@ -157,6 +157,104 @@ public class WishlistShareLinkIntegrationTests(PostgreSqlContainerFixture fixtur
     }
 
     [Fact]
+    public async Task SharedWish_WhenGuestReservedFullQuantity_ReturnsPublicNoteAndCurrentQuantity()
+    {
+        // Arrange
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var factory = await CreateFactoryAsync(cancellationToken);
+        var ownerId = Guid.CreateVersion7();
+        var wishlistId = Guid.CreateVersion7();
+        var wishId = await SeedWishlistAsync(
+            factory,
+            ownerId,
+            wishlistId,
+            cancellationToken);
+        var foreignWishId = await SeedWishlistAsync(
+            factory,
+            Guid.CreateVersion7(),
+            Guid.CreateVersion7(),
+            cancellationToken);
+        using var ownerClient = CreateAuthorizedClient(
+            factory,
+            ownerId);
+        using var creation = await ownerClient.PostAsync(
+            $"/api/v1/wishlists/{wishlistId}/share-link",
+            null,
+            cancellationToken);
+        var createdBody = await creation.Content.ReadFromJsonAsync<JsonElement>(
+            cancellationToken);
+        var shareLinkId = createdBody.GetProperty("id").GetGuid();
+        var secret = GetSecret(createdBody);
+        using var guestClient = factory.CreateClient();
+        using var join = await JoinAsGuestAsync(
+            guestClient,
+            shareLinkId,
+            secret,
+            "Guest Jenn",
+            cancellationToken);
+        using var reservation = await UpsertReservationAsync(
+            guestClient,
+            shareLinkId,
+            wishId,
+            secret,
+            1,
+            cancellationToken);
+
+        // Act
+        using var detail = await GetSharedWishAsync(
+            guestClient,
+            shareLinkId,
+            wishId,
+            secret,
+            cancellationToken);
+        using var foreignWish = await GetSharedWishAsync(
+            guestClient,
+            shareLinkId,
+            foreignWishId,
+            secret,
+            cancellationToken);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.Created,
+            join.StatusCode);
+        Assert.Equal(
+            HttpStatusCode.Created,
+            reservation.StatusCode);
+        Assert.Equal(
+            HttpStatusCode.OK,
+            detail.StatusCode);
+        var detailBody = await detail.Content.ReadFromJsonAsync<JsonElement>(
+            cancellationToken);
+        Assert.Equal(
+            wishId,
+            detailBody.GetProperty("id").GetGuid());
+        Assert.Equal(
+            "Description publique",
+            detailBody.GetProperty("note").GetString());
+        Assert.Equal(
+            1,
+            detailBody.GetProperty("quantity").GetInt32());
+        Assert.Equal(
+            1,
+            detailBody.GetProperty("reservedQuantity").GetInt32());
+        Assert.Equal(
+            0,
+            detailBody.GetProperty("availableQuantity").GetInt32());
+        Assert.Equal(
+            1,
+            detailBody.GetProperty("currentParticipantReservedQuantity").GetInt32());
+        Assert.Equal(
+            HttpStatusCode.NotFound,
+            foreignWish.StatusCode);
+        var error = await foreignWish.Content.ReadFromJsonAsync<JsonElement>(
+            cancellationToken);
+        Assert.Equal(
+            "SHARED_WISH_NOT_FOUND",
+            error.GetProperty("errorCode").GetString());
+    }
+
+    [Fact]
     public async Task Participant_WhenGuestJoinsAndShareLinkRotates_PreservesIdentityUntilGuestSessionExpires()
     {
         // Arrange
@@ -482,7 +580,7 @@ public class WishlistShareLinkIntegrationTests(PostgreSqlContainerFixture fixtur
             cancellationToken);
     }
 
-    private static async Task SeedWishlistAsync(
+    private static async Task<Guid> SeedWishlistAsync(
         PostgreSqlApiFactory factory,
         Guid ownerId,
         Guid wishlistId,
@@ -490,13 +588,14 @@ public class WishlistShareLinkIntegrationTests(PostgreSqlContainerFixture fixtur
     {
         await using var scope = factory.Services.CreateAsyncScope();
         var context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
+        var ownerEmail = $"owner-{ownerId:N}@example.test";
         context.Users.Add(new MonKadoUser
         {
             Id = ownerId,
-            UserName = "owner@example.test",
-            NormalizedUserName = "OWNER@EXAMPLE.TEST",
-            Email = "owner@example.test",
-            NormalizedEmail = "OWNER@EXAMPLE.TEST",
+            UserName = ownerEmail,
+            NormalizedUserName = ownerEmail.ToUpperInvariant(),
+            Email = ownerEmail,
+            NormalizedEmail = ownerEmail.ToUpperInvariant(),
             EmailConfirmed = true,
             DisplayName = "Jenn",
             SecurityStamp = Guid.CreateVersion7().ToString()
@@ -512,15 +611,18 @@ public class WishlistShareLinkIntegrationTests(PostgreSqlContainerFixture fixtur
                 9,
                 23),
             "Merci"));
+        var wishId = Guid.CreateVersion7();
         context.Wishes.Add(new Wish(
-            Guid.CreateVersion7(),
+            wishId,
             wishlistId,
             "Livre",
-            "Note privée",
+            "Description publique",
             "https://example.test/book",
             19.99m,
             1));
         await context.SaveChangesAsync(cancellationToken);
+
+        return wishId;
     }
 
     private static async Task SeedMemberAsync(
@@ -620,6 +722,57 @@ public class WishlistShareLinkIntegrationTests(PostgreSqlContainerFixture fixtur
         request.Headers.TryAddWithoutValidation(
             "X-MonKado-Share-Token",
             secret);
+
+        return await client.SendAsync(
+            request,
+            cancellationToken);
+    }
+
+    private static async Task<HttpResponseMessage> GetSharedWishAsync(
+        HttpClient client,
+        Guid shareLinkId,
+        Guid wishId,
+        string secret,
+        CancellationToken cancellationToken)
+    {
+        using var request = new HttpRequestMessage(
+            HttpMethod.Get,
+            $"/api/v1/shared-wishlists/{shareLinkId}/wishes/{wishId}");
+        request.Headers.TryAddWithoutValidation(
+            "X-MonKado-Share-Token",
+            secret);
+
+        return await client.SendAsync(
+            request,
+            cancellationToken);
+    }
+
+    private static async Task<HttpResponseMessage> UpsertReservationAsync(
+        HttpClient client,
+        Guid shareLinkId,
+        Guid wishId,
+        string secret,
+        int quantity,
+        CancellationToken cancellationToken)
+    {
+        var csrfToken = await GetCsrfTokenAsync(
+            client,
+            cancellationToken);
+        using var request = new HttpRequestMessage(
+            HttpMethod.Put,
+            $"/api/v1/shared-wishlists/{shareLinkId}/wishes/{wishId}/reservations/current")
+        {
+            Content = JsonContent.Create(new
+            {
+                quantity
+            })
+        };
+        request.Headers.TryAddWithoutValidation(
+            "X-MonKado-Share-Token",
+            secret);
+        request.Headers.Add(
+            WebSecurityOptions.AntiforgeryHeaderName,
+            csrfToken);
 
         return await client.SendAsync(
             request,

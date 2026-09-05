@@ -104,4 +104,91 @@ public class SharedWishlistsControllerTests
         _guestSessionCookieServiceMock.VerifyNoOtherCalls();
         _senderMock.VerifyNoOtherCalls();
     }
+
+    [Fact]
+    public async Task GetWishAsync_WhenWishIsReturned_MapsDetailedPublicResponse()
+    {
+        // Arrange
+        var shareLinkId = Guid.CreateVersion7();
+        var wishId = Guid.CreateVersion7();
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var wish = new SharedWishDetail
+        {
+            Id = wishId,
+            Name = "Gift",
+            Note = "Public note",
+            Url = "https://example.test/gift",
+            Price = 12.34m,
+            Quantity = 1,
+            ReservedQuantity = 3,
+            CurrentParticipantReservedQuantity = null
+        };
+        _guestSessionCookieServiceMock
+            .Setup(service => service.GetValue(_controller.Request))
+            .Returns("guest");
+        _senderMock
+            .Setup(sender => sender.Send(
+                It.Is<GetSharedWishQuery>(query =>
+                    query.ShareLinkId == shareLinkId &&
+                    query.WishId == wishId &&
+                    query.Secret == "secret" &&
+                    query.MemberId.GetValueOrDefault() == Guid.Empty &&
+                    query.GuestToken == "guest"),
+                cancellationToken))
+            .ReturnsAsync(wish);
+
+        // Act
+        var result = await _controller.GetWishAsync(
+            shareLinkId,
+            wishId,
+            "secret",
+            cancellationToken);
+
+        // Assert
+        var response = Assert.IsType<OkObjectResult>(result.Result);
+        var body = Assert.IsType<SharedWishDetailResponse>(response.Value);
+        Assert.Equal(
+            wish.Id,
+            body.Id);
+        Assert.Equal(
+            wish.Name,
+            body.Name);
+        Assert.Equal(
+            wish.Note,
+            body.Note);
+        Assert.Equal(
+            wish.Url,
+            body.Url);
+        Assert.Equal(
+            wish.Price,
+            body.Price);
+        Assert.Equal(
+            wish.Quantity,
+            body.Quantity);
+        Assert.Equal(
+            wish.ReservedQuantity,
+            body.ReservedQuantity);
+        Assert.Equal(
+            0,
+            body.AvailableQuantity);
+        Assert.Null(body.CurrentParticipantReservedQuantity);
+        Assert.Equal(
+            "no-store",
+            _controller.Response.Headers.CacheControl);
+        Assert.Equal(
+            "noindex, nofollow, noarchive",
+            _controller.Response.Headers["X-Robots-Tag"]);
+        _guestSessionCookieServiceMock.Verify(
+            service => service.GetValue(_controller.Request),
+            Times.Once);
+        _senderMock.Verify(
+            sender => sender.Send(
+                It.Is<GetSharedWishQuery>(query =>
+                    query.ShareLinkId == shareLinkId &&
+                    query.WishId == wishId),
+                cancellationToken),
+            Times.Once);
+        _guestSessionCookieServiceMock.VerifyNoOtherCalls();
+        _senderMock.VerifyNoOtherCalls();
+    }
 }

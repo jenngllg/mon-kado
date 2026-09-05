@@ -193,6 +193,12 @@ public class GlobalExceptionHandler(
                 "The shared wishlist was not found.",
                 ErrorCodes.SharedWishlistNotFound,
                 null),
+            SharedWishNotFoundException => new ErrorResponse(
+                StatusCodes.Status404NotFound,
+                "Shared wish not found",
+                "The gift wish was not found under the shared wishlist.",
+                ErrorCodes.SharedWishNotFound,
+                null),
             GuestSessionInvalidException => new ErrorResponse(
                 StatusCodes.Status401Unauthorized,
                 "Guest session invalid",

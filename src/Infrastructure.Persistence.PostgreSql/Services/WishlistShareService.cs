@@ -242,17 +242,13 @@ public class WishlistShareService(
     {
         try
         {
-            var shareLink = await shareLinkRepository.GetByIdAsync(
+            var shareLink = await GetVerifiedShareLinkAsync(
                 shareLinkId,
+                secret,
                 cancellationToken);
 
-            if (shareLink is null ||
-                !tokenService.Verify(
-                    secret,
-                    shareLink.SecretHash))
-            {
+            if (shareLink is null)
                 return null;
-            }
 
             return await shareLinkRepository.GetSharedWishlistAsync(
                 shareLink.WishlistId,
@@ -264,6 +260,73 @@ public class WishlistShareService(
                 "PostgreSQL",
                 exception);
         }
+    }
+
+    /// <inheritdoc />
+    public async Task<SharedWishLookupResult> GetSharedWishAsync(
+        Guid shareLinkId,
+        string secret,
+        Guid wishId,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var shareLink = await GetVerifiedShareLinkAsync(
+                shareLinkId,
+                secret,
+                cancellationToken);
+
+            if (shareLink is null)
+            {
+                return new SharedWishLookupResult(
+                    SharedWishLookupOutcome.SharedWishlistNotFound,
+                    null,
+                    null);
+            }
+
+            var wish = await shareLinkRepository.GetSharedWishAsync(
+                shareLink.WishlistId,
+                wishId,
+                cancellationToken);
+
+            return new SharedWishLookupResult(
+                wish is null
+                    ? SharedWishLookupOutcome.WishNotFound
+                    : SharedWishLookupOutcome.Found,
+                shareLink.WishlistId,
+                wish);
+        }
+        catch (Exception exception) when (PostgreSqlFailureClassifier.IsUnavailable(exception))
+        {
+            throw new DependencyUnavailableException(
+                "PostgreSQL",
+                exception);
+        }
+    }
+
+    /// <summary>Gets a share link only when the presented secret matches it.</summary>
+    /// <param name="shareLinkId">The share-link identifier.</param>
+    /// <param name="secret">The presented secret.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The verified share link, or <see langword="null" />.</returns>
+    private async Task<WishlistShareLink?> GetVerifiedShareLinkAsync(
+        Guid shareLinkId,
+        string secret,
+        CancellationToken cancellationToken)
+    {
+        var shareLink = await shareLinkRepository.GetByIdAsync(
+            shareLinkId,
+            cancellationToken);
+
+        if (shareLink is null)
+            return null;
+
+        if (!tokenService.Verify(
+            secret,
+            shareLink.SecretHash))
+            return null;
+
+        return shareLink;
     }
 
     /// <summary>

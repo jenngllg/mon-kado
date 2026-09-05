@@ -240,6 +240,38 @@ public static partial class ApplicationLogMessages
         Guid wishlistId);
 
     /// <summary>
+    /// Logs the start of detailed public gift-wish retrieval.
+    /// </summary>
+    /// <param name="logger">The logger.</param>
+    /// <param name="shareLinkId">The share-link identifier.</param>
+    /// <param name="wishId">The gift-wish identifier.</param>
+    [LoggerMessage(
+        EventId = LogEventIds.SharedWishRetrievalStarted,
+        Level = LogLevel.Debug,
+        Message = "Retrieving wish {WishId} through share link {ShareLinkId}.")]
+    public static partial void SharedWishRetrievalStarted(
+        ILogger logger,
+        Guid shareLinkId,
+        Guid wishId);
+
+    /// <summary>
+    /// Logs a detailed publicly retrieved gift wish.
+    /// </summary>
+    /// <param name="logger">The logger.</param>
+    /// <param name="shareLinkId">The share-link identifier.</param>
+    /// <param name="wishlistId">The wishlist identifier.</param>
+    /// <param name="wishId">The gift-wish identifier.</param>
+    [LoggerMessage(
+        EventId = LogEventIds.SharedWishRetrieved,
+        Level = LogLevel.Information,
+        Message = "Wish {WishId} from wishlist {WishlistId} retrieved through share link {ShareLinkId}.")]
+    public static partial void SharedWishRetrieved(
+        ILogger logger,
+        Guid shareLinkId,
+        Guid wishlistId,
+        Guid wishId);
+
+    /// <summary>
     /// Logs the start of a current session retrieval.
     /// </summary>
     /// <param name="logger">The logger.</param>

@@ -47,4 +47,14 @@ public interface IWishlistShareLinkRepository
     Task<SharedWishlistDetails?> GetSharedWishlistAsync(
         Guid wishlistId,
         CancellationToken cancellationToken);
+
+    /// <summary>Gets detailed public information about one gift wish without tracking it.</summary>
+    /// <param name="wishlistId">The wishlist identifier.</param>
+    /// <param name="wishId">The gift-wish identifier.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The shared gift-wish details, or <see langword="null" />.</returns>
+    Task<SharedWishDetail?> GetSharedWishAsync(
+        Guid wishlistId,
+        Guid wishId,
+        CancellationToken cancellationToken);
 }
