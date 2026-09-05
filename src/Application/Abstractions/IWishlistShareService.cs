@@ -79,4 +79,17 @@ public interface IWishlistShareService
         Guid shareLinkId,
         string secret,
         CancellationToken cancellationToken);
+
+    /// <summary>Gets detailed public information about one gift wish from a share-link secret.</summary>
+    /// <param name="shareLinkId">The share-link identifier.</param>
+    /// <param name="secret">The presented secret.</param>
+    /// <param name="wishId">The gift-wish identifier.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The explicit public gift-wish lookup result.</returns>
+    /// <exception cref="DependencyUnavailableException">PostgreSQL is unavailable.</exception>
+    Task<SharedWishLookupResult> GetSharedWishAsync(
+        Guid shareLinkId,
+        string secret,
+        Guid wishId,
+        CancellationToken cancellationToken);
 }

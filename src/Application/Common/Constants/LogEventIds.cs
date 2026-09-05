@@ -383,6 +383,12 @@ public static class LogEventIds
     /// <summary>Identifies a cancelled gift reservation.</summary>
     public const int GiftReservationCancelled = 2043;
 
+    /// <summary>Identifies the start of detailed public gift-wish retrieval.</summary>
+    public const int SharedWishRetrievalStarted = 2044;
+
+    /// <summary>Identifies a retrieved detailed public gift wish.</summary>
+    public const int SharedWishRetrieved = 2045;
+
     #endregion
 
     #region Technical
