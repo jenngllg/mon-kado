@@ -1,4 +1,5 @@
 using JennGllg.Fr.MonKado.Back.Application.Abstractions;
+using JennGllg.Fr.MonKado.Back.Application.Common.Exceptions;
 using JennGllg.Fr.MonKado.Back.Application.Models;
 using JennGllg.Fr.MonKado.Back.Worker.Logging;
 using JennGllg.Fr.MonKado.Back.Worker.Options;
@@ -72,15 +73,17 @@ public sealed class GiftImageCleanupWorker : BackgroundService
     /// <returns>The delay before the next cycle.</returns>
     private async Task<TimeSpan> CleanupOnceAsync(CancellationToken cancellationToken)
     {
+        using var logScope = WorkerLogScope.Begin(
+            _logger,
+            "GiftImageCleanup");
         try
         {
-            using (WorkerLogScope.Begin(
-                _logger,
-                "GiftImageCleanup"))
-            {
-                await DeleteObsoleteImagesAsync(cancellationToken);
-                await ReconcilePendingImagesAsync(cancellationToken);
-            }
+            await DeleteObsoleteImagesAsync(cancellationToken);
+            await ReconcilePendingImagesAsync(cancellationToken);
+            await _store.CleanupTemporaryAsync(
+                _timeProvider.GetUtcNow().UtcDateTime - _options.PendingGracePeriod,
+                _options.BatchSize,
+                cancellationToken);
 
             return _options.Interval;
         }
@@ -93,7 +96,7 @@ public sealed class GiftImageCleanupWorker : BackgroundService
             WorkerLogMessages.GiftImageCleanupFailed(
                 _logger,
                 exception.GetType().Name,
-                exception);
+                exception is GiftImageStorageUnavailableException ? null : exception);
 
             return _options.FailureRetryInterval;
         }

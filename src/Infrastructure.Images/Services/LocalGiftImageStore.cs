@@ -16,16 +16,21 @@ public class LocalGiftImageStore : IGiftImageStore
     private const string PendingExtension = ".pending";
 
     private readonly string _storagePath;
+    private readonly TimeProvider _timeProvider;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="LocalGiftImageStore" /> class.
     /// </summary>
     /// <param name="options">The local image storage options.</param>
-    public LocalGiftImageStore(IOptions<GiftImageStorageOptions> options)
+    /// <param name="timeProvider">The clock used for cancellable lock contention waits.</param>
+    public LocalGiftImageStore(
+        IOptions<GiftImageStorageOptions> options,
+        TimeProvider timeProvider)
     {
         var storagePath = options.Value.StoragePath;
         ArgumentException.ThrowIfNullOrWhiteSpace(storagePath);
-        _storagePath = Path.GetFullPath(storagePath);
+        _storagePath = Path.TrimEndingDirectorySeparator(Path.GetFullPath(storagePath));
+        _timeProvider = timeProvider;
     }
 
     /// <inheritdoc />
@@ -42,6 +47,10 @@ public class LocalGiftImageStore : IGiftImageStore
 
         try
         {
+            using var lease = await AcquireWriteLeaseAsync(
+                imageId,
+                cancellationToken);
+            EnsureSafeDirectory(directoryPath);
             Directory.CreateDirectory(directoryPath);
             await File.WriteAllBytesAsync(
                 temporaryPendingPath,
@@ -76,6 +85,158 @@ public class LocalGiftImageStore : IGiftImageStore
                 throw;
 
             throw new GiftImageStorageUnavailableException(exception);
+        }
+    }
+
+    /// <inheritdoc />
+    public Task CleanupTemporaryAsync(
+        DateTime cutoff,
+        int batchSize,
+        CancellationToken cancellationToken)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(batchSize);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        try
+        {
+            EnsureSafeDirectory(_storagePath);
+            var candidates = Directory.EnumerateFiles(
+                _storagePath,
+                "*.tmp",
+                new EnumerationOptions
+                {
+                    RecurseSubdirectories = true,
+                    AttributesToSkip = FileAttributes.ReparsePoint,
+                    IgnoreInaccessible = false
+                })
+                .Where(path => File.GetLastWriteTimeUtc(path) <= cutoff)
+                .Where(path => TryGetTemporaryImageId(path) is not null)
+                .Take(batchSize);
+            foreach (var path in candidates)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var imageId = TryGetTemporaryImageId(path).GetValueOrDefault();
+                using var lease = TryAcquireLease(imageId);
+
+                if (lease is null)
+                    continue;
+                EnsureSafeDirectory(GetDirectoryPath(imageId));
+
+                if (File.Exists(path) &&
+                    !File.GetAttributes(path).HasFlag(FileAttributes.ReparsePoint) &&
+                    File.GetLastWriteTimeUtc(path) <= cutoff)
+                    File.Delete(path);
+            }
+
+            return Task.CompletedTask;
+        }
+        catch (DirectoryNotFoundException)
+        {
+
+            return Task.CompletedTask;
+        }
+        catch (Exception exception) when (IsStorageFailure(exception))
+        {
+
+            throw new GiftImageStorageUnavailableException(exception);
+        }
+    }
+
+    /// <summary>Recognizes only generated temporary names in their canonical shard.</summary>
+    /// <param name="path">The candidate path.</param>
+    /// <returns>The image identifier, or no match.</returns>
+    private Guid? TryGetTemporaryImageId(string path)
+    {
+        var parts = Path.GetFileName(path).Split('.');
+
+        if (parts.Length != 4 || parts[1] is not ("webp" or "pending") ||
+            !Guid.TryParseExact(
+                parts[0],
+                "N",
+                out var imageId) ||
+            !Guid.TryParseExact(
+                parts[2],
+                "N",
+                out _))
+            return null;
+
+        return string.Equals(
+            path,
+            Path.Combine(
+                GetDirectoryPath(imageId),
+                $"{parts[0]}.{parts[1]}.{parts[2]}.tmp"),
+            StringComparison.Ordinal) ? imageId : null;
+    }
+
+    /// <summary>Acquires exclusive ownership before any temporary file is created.</summary>
+    /// <param name="imageId">The immutable image identifier.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The cross-process write lease.</returns>
+    private async Task<FileStream> AcquireWriteLeaseAsync(
+        Guid imageId,
+        CancellationToken cancellationToken)
+    {
+        FileStream? lease;
+        while ((lease = TryAcquireLease(imageId)) is null)
+            await Task.Delay(
+                TimeSpan.FromMilliseconds(10),
+                _timeProvider,
+                cancellationToken);
+
+        return lease;
+    }
+
+    /// <summary>Uses at most 256 persistent lock files, never unlinked while another process can acquire them.</summary>
+    /// <param name="imageId">The image used to select the lock partition.</param>
+    /// <returns>The exclusive lease, or null when another process owns it.</returns>
+    private FileStream? TryAcquireLease(Guid imageId)
+    {
+        EnsureSafeDirectory(_storagePath);
+        var lockDirectory = Path.Combine(
+            _storagePath,
+            ".cleanup-locks");
+        EnsureSafeDirectory(lockDirectory);
+        Directory.CreateDirectory(lockDirectory);
+        var lockPath = Path.Combine(
+            lockDirectory,
+            imageId.ToString("N")[^2..] + ".lock");
+
+        if (new FileInfo(lockPath).LinkTarget is not null)
+            throw new IOException("The image lock is not a regular file.");
+
+        try
+        {
+
+            return new FileStream(
+                lockPath,
+                FileMode.OpenOrCreate,
+                FileAccess.ReadWrite,
+                FileShare.None);
+        }
+        catch (IOException exception) when ((exception.HResult & 0xFFFF) is 11 or 32 or 33)
+        {
+
+            return null;
+        }
+    }
+
+    /// <summary>Rejects file and symbolic-link directory components within storage.</summary>
+    /// <param name="path">The directory to validate.</param>
+    private void EnsureSafeDirectory(string path)
+    {
+        var directory = new DirectoryInfo(path);
+        while (true)
+        {
+
+            if (File.Exists(directory.FullName) || directory.LinkTarget is not null)
+                throw new IOException("The image storage directory is not a regular directory.");
+
+            if (string.Equals(
+                directory.FullName,
+                _storagePath,
+                StringComparison.Ordinal))
+                break;
+            directory = directory.Parent!;
         }
     }
 

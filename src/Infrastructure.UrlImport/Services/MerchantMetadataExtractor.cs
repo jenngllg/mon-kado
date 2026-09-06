@@ -34,13 +34,16 @@ public class MerchantMetadataExtractor : IMerchantMetadataExtractor
                 "name")) ?? CleanName(ReadMeta(
                 html,
                 "og:title")) ?? CleanName(html.Title);
-        var image = ReadImage(product) ?? ReadMeta(
-            html,
-            "og:image");
+        var image = ReadImage(product);
+
+        if (string.IsNullOrWhiteSpace(image))
+            image = ReadMeta(
+                html,
+                "og:image");
         var prices = ReadOffers(product)
             .ToArray();
 
-        if (prices.Length == 0)
+        if (prices.All(price => string.IsNullOrWhiteSpace(price.Amount)))
         {
             prices = [(ReadMeta(
                     html,

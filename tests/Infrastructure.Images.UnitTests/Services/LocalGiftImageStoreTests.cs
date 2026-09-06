@@ -8,6 +8,8 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Images.UnitTests.Services;
 
 public class LocalGiftImageStoreTests : IDisposable
 {
+    public static bool RequiresWindowsSymbolicLinkPrivilege => OperatingSystem.IsWindows();
+
     [Fact]
     public async Task WritePendingAsync_WhenSourceMemoryIsUnavailable_DoesNotReportStorageFailure()
     {
@@ -23,23 +25,54 @@ public class LocalGiftImageStoreTests : IDisposable
         // Assert
         await Assert.ThrowsAsync<InvalidOperationException>(action);
         Assert.Empty(Directory.EnumerateFiles(
-            _storagePath,
-            "*.tmp",
-            SearchOption.AllDirectories));
+                _storagePath,
+                "*.tmp",
+                SearchOption.AllDirectories));
     }
 
     private readonly string _storagePath;
     private readonly LocalGiftImageStore _store;
+
+    [Fact]
+    public async Task WritePendingAsync_WhenStoragePathHasTrailingSeparator_WritesAndCleansSafely()
+    {
+        // Arrange
+        var store = new LocalGiftImageStore(
+            Microsoft.Extensions.Options.Options.Create(new GiftImageStorageOptions
+            {
+                StoragePath = _storagePath + Path.DirectorySeparatorChar
+            }),
+            TimeProvider.System);
+        var imageId = Guid.CreateVersion7();
+
+        // Act
+        await store.WritePendingAsync(
+            imageId,
+            new byte[] { 1 },
+            TestContext.Current.CancellationToken);
+        await store.CleanupTemporaryAsync(
+            DateTime.MaxValue,
+            10,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        await using var stream = await store.OpenReadAsync(
+            imageId,
+            TestContext.Current.CancellationToken);
+        Assert.NotNull(stream);
+        Assert.Equal(
+            1,
+            stream.ReadByte());
+    }
 
     public LocalGiftImageStoreTests()
     {
         _storagePath = Path.Combine(
             Path.GetTempPath(),
             $"mon-kado-images-{Guid.NewGuid():N}");
-        _store = new LocalGiftImageStore(Microsoft.Extensions.Options.Options.Create(new GiftImageStorageOptions
-        {
-            StoragePath = _storagePath
-        }));
+        _store = new LocalGiftImageStore(
+            Microsoft.Extensions.Options.Options.Create(new GiftImageStorageOptions { StoragePath = _storagePath }),
+            TimeProvider.System);
     }
 
     [Fact]
@@ -47,8 +80,7 @@ public class LocalGiftImageStoreTests : IDisposable
     {
         // Arrange
         var imageId = Guid.Parse("019cba55-f3d7-7000-8000-000000000001");
-        byte[] content =
-        [
+        byte[] content = [
             1,
             2,
             3
@@ -63,9 +95,12 @@ public class LocalGiftImageStoreTests : IDisposable
         // Assert
         var files = Directory
             .EnumerateFiles(
-                _storagePath,
-                "*",
-                SearchOption.AllDirectories)
+            _storagePath,
+            "*",
+            SearchOption.AllDirectories)
+            .Where(path => !path.EndsWith(
+                ".lock",
+                StringComparison.Ordinal))
             .OrderBy(path => path)
             .ToArray();
         Assert.Equal(
@@ -93,8 +128,7 @@ public class LocalGiftImageStoreTests : IDisposable
     {
         // Arrange
         var imageId = Guid.CreateVersion7();
-        byte[] content =
-        [
+        byte[] content = [
             4,
             5,
             6
@@ -160,8 +194,8 @@ public class LocalGiftImageStoreTests : IDisposable
 
         // Act
         var exception = await Record.ExceptionAsync(() => _store.OpenReadAsync(
-            imageId,
-            TestContext.Current.CancellationToken));
+                imageId,
+                TestContext.Current.CancellationToken));
 
         // Assert
         Assert.IsType<GiftImageStorageUnavailableException>(exception);
@@ -185,9 +219,12 @@ public class LocalGiftImageStoreTests : IDisposable
         // Assert
         var files = Directory
             .EnumerateFiles(
-                _storagePath,
-                "*",
-                SearchOption.AllDirectories)
+            _storagePath,
+            "*",
+            SearchOption.AllDirectories)
+            .Where(path => !path.EndsWith(
+                ".lock",
+                StringComparison.Ordinal))
             .ToArray();
         var imagePath = Assert.Single(files);
         Assert.EndsWith(
@@ -204,8 +241,8 @@ public class LocalGiftImageStoreTests : IDisposable
 
         // Act
         var exception = await Record.ExceptionAsync(() => _store.MarkCommittedAsync(
-            imageId,
-            TestContext.Current.CancellationToken));
+                imageId,
+                TestContext.Current.CancellationToken));
 
         // Assert
         Assert.Null(exception);
@@ -220,8 +257,8 @@ public class LocalGiftImageStoreTests : IDisposable
 
         // Act
         var exception = await Record.ExceptionAsync(() => _store.MarkCommittedAsync(
-            imageId,
-            TestContext.Current.CancellationToken));
+                imageId,
+                TestContext.Current.CancellationToken));
 
         // Assert
         Assert.IsType<GiftImageStorageUnavailableException>(exception);
@@ -243,10 +280,14 @@ public class LocalGiftImageStoreTests : IDisposable
             TestContext.Current.CancellationToken);
 
         // Assert
-        Assert.Empty(Directory.EnumerateFiles(
-            _storagePath,
-            "*",
-            SearchOption.AllDirectories));
+        Assert.DoesNotContain(
+            Directory.EnumerateFiles(
+                _storagePath,
+                "*",
+                SearchOption.AllDirectories),
+            path => !path.EndsWith(
+                ".lock",
+                StringComparison.Ordinal));
     }
 
     [Fact]
@@ -258,8 +299,8 @@ public class LocalGiftImageStoreTests : IDisposable
 
         // Act
         var exception = await Record.ExceptionAsync(() => _store.DeleteAsync(
-            imageId,
-            TestContext.Current.CancellationToken));
+                imageId,
+                TestContext.Current.CancellationToken));
 
         // Assert
         Assert.IsType<GiftImageStorageUnavailableException>(exception);
@@ -340,18 +381,17 @@ public class LocalGiftImageStoreTests : IDisposable
             filePath,
             [],
             TestContext.Current.CancellationToken);
-        var store = new LocalGiftImageStore(Microsoft.Extensions.Options.Options.Create(new GiftImageStorageOptions
-        {
-            StoragePath = filePath
-        }));
-
+        var store = new LocalGiftImageStore(
+            Microsoft.Extensions.Options.Options.Create(new GiftImageStorageOptions { StoragePath = filePath }),
+            TimeProvider.System);
         try
         {
+
             // Act
             var exception = await Record.ExceptionAsync(() => store.GetPendingAsync(
-                DateTime.UtcNow,
-                10,
-                TestContext.Current.CancellationToken));
+                    DateTime.UtcNow,
+                    10,
+                    TestContext.Current.CancellationToken));
 
             // Assert
             Assert.IsType<GiftImageStorageUnavailableException>(exception);
@@ -370,9 +410,9 @@ public class LocalGiftImageStoreTests : IDisposable
 
         // Act
         var exception = await Record.ExceptionAsync(() => _store.GetPendingAsync(
-            cutoff,
-            0,
-            TestContext.Current.CancellationToken));
+                cutoff,
+                0,
+                TestContext.Current.CancellationToken));
 
         // Assert
         Assert.IsType<ArgumentOutOfRangeException>(exception);
@@ -390,17 +430,21 @@ public class LocalGiftImageStoreTests : IDisposable
 
         // Act
         var exception = await Record.ExceptionAsync(() => _store.WritePendingAsync(
-            imageId,
-            new byte[] { 2 },
-            TestContext.Current.CancellationToken));
+                imageId,
+                new byte[] { 2 },
+                TestContext.Current.CancellationToken));
 
         // Assert
         Assert.IsType<GiftImageStorageUnavailableException>(exception);
         Assert.DoesNotContain(
-            Directory.EnumerateFiles(
+            Directory
+                .EnumerateFiles(
                 _storagePath,
                 "*",
-                SearchOption.AllDirectories),
+                SearchOption.AllDirectories)
+                .Where(path => !path.EndsWith(
+                    ".lock",
+                    StringComparison.Ordinal)),
             path => path.EndsWith(
                 ".tmp",
                 StringComparison.Ordinal));
@@ -412,13 +456,12 @@ public class LocalGiftImageStoreTests : IDisposable
     public void Constructor_WhenStoragePathIsMissing_ThrowsArgumentException(string? storagePath)
     {
         // Arrange
-        var options = Microsoft.Extensions.Options.Options.Create(new GiftImageStorageOptions
-        {
-            StoragePath = storagePath
-        });
+        var options = Microsoft.Extensions.Options.Options.Create(new GiftImageStorageOptions { StoragePath = storagePath });
 
         // Act
-        var exception = Record.Exception(() => new LocalGiftImageStore(options));
+        var exception = Record.Exception(() => new LocalGiftImageStore(
+                options,
+                TimeProvider.System));
 
         // Assert
         Assert.IsAssignableFrom<ArgumentException>(exception);
@@ -433,16 +476,16 @@ public class LocalGiftImageStoreTests : IDisposable
 
         // Act
         var exception = await Record.ExceptionAsync(() => _store.WritePendingAsync(
-            Guid.CreateVersion7(),
-            new byte[] { 1 },
-            cancellationTokenSource.Token));
+                Guid.CreateVersion7(),
+                new byte[] { 1 },
+                cancellationTokenSource.Token));
 
         // Assert
         Assert.IsAssignableFrom<OperationCanceledException>(exception);
         Assert.Empty(Directory.EnumerateFiles(
-            _storagePath,
-            "*.tmp",
-            SearchOption.AllDirectories));
+                _storagePath,
+                "*.tmp",
+                SearchOption.AllDirectories));
     }
 
     [Fact]
@@ -454,20 +497,404 @@ public class LocalGiftImageStoreTests : IDisposable
 
         // Act
         var exception = await Record.ExceptionAsync(() => _store.DeleteAsync(
-            Guid.CreateVersion7(),
-            cancellationTokenSource.Token));
+                Guid.CreateVersion7(),
+                cancellationTokenSource.Token));
 
         // Assert
         Assert.IsAssignableFrom<OperationCanceledException>(exception);
     }
 
+    [Fact]
+    public async Task CleanupTemporaryAsync_WhenFilesAreAbandoned_DeletesOnlyRecognizedOldBatch()
+    {
+        // Arrange
+        var imageId = Guid.CreateVersion7();
+        var old = new DateTime(
+            2026,
+            1,
+            1,
+            0,
+            0,
+            0,
+            DateTimeKind.Utc);
+        var imagePath = GetImagePath(imageId);
+        Directory.CreateDirectory(Path.GetDirectoryName(imagePath)!);
+        var first = imagePath + $".{Guid.NewGuid():N}.tmp";
+        var second = GetPendingPath(imageId) + $".{Guid.NewGuid():N}.tmp";
+        var recent = imagePath + $".{Guid.NewGuid():N}.tmp";
+        foreach (var path in new[]
+        {
+            first,
+            second,
+            recent
+        }
+
+        )
+            await File.WriteAllTextAsync(
+                path,
+                "partial",
+                TestContext.Current.CancellationToken);
+        File.SetLastWriteTimeUtc(
+            first,
+            old);
+        File.SetLastWriteTimeUtc(
+            second,
+            old);
+        File.SetLastWriteTimeUtc(
+            recent,
+            old.AddHours(2));
+        await File.WriteAllTextAsync(
+            imagePath,
+            "committed",
+            TestContext.Current.CancellationToken);
+
+        // Act
+        await _store.CleanupTemporaryAsync(
+            old.AddHours(1),
+            1,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Single(
+            new[] {
+                first,
+                second
+            },
+            File.Exists);
+        Assert.True(File.Exists(recent));
+        Assert.True(File.Exists(imagePath));
+
+        // Act
+        await _store.CleanupTemporaryAsync(
+            old.AddHours(1),
+            10,
+            TestContext.Current.CancellationToken);
+        await _store.CleanupTemporaryAsync(
+            old.AddHours(1),
+            10,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.False(File.Exists(first));
+        Assert.False(File.Exists(second));
+        Assert.True(File.Exists(recent));
+    }
+
+    [Theory]
+    [InlineData("foreign.tmp")]
+    [InlineData("bad.webp.00000000000000000000000000000000.tmp")]
+    [InlineData("00000000000000000000000000000000.other.00000000000000000000000000000000.tmp")]
+    [InlineData("00000000000000000000000000000000.webp.bad.tmp")]
+    [InlineData("00000000000000000000000000000000.webp.00000000000000000000000000000000.tmp")]
+    public async Task CleanupTemporaryAsync_WhenFileIsForeignOrMisplaced_PreservesIt(string name)
+    {
+        // Arrange
+        Directory.CreateDirectory(_storagePath);
+        var path = Path.Combine(
+            _storagePath,
+            name);
+        await File.WriteAllTextAsync(
+            path,
+            "foreign",
+            TestContext.Current.CancellationToken);
+        var cutoff = new DateTime(
+            2026,
+            1,
+            1,
+            0,
+            0,
+            0,
+            DateTimeKind.Utc);
+        File.SetLastWriteTimeUtc(
+            path,
+            cutoff);
+
+        // Act
+        await _store.CleanupTemporaryAsync(
+            cutoff,
+            10,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.True(File.Exists(path));
+    }
+
+    [Fact]
+    public async Task CleanupTemporaryAsync_WhenWriterOwnsPartition_SkipsUntilLeaseIsReleased()
+    {
+        // Arrange
+        var imageId = Guid.CreateVersion7();
+        await _store.WritePendingAsync(
+            imageId,
+            new byte[] { 1 },
+            TestContext.Current.CancellationToken);
+        var temporary = GetImagePath(imageId) + $".{Guid.NewGuid():N}.tmp";
+        await File.WriteAllTextAsync(
+            temporary,
+            "partial",
+            TestContext.Current.CancellationToken);
+        var cutoff = new DateTime(
+            2026,
+            1,
+            1,
+            0,
+            0,
+            0,
+            DateTimeKind.Utc);
+        File.SetLastWriteTimeUtc(
+            temporary,
+            cutoff);
+        var lockPath = Path.Combine(
+            _storagePath,
+            ".cleanup-locks",
+            imageId.ToString("N")[^2..] + ".lock");
+        using (var lease = new FileStream(
+            lockPath,
+            FileMode.Open,
+            FileAccess.ReadWrite,
+            FileShare.None))
+        {
+
+            // Act
+            await _store.CleanupTemporaryAsync(
+                cutoff,
+                10,
+                TestContext.Current.CancellationToken);
+
+            // Assert
+            Assert.True(File.Exists(temporary));
+        }
+
+        // Act
+        await Task.WhenAll(
+            Task.Run(
+                () => _store.CleanupTemporaryAsync(
+                    cutoff,
+                    10,
+                    TestContext.Current.CancellationToken),
+                TestContext.Current.CancellationToken),
+            Task.Run(
+                () => _store.CleanupTemporaryAsync(
+                    cutoff,
+                    10,
+                    TestContext.Current.CancellationToken),
+                TestContext.Current.CancellationToken));
+
+        // Assert
+        Assert.False(File.Exists(temporary));
+        Assert.True(File.Exists(GetImagePath(imageId)));
+    }
+
+    [Fact]
+    public async Task CleanupTemporaryAsync_WhenStorageIsAbsent_Completes()
+    {
+        // Arrange
+        var cutoff = new DateTime(
+            2026,
+            1,
+            1,
+            0,
+            0,
+            0,
+            DateTimeKind.Utc);
+
+        // Act
+        await _store.CleanupTemporaryAsync(
+            cutoff,
+            10,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.False(Directory.Exists(_storagePath));
+    }
+
+    [Fact]
+    public async Task CleanupTemporaryAsync_WhenStorageIsUnavailable_ReportsSafeFailure()
+    {
+        // Arrange
+        await File.WriteAllTextAsync(
+            _storagePath,
+            "not a directory",
+            TestContext.Current.CancellationToken);
+        try
+        {
+
+            // Act
+            var failure = await Record.ExceptionAsync(() => _store.CleanupTemporaryAsync(
+                    DateTime.MaxValue,
+                    10,
+                    TestContext.Current.CancellationToken));
+
+            // Assert
+            Assert.IsType<GiftImageStorageUnavailableException>(failure);
+        }
+        finally
+        {
+            File.Delete(_storagePath);
+        }
+    }
+
+    [Fact(Skip = "Symbolic-link security is verified on Linux; Windows requires an unavailable OS privilege.", SkipWhen = nameof(RequiresWindowsSymbolicLinkPrivilege))]
+    public async Task WritePendingAsync_WhenLockIsSymbolicLink_RejectsIt()
+    {
+        // Arrange
+        var imageId = Guid.CreateVersion7();
+        var lockDirectory = Path.Combine(
+            _storagePath,
+            ".cleanup-locks");
+        Directory.CreateDirectory(lockDirectory);
+        var target = Path.Combine(
+            _storagePath,
+            "unrelated.txt");
+        await File.WriteAllTextAsync(
+            target,
+            "untouched",
+            TestContext.Current.CancellationToken);
+        File.CreateSymbolicLink(
+            Path.Combine(
+                lockDirectory,
+                imageId.ToString("N")[^2..] + ".lock"),
+            target);
+
+        // Act
+        var failure = await Record.ExceptionAsync(() => _store.WritePendingAsync(
+                imageId,
+                new byte[] { 1 },
+                TestContext.Current.CancellationToken));
+
+        // Assert
+        Assert.IsType<GiftImageStorageUnavailableException>(failure);
+        Assert.Equal(
+            "untouched",
+            await File.ReadAllTextAsync(
+                target,
+                TestContext.Current.CancellationToken));
+    }
+
+    [Fact(Skip = "Symbolic-link security is verified on Linux; Windows requires an unavailable OS privilege.", SkipWhen = nameof(RequiresWindowsSymbolicLinkPrivilege))]
+    public async Task CleanupTemporaryAsync_WhenCandidatesAreSymbolicLinks_PreservesTargets()
+    {
+        // Arrange
+        var imageId = Guid.CreateVersion7();
+        var imagePath = GetImagePath(imageId);
+        Directory.CreateDirectory(Path.GetDirectoryName(imagePath)!);
+        var target = Path.Combine(
+            _storagePath,
+            "target.txt");
+        await File.WriteAllTextAsync(
+            target,
+            "untouched",
+            TestContext.Current.CancellationToken);
+        var link = imagePath + $".{Guid.NewGuid():N}.tmp";
+        File.CreateSymbolicLink(
+            link,
+            target);
+
+        // Act
+        await _store.CleanupTemporaryAsync(
+            DateTime.MaxValue,
+            10,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.True(File.Exists(link));
+        Assert.Equal(
+            "untouched",
+            await File.ReadAllTextAsync(
+                target,
+                TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task CleanupTemporaryAsync_WhenCancelled_PropagatesCancellation()
+    {
+        // Arrange
+        using var source = new CancellationTokenSource();
+        await source.CancelAsync();
+
+        // Act
+        var failure = await Record.ExceptionAsync(() => _store.CleanupTemporaryAsync(
+                DateTime.MaxValue,
+                10,
+                source.Token));
+
+        // Assert
+        Assert.IsAssignableFrom<OperationCanceledException>(failure);
+    }
+
+    [Fact]
+    public async Task CleanupTemporaryAsync_WhenBatchIsInvalid_RejectsIt()
+    {
+        // Arrange
+        var cancellationToken = TestContext.Current.CancellationToken;
+
+        // Act
+        var failure = await Record.ExceptionAsync(() => _store.CleanupTemporaryAsync(
+                DateTime.MaxValue,
+                0,
+                cancellationToken));
+
+        // Assert
+        Assert.IsType<ArgumentOutOfRangeException>(failure);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task WritePendingAsync_WhenPartitionIsBusy_WaitsOrCancels(bool cancel)
+    {
+        // Arrange
+        var imageId = Guid.CreateVersion7();
+        var lockDirectory = Path.Combine(
+            _storagePath,
+            ".cleanup-locks");
+        Directory.CreateDirectory(lockDirectory);
+        using var lease = new FileStream(
+            Path.Combine(
+                lockDirectory,
+                imageId.ToString("N")[^2..] + ".lock"),
+            FileMode.CreateNew,
+            FileAccess.ReadWrite,
+            FileShare.None);
+        using var source = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        var clock = new LeaseContentionTimeProvider(() =>
+            {
+
+                if (cancel)
+                    source.Cancel();
+                lease.Dispose();
+            });
+        var store = new LocalGiftImageStore(
+            Microsoft.Extensions.Options.Options.Create(new GiftImageStorageOptions { StoragePath = _storagePath }),
+            clock);
+
+        // Act
+        var failure = await Record.ExceptionAsync(() => store.WritePendingAsync(
+                imageId,
+                new byte[] { 1 },
+                source.Token));
+
+        // Assert
+        Assert.Equal(
+            TimeSpan.FromMilliseconds(10),
+            clock.Delay);
+
+        if (cancel)
+            Assert.IsAssignableFrom<OperationCanceledException>(failure);
+        else
+        {
+            Assert.Null(failure);
+            Assert.True(File.Exists(GetImagePath(imageId)));
+        }
+    }
+
     public void Dispose()
     {
+
         if (Directory.Exists(_storagePath))
             Directory.Delete(
                 _storagePath,
                 recursive: true);
-
         GC.SuppressFinalize(this);
     }
 
@@ -478,9 +905,9 @@ public class LocalGiftImageStoreTests : IDisposable
         var fileName = imageId.ToString("N") + ".pending";
         var path = Directory
             .EnumerateFiles(
-                _storagePath,
-                fileName,
-                SearchOption.AllDirectories)
+            _storagePath,
+            fileName,
+            SearchOption.AllDirectories)
             .Single();
         File.SetLastWriteTimeUtc(
             path,
@@ -502,6 +929,7 @@ public class LocalGiftImageStoreTests : IDisposable
 
     private string GetPendingPath(Guid imageId)
     {
+
         return Path.ChangeExtension(
             GetImagePath(imageId),
             ".pending");

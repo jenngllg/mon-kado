@@ -2,6 +2,7 @@ using JennGllg.Fr.MonKado.Back.Api.Abstractions;
 using JennGllg.Fr.MonKado.Back.Api.Errors;
 using JennGllg.Fr.MonKado.Back.Api.Handlers;
 using JennGllg.Fr.MonKado.Back.Application.Common.Exceptions;
+using JennGllg.Fr.MonKado.Back.Tests.Common;
 
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -14,16 +15,50 @@ namespace JennGllg.Fr.MonKado.Back.Api.UnitTests.Handlers;
 
 public class GlobalExceptionHandlerTests
 {
+    [Fact]
+    public async Task TryHandleAsync_WhenImageStorageFails_DoesNotLogExceptionPaths()
+    {
+        // Arrange
+        var logger = new RecordingExceptionLogger<GlobalExceptionHandler>();
+        var handler = new GlobalExceptionHandler(
+            logger,
+            _refreshTokenCookieServiceMock.Object,
+            _googleExternalAuthenticationServiceMock.Object,
+            _guestSessionCookieServiceMock.Object);
+        var context = new DefaultHttpContext();
+        using var body = new MemoryStream();
+        context.Response.Body = body;
+        var exception = new GiftImageStorageUnavailableException(new IOException("private-storage-path"));
+
+        // Act
+        await handler.TryHandleAsync(
+            context,
+            exception,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(
+            StatusCodes.Status503ServiceUnavailable,
+            context.Response.StatusCode);
+        Assert.Single(logger.Entries);
+        Assert.DoesNotContain(
+            logger.Entries,
+            entry => entry.Contains(
+                "private-storage-path",
+                StringComparison.Ordinal));
+        _refreshTokenCookieServiceMock.VerifyNoOtherCalls();
+        _googleExternalAuthenticationServiceMock.VerifyNoOtherCalls();
+        _guestSessionCookieServiceMock.VerifyNoOtherCalls();
+    }
+
     private static readonly JsonSerializerOptions _jsonOptions = new(JsonSerializerDefaults.Web);
     private readonly Mock<IGoogleExternalAuthenticationService> _googleExternalAuthenticationServiceMock;
     private readonly Mock<IGuestSessionCookieService> _guestSessionCookieServiceMock;
     private readonly Mock<IRefreshTokenCookieService> _refreshTokenCookieServiceMock;
     private readonly GlobalExceptionHandler _handler;
-
     public GlobalExceptionHandlerTests()
     {
-        _googleExternalAuthenticationServiceMock = new Mock<IGoogleExternalAuthenticationService>(
-            MockBehavior.Strict);
+        _googleExternalAuthenticationServiceMock = new Mock<IGoogleExternalAuthenticationService>(MockBehavior.Strict);
         _guestSessionCookieServiceMock = new Mock<IGuestSessionCookieService>(MockBehavior.Strict);
         _refreshTokenCookieServiceMock = new Mock<IRefreshTokenCookieService>(MockBehavior.Strict);
         _handler = new GlobalExceptionHandler(
@@ -103,7 +138,6 @@ public class GlobalExceptionHandlerTests
                     context,
                     TestContext.Current.CancellationToken),
                 Times.Once);
-
         _googleExternalAuthenticationServiceMock.VerifyNoOtherCalls();
         _refreshTokenCookieServiceMock.VerifyNoOtherCalls();
         _guestSessionCookieServiceMock.VerifyNoOtherCalls();
@@ -195,8 +229,7 @@ public class GlobalExceptionHandlerTests
         // Arrange
         var context = new DefaultHttpContext();
         context.Response.Body = new MemoryStream();
-        _guestSessionCookieServiceMock
-            .Setup(service => service.Delete(context));
+        _guestSessionCookieServiceMock.Setup(service => service.Delete(context));
 
         // Act
         await _handler.TryHandleAsync(

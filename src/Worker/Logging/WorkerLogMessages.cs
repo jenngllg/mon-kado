@@ -280,5 +280,5 @@ public static partial class WorkerLogMessages
     public static partial void GiftImageCleanupFailed(
         ILogger logger,
         string exceptionType,
-        Exception exception);
+        Exception? exception);
 }
