@@ -2,8 +2,7 @@ using JennGllg.Fr.MonKado.Back.Application.Abstractions;
 using JennGllg.Fr.MonKado.Back.Application.Commands;
 using JennGllg.Fr.MonKado.Back.Application.Common.Exceptions;
 using JennGllg.Fr.MonKado.Back.Application.Models;
-
-using Microsoft.Extensions.Logging.Abstractions;
+using JennGllg.Fr.MonKado.Back.Tests.Common;
 
 using Moq;
 
@@ -15,6 +14,7 @@ public class UpsertWishImageCommandHandlerTests
     private readonly Mock<IGiftImageStore> _storeMock;
     private readonly Mock<IWishService> _wishServiceMock;
     private readonly UpsertWishImageCommandHandler _handler;
+    private readonly RecordingExceptionLogger<UpsertWishImageCommandHandler> _logger = new();
 
     public UpsertWishImageCommandHandlerTests()
     {
@@ -26,7 +26,7 @@ public class UpsertWishImageCommandHandlerTests
             _storeMock.Object,
             _wishServiceMock.Object,
             TimeProvider.System,
-            NullLogger<UpsertWishImageCommandHandler>.Instance);
+            _logger);
     }
 
     [Fact]
@@ -310,7 +310,7 @@ public class UpsertWishImageCommandHandlerTests
                 .Setup(store => store.MarkCommittedAsync(
                     It.IsAny<Guid>(),
                     cancellationToken))
-                .ThrowsAsync(new GiftImageStorageUnavailableException(new IOException()));
+                .ThrowsAsync(new GiftImageStorageUnavailableException(new IOException("private-storage-path")));
         }
         else
         {
@@ -318,7 +318,7 @@ public class UpsertWishImageCommandHandlerTests
                 .Setup(store => store.DeleteAsync(
                     It.IsAny<Guid>(),
                     cancellationToken))
-                .ThrowsAsync(new GiftImageStorageUnavailableException(new IOException()));
+                .ThrowsAsync(new GiftImageStorageUnavailableException(new IOException("private-storage-path")));
         }
 
         // Act
@@ -332,6 +332,9 @@ public class UpsertWishImageCommandHandlerTests
                 ? writtenImageId
                 : currentImageId,
             result.ImageId);
+        Assert.DoesNotContain(
+            _logger.Entries,
+            entry => entry.Contains("private-storage-path", StringComparison.Ordinal));
         _processorMock.Verify(
             processor => processor.ProcessAsync(
                 command.Image,

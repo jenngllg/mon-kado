@@ -4,6 +4,8 @@ namespace JennGllg.Fr.MonKado.Back.Worker.UnitTests;
 
 public class RecordingLogger<TCategory> : ILogger<TCategory>
 {
+    public List<string?> TraceIdsAtLog { get; } = [];
+
     public List<(LogLevel LogLevel, EventId EventId, Exception? Exception, string Message)> Entries
     {
         get;
@@ -39,6 +41,7 @@ public class RecordingLogger<TCategory> : ILogger<TCategory>
         Exception? exception,
         Func<TState, Exception?, string> formatter)
     {
+        TraceIdsAtLog.Add(System.Diagnostics.Activity.Current?.TraceId.ToString());
         Entries.Add((
             logLevel,
             eventId,

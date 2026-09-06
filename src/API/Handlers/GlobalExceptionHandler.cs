@@ -325,6 +325,16 @@ public class GlobalExceptionHandler(
         Exception exception)
     {
 
+        if (exception is GiftImageStorageUnavailableException)
+        {
+            ApiLogMessages.DependencyUnavailable(
+                logger,
+                nameof(GiftImageStorageUnavailableException),
+                null);
+
+            return;
+        }
+
         if (exception is DependencyUnavailableException dependencyException)
         {
             ApiLogMessages.DependencyUnavailable(

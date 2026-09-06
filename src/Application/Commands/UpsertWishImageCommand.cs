@@ -154,12 +154,11 @@ public class UpsertWishImageCommandHandler(
                 imageId,
                 cancellationToken);
         }
-        catch (GiftImageStorageUnavailableException exception)
+        catch (GiftImageStorageUnavailableException)
         {
             ApplicationLogMessages.GiftImagePendingCleanupFailed(
                 logger,
-                imageId,
-                exception);
+                imageId);
         }
     }
 }

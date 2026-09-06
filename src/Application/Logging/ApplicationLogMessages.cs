@@ -97,15 +97,13 @@ public static partial class ApplicationLogMessages
     /// </summary>
     /// <param name="logger">The logger.</param>
     /// <param name="imageId">The immutable image identifier.</param>
-    /// <param name="exception">The storage exception.</param>
     [LoggerMessage(
         EventId = LogEventIds.GiftImagePendingCleanupFailed,
         Level = LogLevel.Error,
         Message = "Pending marker cleanup failed for gift image {ImageId}; the worker will reconcile it.")]
     public static partial void GiftImagePendingCleanupFailed(
         ILogger logger,
-        Guid imageId,
-        Exception exception);
+        Guid imageId);
     /// <summary>Logs the start of an anonymous wishlist report creation.</summary>
     /// <param name="logger">The logger.</param>
     /// <param name="shareLinkId">The share-link identifier.</param>

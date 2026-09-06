@@ -194,6 +194,55 @@ public class MerchantMetadataExtractorTests
             result.ImageUrl?.AbsoluteUri);
     }
 
+    [Theory]
+    [InlineData("{}", "")]
+    [InlineData("{\"price\":null}", "   ")]
+    [InlineData("{\"price\":\" \"}", "")]
+    public void Extract_WhenJsonLdFieldsAreEmpty_UsesOpenGraph(
+        string offers,
+        string image)
+    {
+        // Arrange
+        var document = CreateDocument($$"""
+            <script type="application/ld+json">
+            {"@type":"Product","image":"{{image}}","offers":{{offers}}}
+            </script>
+            <meta property="og:image" content="/fallback.png">
+            <meta property="product:price:amount" content="42.50">
+            <meta property="product:price:currency" content="EUR">
+        """);
+
+        // Act
+        var result = _extractor.Extract(document);
+
+        // Assert
+        Assert.Equal(
+            42.50m,
+            result.Price);
+        Assert.Equal(
+            "https://example.com/fallback.png",
+            result.ImageUrl?.AbsoluteUri);
+    }
+
+    [Theory]
+    [InlineData("{\"price\":12,\"priceCurrency\":\"USD\"}")]
+    [InlineData("[{\"price\":12,\"priceCurrency\":\"EUR\"},{\"price\":13,\"priceCurrency\":\"EUR\"}]")]
+    public void Extract_WhenJsonLdPriceCannotBeChosen_DoesNotOverrideWithOpenGraph(string offers)
+    {
+        // Arrange
+        var document = CreateDocument($$"""
+            <script type="application/ld+json">{"@type":"Product","offers":{{offers}}}</script>
+            <meta property="product:price:amount" content="42.50">
+            <meta property="product:price:currency" content="EUR">
+        """);
+
+        // Act
+        var result = _extractor.Extract(document);
+
+        // Assert
+        Assert.Null(result.Price);
+    }
+
     private static ImportDocument CreateDocument(
         string html,
         string? charset = null)

@@ -7,6 +7,16 @@ namespace JennGllg.Fr.MonKado.Back.Application.Abstractions;
 /// </summary>
 public interface IGiftImageStore
 {
+    /// <summary>Deletes a bounded batch of abandoned temporary files without touching active writes.</summary>
+    /// <param name="cutoff">The inclusive UTC age cutoff.</param>
+    /// <param name="batchSize">The maximum number of candidate files processed.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A task representing the cleanup.</returns>
+    Task CleanupTemporaryAsync(
+        DateTime cutoff,
+        int batchSize,
+        CancellationToken cancellationToken);
+
     /// <summary>
     /// Writes a new immutable image and its pending-commit marker atomically.
     /// </summary>

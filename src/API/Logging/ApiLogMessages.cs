@@ -37,7 +37,7 @@ public static partial class ApiLogMessages
     public static partial void DependencyUnavailable(
         ILogger logger,
         string exceptionType,
-        Exception exception);
+        Exception? exception);
     /// <summary>
     /// Executes the unhandled exception operation.
     /// </summary>
