@@ -28,13 +28,49 @@ public class GmailAuthenticationEmailSender(
     ILogger<GmailAuthenticationEmailSender> logger) : IAuthenticationEmailSender
 {
     private readonly GmailOptions _gmail = options.Value;
+    /// <inheritdoc/>
+    public async Task<AuthenticationEmailSendResult> SendAccountDeletionConfirmationAsync(
+        AuthenticationEmailMessage message,
+        CancellationToken cancellationToken)
+    {
+        var result = await SendAsync(
+            message.OutboxMessageId,
+            token => CreateAccountDeletionRawMessageAsync(
+                message,
+                token),
+            cancellationToken);
+        WorkerLogMessages.AccountDeletionConfirmationSent(
+            logger,
+            message.OutboxMessageId);
 
-    /// <inheritdoc />
+        return result;
+    }
+
+    /// <summary>Builds a confirmation email that explicitly describes irreversible data removal.</summary>
+    /// <param name="message">The protected confirmation link and recipient.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The encoded Gmail message.</returns>
+    private Task<string> CreateAccountDeletionRawMessageAsync(
+        AuthenticationEmailMessage message,
+        CancellationToken cancellationToken)
+    {
+        var url = message.ConfirmationUrl.AbsoluteUri;
+        var encodedUrl = HtmlEncoder.Default.Encode(url);
+
+        return CreateRawMessageAsync(
+            message.OutboxMessageId,
+            message.RecipientAddress,
+            "Confirmez la suppression de votre compte – MonKado",
+            "Vous avez demandé la suppression définitive de votre compte, de vos listes et de votre historique. " + "Vos réservations seront annulées. Connectez-vous au même compte puis confirmez sur cette page : " + url + "\nSi vous n'êtes pas à l'origine de cette demande, ignorez cet e-mail. L'ouverture du lien ne supprime rien.",
+            "<p>Vous avez demandé la suppression définitive de votre compte, de vos listes et de votre historique. " + "Vos réservations seront annulées.</p><p>Connectez-vous au même compte puis " + $"<a href=\"{encodedUrl}\">confirmez la suppression</a>.</p>" + "<p>Si vous n'êtes pas à l'origine de cette demande, ignorez cet e-mail. L'ouverture du lien ne supprime rien.</p>",
+            cancellationToken);
+    }
+
+    /// <inheritdoc/>
     public async Task<AuthenticationEmailSendResult> SendEmailConfirmationAsync(
         AuthenticationEmailMessage message,
         CancellationToken cancellationToken)
     {
-
         var result = await SendAsync(
             message.OutboxMessageId,
             token => CreateEmailConfirmationRawMessageAsync(
@@ -48,12 +84,11 @@ public class GmailAuthenticationEmailSender(
         return result;
     }
 
-    /// <inheritdoc />
+    /// <inheritdoc/>
     public async Task<AuthenticationEmailSendResult> SendPasswordResetAsync(
         AuthenticationPasswordResetMessage message,
         CancellationToken cancellationToken)
     {
-
         var result = await SendAsync(
             message.OutboxMessageId,
             token => CreatePasswordResetRawMessageAsync(
@@ -67,12 +102,11 @@ public class GmailAuthenticationEmailSender(
         return result;
     }
 
-    /// <inheritdoc />
+    /// <inheritdoc/>
     public async Task<AuthenticationEmailSendResult> SendEmailChangeConfirmationAsync(
         AuthenticationEmailMessage message,
         CancellationToken cancellationToken)
     {
-
         var result = await SendAsync(
             message.OutboxMessageId,
             token => CreateEmailChangeConfirmationRawMessageAsync(
@@ -86,12 +120,11 @@ public class GmailAuthenticationEmailSender(
         return result;
     }
 
-    /// <inheritdoc />
+    /// <inheritdoc/>
     public async Task<AuthenticationEmailSendResult> SendEmailChangeSecurityNotificationAsync(
         AuthenticationEmailSecurityNotification message,
         CancellationToken cancellationToken)
     {
-
         var result = await SendAsync(
             message.OutboxMessageId,
             token => CreateEmailChangeSecurityNotificationRawMessageAsync(
@@ -105,12 +138,11 @@ public class GmailAuthenticationEmailSender(
         return result;
     }
 
-    /// <inheritdoc />
+    /// <inheritdoc/>
     public async Task<AuthenticationEmailSendResult> SendPasswordChangedSecurityNotificationAsync(
         AuthenticationPasswordChangedNotification message,
         CancellationToken cancellationToken)
     {
-
         var result = await SendAsync(
             message.OutboxMessageId,
             token => CreatePasswordChangedSecurityNotificationRawMessageAsync(
@@ -258,8 +290,7 @@ public class GmailAuthenticationEmailSender(
             message.RecipientAddress,
             "Demande de changement d’adresse e-mail – MonKado",
             CreateEmailChangeSecurityNotificationTextBody(maskedAddress),
-            CreateEmailChangeSecurityNotificationHtmlBody(
-                HtmlEncoder.Default.Encode(maskedAddress)),
+            CreateEmailChangeSecurityNotificationHtmlBody(HtmlEncoder.Default.Encode(maskedAddress)),
             cancellationToken);
     }
 
@@ -296,8 +327,8 @@ public class GmailAuthenticationEmailSender(
     {
         var mimeMessage = new MimeMessage();
         mimeMessage.From.Add(new MailboxAddress(
-            "MonKado",
-            _gmail.SenderAddress));
+                "MonKado",
+                _gmail.SenderAddress));
         mimeMessage.To.Add(MailboxAddress.Parse(recipientAddress));
         mimeMessage.Subject = subject;
         mimeMessage.MessageId = $"{outboxMessageId:N}@mon-kado.fr";
@@ -309,41 +340,32 @@ public class GmailAuthenticationEmailSender(
             TextBody = textBody,
             HtmlBody = htmlBody
         }.ToMessageBody();
-
         await using var stream = new MemoryStream();
         await mimeMessage.WriteToAsync(
             stream,
             cancellationToken);
 
-        return Convert.ToBase64String(stream.ToArray())
+        return Convert
+            .ToBase64String(stream.ToArray())
             .TrimEnd('=')
             .Replace(
-                '+',
-                '-')
+            '+',
+            '-')
             .Replace(
-                '/',
-                '_');
+            '/',
+            '_');
     }
 
     private static string CreateAccountConfirmationTextBody(string url)
     {
 
-        return "Bonjour,\n\n" +
-            "Confirmez votre adresse e-mail MonKado en ouvrant ce lien :\n" +
-            url + "\n\n" +
-            "Ce lien est valable pendant 24 heures. " +
-            "Si vous n'avez pas créé ce compte, ignorez cet e-mail.";
+        return "Bonjour,\n\n" + "Confirmez votre adresse e-mail MonKado en ouvrant ce lien :\n" + url + "\n\n" + "Ce lien est valable pendant 24 heures. " + "Si vous n'avez pas créé ce compte, ignorez cet e-mail.";
     }
 
     private static string CreateAccountConfirmationHtmlBody(string encodedUrl)
     {
 
-        return "<!doctype html><html lang='fr'><body>" +
-            "<p>Bonjour,</p><p>Confirmez votre adresse e-mail MonKado :</p>" +
-            $"<p><a href='{encodedUrl}'>Confirmer mon adresse e-mail</a></p>" +
-            "<p>Ce lien est valable pendant 24 heures.</p>" +
-            "<p>Si vous n'avez pas créé ce compte, ignorez cet e-mail.</p>" +
-            "</body></html>";
+        return "<!doctype html><html lang='fr'><body>" + "<p>Bonjour,</p><p>Confirmez votre adresse e-mail MonKado :</p>" + $"<p><a href='{encodedUrl}'>Confirmer mon adresse e-mail</a></p>" + "<p>Ce lien est valable pendant 24 heures.</p>" + "<p>Si vous n'avez pas créé ce compte, ignorez cet e-mail.</p>" + "</body></html>";
     }
 
     /// <summary>
@@ -354,12 +376,7 @@ public class GmailAuthenticationEmailSender(
     private static string CreatePasswordResetTextBody(string url)
     {
 
-        return "Bonjour,\n\n" +
-            "Vous avez demandé la réinitialisation du mot de passe de votre compte MonKado.\n" +
-            "Choisissez un nouveau mot de passe en ouvrant ce lien :\n" +
-            url + "\n\n" +
-            "Ce lien est valable pendant 1 heure. " +
-            "Si vous n'êtes pas à l'origine de cette demande, ignorez cet e-mail.";
+        return "Bonjour,\n\n" + "Vous avez demandé la réinitialisation du mot de passe de votre compte MonKado.\n" + "Choisissez un nouveau mot de passe en ouvrant ce lien :\n" + url + "\n\n" + "Ce lien est valable pendant 1 heure. " + "Si vous n'êtes pas à l'origine de cette demande, ignorez cet e-mail.";
     }
 
     /// <summary>
@@ -370,57 +387,31 @@ public class GmailAuthenticationEmailSender(
     private static string CreatePasswordResetHtmlBody(string encodedUrl)
     {
 
-        return "<!doctype html><html lang='fr'><body>" +
-            "<p>Bonjour,</p>" +
-            "<p>Vous avez demandé la réinitialisation du mot de passe de votre compte MonKado.</p>" +
-            $"<p><a href='{encodedUrl}'>Réinitialiser mon mot de passe</a></p>" +
-            "<p>Ce lien est valable pendant 1 heure.</p>" +
-            "<p>Si vous n'êtes pas à l'origine de cette demande, ignorez cet e-mail.</p>" +
-            "</body></html>";
+        return "<!doctype html><html lang='fr'><body>" + "<p>Bonjour,</p>" + "<p>Vous avez demandé la réinitialisation du mot de passe de votre compte MonKado.</p>" + $"<p><a href='{encodedUrl}'>Réinitialiser mon mot de passe</a></p>" + "<p>Ce lien est valable pendant 1 heure.</p>" + "<p>Si vous n'êtes pas à l'origine de cette demande, ignorez cet e-mail.</p>" + "</body></html>";
     }
 
     private static string CreateEmailChangeConfirmationTextBody(string url)
     {
 
-        return "Bonjour,\n\n" +
-            "Confirmez cette nouvelle adresse e-mail pour votre compte MonKado :\n" +
-            url + "\n\n" +
-            "Ce lien est valable pendant 24 heures. " +
-            "Si vous n'avez pas demandé ce changement, ignorez cet e-mail.";
+        return "Bonjour,\n\n" + "Confirmez cette nouvelle adresse e-mail pour votre compte MonKado :\n" + url + "\n\n" + "Ce lien est valable pendant 24 heures. " + "Si vous n'avez pas demandé ce changement, ignorez cet e-mail.";
     }
 
     private static string CreateEmailChangeConfirmationHtmlBody(string encodedUrl)
     {
 
-        return "<!doctype html><html lang='fr'><body>" +
-            "<p>Bonjour,</p>" +
-            "<p>Confirmez cette nouvelle adresse e-mail pour votre compte MonKado :</p>" +
-            $"<p><a href='{encodedUrl}'>Confirmer ma nouvelle adresse</a></p>" +
-            "<p>Ce lien est valable pendant 24 heures.</p>" +
-            "<p>Si vous n'avez pas demandé ce changement, ignorez cet e-mail.</p>" +
-            "</body></html>";
+        return "<!doctype html><html lang='fr'><body>" + "<p>Bonjour,</p>" + "<p>Confirmez cette nouvelle adresse e-mail pour votre compte MonKado :</p>" + $"<p><a href='{encodedUrl}'>Confirmer ma nouvelle adresse</a></p>" + "<p>Ce lien est valable pendant 24 heures.</p>" + "<p>Si vous n'avez pas demandé ce changement, ignorez cet e-mail.</p>" + "</body></html>";
     }
 
     private static string CreateEmailChangeSecurityNotificationTextBody(string maskedAddress)
     {
 
-        return "Bonjour,\n\n" +
-            $"Une demande de changement vers l'adresse {maskedAddress} a été créée " +
-            "pour votre compte MonKado.\n\n" +
-            "Votre adresse actuelle reste active tant que la nouvelle adresse n'est pas confirmée. " +
-            "Si vous n'êtes pas à l'origine de cette demande, sécurisez immédiatement votre compte.";
+        return "Bonjour,\n\n" + $"Une demande de changement vers l'adresse {maskedAddress} a été créée " + "pour votre compte MonKado.\n\n" + "Votre adresse actuelle reste active tant que la nouvelle adresse n'est pas confirmée. " + "Si vous n'êtes pas à l'origine de cette demande, sécurisez immédiatement votre compte.";
     }
 
     private static string CreateEmailChangeSecurityNotificationHtmlBody(string maskedAddress)
     {
 
-        return "<!doctype html><html lang='fr'><body>" +
-            "<p>Bonjour,</p>" +
-            $"<p>Une demande de changement vers l'adresse {maskedAddress} a été créée " +
-            "pour votre compte MonKado.</p>" +
-            "<p>Votre adresse actuelle reste active tant que la nouvelle adresse n'est pas confirmée.</p>" +
-            "<p>Si vous n'êtes pas à l'origine de cette demande, sécurisez immédiatement votre compte.</p>" +
-            "</body></html>";
+        return "<!doctype html><html lang='fr'><body>" + "<p>Bonjour,</p>" + $"<p>Une demande de changement vers l'adresse {maskedAddress} a été créée " + "pour votre compte MonKado.</p>" + "<p>Votre adresse actuelle reste active tant que la nouvelle adresse n'est pas confirmée.</p>" + "<p>Si vous n'êtes pas à l'origine de cette demande, sécurisez immédiatement votre compte.</p>" + "</body></html>";
     }
 
     /// <summary>
@@ -431,10 +422,7 @@ public class GmailAuthenticationEmailSender(
     private static string CreatePasswordChangedSecurityNotificationTextBody(string changedAt)
     {
 
-        return "Bonjour,\n\n" +
-            $"Le mot de passe de votre compte MonKado a été modifié le {changedAt}.\n\n" +
-            "Toutes vos sessions ont été déconnectées. " +
-            "Si vous n'êtes pas à l'origine de ce changement, sécurisez immédiatement votre compte.";
+        return "Bonjour,\n\n" + $"Le mot de passe de votre compte MonKado a été modifié le {changedAt}.\n\n" + "Toutes vos sessions ont été déconnectées. " + "Si vous n'êtes pas à l'origine de ce changement, sécurisez immédiatement votre compte.";
     }
 
     /// <summary>
@@ -445,28 +433,21 @@ public class GmailAuthenticationEmailSender(
     private static string CreatePasswordChangedSecurityNotificationHtmlBody(string changedAt)
     {
 
-        return "<!doctype html><html lang='fr'><body>" +
-            "<p>Bonjour,</p>" +
-            $"<p>Le mot de passe de votre compte MonKado a été modifié le {changedAt}.</p>" +
-            "<p>Toutes vos sessions ont été déconnectées.</p>" +
-            "<p>Si vous n'êtes pas à l'origine de ce changement, " +
-            "sécurisez immédiatement votre compte.</p>" +
-            "</body></html>";
+        return "<!doctype html><html lang='fr'><body>" + "<p>Bonjour,</p>" + $"<p>Le mot de passe de votre compte MonKado a été modifié le {changedAt}.</p>" + "<p>Toutes vos sessions ont été déconnectées.</p>" + "<p>Si vous n'êtes pas à l'origine de ce changement, " + "sécurisez immédiatement votre compte.</p>" + "</body></html>";
     }
 
     private static string MaskEmailAddress(string email)
     {
-        var separatorIndex = email.IndexOf('@', StringComparison.Ordinal);
+        var separatorIndex = email.IndexOf(
+            '@',
+            StringComparison.Ordinal);
 
         if (separatorIndex <= 0 || separatorIndex == email.Length - 1)
             return "***";
-
         var localPart = email[..separatorIndex];
         var domain = email[(separatorIndex + 1)..];
         var domainSeparatorIndex = domain.LastIndexOf('.');
-        var maskedDomain = domainSeparatorIndex <= 0
-            ? $"{domain[0]}***"
-            : $"{domain[0]}***{domain[domainSeparatorIndex..]}";
+        var maskedDomain = domainSeparatorIndex <= 0 ? $"{domain[0]}***" : $"{domain[0]}***{domain[domainSeparatorIndex..]}";
 
         return $"{localPart[0]}***@{maskedDomain}";
     }

@@ -10,17 +10,24 @@ internal class FakeEmailSender(
     bool fail = false,
     TimeSpan? delay = null,
     TimeSpan? retryAfter = null,
-    AuthenticationEmailFailureCategory failureCategory = AuthenticationEmailFailureCategory.Transient)
-    : IAuthenticationEmailSender
+    AuthenticationEmailFailureCategory failureCategory = AuthenticationEmailFailureCategory.Transient) : IAuthenticationEmailSender
 {
     public ConcurrentQueue<AuthenticationEmailMessage> Messages { get; } = new();
+    public ConcurrentQueue<AuthenticationEmailMessage> AccountDeletionConfirmations { get; } = new();
+
+    public Task<AuthenticationEmailSendResult> SendAccountDeletionConfirmationAsync(
+        AuthenticationEmailMessage message,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        AccountDeletionConfirmations.Enqueue(message);
+
+        return Task.FromResult(new AuthenticationEmailSendResult("fake-account-deletion"));
+    }
 
     public ConcurrentQueue<AuthenticationPasswordResetMessage> PasswordResetMessages { get; } = new();
-
     public ConcurrentQueue<AuthenticationEmailMessage> EmailChangeConfirmations { get; } = new();
-
     public ConcurrentQueue<AuthenticationEmailSecurityNotification> EmailChangeNotifications { get; } = new();
-
     public ConcurrentQueue<AuthenticationPasswordChangedNotification> PasswordChangedNotifications { get; } = new();
 
     public async Task<AuthenticationEmailSendResult> SendEmailConfirmationAsync(
@@ -34,11 +41,9 @@ internal class FakeEmailSender(
                 value,
                 cancellationToken);
 
-        return fail
-            ? throw new AuthenticationEmailDeliveryException(
-                failureCategory,
-                retryAfter)
-            : new AuthenticationEmailSendResult("fake-provider-id");
+        return fail ? throw new AuthenticationEmailDeliveryException(
+            failureCategory,
+            retryAfter) : new AuthenticationEmailSendResult("fake-provider-id");
     }
 
     public async Task<AuthenticationEmailSendResult> SendPasswordResetAsync(
@@ -77,8 +82,7 @@ internal class FakeEmailSender(
         return await CompleteAsync(cancellationToken);
     }
 
-    private async Task<AuthenticationEmailSendResult> CompleteAsync(
-        CancellationToken cancellationToken)
+    private async Task<AuthenticationEmailSendResult> CompleteAsync(CancellationToken cancellationToken)
     {
 
         if (delay is { } value)
@@ -86,10 +90,8 @@ internal class FakeEmailSender(
                 value,
                 cancellationToken);
 
-        return fail
-            ? throw new AuthenticationEmailDeliveryException(
-                failureCategory,
-                retryAfter)
-            : new AuthenticationEmailSendResult("fake-provider-id");
+        return fail ? throw new AuthenticationEmailDeliveryException(
+            failureCategory,
+            retryAfter) : new AuthenticationEmailSendResult("fake-provider-id");
     }
 }

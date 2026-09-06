@@ -37,6 +37,59 @@ public class MembersController(
 {
     private const int MaximumRequestBodySize = 4 * 1024;
     private const string NoStoreCacheControl = "no-store";
+    /// <summary>Requests an email confirmation before permanently deleting the current account.</summary>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>An accepted response once the confirmation email is durably queued.</returns>
+    [HttpPost("current/deletion-requests")]
+    [NoStoreResponse(StatusCodes.Status202Accepted)]
+    [ProducesResponseType(StatusCodes.Status202Accepted)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status429TooManyRequests, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status503ServiceUnavailable, "application/json")]
+    public async Task<IActionResult> RequestAccountDeletionAsync(CancellationToken cancellationToken)
+    {
+        _ = Guid.TryParse(
+            User.FindFirstValue(JwtRegisteredClaimNames.Sub),
+            out var memberId);
+        await sender.Send(
+            new RequestMemberAccountDeletionCommand(memberId),
+            cancellationToken);
+        Response.Headers.CacheControl = NoStoreCacheControl;
+
+        return Accepted();
+    }
+
+    /// <summary>Permanently deletes the current account after explicit email confirmation.</summary>
+    /// <param name="request">The confirmation token received by the authenticated member.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>No content after deletion and refresh cookie removal.</returns>
+    [HttpPost("current/deletion-requests/confirm")]
+    [EnableRateLimiting(AuthenticationRateLimitingExtensions.AccountDeletionConfirmationPolicy)]
+    [NoStoreResponse(StatusCodes.Status204NoContent)]
+    [RequestSizeLimit(MaximumRequestBodySize)]
+    [Consumes("application/json")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status413PayloadTooLarge, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status415UnsupportedMediaType, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status429TooManyRequests, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status503ServiceUnavailable, "application/json")]
+    public async Task<IActionResult> ConfirmAccountDeletionAsync(
+        ConfirmMemberAccountDeletionRequest request,
+        CancellationToken cancellationToken)
+    {
+        _ = Guid.TryParse(
+            User.FindFirstValue(JwtRegisteredClaimNames.Sub),
+            out var memberId);
+        await sender.Send(
+            new ConfirmMemberAccountDeletionCommand(
+                memberId,
+                request.Token),
+            cancellationToken);
+        refreshTokenCookieService.Delete(HttpContext);
+        Response.Headers.CacheControl = NoStoreCacheControl;
+
+        return NoContent();
+    }
 
     /// <summary>
     /// Gets one page of the current member's reservation history.
@@ -198,9 +251,9 @@ public class MembersController(
         return NoContent();
     }
 
-    private static GiftReservationHistoryResponse CreateHistoryResponse(
-        GiftReservationHistoryDetails history)
+    private static GiftReservationHistoryResponse CreateHistoryResponse(GiftReservationHistoryDetails history)
     {
+
         return new GiftReservationHistoryResponse(
             history.Id,
             history.WishlistId,

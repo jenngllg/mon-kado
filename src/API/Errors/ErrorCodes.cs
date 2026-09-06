@@ -1,25 +1,27 @@
 using System.Diagnostics.CodeAnalysis;
 
 namespace JennGllg.Fr.MonKado.Back.Api.Errors;
+
 /// <summary>
 /// Represents error codes.
 /// </summary>
-
 [ExcludeFromCodeCoverage]
 public static class ErrorCodes
 {
     #region WishImport
-
     /// <summary>Identifies an unsafe URL import destination.</summary>
     public const string WishImportUrlRejected = "WISH_IMPORT_URL_REJECTED";
-
     #endregion
     /// <summary>
     /// Identifies account email not confirmed.
     /// </summary>
-    #region Account
 
+    #region Account
     public const string AccountEmailNotConfirmed = "ACCOUNT_EMAIL_NOT_CONFIRMED";
+    /// <summary>Identifies an invalid account deletion confirmation.</summary>
+    public const string AccountDeletionInvalid = "ACCOUNT_DELETION_INVALID";
+    /// <summary>Identifies an exhausted account deletion request quota.</summary>
+    public const string AccountDeletionRateLimited = "ACCOUNT_DELETION_RATE_LIMITED";
     /// <summary>
     /// Identifies account invalid credentials.
     /// </summary>
@@ -37,9 +39,7 @@ public static class ErrorCodes
     /// </summary>
     public const string AccountPasswordResetInvalid = "ACCOUNT_PASSWORD_RESET_INVALID";
     #endregion
-
     #region Google
-
     /// <summary>
     /// Identifies an invalid or expired Google authentication flow.
     /// </summary>
@@ -52,11 +52,8 @@ public static class ErrorCodes
     /// Identifies a concurrent or ambiguous Google account link.
     /// </summary>
     public const string GoogleAccountLinkConflict = "GOOGLE_ACCOUNT_LINK_CONFLICT";
-
     #endregion
-
     #region Request
-
     /// <summary>
     /// Identifies request validation error.
     /// </summary>
@@ -86,9 +83,7 @@ public static class ErrorCodes
     /// </summary>
     public const string RequestPreconditionRequired = "REQUEST_PRECONDITION_REQUIRED";
     #endregion
-
     #region Security
-
     /// <summary>
     /// Identifies security unauthorized.
     /// </summary>
@@ -98,9 +93,7 @@ public static class ErrorCodes
     /// </summary>
     public const string SecurityForbidden = "SECURITY_FORBIDDEN";
     #endregion
-
     #region Member
-
     /// <summary>
     /// Identifies a member profile version conflict.
     /// </summary>
@@ -117,103 +110,74 @@ public static class ErrorCodes
     /// Identifies an invalid member email change confirmation.
     /// </summary>
     public const string MemberEmailChangeInvalid = "MEMBER_EMAIL_CHANGE_INVALID";
-
     #endregion
-
     #region Wishlist
-
     /// <summary>
     /// Identifies a private wishlist that is unavailable to the current member.
     /// </summary>
     public const string WishlistNotFound = "WISHLIST_NOT_FOUND";
-
     /// <summary>
     /// Identifies an owner-scoped wishlist name conflict.
     /// </summary>
     public const string WishlistNameAlreadyExists = "WISHLIST_NAME_ALREADY_EXISTS";
-
     /// <summary>
     /// Identifies an optimistic wishlist update conflict.
     /// </summary>
     public const string WishlistVersionConflict = "WISHLIST_VERSION_CONFLICT";
-
     /// <summary>
     /// Identifies a gift wish that is unavailable under its parent wishlist.
     /// </summary>
     public const string WishNotFound = "WISH_NOT_FOUND";
-
     /// <summary>
     /// Identifies an optimistic gift wish update conflict.
     /// </summary>
     public const string WishVersionConflict = "WISH_VERSION_CONFLICT";
-
     /// <summary>
     /// Identifies a requested gift wish order that does not match the current collection.
     /// </summary>
     public const string WishOrderConflict = "WISH_ORDER_CONFLICT";
-
     /// <summary>
     /// Identifies an optimistic gift wish collection order conflict.
     /// </summary>
     public const string WishOrderVersionConflict = "WISH_ORDER_VERSION_CONFLICT";
-
     /// <summary>
     /// Identifies a wishlist that reached its maximum number of gift wishes.
     /// </summary>
     public const string WishLimitReached = "WISH_LIMIT_REACHED";
-
     /// <summary>Identifies a gift quantity lower than the quantity already reserved.</summary>
     public const string WishQuantityBelowReserved = "WISH_QUANTITY_BELOW_RESERVED";
-
     /// <summary>Identifies recognized image content that cannot be processed safely.</summary>
     public const string WishImageInvalid = "WISH_IMAGE_INVALID";
-
     /// <summary>Identifies an unsupported gift-image representation.</summary>
     public const string WishImageUnsupportedFormat = "WISH_IMAGE_UNSUPPORTED_FORMAT";
-
     /// <summary>Identifies an unavailable gift image or signed grant.</summary>
     public const string WishImageNotFound = "WISH_IMAGE_NOT_FOUND";
-
     /// <summary>Identifies an active wishlist share link that was not found.</summary>
     public const string WishlistShareLinkNotFound = "WISHLIST_SHARE_LINK_NOT_FOUND";
-
     /// <summary>Identifies a wishlist that already has an active share link.</summary>
     public const string WishlistShareLinkAlreadyExists = "WISHLIST_SHARE_LINK_ALREADY_EXISTS";
-
     /// <summary>Identifies an optimistic share-link version conflict.</summary>
     public const string WishlistShareLinkVersionConflict = "WISHLIST_SHARE_LINK_VERSION_CONFLICT";
-
     /// <summary>Identifies public wishlist content unavailable through a share link.</summary>
     public const string SharedWishlistNotFound = "SHARED_WISHLIST_NOT_FOUND";
-
     /// <summary>Identifies a gift wish unavailable under a shared wishlist.</summary>
     public const string SharedWishNotFound = "SHARED_WISH_NOT_FOUND";
-
     /// <summary>Identifies a current identity that has not joined the wishlist.</summary>
     public const string WishlistParticipantNotFound = "WISHLIST_PARTICIPANT_NOT_FOUND";
-
     /// <summary>Identifies a wishlist owner attempting to join as a participant.</summary>
     public const string WishlistOwnerCannotJoin = "WISHLIST_OWNER_CANNOT_JOIN";
-
     /// <summary>Identifies a wishlist that reached its participant limit.</summary>
     public const string WishlistParticipantLimitReached = "WISHLIST_PARTICIPANT_LIMIT_REACHED";
-
     /// <summary>Identifies an invalid or expired browser guest session.</summary>
     public const string GuestSessionInvalid = "GUEST_SESSION_INVALID";
-
     /// <summary>Identifies a missing current-participant gift reservation.</summary>
     public const string GiftReservationNotFound = "GIFT_RESERVATION_NOT_FOUND";
-
     /// <summary>Identifies a reservation quantity that is no longer available.</summary>
     public const string GiftReservationQuantityUnavailable = "GIFT_RESERVATION_QUANTITY_UNAVAILABLE";
-
     /// <summary>Identifies an optimistic gift-reservation version conflict.</summary>
     public const string GiftReservationVersionConflict = "GIFT_RESERVATION_VERSION_CONFLICT";
-
     #endregion
-
     #region Technical
-
     /// <summary>
     /// Identifies technical dependency unavailable.
     /// </summary>
@@ -222,6 +186,5 @@ public static class ErrorCodes
     /// Identifies technical service unavailable.
     /// </summary>
     public const string TechnicalServiceUnavailable = "TECHNICAL_SERVICE_UNAVAILABLE";
-
     #endregion
 }

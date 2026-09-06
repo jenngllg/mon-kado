@@ -1,19 +1,19 @@
 using System.Diagnostics.CodeAnalysis;
 
 namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Entities;
+
 /// <summary>
 /// Represents authentication email outbox message.
 /// </summary>
-
 public class AuthenticationEmailOutboxMessage
 {
     private AuthenticationEmailOutboxMessage()
     {
     }
+
     /// <summary>
     /// Gets id.
     /// </summary>
-
     public Guid Id
     {
         get; private set;
@@ -21,7 +21,6 @@ public class AuthenticationEmailOutboxMessage
     /// <summary>
     /// Gets user id.
     /// </summary>
-
     public Guid UserId
     {
         get; private set;
@@ -29,15 +28,38 @@ public class AuthenticationEmailOutboxMessage
     /// <summary>
     /// Gets the related member email change request identifier.
     /// </summary>
-
     public Guid? MemberEmailChangeRequestId
     {
         get; private set;
     }
+    /// <summary>Gets the deletion request identity, retained after supersession for delivery filtering.</summary>
+    public Guid? MemberAccountDeletionRequestId
+    {
+        get; private set;
+    }
+
+    /// <summary>Creates a confirmation message bound to a durable account deletion request.</summary>
+    /// <param name="request">The request containing the immutable recipient security state.</param>
+    /// <returns>The new delivery message.</returns>
+    public static AuthenticationEmailOutboxMessage CreateAccountDeletionConfirmation(MemberAccountDeletionRequest request)
+    {
+
+        return new AuthenticationEmailOutboxMessage
+        {
+            Id = Guid.CreateVersion7(),
+            UserId = request.MemberId,
+            MemberAccountDeletionRequestId = request.Id,
+            RecipientEmail = request.Email,
+            SecurityStampSnapshot = request.SecurityStamp,
+            Kind = AuthenticationEmailKind.AccountDeletionConfirmation,
+            CreatedAt = request.CreatedAt,
+            AvailableAt = request.CreatedAt
+        };
+    }
+
     /// <summary>
     /// Gets the immutable recipient address for request-specific messages.
     /// </summary>
-
     public string? RecipientEmail
     {
         get; private set;
@@ -45,7 +67,6 @@ public class AuthenticationEmailOutboxMessage
     /// <summary>
     /// Gets the immutable security stamp used to validate a password reset or email change confirmation.
     /// </summary>
-
     public string? SecurityStampSnapshot
     {
         get; private set;
@@ -53,7 +74,6 @@ public class AuthenticationEmailOutboxMessage
     /// <summary>
     /// Gets kind.
     /// </summary>
-
     public AuthenticationEmailKind Kind
     {
         get; private set;
@@ -61,7 +81,6 @@ public class AuthenticationEmailOutboxMessage
     /// <summary>
     /// Gets created at.
     /// </summary>
-
     public DateTime CreatedAt
     {
         get; private set;
@@ -69,78 +88,62 @@ public class AuthenticationEmailOutboxMessage
     /// <summary>
     /// Gets available at.
     /// </summary>
-
     public DateTime AvailableAt
     {
         get; private set;
     }
+
     /// <summary>
     /// Gets attempt count.
     /// </summary>
-
-    [SuppressMessage(
-        "CodeQuality",
-        "S1144:Unused private types or members should be removed",
-        Justification = "Entity Framework uses this private setter when materializing persisted outbox state.")]
+    [SuppressMessage("CodeQuality", "S1144:Unused private types or members should be removed", Justification = "Entity Framework uses this private setter when materializing persisted outbox state.")]
     public int AttemptCount
     {
         get; private set;
     }
+
     /// <summary>
     /// Gets locked until.
     /// </summary>
-
-    [SuppressMessage(
-        "CodeQuality",
-        "S1144:Unused private types or members should be removed",
-        Justification = "Entity Framework uses this private setter when materializing persisted outbox state.")]
+    [SuppressMessage("CodeQuality", "S1144:Unused private types or members should be removed", Justification = "Entity Framework uses this private setter when materializing persisted outbox state.")]
     public DateTime? LockedUntil
     {
         get; private set;
     }
+
     /// <summary>
     /// Gets processed at.
     /// </summary>
-
-    [SuppressMessage(
-        "CodeQuality",
-        "S1144:Unused private types or members should be removed",
-        Justification = "Entity Framework uses this private setter when materializing persisted outbox state.")]
+    [SuppressMessage("CodeQuality", "S1144:Unused private types or members should be removed", Justification = "Entity Framework uses this private setter when materializing persisted outbox state.")]
     public DateTime? ProcessedAt
     {
         get; private set;
     }
+
     /// <summary>
     /// Gets last error.
     /// </summary>
-
-    [SuppressMessage(
-        "CodeQuality",
-        "S1144:Unused private types or members should be removed",
-        Justification = "Entity Framework uses this private setter when materializing persisted outbox state.")]
+    [SuppressMessage("CodeQuality", "S1144:Unused private types or members should be removed", Justification = "Entity Framework uses this private setter when materializing persisted outbox state.")]
     public string? LastError
     {
         get; private set;
     }
+
     /// <summary>
     /// Gets provider message id.
     /// </summary>
-
-    [SuppressMessage(
-        "CodeQuality",
-        "S1144:Unused private types or members should be removed",
-        Justification = "Entity Framework uses this private setter when materializing persisted outbox state.")]
+    [SuppressMessage("CodeQuality", "S1144:Unused private types or members should be removed", Justification = "Entity Framework uses this private setter when materializing persisted outbox state.")]
     public string? ProviderMessageId
     {
         get; private set;
     }
+
     /// <summary>
     /// Executes the create email confirmation operation.
     /// </summary>
     /// <param name="userId">The user id.</param>
     /// <param name="createdAt">The created at.</param>
     /// <returns>The operation result.</returns>
-
     public static AuthenticationEmailOutboxMessage CreateEmailConfirmation(
         Guid userId,
         DateTime createdAt)

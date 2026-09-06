@@ -17,11 +17,7 @@ public class SecurityApiFactory(
     public const string JwtAudience = "MonKado.Frontend";
     public const string JwtIssuer = "MonKado.Api";
     public const string JwtSigningKey = "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA=";
-
-    private const string UnavailableConnectionString =
-        "Host=127.0.0.1;Port=1;Database=mon_kado;Username=mon_kado;Password=functional-tests-only;" +
-        "Timeout=1;Command Timeout=1;Pooling=false;SSL Mode=Disable";
-
+    private const string UnavailableConnectionString = "Host=127.0.0.1;Port=1;Database=mon_kado;Username=mon_kado;Password=functional-tests-only;" + "Timeout=1;Command Timeout=1;Pooling=false;SSL Mode=Disable";
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment(environment);
@@ -47,11 +43,14 @@ public class SecurityApiFactory(
             "ReverseProxy:KnownNetworks:0",
             knownProxyNetwork);
         builder.ConfigureServices(services =>
-        {
-            services.AddControllers().AddApplicationPart(typeof(SecurityTestController).Assembly);
+            {
+                services.AddSingleton<JennGllg.Fr.MonKado.Back.Application.Abstractions.IAuthenticatedMemberValidationService>(new RecordingAuthenticatedMemberValidationService());
+                services
+                    .AddControllers()
+                    .AddApplicationPart(typeof(SecurityTestController).Assembly);
 
-            if (remoteIpAddress is not null)
-                services.AddSingleton<IStartupFilter>(new RemoteIpStartupFilter(remoteIpAddress));
-        });
+                if (remoteIpAddress is not null)
+                    services.AddSingleton<IStartupFilter>(new RemoteIpStartupFilter(remoteIpAddress));
+            });
     }
 }

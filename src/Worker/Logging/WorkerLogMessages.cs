@@ -4,20 +4,24 @@ using JennGllg.Fr.MonKado.Back.Application.Models;
 using Microsoft.Extensions.Logging;
 
 namespace JennGllg.Fr.MonKado.Back.Worker.Logging;
+
 /// <summary>
 /// Represents worker log messages.
 /// </summary>
-
 public static partial class WorkerLogMessages
 {
+    /// <summary>Logs delivery of an account deletion confirmation without recipient or token.</summary>
+    /// <param name="logger">The logger.</param>
+    /// <param name="outboxMessageId">The durable message identifier.</param>
+    [LoggerMessage(EventId = LogEventIds.AccountDeletionConfirmationSent, Level = LogLevel.Information, Message = "Account deletion confirmation {OutboxMessageId} sent.")]
+    public static partial void AccountDeletionConfirmationSent(
+        ILogger logger,
+        Guid outboxMessageId);
     /// <summary>
     /// Executes the authentication email delivery disabled operation.
     /// </summary>
     /// <param name="logger">The logger.</param>
-    [LoggerMessage(
-        EventId = LogEventIds.AuthenticationEmailDeliveryDisabled,
-        Level = LogLevel.Information,
-        Message = "Authentication email delivery is disabled for this environment.")]
+    [LoggerMessage(EventId = LogEventIds.AuthenticationEmailDeliveryDisabled, Level = LogLevel.Information, Message = "Authentication email delivery is disabled for this environment.")]
     public static partial void AuthenticationEmailDeliveryDisabled(ILogger logger);
     /// <summary>
     /// Executes the authentication email delivery failed operation.
@@ -25,11 +29,7 @@ public static partial class WorkerLogMessages
     /// <param name="logger">The logger.</param>
     /// <param name="exceptionType">The exception type.</param>
     /// <param name="exception">The delivery exception.</param>
-
-    [LoggerMessage(
-        EventId = LogEventIds.AuthenticationEmailDeliveryFailed,
-        Level = LogLevel.Error,
-        Message = "Authentication email delivery failed and will be retried. Exception type: {ExceptionType}")]
+    [LoggerMessage(EventId = LogEventIds.AuthenticationEmailDeliveryFailed, Level = LogLevel.Error, Message = "Authentication email delivery failed and will be retried. Exception type: {ExceptionType}")]
     public static partial void AuthenticationEmailDeliveryFailed(
         ILogger logger,
         string exceptionType,
@@ -39,10 +39,7 @@ public static partial class WorkerLogMessages
     /// </summary>
     /// <param name="logger">The logger.</param>
     /// <param name="outboxMessageId">The outbox message identifier.</param>
-    [LoggerMessage(
-        EventId = LogEventIds.AccountConfirmationEmailSent,
-        Level = LogLevel.Information,
-        Message = "Account confirmation email {OutboxMessageId} sent.")]
+    [LoggerMessage(EventId = LogEventIds.AccountConfirmationEmailSent, Level = LogLevel.Information, Message = "Account confirmation email {OutboxMessageId} sent.")]
     public static partial void AccountConfirmationEmailSent(
         ILogger logger,
         Guid outboxMessageId);
@@ -51,10 +48,7 @@ public static partial class WorkerLogMessages
     /// </summary>
     /// <param name="logger">The logger.</param>
     /// <param name="outboxMessageId">The outbox message identifier.</param>
-    [LoggerMessage(
-        EventId = LogEventIds.AccountPasswordResetEmailSent,
-        Level = LogLevel.Information,
-        Message = "Account password reset email {OutboxMessageId} sent.")]
+    [LoggerMessage(EventId = LogEventIds.AccountPasswordResetEmailSent, Level = LogLevel.Information, Message = "Account password reset email {OutboxMessageId} sent.")]
     public static partial void AccountPasswordResetEmailSent(
         ILogger logger,
         Guid outboxMessageId);
@@ -63,10 +57,7 @@ public static partial class WorkerLogMessages
     /// </summary>
     /// <param name="logger">The logger.</param>
     /// <param name="outboxMessageId">The outbox message identifier.</param>
-    [LoggerMessage(
-        EventId = LogEventIds.MemberEmailChangeConfirmationSent,
-        Level = LogLevel.Information,
-        Message = "Member email change confirmation {OutboxMessageId} sent.")]
+    [LoggerMessage(EventId = LogEventIds.MemberEmailChangeConfirmationSent, Level = LogLevel.Information, Message = "Member email change confirmation {OutboxMessageId} sent.")]
     public static partial void MemberEmailChangeConfirmationSent(
         ILogger logger,
         Guid outboxMessageId);
@@ -75,10 +66,7 @@ public static partial class WorkerLogMessages
     /// </summary>
     /// <param name="logger">The logger.</param>
     /// <param name="outboxMessageId">The outbox message identifier.</param>
-    [LoggerMessage(
-        EventId = LogEventIds.MemberEmailChangeSecurityNotificationSent,
-        Level = LogLevel.Information,
-        Message = "Member email change security notification {OutboxMessageId} sent.")]
+    [LoggerMessage(EventId = LogEventIds.MemberEmailChangeSecurityNotificationSent, Level = LogLevel.Information, Message = "Member email change security notification {OutboxMessageId} sent.")]
     public static partial void MemberEmailChangeSecurityNotificationSent(
         ILogger logger,
         Guid outboxMessageId);
@@ -87,10 +75,7 @@ public static partial class WorkerLogMessages
     /// </summary>
     /// <param name="logger">The logger.</param>
     /// <param name="outboxMessageId">The outbox message identifier.</param>
-    [LoggerMessage(
-        EventId = LogEventIds.MemberPasswordChangedSecurityNotificationSent,
-        Level = LogLevel.Information,
-        Message = "Member password change security notification {OutboxMessageId} sent.")]
+    [LoggerMessage(EventId = LogEventIds.MemberPasswordChangedSecurityNotificationSent, Level = LogLevel.Information, Message = "Member password change security notification {OutboxMessageId} sent.")]
     public static partial void MemberPasswordChangedSecurityNotificationSent(
         ILogger logger,
         Guid outboxMessageId);
@@ -100,10 +85,7 @@ public static partial class WorkerLogMessages
     /// <param name="logger">The logger.</param>
     /// <param name="outboxMessageId">The outbox message identifier.</param>
     /// <param name="failureCategory">The technical failure category.</param>
-    [LoggerMessage(
-        EventId = LogEventIds.AuthenticationEmailProviderRejectedMessage,
-        Level = LogLevel.Error,
-        Message = "Authentication email {OutboxMessageId} was rejected by the provider with category {FailureCategory}.")]
+    [LoggerMessage(EventId = LogEventIds.AuthenticationEmailProviderRejectedMessage, Level = LogLevel.Error, Message = "Authentication email {OutboxMessageId} was rejected by the provider with category {FailureCategory}.")]
     public static partial void AuthenticationEmailProviderRejectedMessage(
         ILogger logger,
         Guid outboxMessageId,
@@ -113,11 +95,7 @@ public static partial class WorkerLogMessages
     /// </summary>
     /// <param name="logger">The logger.</param>
     /// <param name="deletedAccountCount">The deleted account count.</param>
-
-    [LoggerMessage(
-        EventId = LogEventIds.ExpiredAccountsDeleted,
-        Level = LogLevel.Information,
-        Message = "Deleted {DeletedAccountCount} expired unconfirmed accounts.")]
+    [LoggerMessage(EventId = LogEventIds.ExpiredAccountsDeleted, Level = LogLevel.Information, Message = "Deleted {DeletedAccountCount} expired unconfirmed accounts.")]
     public static partial void ExpiredAccountsDeleted(
         ILogger logger,
         int deletedAccountCount);
@@ -127,11 +105,7 @@ public static partial class WorkerLogMessages
     /// <param name="logger">The logger.</param>
     /// <param name="exceptionType">The exception type.</param>
     /// <param name="exception">The cleanup exception.</param>
-
-    [LoggerMessage(
-        EventId = LogEventIds.ExpiredAccountCleanupFailed,
-        Level = LogLevel.Error,
-        Message = "Expired account cleanup failed and will be retried. Exception type: {ExceptionType}")]
+    [LoggerMessage(EventId = LogEventIds.ExpiredAccountCleanupFailed, Level = LogLevel.Error, Message = "Expired account cleanup failed and will be retried. Exception type: {ExceptionType}")]
     public static partial void ExpiredAccountCleanupFailed(
         ILogger logger,
         string exceptionType,
@@ -141,11 +115,7 @@ public static partial class WorkerLogMessages
     /// </summary>
     /// <param name="logger">The logger.</param>
     /// <param name="deletedSessionCount">The deleted session count.</param>
-
-    [LoggerMessage(
-        EventId = LogEventIds.ExpiredSessionsDeleted,
-        Level = LogLevel.Information,
-        Message = "Deleted {DeletedSessionCount} expired authentication sessions.")]
+    [LoggerMessage(EventId = LogEventIds.ExpiredSessionsDeleted, Level = LogLevel.Information, Message = "Deleted {DeletedSessionCount} expired authentication sessions.")]
     public static partial void ExpiredSessionsDeleted(
         ILogger logger,
         int deletedSessionCount);
@@ -155,128 +125,88 @@ public static partial class WorkerLogMessages
     /// <param name="logger">The logger.</param>
     /// <param name="exceptionType">The exception type.</param>
     /// <param name="exception">The cleanup exception.</param>
-
-    [LoggerMessage(
-        EventId = LogEventIds.ExpiredSessionCleanupFailed,
-        Level = LogLevel.Error,
-        Message = "Authentication session cleanup failed and will be retried. Exception type: {ExceptionType}")]
+    [LoggerMessage(EventId = LogEventIds.ExpiredSessionCleanupFailed, Level = LogLevel.Error, Message = "Authentication session cleanup failed and will be retried. Exception type: {ExceptionType}")]
     public static partial void ExpiredSessionCleanupFailed(
         ILogger logger,
         string exceptionType,
         Exception exception);
-
     /// <summary>Logs deleted expired guest sessions.</summary>
     /// <param name="logger">The logger.</param>
     /// <param name="deletedSessionCount">The deleted guest-session count.</param>
-    [LoggerMessage(
-        EventId = LogEventIds.ExpiredGuestSessionsDeleted,
-        Level = LogLevel.Information,
-        Message = "Deleted {DeletedSessionCount} expired guest sessions.")]
+    [LoggerMessage(EventId = LogEventIds.ExpiredGuestSessionsDeleted, Level = LogLevel.Information, Message = "Deleted {DeletedSessionCount} expired guest sessions.")]
     public static partial void ExpiredGuestSessionsDeleted(
         ILogger logger,
         int deletedSessionCount);
-
     /// <summary>Logs an expired guest-session cleanup failure.</summary>
     /// <param name="logger">The logger.</param>
     /// <param name="exceptionType">The exception type.</param>
     /// <param name="exception">The cleanup exception.</param>
-    [LoggerMessage(
-        EventId = LogEventIds.ExpiredGuestSessionCleanupFailed,
-        Level = LogLevel.Error,
-        Message = "Guest session cleanup failed and will be retried. Exception type: {ExceptionType}")]
+    [LoggerMessage(EventId = LogEventIds.ExpiredGuestSessionCleanupFailed, Level = LogLevel.Error, Message = "Guest session cleanup failed and will be retried. Exception type: {ExceptionType}")]
     public static partial void ExpiredGuestSessionCleanupFailed(
         ILogger logger,
         string exceptionType,
         Exception exception);
-
     /// <summary>
     /// Logs deleted member email change requests.
     /// </summary>
     /// <param name="logger">The logger.</param>
     /// <param name="deletedRequestCount">The deleted request count.</param>
-    [LoggerMessage(
-        EventId = LogEventIds.ExpiredMemberEmailChangeRequestsDeleted,
-        Level = LogLevel.Information,
-        Message = "Deleted {DeletedRequestCount} expired member email change requests.")]
+    [LoggerMessage(EventId = LogEventIds.ExpiredMemberEmailChangeRequestsDeleted, Level = LogLevel.Information, Message = "Deleted {DeletedRequestCount} expired member email change requests.")]
     public static partial void ExpiredMemberEmailChangeRequestsDeleted(
         ILogger logger,
         int deletedRequestCount);
-
     /// <summary>
     /// Logs a member email change request cleanup failure.
     /// </summary>
     /// <param name="logger">The logger.</param>
     /// <param name="exceptionType">The exception type.</param>
     /// <param name="exception">The cleanup exception.</param>
-    [LoggerMessage(
-        EventId = LogEventIds.MemberEmailChangeRequestCleanupFailed,
-        Level = LogLevel.Error,
-        Message = "Member email change request cleanup failed and will be retried. Exception type: {ExceptionType}")]
+    [LoggerMessage(EventId = LogEventIds.MemberEmailChangeRequestCleanupFailed, Level = LogLevel.Error, Message = "Member email change request cleanup failed and will be retried. Exception type: {ExceptionType}")]
     public static partial void MemberEmailChangeRequestCleanupFailed(
         ILogger logger,
         string exceptionType,
         Exception exception);
-
     /// <summary>
     /// Logs deleted processed authentication emails.
     /// </summary>
     /// <param name="logger">The logger.</param>
     /// <param name="deletedEmailCount">The deleted email count.</param>
-    [LoggerMessage(
-        EventId = LogEventIds.ProcessedAuthenticationEmailsDeleted,
-        Level = LogLevel.Information,
-        Message = "Deleted {DeletedEmailCount} processed authentication email messages.")]
+    [LoggerMessage(EventId = LogEventIds.ProcessedAuthenticationEmailsDeleted, Level = LogLevel.Information, Message = "Deleted {DeletedEmailCount} processed authentication email messages.")]
     public static partial void ProcessedAuthenticationEmailsDeleted(
         ILogger logger,
         int deletedEmailCount);
-
     /// <summary>
     /// Logs a processed authentication email cleanup failure.
     /// </summary>
     /// <param name="logger">The logger.</param>
     /// <param name="exceptionType">The exception type.</param>
     /// <param name="exception">The cleanup exception.</param>
-    [LoggerMessage(
-        EventId = LogEventIds.ProcessedAuthenticationEmailCleanupFailed,
-        Level = LogLevel.Error,
-        Message = "Processed authentication email cleanup failed and will be retried. Exception type: {ExceptionType}")]
+    [LoggerMessage(EventId = LogEventIds.ProcessedAuthenticationEmailCleanupFailed, Level = LogLevel.Error, Message = "Processed authentication email cleanup failed and will be retried. Exception type: {ExceptionType}")]
     public static partial void ProcessedAuthenticationEmailCleanupFailed(
         ILogger logger,
         string exceptionType,
         Exception exception);
-
     /// <summary>Logs one physically deleted obsolete gift image.</summary>
     /// <param name="logger">The logger.</param>
     /// <param name="imageId">The immutable image identifier.</param>
-    [LoggerMessage(
-        EventId = LogEventIds.GiftImageDeleted,
-        Level = LogLevel.Information,
-        Message = "Deleted obsolete gift image {ImageId}.")]
+    [LoggerMessage(EventId = LogEventIds.GiftImageDeleted, Level = LogLevel.Information, Message = "Deleted obsolete gift image {ImageId}.")]
     public static partial void GiftImageDeleted(
         ILogger logger,
         Guid imageId);
-
     /// <summary>Logs one reconciled pending gift image.</summary>
     /// <param name="logger">The logger.</param>
     /// <param name="imageId">The immutable image identifier.</param>
     /// <param name="isReferenced">Whether PostgreSQL references the image.</param>
-    [LoggerMessage(
-        EventId = LogEventIds.PendingGiftImageReconciled,
-        Level = LogLevel.Information,
-        Message = "Reconciled pending gift image {ImageId}; referenced: {IsReferenced}.")]
+    [LoggerMessage(EventId = LogEventIds.PendingGiftImageReconciled, Level = LogLevel.Information, Message = "Reconciled pending gift image {ImageId}; referenced: {IsReferenced}.")]
     public static partial void PendingGiftImageReconciled(
         ILogger logger,
         Guid imageId,
         bool isReferenced);
-
     /// <summary>Logs a gift-image cleanup cycle failure.</summary>
     /// <param name="logger">The logger.</param>
     /// <param name="exceptionType">The bounded exception type.</param>
     /// <param name="exception">The cleanup exception.</param>
-    [LoggerMessage(
-        EventId = LogEventIds.GiftImageCleanupFailed,
-        Level = LogLevel.Error,
-        Message = "Gift-image cleanup failed and will be retried. Exception type: {ExceptionType}.")]
+    [LoggerMessage(EventId = LogEventIds.GiftImageCleanupFailed, Level = LogLevel.Error, Message = "Gift-image cleanup failed and will be retried. Exception type: {ExceptionType}.")]
     public static partial void GiftImageCleanupFailed(
         ILogger logger,
         string exceptionType,

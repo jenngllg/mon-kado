@@ -31,7 +31,123 @@ public class AuthenticationEmailDispatcherTests(PostgreSqlWorkerFixture fixture)
     private readonly string _keysPath = Path.Combine(
         Path.GetTempPath(),
         "mon-kado-worker-tests",
-        Guid.NewGuid().ToString("N"));
+        Guid
+            .NewGuid()
+            .ToString("N"));
+    [Theory]
+    [InlineData("valid", true)]
+    [InlineData("expired", false)]
+    [InlineData("removed", false)]
+    [InlineData("unconfirmed", false)]
+    [InlineData("email", false)]
+    [InlineData("stamp", false)]
+    public async Task DispatchAsync_WhenAccountDeletionIsRequested_SendsOnlyCurrentConfirmation(
+        string scenario,
+        bool expectedDelivery)
+    {
+        // Arrange
+        var sender = new FakeEmailSender();
+        var now = new DateTimeOffset(
+            2026,
+            9,
+            6,
+            12,
+            0,
+            0,
+            TimeSpan.Zero);
+        await using var provider = await CreateProviderAsync(
+            sender,
+            now);
+        await using var scope = provider.CreateAsyncScope();
+        var context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
+        var member = new MonKadoUser
+        {
+            Id = Guid.CreateVersion7(),
+            UserName = "delete@example.test",
+            Email = "delete@example.test",
+            EmailConfirmed = true,
+            DisplayName = "Deletion test"
+        };
+        var manager = scope.ServiceProvider.GetRequiredService<UserManager<MonKadoUser>>();
+        Assert.True((await manager.CreateAsync(member)).Succeeded);
+        await scope.ServiceProvider
+            .GetRequiredService<IMemberAccountDeletionService>()
+            .RequestAsync(
+            member.Id,
+            TestContext.Current.CancellationToken);
+        var request = await context.MemberAccountDeletionRequests.SingleAsync(TestContext.Current.CancellationToken);
+        switch (scenario)
+        {
+            case "expired":
+                await context.MemberAccountDeletionRequests.ExecuteUpdateAsync(
+                    setters => setters
+                        .SetProperty(
+                        value => value.CreatedAt,
+                        now.UtcDateTime.AddHours(-1))
+                        .SetProperty(
+                        value => value.ExpiresAt,
+                        now.UtcDateTime),
+                    TestContext.Current.CancellationToken);
+                break;
+            case "removed":
+                await context.MemberAccountDeletionRequests.ExecuteDeleteAsync(TestContext.Current.CancellationToken);
+                break;
+            case "unconfirmed":
+                await context.Users.ExecuteUpdateAsync(
+                    setters => setters.SetProperty(
+                        value => value.EmailConfirmed,
+                        false),
+                    TestContext.Current.CancellationToken);
+                break;
+            case "email":
+                await context.Users.ExecuteUpdateAsync(
+                    setters => setters.SetProperty(
+                        value => value.Email,
+                        "changed@example.test"),
+                    TestContext.Current.CancellationToken);
+                break;
+            case "stamp":
+                await context.Users.ExecuteUpdateAsync(
+                    setters => setters.SetProperty(
+                        value => value.SecurityStamp,
+                        "changed"),
+                    TestContext.Current.CancellationToken);
+                break;
+        }
+
+        // Act
+        await DispatchAsync(provider);
+
+        // Assert
+        context.ChangeTracker.Clear();
+        var storedMessage = await context.AuthenticationEmailOutboxMessages.SingleAsync(TestContext.Current.CancellationToken);
+        Assert.NotNull(storedMessage.ProcessedAt);
+
+        if (expectedDelivery)
+        {
+            var message = Assert.Single(sender.AccountDeletionConfirmations);
+            Assert.Equal(
+                member.Email,
+                message.RecipientAddress);
+            Assert.Empty(message.ConfirmationUrl.Query);
+            Assert.Equal(
+                "/confirm-account-deletion",
+                message.ConfirmationUrl.AbsolutePath);
+            var token = Uri.UnescapeDataString(GetFragmentValues(message.ConfirmationUrl)["token"]);
+            var requestId = scope.ServiceProvider
+                .GetRequiredService<IMemberAccountDeletionTokenService>()
+                .Read(
+                member.Id,
+                token);
+            Assert.Equal(
+                request.Id,
+                requestId);
+        }
+        else
+        {
+            Assert.Empty(sender.AccountDeletionConfirmations);
+        }
+    }
 
     [Fact]
     public async Task ExecuteAsync_WhenAcceptedMessage_IsProcessedAndProviderIdentifierIsStored()
@@ -52,18 +168,19 @@ public class AuthenticationEmailDispatcherTests(PostgreSqlWorkerFixture fixture)
         var messageId = await CreateUnconfirmedAccountAsync(
             provider,
             now);
-
         await DispatchAsync(provider);
-
         await using var scope = provider.CreateAsyncScope();
         var context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
+
         // Act
-        var message = await context.AuthenticationEmailOutboxMessages
-            .SingleAsync(TestContext.Current.CancellationToken);
+        var message = await context.AuthenticationEmailOutboxMessages.SingleAsync(TestContext.Current.CancellationToken);
+
         // Assert
         Assert.Equal(
             messageId,
-            sender.Messages.Single().OutboxMessageId);
+            sender.Messages
+                .Single()
+                .OutboxMessageId);
         Assert.Equal(
             "fake-provider-id",
             message.ProviderMessageId);
@@ -93,14 +210,14 @@ public class AuthenticationEmailDispatcherTests(PostgreSqlWorkerFixture fixture)
         await CreateUnconfirmedAccountAsync(
             provider,
             now);
-
         await DispatchAsync(provider);
-
         await using var scope = provider.CreateAsyncScope();
+
         // Act
         var message = await scope.ServiceProvider
             .GetRequiredService<MonKadoDbContext>()
             .AuthenticationEmailOutboxMessages.SingleAsync(TestContext.Current.CancellationToken);
+
         // Assert
         Assert.Equal(
             1,
@@ -183,14 +300,14 @@ public class AuthenticationEmailDispatcherTests(PostgreSqlWorkerFixture fixture)
         await CreateUnconfirmedAccountAsync(
             provider,
             now);
-
         await DispatchAsync(provider);
-
         await using var scope = provider.CreateAsyncScope();
+
         // Act
         var message = await scope.ServiceProvider
             .GetRequiredService<MonKadoDbContext>()
             .AuthenticationEmailOutboxMessages.SingleAsync(TestContext.Current.CancellationToken);
+
         // Assert
         Assert.Equal(
             now.AddHours(2),
@@ -218,14 +335,14 @@ public class AuthenticationEmailDispatcherTests(PostgreSqlWorkerFixture fixture)
         await CreateUnconfirmedAccountAsync(
             provider,
             now);
-
         await DispatchAsync(provider);
-
         await using var scope = provider.CreateAsyncScope();
+
         // Act
         var message = await scope.ServiceProvider
             .GetRequiredService<MonKadoDbContext>()
             .AuthenticationEmailOutboxMessages.SingleAsync(TestContext.Current.CancellationToken);
+
         // Assert
         Assert.Equal(
             now.AddHours(6),
@@ -254,9 +371,7 @@ public class AuthenticationEmailDispatcherTests(PostgreSqlWorkerFixture fixture)
         // Arrange
         var sender = new FakeEmailSender(
             fail: true,
-            retryAfter: providerRetryMinutes is null
-                ? null
-                : TimeSpan.FromMinutes(providerRetryMinutes.Value),
+            retryAfter: providerRetryMinutes is null ? null : TimeSpan.FromMinutes(providerRetryMinutes.Value),
             failureCategory: failureCategory);
         var now = new DateTimeOffset(
             2026,
@@ -319,16 +434,15 @@ public class AuthenticationEmailDispatcherTests(PostgreSqlWorkerFixture fixture)
             now);
         await using (var setupScope = provider.CreateAsyncScope())
         {
-            var setupContext =
-                setupScope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
+            var setupContext = setupScope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
             await setupContext.AuthenticationEmailOutboxMessages.ExecuteUpdateAsync(
                 setters => setters
                     .SetProperty(
-                        message => message.LockedUntil,
-                        now.UtcDateTime.AddMinutes(-1))
+                    message => message.LockedUntil,
+                    now.UtcDateTime.AddMinutes(-1))
                     .SetProperty(
-                        message => message.AttemptCount,
-                        1),
+                    message => message.AttemptCount,
+                    1),
                 TestContext.Current.CancellationToken);
         }
 
@@ -380,8 +494,7 @@ public class AuthenticationEmailDispatcherTests(PostgreSqlWorkerFixture fixture)
     [InlineData("confirmed")]
     [InlineData("expired")]
     [InlineData("missing-account")]
-    public async Task ExecuteAsync_WhenAccountCannotReceiveConfirmation_IsNotContactedAndMessageIsClosed(
-        string scenario)
+    public async Task ExecuteAsync_WhenAccountCannotReceiveConfirmation_IsNotContactedAndMessageIsClosed(string scenario)
     {
         // Arrange
         var sender = new FakeEmailSender();
@@ -401,8 +514,7 @@ public class AuthenticationEmailDispatcherTests(PostgreSqlWorkerFixture fixture)
             now);
         await using (var setupScope = provider.CreateAsyncScope())
         {
-            var setupContext =
-                setupScope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
+            var setupContext = setupScope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
             switch (scenario)
             {
                 case "confirmed":
@@ -420,16 +532,13 @@ public class AuthenticationEmailDispatcherTests(PostgreSqlWorkerFixture fixture)
                         TestContext.Current.CancellationToken);
                     break;
                 case "missing-account":
-                    await setupContext.Database.OpenConnectionAsync(
-                        TestContext.Current.CancellationToken);
-
+                    await setupContext.Database.OpenConnectionAsync(TestContext.Current.CancellationToken);
                     try
                     {
                         await setupContext.Database.ExecuteSqlRawAsync(
                             "SET session_replication_role = replica;",
                             TestContext.Current.CancellationToken);
-                        await setupContext.Users.ExecuteDeleteAsync(
-                            TestContext.Current.CancellationToken);
+                        await setupContext.Users.ExecuteDeleteAsync(TestContext.Current.CancellationToken);
                     }
                     finally
                     {
@@ -438,8 +547,10 @@ public class AuthenticationEmailDispatcherTests(PostgreSqlWorkerFixture fixture)
                             TestContext.Current.CancellationToken);
                         await setupContext.Database.CloseConnectionAsync();
                     }
+
                     break;
                 default:
+
                     throw new InvalidOperationException($"Unknown test scenario '{scenario}'.");
             }
         }
@@ -463,8 +574,7 @@ public class AuthenticationEmailDispatcherTests(PostgreSqlWorkerFixture fixture)
     [InlineData("processed")]
     [InlineData("missing-lease")]
     [InlineData("expired-lease")]
-    public async Task ExecuteAsync_WhenClaimedMessageBecomesUndeliverable_DoesNotContactProvider(
-        string scenario)
+    public async Task ExecuteAsync_WhenClaimedMessageBecomesUndeliverable_DoesNotContactProvider(string scenario)
     {
         // Arrange
         var sender = new FakeEmailSender();
@@ -619,13 +729,12 @@ public class AuthenticationEmailDispatcherTests(PostgreSqlWorkerFixture fixture)
         var token = DecodeBase64Url(fragment["token"]);
         await using var scope = provider.CreateAsyncScope();
         var userManager = scope.ServiceProvider.GetRequiredService<UserManager<MonKadoUser>>();
-        var user = await userManager.FindByIdAsync(userId.ToString("D"))
-            ?? throw new InvalidOperationException("The member does not exist.");
+        var user = await userManager.FindByIdAsync(userId.ToString("D")) ?? throw new InvalidOperationException("The member does not exist.");
         Assert.True(await userManager.VerifyUserTokenAsync(
-            user,
-            PasswordResetTokenProviderOptions.ProviderName,
-            UserManager<MonKadoUser>.ResetPasswordTokenPurpose,
-            token));
+                user,
+                PasswordResetTokenProviderOptions.ProviderName,
+                UserManager<MonKadoUser>.ResetPasswordTokenPurpose,
+                token));
     }
 
     [Theory]
@@ -634,8 +743,7 @@ public class AuthenticationEmailDispatcherTests(PostgreSqlWorkerFixture fixture)
     [InlineData("changed-email")]
     [InlineData("changed-security-stamp")]
     [InlineData("missing-member")]
-    public async Task ExecuteAsync_WhenPasswordResetSnapshotIsStale_ClosesWithoutSending(
-        string scenario)
+    public async Task ExecuteAsync_WhenPasswordResetSnapshotIsStale_ClosesWithoutSending(string scenario)
     {
         // Arrange
         var sender = new FakeEmailSender();
@@ -661,11 +769,11 @@ public class AuthenticationEmailDispatcherTests(PostgreSqlWorkerFixture fixture)
                 await context.AuthenticationEmailOutboxMessages.ExecuteUpdateAsync(
                     setters => setters
                         .SetProperty(
-                            message => message.CreatedAt,
-                            now.UtcDateTime.AddHours(-1))
+                        message => message.CreatedAt,
+                        now.UtcDateTime.AddHours(-1))
                         .SetProperty(
-                            message => message.AvailableAt,
-                            now.UtcDateTime.AddHours(-1)),
+                        message => message.AvailableAt,
+                        now.UtcDateTime.AddHours(-1)),
                     TestContext.Current.CancellationToken);
 
             if (scenario == "unconfirmed")
@@ -692,8 +800,7 @@ public class AuthenticationEmailDispatcherTests(PostgreSqlWorkerFixture fixture)
             if (scenario == "missing-member")
             {
                 await context.Database.ExecuteSqlRawAsync(
-                    "ALTER TABLE public.authentication_email_outbox " +
-                    "DROP CONSTRAINT fk_authentication_email_outbox_users_user_id;",
+                    "ALTER TABLE public.authentication_email_outbox " + "DROP CONSTRAINT fk_authentication_email_outbox_users_user_id;",
                     TestContext.Current.CancellationToken);
                 await context.Users.ExecuteDeleteAsync(TestContext.Current.CancellationToken);
             }
@@ -758,8 +865,7 @@ public class AuthenticationEmailDispatcherTests(PostgreSqlWorkerFixture fixture)
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public async Task ExecuteAsync_WhenPasswordResetSnapshotIsIncomplete_ClosesWithoutSending(
-        bool removesRecipient)
+    public async Task ExecuteAsync_WhenPasswordResetSnapshotIsIncomplete_ClosesWithoutSending(bool removesRecipient)
     {
         // Arrange
         var sender = new FakeEmailSender();
@@ -781,8 +887,7 @@ public class AuthenticationEmailDispatcherTests(PostgreSqlWorkerFixture fixture)
         {
             var context = setupScope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
             await context.Database.ExecuteSqlRawAsync(
-                "ALTER TABLE public.authentication_email_outbox " +
-                "DROP CONSTRAINT ck_authentication_email_outbox_email_change_fields_consistent;",
+                "ALTER TABLE public.authentication_email_outbox " + "DROP CONSTRAINT ck_authentication_email_outbox_email_change_fields_consistent;",
                 TestContext.Current.CancellationToken);
 
             if (removesRecipient)
@@ -837,8 +942,7 @@ public class AuthenticationEmailDispatcherTests(PostgreSqlWorkerFixture fixture)
         {
             var context = setupScope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
             await context.Database.ExecuteSqlRawAsync(
-                "ALTER TABLE public.authentication_email_outbox " +
-                "DROP CONSTRAINT ck_authentication_email_outbox_email_change_fields_consistent;",
+                "ALTER TABLE public.authentication_email_outbox " + "DROP CONSTRAINT ck_authentication_email_outbox_email_change_fields_consistent;",
                 TestContext.Current.CancellationToken);
             await context.AuthenticationEmailOutboxMessages.ExecuteUpdateAsync(
                 setters => setters.SetProperty(
@@ -865,8 +969,7 @@ public class AuthenticationEmailDispatcherTests(PostgreSqlWorkerFixture fixture)
     [InlineData("revoked")]
     [InlineData("expired")]
     [InlineData("changed-current-email")]
-    public async Task ExecuteAsync_WhenEmailChangeRequestCannotBeConfirmed_ClosesConfirmationWithoutSending(
-        string scenario)
+    public async Task ExecuteAsync_WhenEmailChangeRequestCannotBeConfirmed_ClosesConfirmationWithoutSending(string scenario)
     {
         // Arrange
         var sender = new FakeEmailSender();
@@ -899,11 +1002,11 @@ public class AuthenticationEmailDispatcherTests(PostgreSqlWorkerFixture fixture)
                 await setupContext.MemberEmailChangeRequests.ExecuteUpdateAsync(
                     setters => setters
                         .SetProperty(
-                            request => request.CreatedAt,
-                            now.UtcDateTime.AddHours(-2))
+                        request => request.CreatedAt,
+                        now.UtcDateTime.AddHours(-2))
                         .SetProperty(
-                            request => request.ExpiresAt,
-                            now.UtcDateTime.AddHours(-1)),
+                        request => request.ExpiresAt,
+                        now.UtcDateTime.AddHours(-1)),
                     TestContext.Current.CancellationToken);
 
             if (scenario == "changed-current-email")
@@ -953,8 +1056,7 @@ public class AuthenticationEmailDispatcherTests(PostgreSqlWorkerFixture fixture)
                 .Where(message => message.Kind != kind)
                 .ExecuteDeleteAsync(TestContext.Current.CancellationToken);
             await context.Database.ExecuteSqlRawAsync(
-                "ALTER TABLE public.authentication_email_outbox " +
-                "DROP CONSTRAINT ck_authentication_email_outbox_email_change_fields_consistent;",
+                "ALTER TABLE public.authentication_email_outbox " + "DROP CONSTRAINT ck_authentication_email_outbox_email_change_fields_consistent;",
                 TestContext.Current.CancellationToken);
 
             if (removesRequestId)
@@ -1007,7 +1109,6 @@ public class AuthenticationEmailDispatcherTests(PostgreSqlWorkerFixture fixture)
             sendingProvider,
             now);
         await DispatchAsync(sendingProvider);
-
         await using var validatingProvider = BuildProvider(
             new FakeEmailSender(),
             now);
@@ -1015,31 +1116,29 @@ public class AuthenticationEmailDispatcherTests(PostgreSqlWorkerFixture fixture)
         var fragment = delivery.ConfirmationUrl.Fragment
             .TrimStart('#')
             .Split(
-                '&',
-                StringSplitOptions.RemoveEmptyEntries)
+            '&',
+            StringSplitOptions.RemoveEmptyEntries)
             .Select(part => part.Split(
                 '=',
                 2))
             .ToDictionary(
-                parts => parts[0],
-                parts => parts[1],
-                StringComparer.Ordinal);
+            parts => parts[0],
+            parts => parts[1],
+            StringComparer.Ordinal);
         var userId = Guid.Parse(fragment["userId"]);
         var token = DecodeBase64Url(fragment["token"]);
 
         // Act
         await using var scope = validatingProvider.CreateAsyncScope();
-        var userManager =
-            scope.ServiceProvider.GetRequiredService<UserManager<MonKadoUser>>();
-        var user = await userManager.FindByIdAsync(userId.ToString("D"))
-            ?? throw new InvalidOperationException("The member does not exist.");
+        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<MonKadoUser>>();
+        var user = await userManager.FindByIdAsync(userId.ToString("D")) ?? throw new InvalidOperationException("The member does not exist.");
 
         // Assert
         Assert.True(await userManager.VerifyUserTokenAsync(
-            user,
-            userManager.Options.Tokens.EmailConfirmationTokenProvider,
-            UserManager<MonKadoUser>.ConfirmEmailTokenPurpose,
-            token));
+                user,
+                userManager.Options.Tokens.EmailConfirmationTokenProvider,
+                UserManager<MonKadoUser>.ConfirmEmailTokenPurpose,
+                token));
     }
 
     [Fact]
@@ -1069,15 +1168,15 @@ public class AuthenticationEmailDispatcherTests(PostgreSqlWorkerFixture fixture)
         var fragment = delivery.ConfirmationUrl.Fragment
             .TrimStart('#')
             .Split(
-                '&',
-                StringSplitOptions.RemoveEmptyEntries)
+            '&',
+            StringSplitOptions.RemoveEmptyEntries)
             .Select(part => part.Split(
                 '=',
                 2))
             .ToDictionary(
-                parts => parts[0],
-                parts => parts[1],
-                StringComparer.Ordinal);
+            parts => parts[0],
+            parts => parts[1],
+            StringComparer.Ordinal);
         var deliveredRequestId = Guid.Parse(fragment["requestId"]);
         var token = DecodeBase64Url(fragment["token"]);
         await using var scope = validatingProvider.CreateAsyncScope();
@@ -1085,11 +1184,10 @@ public class AuthenticationEmailDispatcherTests(PostgreSqlWorkerFixture fixture)
         var request = await context.MemberEmailChangeRequests
             .AsNoTracking()
             .SingleAsync(
-                candidate => candidate.Id == requestId,
-                TestContext.Current.CancellationToken);
+            candidate => candidate.Id == requestId,
+            TestContext.Current.CancellationToken);
         var userManager = scope.ServiceProvider.GetRequiredService<UserManager<MonKadoUser>>();
-        var user = await userManager.FindByIdAsync(request.UserId.ToString("D"))
-            ?? throw new InvalidOperationException("The member does not exist.");
+        var user = await userManager.FindByIdAsync(request.UserId.ToString("D")) ?? throw new InvalidOperationException("The member does not exist.");
         var purpose = MemberEmailChangeTokenPurpose.Create(
             request.Id,
             request.NormalizedNewEmail);
@@ -1148,11 +1246,10 @@ public class AuthenticationEmailDispatcherTests(PostgreSqlWorkerFixture fixture)
         // Assert
         Assert.True(reset);
         var userManager = scope.ServiceProvider.GetRequiredService<UserManager<MonKadoUser>>();
-        var user = await userManager.FindByIdAsync(userId.ToString("D"))
-            ?? throw new InvalidOperationException("The member does not exist.");
+        var user = await userManager.FindByIdAsync(userId.ToString("D")) ?? throw new InvalidOperationException("The member does not exist.");
         Assert.True(await userManager.CheckPasswordAsync(
-            user,
-            "a long replacement password"));
+                user,
+                "a long replacement password"));
     }
 
     public void Dispose()
@@ -1162,7 +1259,6 @@ public class AuthenticationEmailDispatcherTests(PostgreSqlWorkerFixture fixture)
             Directory.Delete(
                 _keysPath,
                 recursive: true);
-
         GC.SuppressFinalize(this);
     }
 
@@ -1193,8 +1289,7 @@ public class AuthenticationEmailDispatcherTests(PostgreSqlWorkerFixture fixture)
         configuration["ConnectionStrings:PostgreSql"] = fixture.Container.GetConnectionString();
         configuration["DataProtection:KeysPath"] = _keysPath;
         var services = new ServiceCollection();
-        services.AddSingleton<TimeProvider>(
-            timeProvider ?? new FixedTimeProvider(now));
+        services.AddSingleton<TimeProvider>(timeProvider ?? new FixedTimeProvider(now));
         services.AddSingleton<IAuthenticationEmailSender>(sender);
         services.ConfigureDataProtection(
             configuration,
@@ -1207,11 +1302,13 @@ public class AuthenticationEmailDispatcherTests(PostgreSqlWorkerFixture fixture)
 
     private static string DecodeBase64Url(string token)
     {
-        var base64 = token.Replace(
+        var base64 = token
+            .Replace(
             '-',
-            '+').Replace(
-                '_',
-                '/');
+            '+')
+            .Replace(
+            '_',
+            '/');
         base64 = base64.PadRight(
             base64.Length + ((4 - (base64.Length % 4)) % 4),
             '=');
@@ -1225,15 +1322,15 @@ public class AuthenticationEmailDispatcherTests(PostgreSqlWorkerFixture fixture)
         return uri.Fragment
             .TrimStart('#')
             .Split(
-                '&',
-                StringSplitOptions.RemoveEmptyEntries)
+            '&',
+            StringSplitOptions.RemoveEmptyEntries)
             .Select(part => part.Split(
                 '=',
                 2))
             .ToDictionary(
-                parts => parts[0],
-                parts => parts[1],
-                StringComparer.Ordinal);
+            parts => parts[0],
+            parts => parts[1],
+            StringComparer.Ordinal);
     }
 
     private static async Task<Guid> CreateUnconfirmedAccountAsync(
@@ -1252,12 +1349,10 @@ public class AuthenticationEmailDispatcherTests(PostgreSqlWorkerFixture fixture)
         };
         var result = await userManager.CreateAsync(user);
         Assert.True(result.Succeeded);
-
         var context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
-        var message =
-            AuthenticationEmailOutboxMessage.CreateEmailConfirmation(
-                user.Id,
-                now.UtcDateTime);
+        var message = AuthenticationEmailOutboxMessage.CreateEmailConfirmation(
+            user.Id,
+            now.UtcDateTime);
         context.AuthenticationEmailOutboxMessages.Add(message);
         await context.SaveChangesAsync(TestContext.Current.CancellationToken);
 
@@ -1325,11 +1420,10 @@ public class AuthenticationEmailDispatcherTests(PostgreSqlWorkerFixture fixture)
         };
         var result = await userManager.CreateAsync(user);
         Assert.True(result.Succeeded);
-        var message = AuthenticationEmailOutboxMessage
-            .CreatePasswordChangedSecurityNotification(
-                user.Id,
-                "member@example.fr",
-                now.UtcDateTime);
+        var message = AuthenticationEmailOutboxMessage.CreatePasswordChangedSecurityNotification(
+            user.Id,
+            "member@example.fr",
+            now.UtcDateTime);
         var context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
         context.AuthenticationEmailOutboxMessages.Add(message);
         await context.SaveChangesAsync(TestContext.Current.CancellationToken);
@@ -1355,8 +1449,7 @@ public class AuthenticationEmailDispatcherTests(PostgreSqlWorkerFixture fixture)
             user,
             "a valid member password");
         Assert.True(result.Succeeded);
-        var securityStamp = user.SecurityStamp
-            ?? throw new InvalidOperationException("The member security stamp is missing.");
+        var securityStamp = user.SecurityStamp ?? throw new InvalidOperationException("The member security stamp is missing.");
         var message = AuthenticationEmailOutboxMessage.CreatePasswordReset(
             user.Id,
             "member@example.fr",
@@ -1382,8 +1475,7 @@ public class AuthenticationEmailDispatcherTests(PostgreSqlWorkerFixture fixture)
         AuthenticationEmailDeliveryPolicy policy)
     {
         await using var scope = provider.CreateAsyncScope();
-        var dispatcher =
-            scope.ServiceProvider.GetRequiredService<IAuthenticationEmailDispatcher>();
+        var dispatcher = scope.ServiceProvider.GetRequiredService<IAuthenticationEmailDispatcher>();
         await dispatcher.DispatchPendingAsync(
             new Uri("https://mon-kado.fr"),
             policy,
@@ -1393,8 +1485,7 @@ public class AuthenticationEmailDispatcherTests(PostgreSqlWorkerFixture fixture)
     private static async Task<int> DispatchOneAsync(ServiceProvider provider)
     {
         await using var scope = provider.CreateAsyncScope();
-        var dispatcher =
-            scope.ServiceProvider.GetRequiredService<IAuthenticationEmailDispatcher>();
+        var dispatcher = scope.ServiceProvider.GetRequiredService<IAuthenticationEmailDispatcher>();
 
         return await dispatcher.DispatchPendingAsync(
             new Uri("https://mon-kado.fr"),
@@ -1410,8 +1501,7 @@ public class AuthenticationEmailDispatcherTests(PostgreSqlWorkerFixture fixture)
         var context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
         var command = scenario switch
         {
-            "missing-message" =>
-                """
+            "missing-message" => """
                 CREATE OR REPLACE FUNCTION public.mutate_claimed_message()
                 RETURNS trigger AS $$
                 BEGIN
@@ -1423,9 +1513,8 @@ public class AuthenticationEmailDispatcherTests(PostgreSqlWorkerFixture fixture)
                 AFTER UPDATE OF locked_until ON public.authentication_email_outbox
                 FOR EACH ROW WHEN (NEW.locked_until IS NOT NULL)
                 EXECUTE FUNCTION public.mutate_claimed_message();
-                """,
-            "processed" =>
-                """
+            """,
+            "processed" => """
                 CREATE OR REPLACE FUNCTION public.mutate_claimed_message()
                 RETURNS trigger AS $$
                 BEGIN
@@ -1437,9 +1526,8 @@ public class AuthenticationEmailDispatcherTests(PostgreSqlWorkerFixture fixture)
                 BEFORE UPDATE OF locked_until ON public.authentication_email_outbox
                 FOR EACH ROW WHEN (NEW.locked_until IS NOT NULL)
                 EXECUTE FUNCTION public.mutate_claimed_message();
-                """,
-            "missing-lease" =>
-                """
+            """,
+            "missing-lease" => """
                 CREATE OR REPLACE FUNCTION public.mutate_claimed_message()
                 RETURNS trigger AS $$
                 BEGIN
@@ -1451,9 +1539,8 @@ public class AuthenticationEmailDispatcherTests(PostgreSqlWorkerFixture fixture)
                 BEFORE UPDATE OF locked_until ON public.authentication_email_outbox
                 FOR EACH ROW WHEN (NEW.locked_until IS NOT NULL)
                 EXECUTE FUNCTION public.mutate_claimed_message();
-                """,
-            "expired-lease" =>
-                """
+            """,
+            "expired-lease" => """
                 CREATE OR REPLACE FUNCTION public.mutate_claimed_message()
                 RETURNS trigger AS $$
                 BEGIN
@@ -1465,12 +1552,11 @@ public class AuthenticationEmailDispatcherTests(PostgreSqlWorkerFixture fixture)
                 BEFORE UPDATE OF locked_until ON public.authentication_email_outbox
                 FOR EACH ROW WHEN (NEW.locked_until IS NOT NULL)
                 EXECUTE FUNCTION public.mutate_claimed_message();
-                """,
+            """,
             _ => throw new InvalidOperationException($"Unknown test scenario '{scenario}'.")
         };
         await context.Database.ExecuteSqlRawAsync(
             command,
             TestContext.Current.CancellationToken);
     }
-
 }
