@@ -902,6 +902,14 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Migrati
                         .HasColumnType("boolean")
                         .HasColumnName("phone_number_confirmed");
 
+                    b.Property<byte[]>("ProfileImageHash")
+                        .HasColumnType("bytea")
+                        .HasColumnName("profile_image_hash");
+
+                    b.Property<Guid?>("ProfileImageId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("profile_image_id");
+
                     b.Property<string>("SecurityStamp")
                         .HasColumnType("text")
                         .HasColumnName("security_stamp");
@@ -941,6 +949,11 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Migrati
                         .IsUnique()
                         .HasDatabaseName("ux_users_normalized_user_name");
 
+                    b.HasIndex("ProfileImageId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_users_profile_image_id")
+                        .HasFilter("profile_image_id IS NOT NULL");
+
                     b.HasIndex("UnconfirmedAccountExpiresAt")
                         .HasDatabaseName("ix_users_unconfirmed_account_expiry")
                         .HasFilter("email_confirmed = FALSE AND unconfirmed_account_expires_at IS NOT NULL");
@@ -948,6 +961,8 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Migrati
                     b.ToTable("users", "public", t =>
                         {
                             t.HasCheckConstraint("ck_users_display_name_valid", "char_length(btrim(display_name)) > 0 AND display_name !~ '[[:cntrl:]]'");
+
+                            t.HasCheckConstraint("ck_users_profile_image_consistent", "(profile_image_id IS NULL AND profile_image_hash IS NULL) OR (profile_image_id IS NOT NULL AND profile_image_hash IS NOT NULL AND octet_length(profile_image_hash) = 32)");
 
                             t.HasCheckConstraint("ck_users_timestamps_consistent", "updated_at >= created_at AND (unconfirmed_account_expires_at IS NULL OR unconfirmed_account_expires_at >= created_at)");
                         });

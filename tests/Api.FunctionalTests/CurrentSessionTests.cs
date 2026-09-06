@@ -73,6 +73,7 @@ public class CurrentSessionTests
                 "displayName",
                 "email",
                 "id",
+                "profileImageUrl",
                 "roles"
             ],
             propertyNames);

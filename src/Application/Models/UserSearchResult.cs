@@ -13,4 +13,10 @@ public class UserSearchResult
     }
     /// <summary>Gets the member's display name.</summary>
     public string DisplayName { get; init; } = string.Empty;
+
+    /// <summary>Gets the current public profile-photo identifier.</summary>
+    public Guid? ProfileImageId
+    {
+        get; init;
+    }
 }

@@ -16,7 +16,8 @@ public class UserSearchIntegrationTests(PostgreSqlContainerFixture fixture)
 {
     private static readonly string[] _publicProperties = [
         "id",
-        "displayName"
+        "displayName",
+        "profileImageUrl"
     ];
     [Theory]
     [InlineData("elodie", "Élodie")]

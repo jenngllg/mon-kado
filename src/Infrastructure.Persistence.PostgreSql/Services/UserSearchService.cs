@@ -30,7 +30,7 @@ public class UserSearchService(MonKadoDbContext context) : IUserSearchService
             var offset = (long)(page - 1) * pageSize;
             var items = await context.Database
                 .SqlQuery<UserSearchResult>($"""
-                SELECT id, display_name
+                SELECT id, display_name, profile_image_id
                     FROM public.users
                 WHERE email_confirmed AND length(public.unaccent({displayName})) > 0
                 AND strpos(lower(public.unaccent(normalize(display_name, NFC))), lower(public.unaccent({displayName}))) > 0

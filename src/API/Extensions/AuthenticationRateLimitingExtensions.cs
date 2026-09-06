@@ -96,6 +96,9 @@ public static class AuthenticationRateLimitingExtensions
     /// Identifies authenticated gift-image upload policy.
     /// </summary>
     public const string GiftImageUploadPolicy = "GiftImageUpload";
+
+    /// <summary>Identifies the independent member-scoped profile-photo upload quota.</summary>
+    public const string ProfileImageUploadPolicy = "ProfileImageUpload";
     /// <summary>Identifies authenticated merchant preview requests.</summary>
     public const string WishImportPreviewPolicy = "WishImportPreview";
     /// <summary>
@@ -235,6 +238,11 @@ public static class AuthenticationRateLimitingExtensions
                         _wishlistReportWindow));
                 options.AddPolicy(
                     GiftImageUploadPolicy,
+                    context => CreateMemberLimiter(
+                        context,
+                        GiftImageUploadPermitLimit));
+                options.AddPolicy(
+                    ProfileImageUploadPolicy,
                     context => CreateMemberLimiter(
                         context,
                         GiftImageUploadPermitLimit));

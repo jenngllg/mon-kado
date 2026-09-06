@@ -10,6 +10,20 @@ public static class LogEventIds
 {
     #region Account
 
+    /// <summary>Identifies profile-photo UpsertStarted events.</summary>
+    public const int ProfileImageUpsertStarted = 1140;
+    /// <summary>Identifies profile-photo Upserted events.</summary>
+    public const int ProfileImageUpserted = 1141;
+    /// <summary>Identifies profile-photo DeletionStarted events.</summary>
+    public const int ProfileImageDeletionStarted = 1142;
+    /// <summary>Identifies profile-photo Deleted events.</summary>
+    public const int ProfileImageDeleted = 1143;
+    /// <summary>Identifies profile-photo ReconciliationDeferred events.</summary>
+    public const int ProfileImageReconciliationDeferred = 1144;
+    /// <summary>Identifies profile-photo Read events.</summary>
+    public const int ProfileImageRead = 1145;
+
+
     /// <summary>Identifies the start of a public member search.</summary>
     public const int UserSearchStarted = 1130;
     /// <summary>Identifies completion of a public member search.</summary>

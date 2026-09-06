@@ -167,6 +167,7 @@ public class OpenApiContractTests(UnavailablePostgreSqlApiFactory factory) : ICl
                 "displayName",
                 "email",
                 "id",
+                "profileImageUrl",
                 "roles"
             ],
             properties);
@@ -248,7 +249,10 @@ public class OpenApiContractTests(UnavailablePostgreSqlApiFactory factory) : ICl
                 .GetProperty("application/json")
                 .GetProperty("schema"));
         Assert.Equal(
-            ["displayName"],
+            [
+                "displayName",
+                "profileImageUrl"
+            ],
             responseSchema
                 .GetProperty("properties")
                 .EnumerateObject()

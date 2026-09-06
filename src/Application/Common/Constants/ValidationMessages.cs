@@ -8,6 +8,11 @@ namespace JennGllg.Fr.MonKado.Back.Application.Common.Constants;
 [ExcludeFromCodeCoverage]
 public static class ValidationMessages
 {
+    /// <summary>Requires exactly one non-empty profile image.</summary>
+    public const string MandatoryProfileImage = "Supply exactly one non-empty image field.";
+
+    /// <summary>Describes the profile-photo file size limit.</summary>
+    public const string ProfileImageTooLarge = "The profile image must not exceed 10 MiB.";
     /// <summary>Gets the safe URL import validation message.</summary>
     public const string InvalidWishImportUrl = "The property {PropertyName} must be an absolute public HTTP or HTTPS URL without credentials or a custom port.";
     /// <summary>

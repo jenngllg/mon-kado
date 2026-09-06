@@ -12,11 +12,14 @@ public static class ErrorCodes
     /// <summary>Identifies an unsafe URL import destination.</summary>
     public const string WishImportUrlRejected = "WISH_IMPORT_URL_REJECTED";
     #endregion
-    /// <summary>
-    /// Identifies account email not confirmed.
-    /// </summary>
-
     #region Account
+    /// <summary>Identifies ProfileImageUnsupportedFormat errors.</summary>
+    public const string ProfileImageUnsupportedFormat = "ACCOUNT_PROFILE_IMAGE_UNSUPPORTED_FORMAT";
+    /// <summary>Identifies ProfileImageInvalid errors.</summary>
+    public const string ProfileImageInvalid = "ACCOUNT_PROFILE_IMAGE_INVALID";
+    /// <summary>Identifies ProfileImageNotFound errors.</summary>
+    public const string ProfileImageNotFound = "ACCOUNT_PROFILE_IMAGE_NOT_FOUND";
+    /// <summary>Identifies an account whose email is not confirmed.</summary>
     public const string AccountEmailNotConfirmed = "ACCOUNT_EMAIL_NOT_CONFIRMED";
     /// <summary>Identifies an invalid account deletion confirmation.</summary>
     public const string AccountDeletionInvalid = "ACCOUNT_DELETION_INVALID";

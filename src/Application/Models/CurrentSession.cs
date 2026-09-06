@@ -33,6 +33,12 @@ public class CurrentSession(
     /// </summary>
     public string DisplayName { get; } = displayName;
 
+    /// <summary>Gets the current normalized profile-photo identifier.</summary>
+    public Guid? ProfileImageId
+    {
+        get; init;
+    }
+
     /// <summary>
     /// Gets the current member roles.
     /// </summary>

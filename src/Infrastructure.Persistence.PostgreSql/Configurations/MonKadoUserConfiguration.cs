@@ -30,6 +30,10 @@ internal sealed class MonKadoUserConfiguration : IEntityTypeConfiguration<MonKad
             .IsRequired();
         builder.Property(user => user.Version)
             .IsRowVersion();
+        builder.HasIndex(user => user.ProfileImageId)
+            .HasDatabaseName("ux_users_profile_image_id")
+            .IsUnique()
+            .HasFilter("profile_image_id IS NOT NULL");
 
         builder.HasIndex(user => user.NormalizedEmail)
             .HasDatabaseName("ux_users_normalized_email")
@@ -43,6 +47,10 @@ internal sealed class MonKadoUserConfiguration : IEntityTypeConfiguration<MonKad
 
         builder.ToTable(table =>
         {
+            table.HasCheckConstraint(
+                "ck_users_profile_image_consistent",
+                "(profile_image_id IS NULL AND profile_image_hash IS NULL) OR " +
+                "(profile_image_id IS NOT NULL AND profile_image_hash IS NOT NULL AND octet_length(profile_image_hash) = 32)");
             table.HasCheckConstraint(
                 "ck_users_display_name_valid",
                 "char_length(btrim(display_name)) > 0 AND display_name !~ '[[:cntrl:]]'");

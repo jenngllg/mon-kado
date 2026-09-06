@@ -1,3 +1,4 @@
+using JennGllg.Fr.MonKado.Back.Application.Abstractions;
 using JennGllg.Fr.MonKado.Back.Application.Common.Constants;
 using JennGllg.Fr.MonKado.Back.Application.Common.Exceptions;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Images.Services;
@@ -13,6 +14,83 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Images.UnitTests.Services;
 public class GiftImageProcessorTests
 {
     private readonly GiftImageProcessor _processor = new();
+
+    [Theory]
+    [InlineData(2048, 1024, 512, 256)]
+    [InlineData(1024, 2048, 256, 512)]
+    [InlineData(100, 80, 100, 80)]
+    public async Task ProcessAsync_WhenProcessingProfilePhoto_PreservesRatioWithinProfileLimit(
+        int width,
+        int height,
+        int expectedWidth,
+        int expectedHeight)
+    {
+        // Arrange
+        var content = CreateImage(
+            width,
+            height,
+            SKEncodedImageFormat.Png,
+            SKColors.Transparent);
+        var processor = (IProfileImageProcessor)_processor;
+
+        // Act
+        var result = await processor.ProcessAsync(
+            content,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        using var bitmap = SKBitmap.Decode(result.Content.ToArray());
+        Assert.Equal(
+            expectedWidth,
+            bitmap.Width);
+        Assert.Equal(
+            expectedHeight,
+            bitmap.Height);
+        Assert.Equal(
+            0,
+            bitmap.GetPixel(
+                0,
+                0).Alpha);
+        Assert.Equal(
+            SHA256.HashData(result.Content.Span),
+            result.ContentHash);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_WhenProfilePhotoFormatIsUnsupported_ThrowsProfileFormatException()
+    {
+        // Arrange
+        var processor = (IProfileImageProcessor)_processor;
+
+        // Act
+        var exception = await Assert.ThrowsAsync<ProfileImageUnsupportedFormatException>(() => processor.ProcessAsync(
+            "GIF89a"u8.ToArray(),
+            TestContext.Current.CancellationToken));
+
+        // Assert
+        Assert.Null(exception.InnerException);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_WhenProfilePhotoIsCorrupt_ThrowsProfileInvalidException()
+    {
+        // Arrange
+        var processor = (IProfileImageProcessor)_processor;
+
+        // Act
+        var exception = await Assert.ThrowsAsync<ProfileImageInvalidException>(() => processor.ProcessAsync(
+            new byte[]
+            {
+                0xff,
+                0xd8,
+                0xff,
+                0xe0
+            },
+            TestContext.Current.CancellationToken));
+
+        // Assert
+        Assert.Null(exception.InnerException);
+    }
 
     [Theory]
     [InlineData(SKEncodedImageFormat.Jpeg)]

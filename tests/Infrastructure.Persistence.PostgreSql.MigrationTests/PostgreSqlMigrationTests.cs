@@ -140,6 +140,10 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
             migration => Assert.EndsWith(
                 "_AddPublicUserSearch",
                 migration,
+                StringComparison.Ordinal),
+            migration => Assert.EndsWith(
+                "_AddProfileImages",
+                migration,
                 StringComparison.Ordinal));
         Assert.False(context.Database.HasPendingModelChanges());
         var tables = await GetPublicTablesAsync(
@@ -648,16 +652,13 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
         var ownerId = Guid.CreateVersion7();
         var wishlistId = Guid.CreateVersion7();
         var wishId = Guid.CreateVersion7();
-        context.Users.Add(new MonKadoUser
-        {
-            Id = ownerId,
-            DisplayName = "Gift reservation migration",
-            Email = "gift-reservation-migration@example.test",
-            NormalizedEmail = "GIFT-RESERVATION-MIGRATION@EXAMPLE.TEST",
-            UserName = "gift-reservation-migration@example.test",
-            NormalizedUserName = "GIFT-RESERVATION-MIGRATION@EXAMPLE.TEST",
-            EmailConfirmed = true
-        });
+        await InsertHistoricalMemberAsync(
+            context,
+            CreateMigrationMember(
+                ownerId,
+                "gift-reservation-migration@example.test",
+                "Gift reservation migration"),
+            cancellationToken);
         context.Wishlists.Add(new Wishlist(
                 wishlistId,
                 ownerId,
@@ -759,15 +760,20 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
         var wishlistId = Guid.CreateVersion7();
         var wishId = Guid.CreateVersion7();
         var participantId = Guid.CreateVersion7();
-        context.Users.AddRange(
+        await InsertHistoricalMemberAsync(
+            context,
             CreateMigrationMember(
                 ownerId,
                 "quantity-owner@example.test",
                 "Quantity owner"),
+            cancellationToken);
+        await InsertHistoricalMemberAsync(
+            context,
             CreateMigrationMember(
                 memberId,
                 "quantity-member@example.test",
-                "Quantity member"));
+                "Quantity member"),
+            cancellationToken);
         context.Wishlists.Add(new Wishlist(
                 wishlistId,
                 ownerId,
@@ -973,7 +979,10 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
             "NEW-MIGRATION-EMAIL-CHANGE@EXAMPLE.TEST",
             now,
             now.AddHours(24));
-        context.Users.Add(member);
+        await InsertHistoricalMemberAsync(
+            context,
+            member,
+            cancellationToken);
         context.MemberEmailChangeRequests.Add(request);
         await context.SaveChangesAsync(cancellationToken);
         var messageId = Guid.CreateVersion7(now.AddMilliseconds(1));
@@ -1421,8 +1430,10 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
             member.Id,
             member.Email,
             createdAt);
-        context.Users.Add(member);
-        await context.SaveChangesAsync(cancellationToken);
+        await InsertHistoricalMemberAsync(
+            context,
+            member,
+            cancellationToken);
         // The historical schema intentionally predates the current outbox model.
         await context.Database.ExecuteSqlInterpolatedAsync(
             $"""
@@ -1582,15 +1593,20 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
         var wishId = Guid.CreateVersion7();
         var participantId = Guid.CreateVersion7();
         var reservationId = Guid.CreateVersion7();
-        context.Users.AddRange(
+        await InsertHistoricalMemberAsync(
+            context,
             CreateMigrationMember(
                 ownerId,
                 "history-owner@example.test",
                 "History owner"),
+            cancellationToken);
+        await InsertHistoricalMemberAsync(
+            context,
             CreateMigrationMember(
                 memberId,
                 "history-member@example.test",
-                "History member"));
+                "History member"),
+            cancellationToken);
         context.Wishlists.Add(new Wishlist(
                 wishlistId,
                 ownerId,
@@ -1666,6 +1682,30 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
         await context.Users
             .Where(user => user.Id == ownerId || user.Id == memberId)
             .ExecuteDeleteAsync(cancellationToken);
+    }
+
+    /// <summary>Seeds account fields that exist in the historical schemas under test.</summary>
+    /// <param name="context">The migration test context.</param>
+    /// <param name="member">The historical member data.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A task representing the historical insert.</returns>
+    private static async Task InsertHistoricalMemberAsync(
+        MonKadoDbContext context,
+        MonKadoUser member,
+        CancellationToken cancellationToken)
+    {
+        // Do not use the latest EF model to insert columns absent from older schemas.
+        await context.Database.ExecuteSqlInterpolatedAsync(
+            $"""
+            INSERT INTO public.users
+                (id, display_name, email, normalized_email, user_name, normalized_user_name,
+                 email_confirmed, security_stamp, created_at, phone_number_confirmed,
+                 two_factor_enabled, lockout_enabled, access_failed_count)
+            VALUES ({member.Id}, {member.DisplayName}, {member.Email}, {member.NormalizedEmail},
+                {member.UserName}, {member.NormalizedUserName}, {member.EmailConfirmed},
+                {member.SecurityStamp}, {DateTime.UnixEpoch}, FALSE, FALSE, FALSE, 0)
+            """,
+            cancellationToken);
     }
 
     private static MonKadoUser CreateMigrationMember(

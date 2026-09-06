@@ -50,7 +50,10 @@ public class MemberRepository(MonKadoDbContext context) : IMemberRepository
                             role) => role.Name!)
                     .OrderBy(role => role)
                     .ToArray(),
-                member.Version))
+                member.Version)
+            {
+                ProfileImageId = member.ProfileImageId
+            })
             .SingleOrDefaultAsync(cancellationToken);
     }
 

@@ -14,4 +14,10 @@ public class UserSearchResponse(
     public Guid Id { get; } = id;
     /// <summary>Gets the display name.</summary>
     public string DisplayName { get; } = displayName;
+
+    /// <summary>Gets the public profile-photo URL, or null for a generated avatar based on Id.</summary>
+    public string? ProfileImageUrl
+    {
+        get; init;
+    }
 }

@@ -301,8 +301,12 @@ public class LocalGiftImageStore : IGiftImageStore
 
         try
         {
+            EnsureSafeDirectory(GetDirectoryPath(imageId));
+            EnsureStorageAvailable();
             DeleteIfExists(GetImagePath(imageId));
             DeleteIfExists(GetPendingPath(imageId));
+            // A missing shard is idempotent; losing the volume must preserve the outbox request.
+            EnsureStorageAvailable();
 
             return Task.CompletedTask;
         }
@@ -310,6 +314,15 @@ public class LocalGiftImageStore : IGiftImageStore
         {
             throw new GiftImageStorageUnavailableException(exception);
         }
+    }
+
+    /// <summary>Prevents an unavailable volume from being mistaken for an already deleted image.</summary>
+    /// <exception cref="IOException">The storage root is unavailable.</exception>
+    private void EnsureStorageAvailable()
+    {
+
+        if (!Directory.Exists(_storagePath))
+            throw new IOException("The image storage volume is unavailable.");
     }
 
     /// <inheritdoc />

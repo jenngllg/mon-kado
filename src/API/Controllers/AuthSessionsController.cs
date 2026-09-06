@@ -26,12 +26,17 @@ namespace JennGllg.Fr.MonKado.Back.Api.Controllers;
 /// <summary>
 /// Manages authentication sessions.
 /// </summary>
+/// <param name="sender">The mediator sender.</param>
+/// <param name="refreshTokenCookieService">The refresh cookie service.</param>
+/// <param name="entityTagService">The account version service.</param>
+/// <param name="profileImageUrlService">The public profile-photo URL service.</param>
 [ApiController]
 [Route("api/v1/auth/sessions")]
 public class AuthSessionsController(
     ISender sender,
     IRefreshTokenCookieService refreshTokenCookieService,
-    IEntityTagService entityTagService) : ControllerBase
+    IEntityTagService entityTagService,
+    IProfileImageUrlService profileImageUrlService) : ControllerBase
 {
     private const int MaximumRequestBodySize = 4 * 1024;
 
@@ -127,7 +132,12 @@ public class AuthSessionsController(
             currentSession.Id,
             currentSession.Email,
             currentSession.DisplayName,
-            currentSession.Roles);
+            currentSession.Roles)
+        {
+            ProfileImageUrl = profileImageUrlService.CreateUrl(
+                currentSession.Id,
+                currentSession.ProfileImageId)
+        };
         Response.Headers.ETag = entityTagService.Format(currentSession.Version);
         Response.Headers.CacheControl = "no-store";
 

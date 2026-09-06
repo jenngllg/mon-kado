@@ -54,7 +54,8 @@ public class UserSearchTests
 
     private static readonly string[] _publicProperties = [
         "id",
-        "displayName"
+        "displayName",
+        "profileImageUrl"
     ];
     [Theory]
     [InlineData("")]
