@@ -41,6 +41,10 @@ public class WishConfiguration : IEntityTypeConfiguration<Wish>
             .IsRequired();
         builder.Property(wish => wish.Version)
             .IsRowVersion();
+        builder.Property(wish => wish.ImageId);
+        builder.Property(wish => wish.ImageContentHash)
+            .HasField("_imageContentHash")
+            .HasColumnName("image_content_hash");
 
         builder.HasOne<Wishlist>()
             .WithMany()
@@ -54,6 +58,10 @@ public class WishConfiguration : IEntityTypeConfiguration<Wish>
         })
             .HasDatabaseName("ux_wishes_wishlist_position")
             .IsUnique();
+        builder.HasIndex(wish => wish.ImageId)
+            .HasDatabaseName("ux_wishes_image_id")
+            .IsUnique()
+            .HasFilter("image_id IS NOT NULL");
 
         builder.ToTable(table =>
         {
@@ -75,6 +83,11 @@ public class WishConfiguration : IEntityTypeConfiguration<Wish>
             table.HasCheckConstraint(
                 "ck_wishes_timestamps_consistent",
                 "updated_at IS NULL OR updated_at >= created_at");
+            table.HasCheckConstraint(
+                "ck_wishes_image_fields_consistent",
+                "(image_id IS NULL AND image_content_hash IS NULL) OR " +
+                "(image_id IS NOT NULL AND image_content_hash IS NOT NULL AND " +
+                $"octet_length(image_content_hash) = {Wish.ImageContentHashLength})");
         });
     }
 }

@@ -9,6 +9,15 @@ namespace JennGllg.Fr.MonKado.Back.Application.Common.Constants;
 public static class ValidationMessages
 {
     /// <summary>
+    /// Gets the validation message for an empty gift image.
+    /// </summary>
+    public const string MandatoryGiftImage = "The property {PropertyName} must contain an image.";
+
+    /// <summary>
+    /// Gets the validation message for an oversized gift image.
+    /// </summary>
+    public const string GiftImageTooLarge = "The property {PropertyName} must not exceed 10 MB.";
+    /// <summary>
     /// Identifies mandatory property.
     /// </summary>
     public const string MandatoryProperty = "The property {PropertyName} is mandatory.";

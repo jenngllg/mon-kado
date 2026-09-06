@@ -128,6 +128,10 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
             migration => Assert.EndsWith(
                 "_EnforceWishReservationQuantity",
                 migration,
+                StringComparison.Ordinal),
+            migration => Assert.EndsWith(
+                "_AddGiftImages",
+                migration,
                 StringComparison.Ordinal));
         Assert.False(context.Database.HasPendingModelChanges());
 
@@ -139,6 +143,7 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
                 "__EFMigrationsHistory",
                 "authentication_email_outbox",
                 "authentication_sessions",
+                "gift_image_deletion_outbox",
                 "gift_reservation_histories",
                 "gift_reservations",
                 "guest_sessions",
@@ -242,6 +247,15 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
             constraints);
         Assert.Contains(
             "fk_wishes_wishlists_wishlist_id",
+            constraints);
+        Assert.Contains(
+            "ck_wishes_image_fields_consistent",
+            constraints);
+        Assert.Contains(
+            "ck_gift_image_deletion_outbox_attempt_count_non_negative",
+            constraints);
+        Assert.Contains(
+            "ck_gift_image_deletion_outbox_timestamps_consistent",
             constraints);
         Assert.Contains(
             "ck_wishlist_share_links_secret_hash_length",
@@ -362,6 +376,15 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
             "ux_wishes_wishlist_position",
             indexes);
         Assert.Contains(
+            "ux_wishes_image_id",
+            indexes);
+        Assert.Contains(
+            "ix_gift_image_deletion_outbox_available",
+            indexes);
+        Assert.Contains(
+            "ux_gift_image_deletion_outbox_image_id",
+            indexes);
+        Assert.Contains(
             "ux_wishlist_share_links_secret_hash",
             indexes);
         Assert.Contains(
@@ -430,6 +453,83 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
         Assert.False(await HasUserVersionColumnAsync(
             context,
             cancellationToken));
+    }
+
+    [Fact]
+    public async Task MigrateAsync_WhenWishImageFieldsAreInconsistent_RejectsPartialAndInvalidStates()
+    {
+        // Arrange
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var provider = CreateServiceProvider();
+        await using var scope = provider.CreateAsyncScope();
+        var context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
+        await context.Database.MigrateAsync(cancellationToken);
+        var ownerId = Guid.CreateVersion7();
+        var wishlistId = Guid.CreateVersion7();
+        var wishId = Guid.CreateVersion7();
+        context.Users.Add(CreateMigrationMember(
+            ownerId,
+            "gift-image-constraint@example.test",
+            "Gift image constraint"));
+        context.Wishlists.Add(new Wishlist(
+            wishlistId,
+            ownerId,
+            "Image constraint",
+            "IMAGE CONSTRAINT",
+            WishlistOccasion.Other,
+            null,
+            null));
+        context.Wishes.Add(new Wish(
+            wishId,
+            wishlistId,
+            "Gift",
+            null,
+            null,
+            null,
+            1));
+        await context.SaveChangesAsync(cancellationToken);
+        var imageId = Guid.CreateVersion7();
+        var validHash = new byte[Wish.ImageContentHashLength];
+
+        try
+        {
+            // Act
+            var missingHashViolation = await Assert.ThrowsAsync<PostgresException>(() =>
+                context.Database.ExecuteSqlInterpolatedAsync(
+                    $"UPDATE public.wishes SET image_id = {imageId}, image_content_hash = NULL WHERE id = {wishId};",
+                    cancellationToken));
+            var missingImageIdViolation = await Assert.ThrowsAsync<PostgresException>(() =>
+                context.Database.ExecuteSqlInterpolatedAsync(
+                    $"UPDATE public.wishes SET image_id = NULL, image_content_hash = {validHash} WHERE id = {wishId};",
+                    cancellationToken));
+            var invalidHashViolation = await Assert.ThrowsAsync<PostgresException>(() =>
+                context.Database.ExecuteSqlInterpolatedAsync(
+                    $"UPDATE public.wishes SET image_id = {imageId}, image_content_hash = {new byte[1]} WHERE id = {wishId};",
+                    cancellationToken));
+
+            // Assert
+            Assert.All(
+                [
+                    missingHashViolation,
+                    missingImageIdViolation,
+                    invalidHashViolation
+                ],
+                violation =>
+                {
+                    Assert.Equal(
+                        PostgresErrorCodes.CheckViolation,
+                        violation.SqlState);
+                    Assert.Equal(
+                        "ck_wishes_image_fields_consistent",
+                        violation.ConstraintName);
+                });
+        }
+        finally
+        {
+            await context.Users
+                .Where(user => user.Id == ownerId)
+                .ExecuteDeleteAsync(cancellationToken);
+        }
     }
 
     [Fact]
@@ -674,15 +774,15 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
             WishlistOccasion.Other,
             null,
             null));
-        context.Wishes.Add(new Wish(
-            wishId,
-            wishlistId,
-            "Reserved gift",
-            null,
-            null,
-            null,
-            1,
-            1));
+        await context.SaveChangesAsync(cancellationToken);
+        await context.Database.ExecuteSqlInterpolatedAsync(
+            $"""
+            INSERT INTO public.wishes
+                (id, wishlist_id, name, quantity, position, created_at)
+            VALUES
+                ({wishId}, {wishlistId}, {"Reserved gift"}, {1}, {1L}, {new DateTime(2026, 9, 5, 10, 0, 0, DateTimeKind.Utc)});
+            """,
+            cancellationToken);
         context.WishlistParticipants.Add(WishlistParticipant.CreateMember(
             participantId,
             wishlistId,
@@ -1480,15 +1580,15 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
             WishlistOccasion.Birthday,
             null,
             null));
-        context.Wishes.Add(new Wish(
-            wishId,
-            wishlistId,
-            "Book",
-            null,
-            null,
-            null,
-            1,
-            3));
+        await context.SaveChangesAsync(cancellationToken);
+        await context.Database.ExecuteSqlInterpolatedAsync(
+            $"""
+            INSERT INTO public.wishes
+                (id, wishlist_id, name, quantity, position, created_at)
+            VALUES
+                ({wishId}, {wishlistId}, {"Book"}, {3}, {1L}, {new DateTime(2026, 9, 5, 10, 0, 0, DateTimeKind.Utc)});
+            """,
+            cancellationToken);
         context.WishlistParticipants.Add(WishlistParticipant.CreateMember(
             participantId,
             wishlistId,

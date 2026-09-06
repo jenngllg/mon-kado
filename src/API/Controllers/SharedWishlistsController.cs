@@ -26,13 +26,15 @@ namespace JennGllg.Fr.MonKado.Back.Api.Controllers;
 /// <param name="sender">The mediator sender.</param>
 /// <param name="guestSessionCookieService">The guest-session cookie service.</param>
 /// <param name="entityTagService">The entity-tag service.</param>
+/// <param name="wishImageUrlService">The signed gift-image URL service.</param>
 [ApiController]
 [AllowAnonymous]
 [Route("api/v1/shared-wishlists")]
 public class SharedWishlistsController(
     ISender sender,
     IGuestSessionCookieService guestSessionCookieService,
-    IEntityTagService entityTagService) : ControllerBase
+    IEntityTagService entityTagService,
+    IWishImageUrlService wishImageUrlService) : ControllerBase
 {
     private const string GetCurrentParticipantRouteName = "GetCurrentSharedWishlistParticipant";
     private const string GetCurrentReservationRouteName = "GetCurrentSharedWishlistGiftReservation";
@@ -131,7 +133,14 @@ public class SharedWishlistsController(
                     AvailableQuantity = Math.Max(
                         0,
                         wish.Quantity - wish.ReservedQuantity),
-                    CurrentParticipantReservedQuantity = wish.CurrentParticipantReservedQuantity
+                    CurrentParticipantReservedQuantity = wish.CurrentParticipantReservedQuantity,
+                    ImageUrl = wish.ImageId is Guid imageId
+                        ? wishImageUrlService.CreateSharedUrl(
+                            shareLinkId,
+                            wishlist.Id,
+                            wish.Id,
+                            imageId)
+                        : null
                 })
                 .ToArray(),
             CurrentParticipant = result.CurrentParticipant is null
@@ -186,7 +195,14 @@ public class SharedWishlistsController(
             AvailableQuantity = Math.Max(
                 0,
                 wish.Quantity - wish.ReservedQuantity),
-            CurrentParticipantReservedQuantity = wish.CurrentParticipantReservedQuantity
+            CurrentParticipantReservedQuantity = wish.CurrentParticipantReservedQuantity,
+            ImageUrl = wish.ImageId is Guid imageId
+                ? wishImageUrlService.CreateSharedUrl(
+                    shareLinkId,
+                    wish.WishlistId,
+                    wish.Id,
+                    imageId)
+                : null
         };
         Response.Headers.CacheControl = NoStoreCacheControl;
 

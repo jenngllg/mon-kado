@@ -44,6 +44,8 @@ public static class ApiInjectionConfiguration
         services.AddSingleton<IGuestSessionCookieService, GuestSessionCookieService>();
         services.AddSingleton<IEntityTagService, EntityTagService>();
         services.AddSingleton<IWishlistShareLinkUrlService, WishlistShareLinkUrlService>();
+        services.AddSingleton<IWishImageUrlService, WishImageUrlService>();
+        services.AddScoped<IWishImageDeliveryService, WishImageDeliveryService>();
         services.AddSingleton<IValidateOptions<WishlistSharingOptions>, WishlistSharingOptionsValidator>();
         services.AddOptions<WishlistSharingOptions>()
             .Bind(configuration.GetSection(WishlistSharingOptions.SectionName))

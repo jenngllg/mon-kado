@@ -162,7 +162,8 @@ public class GetSharedWishQueryHandler(
             Price = wish.Price,
             Quantity = wish.Quantity,
             ReservedQuantity = wish.ReservedQuantity,
-            CurrentParticipantReservedQuantity = currentQuantity
+            CurrentParticipantReservedQuantity = currentQuantity,
+            ImageId = wish.ImageId
         };
 
         ApplicationLogMessages.SharedWishRetrieved(

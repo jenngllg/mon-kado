@@ -1090,7 +1090,7 @@ public class WishlistIntegrationTests(PostgreSqlContainerFixture fixture)
     }
 
     [Fact]
-    public async Task DeleteAsync_WhenConcurrentDeletionWins_ReturnsNoContentThenNotFound()
+    public async Task DeleteAsync_WhenDeletionHoldsLock_SerializesConcurrentDeletion()
     {
         // Arrange
         var coordinator = new FirstSaveChangesCoordinator();
@@ -1121,11 +1121,11 @@ public class WishlistIntegrationTests(PostgreSqlContainerFixture fixture)
             wishlist.Id,
             entityTag);
         await coordinator.WaitUntilFirstSaveStartsAsync(TestContext.Current.CancellationToken);
-        HttpResponseMessage secondResponse;
+        Task<HttpResponseMessage> secondDeletionTask;
 
         try
         {
-            secondResponse = await DeleteWishlistAsync(
+            secondDeletionTask = DeleteWishlistAsync(
                 client,
                 wishlist.Id,
                 entityTag);
@@ -1135,16 +1135,16 @@ public class WishlistIntegrationTests(PostgreSqlContainerFixture fixture)
             coordinator.ReleaseFirstSave();
         }
 
-        using (secondResponse)
+        using (var secondResponse = await secondDeletionTask)
         using (var firstResponse = await firstDeletionTask)
         {
             // Assert
             Assert.Equal(
                 HttpStatusCode.NoContent,
-                secondResponse.StatusCode);
+                firstResponse.StatusCode);
             Assert.Equal(
                 HttpStatusCode.NotFound,
-                firstResponse.StatusCode);
+                secondResponse.StatusCode);
             Assert.Equal(
                 0,
                 await CountWishlistsAsync(factory));
@@ -1152,7 +1152,7 @@ public class WishlistIntegrationTests(PostgreSqlContainerFixture fixture)
     }
 
     [Fact]
-    public async Task DeleteAsync_WhenConcurrentUpdateWins_ReturnsPreconditionFailedAndPreservesUpdate()
+    public async Task DeleteAsync_WhenDeletionHoldsLock_ConcurrentUpdateCannotRestoreWishlist()
     {
         // Arrange
         var coordinator = new FirstSaveChangesCoordinator();
@@ -1183,11 +1183,11 @@ public class WishlistIntegrationTests(PostgreSqlContainerFixture fixture)
             wishlist.Id,
             entityTag);
         await coordinator.WaitUntilFirstSaveStartsAsync(TestContext.Current.CancellationToken);
-        HttpResponseMessage updateResponse;
+        Task<HttpResponseMessage> updateTask;
 
         try
         {
-            updateResponse = await UpdateWishlistAsync(
+            updateTask = UpdateWishlistAsync(
                 client,
                 wishlist.Id,
                 entityTag,
@@ -1201,29 +1201,19 @@ public class WishlistIntegrationTests(PostgreSqlContainerFixture fixture)
             coordinator.ReleaseFirstSave();
         }
 
-        using (updateResponse)
+        using (var updateResponse = await updateTask)
         using (var deletionResponse = await deletionTask)
         {
-            var stored = await GetWishlistAsync(
-                factory,
-                wishlist.Id);
-            var error = await deletionResponse.Content.ReadFromJsonAsync<ErrorResponse>(
-                TestContext.Current.CancellationToken);
-
             // Assert
             Assert.Equal(
-                HttpStatusCode.OK,
+                HttpStatusCode.NotFound,
                 updateResponse.StatusCode);
             Assert.Equal(
-                HttpStatusCode.PreconditionFailed,
+                HttpStatusCode.NoContent,
                 deletionResponse.StatusCode);
-            Assert.NotNull(error);
             Assert.Equal(
-                ErrorCodes.WishlistVersionConflict,
-                error.ErrorCode);
-            Assert.Equal(
-                "Modification concurrente",
-                stored.Name);
+                0,
+                await CountWishlistsAsync(factory));
         }
     }
 

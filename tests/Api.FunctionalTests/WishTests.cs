@@ -1200,7 +1200,8 @@ public class WishTests
                 "quantity",
                 "position",
                 "createdAt",
-                "updatedAt"
+                "updatedAt",
+                "imageUrl"
             ],
             wish
                 .EnumerateObject()
@@ -1223,6 +1224,9 @@ public class WishTests
         Assert.Equal(
             12.34m,
             wish.GetProperty("price").GetDecimal());
+        Assert.Equal(
+            JsonValueKind.Null,
+            wish.GetProperty("imageUrl").ValueKind);
         Assert.Equal(
             1,
             wish.GetProperty("quantity").GetInt32());

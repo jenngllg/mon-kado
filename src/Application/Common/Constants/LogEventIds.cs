@@ -401,6 +401,30 @@ public static class LogEventIds
     /// <summary>Identifies a retrieved member reservation history page.</summary>
     public const int GiftReservationHistoryRetrieved = 2049;
 
+    /// <summary>Identifies the start of a gift-image add or replacement.</summary>
+    public const int GiftImageUpsertStarted = 2050;
+
+    /// <summary>Identifies an added, replaced, or unchanged gift image.</summary>
+    public const int GiftImageUpserted = 2051;
+
+    /// <summary>Identifies a failed gift-image pending-marker cleanup.</summary>
+    public const int GiftImagePendingCleanupFailed = 2052;
+
+    /// <summary>Identifies a physically deleted obsolete gift image.</summary>
+    public const int GiftImageDeleted = 2053;
+
+    /// <summary>Identifies a reconciled pending gift image.</summary>
+    public const int PendingGiftImageReconciled = 2054;
+
+    /// <summary>Identifies a failed gift-image cleanup cycle.</summary>
+    public const int GiftImageCleanupFailed = 2055;
+
+    /// <summary>Identifies the start of a gift-image removal.</summary>
+    public const int GiftImageRemovalStarted = 2056;
+
+    /// <summary>Identifies a removed gift-image reference.</summary>
+    public const int GiftImageRemoved = 2057;
+
     #endregion
 
     #region Technical

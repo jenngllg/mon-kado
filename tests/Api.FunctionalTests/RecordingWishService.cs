@@ -1,4 +1,5 @@
 using JennGllg.Fr.MonKado.Back.Application.Abstractions;
+using JennGllg.Fr.MonKado.Back.Application.Common.Exceptions;
 using JennGllg.Fr.MonKado.Back.Application.Models;
 
 namespace JennGllg.Fr.MonKado.Back.Api.FunctionalTests;
@@ -29,6 +30,20 @@ public class RecordingWishService : IWishService
         string? Url,
         decimal? Price,
         int Quantity)> Creations
+    {
+        get;
+    } = [];
+
+    /// <summary>
+    /// Gets the recorded image upsert calls.
+    /// </summary>
+    public List<(
+        Guid OwnerId,
+        Guid WishlistId,
+        Guid WishId,
+        Guid ImageId,
+        byte[] ContentHash,
+        uint ExpectedVersion)> ImageUpserts
     {
         get;
     } = [];
@@ -317,5 +332,92 @@ public class RecordingWishService : IWishService
             return Task.FromResult(false);
 
         return Task.FromResult(Wishes.Remove((wishlistId, wishId)));
+    }
+
+    /// <inheritdoc />
+    public Task<WishDetails?> DeleteImageAsync(
+        Guid ownerId,
+        Guid wishlistId,
+        Guid wishId,
+        uint expectedVersion,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (Exception is not null)
+            throw Exception;
+
+        if (!Wishes.TryGetValue(
+                (wishlistId, wishId),
+                out var currentWish))
+            return Task.FromResult<WishDetails?>(null);
+
+        if (currentWish.Version != expectedVersion)
+            throw new WishVersionConflictException();
+
+        if (currentWish.ImageId is null)
+            throw new GiftImageNotFoundException();
+
+        var wish = new WishDetails(
+            currentWish.Id,
+            currentWish.WishlistId,
+            currentWish.Name,
+            currentWish.Note,
+            currentWish.Url,
+            currentWish.Price,
+            currentWish.Position,
+            currentWish.CreatedAt,
+            _createdAt.AddHours(1),
+            expectedVersion + 1,
+            currentWish.Quantity,
+            null);
+        Wishes[(wishlistId, wishId)] = wish;
+
+        return Task.FromResult<WishDetails?>(wish);
+    }
+
+    /// <inheritdoc />
+    public Task<WishDetails?> UpsertImageAsync(
+        Guid ownerId,
+        Guid wishlistId,
+        Guid wishId,
+        Guid imageId,
+        byte[] contentHash,
+        uint expectedVersion,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        ImageUpserts.Add((
+            ownerId,
+            wishlistId,
+            wishId,
+            imageId,
+            contentHash,
+            expectedVersion));
+
+        if (Exception is not null)
+            throw Exception;
+
+        if (!Wishes.TryGetValue(
+                (wishlistId, wishId),
+                out var currentWish))
+            return Task.FromResult<WishDetails?>(null);
+
+        var wish = new WishDetails(
+            currentWish.Id,
+            currentWish.WishlistId,
+            currentWish.Name,
+            currentWish.Note,
+            currentWish.Url,
+            currentWish.Price,
+            currentWish.Position,
+            currentWish.CreatedAt,
+            _createdAt.AddHours(1),
+            expectedVersion + 1,
+            currentWish.Quantity,
+            imageId);
+        Wishes[(wishlistId, wishId)] = wish;
+
+        return Task.FromResult<WishDetails?>(wish);
     }
 }

@@ -1,5 +1,6 @@
 # Local container secrets
 /.env
+/.local/
 
 # Local implementation plans
 *-implementation-plan.md

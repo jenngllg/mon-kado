@@ -175,6 +175,24 @@ public class GlobalExceptionHandler(
                 "The gift quantity cannot be lower than the quantity already reserved.",
                 ErrorCodes.WishQuantityBelowReserved,
                 null),
+            GiftImageInvalidException => new ErrorResponse(
+                StatusCodes.Status400BadRequest,
+                "Gift image invalid",
+                "The supplied gift image cannot be processed safely.",
+                ErrorCodes.WishImageInvalid,
+                null),
+            GiftImageUnsupportedFormatException => new ErrorResponse(
+                StatusCodes.Status415UnsupportedMediaType,
+                "Gift image format unsupported",
+                "Only JPEG, PNG, and non-animated WebP images are supported.",
+                ErrorCodes.WishImageUnsupportedFormat,
+                null),
+            GiftImageNotFoundException => new ErrorResponse(
+                StatusCodes.Status404NotFound,
+                "Gift image not found",
+                "The gift image is unavailable.",
+                ErrorCodes.WishImageNotFound,
+                null),
             WishlistShareLinkNotFoundException => new ErrorResponse(
                 StatusCodes.Status404NotFound,
                 "Wishlist share link not found",

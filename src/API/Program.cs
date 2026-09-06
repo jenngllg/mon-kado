@@ -1,7 +1,9 @@
 using JennGllg.Fr.MonKado.Back.Api.Configurations;
 using JennGllg.Fr.MonKado.Back.Api.Extensions;
+using JennGllg.Fr.MonKado.Back.Api.Middleware;
 using JennGllg.Fr.MonKado.Back.Application.Configurations;
 using JennGllg.Fr.MonKado.Back.Domain.Configurations;
+using JennGllg.Fr.MonKado.Back.Infrastructure.Images.Configurations;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Configurations;
 
 using Microsoft.IdentityModel.Logging;
@@ -19,6 +21,7 @@ builder.Logging.AddFilter(
 
 builder.Services.ConfigureDomainInjection();
 builder.Services.ConfigureApplicationInjection();
+builder.Services.ConfigureImageInfrastructureInjection(builder.Configuration);
 builder.Services.ConfigureInfrastructureInjection(builder.Configuration);
 builder.Services.ConfigureApiInjection(
     builder.Configuration,
@@ -31,6 +34,7 @@ app.UseCorrelationId();
 app.UseSafeHttpRequestLogging();
 app.UseApiErrorHandling();
 app.UseWebSecurity();
+app.UseMiddleware<GiftImageRateLimitIdentityMiddleware>();
 app.UseRateLimiter();
 app.UseRequestBodyLimits();
 app.UseJwtAuthentication();

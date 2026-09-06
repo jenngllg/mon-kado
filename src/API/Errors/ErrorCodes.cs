@@ -159,6 +159,15 @@ public static class ErrorCodes
     /// <summary>Identifies a gift quantity lower than the quantity already reserved.</summary>
     public const string WishQuantityBelowReserved = "WISH_QUANTITY_BELOW_RESERVED";
 
+    /// <summary>Identifies recognized image content that cannot be processed safely.</summary>
+    public const string WishImageInvalid = "WISH_IMAGE_INVALID";
+
+    /// <summary>Identifies an unsupported gift-image representation.</summary>
+    public const string WishImageUnsupportedFormat = "WISH_IMAGE_UNSUPPORTED_FORMAT";
+
+    /// <summary>Identifies an unavailable gift image or signed grant.</summary>
+    public const string WishImageNotFound = "WISH_IMAGE_NOT_FOUND";
+
     /// <summary>Identifies an active wishlist share link that was not found.</summary>
     public const string WishlistShareLinkNotFound = "WISHLIST_SHARE_LINK_NOT_FOUND";
 

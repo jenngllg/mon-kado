@@ -317,6 +317,7 @@ public class WishOpenApiTests
             [
                 "createdAt",
                 "id",
+                "imageUrl",
                 "name",
                 "note",
                 "position",

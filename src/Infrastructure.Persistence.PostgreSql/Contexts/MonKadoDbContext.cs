@@ -33,6 +33,12 @@ public class MonKadoDbContext(DbContextOptions<MonKadoDbContext> options)
 
     public DbSet<AuthenticationEmailOutboxMessage> AuthenticationEmailOutboxMessages =>
         Set<AuthenticationEmailOutboxMessage>();
+
+    /// <summary>
+    /// Gets obsolete gift-image deletion messages.
+    /// </summary>
+    public DbSet<GiftImageDeletionOutboxMessage> GiftImageDeletionOutboxMessages =>
+        Set<GiftImageDeletionOutboxMessage>();
     /// <summary>
     /// Gets member email change requests.
     /// </summary>

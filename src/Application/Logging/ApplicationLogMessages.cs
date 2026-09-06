@@ -9,6 +9,84 @@ namespace JennGllg.Fr.MonKado.Back.Application.Logging;
 /// </summary>
 public static partial class ApplicationLogMessages
 {
+    /// <summary>Logs the start of gift-image removal.</summary>
+    /// <param name="logger">The logger.</param>
+    /// <param name="ownerId">The owner identifier.</param>
+    /// <param name="wishlistId">The wishlist identifier.</param>
+    /// <param name="wishId">The gift identifier.</param>
+    [LoggerMessage(
+        EventId = LogEventIds.GiftImageRemovalStarted,
+        Level = LogLevel.Debug,
+        Message = "Removing the image of wish {WishId} in wishlist {WishlistId} for owner {OwnerId}.")]
+    public static partial void GiftImageRemovalStarted(
+        ILogger logger,
+        Guid ownerId,
+        Guid wishlistId,
+        Guid wishId);
+
+    /// <summary>Logs a removed gift-image reference.</summary>
+    /// <param name="logger">The logger.</param>
+    /// <param name="ownerId">The owner identifier.</param>
+    /// <param name="wishlistId">The wishlist identifier.</param>
+    /// <param name="wishId">The gift identifier.</param>
+    [LoggerMessage(
+        EventId = LogEventIds.GiftImageRemoved,
+        Level = LogLevel.Information,
+        Message = "Removed the image of wish {WishId} in wishlist {WishlistId} for owner {OwnerId}.")]
+    public static partial void GiftImageRemoved(
+        ILogger logger,
+        Guid ownerId,
+        Guid wishlistId,
+        Guid wishId);
+
+    /// <summary>
+    /// Logs the start of a gift-image add or replacement.
+    /// </summary>
+    /// <param name="logger">The logger.</param>
+    /// <param name="memberId">The authenticated member identifier.</param>
+    /// <param name="wishlistId">The parent wishlist identifier.</param>
+    /// <param name="wishId">The gift-wish identifier.</param>
+    [LoggerMessage(
+        EventId = LogEventIds.GiftImageUpsertStarted,
+        Level = LogLevel.Debug,
+        Message = "Adding or replacing the image of wish {WishId} in wishlist {WishlistId} for member {MemberId}.")]
+    public static partial void GiftImageUpsertStarted(
+        ILogger logger,
+        Guid memberId,
+        Guid wishlistId,
+        Guid wishId);
+
+    /// <summary>
+    /// Logs a completed gift-image add or replacement.
+    /// </summary>
+    /// <param name="logger">The logger.</param>
+    /// <param name="memberId">The authenticated member identifier.</param>
+    /// <param name="wishlistId">The parent wishlist identifier.</param>
+    /// <param name="wishId">The gift-wish identifier.</param>
+    [LoggerMessage(
+        EventId = LogEventIds.GiftImageUpserted,
+        Level = LogLevel.Information,
+        Message = "Image added or replaced for wish {WishId} in wishlist {WishlistId} for member {MemberId}.")]
+    public static partial void GiftImageUpserted(
+        ILogger logger,
+        Guid memberId,
+        Guid wishlistId,
+        Guid wishId);
+
+    /// <summary>
+    /// Logs a pending gift-image cleanup that will be retried by the worker.
+    /// </summary>
+    /// <param name="logger">The logger.</param>
+    /// <param name="imageId">The immutable image identifier.</param>
+    /// <param name="exception">The storage exception.</param>
+    [LoggerMessage(
+        EventId = LogEventIds.GiftImagePendingCleanupFailed,
+        Level = LogLevel.Error,
+        Message = "Pending marker cleanup failed for gift image {ImageId}; the worker will reconcile it.")]
+    public static partial void GiftImagePendingCleanupFailed(
+        ILogger logger,
+        Guid imageId,
+        Exception exception);
     /// <summary>Logs the start of an anonymous wishlist report creation.</summary>
     /// <param name="logger">The logger.</param>
     /// <param name="shareLinkId">The share-link identifier.</param>

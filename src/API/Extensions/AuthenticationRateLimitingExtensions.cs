@@ -2,6 +2,8 @@ using JennGllg.Fr.MonKado.Back.Api.Errors;
 using JennGllg.Fr.MonKado.Back.Api.Logging;
 
 using System.Globalization;
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
 using System.Threading.RateLimiting;
 
 namespace JennGllg.Fr.MonKado.Back.Api.Extensions;
@@ -86,6 +88,10 @@ public static class AuthenticationRateLimitingExtensions
     /// </summary>
     public const string SharedWishlistReportPolicy = "SharedWishlistReport";
     /// <summary>
+    /// Identifies authenticated gift-image upload policy.
+    /// </summary>
+    public const string GiftImageUploadPolicy = "GiftImageUpload";
+    /// <summary>
     /// Gets the per-minute Google callback and completion limit for one remote address.
     /// </summary>
     public const int GoogleTransientFlowPermitLimit = 10;
@@ -105,6 +111,10 @@ public static class AuthenticationRateLimitingExtensions
     /// Gets the hourly wishlist report limit for one address and share link.
     /// </summary>
     public const int SharedWishlistReportPermitLimit = 5;
+    /// <summary>
+    /// Gets the per-minute gift-image upload limit for one member.
+    /// </summary>
+    public const int GiftImageUploadPermitLimit = 10;
 
     private static readonly TimeSpan _window = TimeSpan.FromMinutes(1);
     private static readonly TimeSpan _wishlistReportWindow = TimeSpan.FromHours(1);
@@ -214,6 +224,11 @@ public static class AuthenticationRateLimitingExtensions
                     context,
                     SharedWishlistReportPermitLimit,
                     _wishlistReportWindow));
+            options.AddPolicy(
+                GiftImageUploadPolicy,
+                context => CreateMemberLimiter(
+                    context,
+                    GiftImageUploadPermitLimit));
 
             options.OnRejected = async (
                 rejectionContext,
@@ -311,4 +326,26 @@ public static class AuthenticationRateLimitingExtensions
                 Window = window
             });
     }
+
+    private static RateLimitPartition<string> CreateMemberLimiter(
+        HttpContext context,
+        int permitLimit)
+    {
+        var memberId = context.User.FindFirstValue(JwtRegisteredClaimNames.Sub);
+        var partitionKey = string.IsNullOrWhiteSpace(memberId)
+            ? context.Connection.RemoteIpAddress?.ToString() ?? "unknown"
+            : memberId;
+
+        return RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey,
+            _ => new FixedWindowRateLimiterOptions
+            {
+                AutoReplenishment = true,
+                PermitLimit = permitLimit,
+                QueueLimit = 0,
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                Window = _window
+            });
+    }
+
 }

@@ -21,6 +21,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Application\Application.csproj" />
+    <ProjectReference Include="..\Infrastructure.Images\Infrastructure.Images.csproj" />
     <ProjectReference Include="..\Infrastructure.Persistence.PostgreSql\Infrastructure.Persistence.PostgreSql.csproj" />
   </ItemGroup>
 

@@ -8,6 +8,12 @@ namespace JennGllg.Fr.MonKado.Back.Application.Models;
 [ExcludeFromCodeCoverage]
 public class SharedWishDetail
 {
+    /// <summary>Gets the parent wishlist identifier.</summary>
+    public Guid WishlistId
+    {
+        get; init;
+    }
+
     /// <summary>Gets the gift-wish identifier.</summary>
     public Guid Id
     {
@@ -52,6 +58,12 @@ public class SharedWishDetail
 
     /// <summary>Gets the quantity reserved by the current participant when one is joined.</summary>
     public int? CurrentParticipantReservedQuantity
+    {
+        get; init;
+    }
+
+    /// <summary>Gets the optional normalized image identifier.</summary>
+    public Guid? ImageId
     {
         get; init;
     }
