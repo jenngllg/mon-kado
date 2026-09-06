@@ -307,6 +307,41 @@ public class LocalGiftImageStoreTests : IDisposable
     }
 
     [Fact]
+    public async Task DeleteAsync_WhenVolumeIsMissing_ThrowsStorageUnavailable()
+    {
+        // Arrange
+        var imageId = Guid.CreateVersion7();
+
+        // Act
+        var action = () => _store.DeleteAsync(
+            imageId,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        await Assert.ThrowsAsync<GiftImageStorageUnavailableException>(action);
+        Assert.False(Directory.Exists(_storagePath));
+    }
+
+    [Fact]
+    public async Task DeleteAsync_WhenVolumeExistsAndShardIsMissing_IsIdempotent()
+    {
+        // Arrange
+        Directory.CreateDirectory(_storagePath);
+        var imageId = Guid.CreateVersion7();
+
+        // Act
+        await _store.DeleteAsync(
+            imageId,
+            TestContext.Current.CancellationToken);
+        await _store.DeleteAsync(
+            imageId,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Empty(Directory.EnumerateFileSystemEntries(_storagePath));
+    }
+
+    [Fact]
     public async Task GetPendingAsync_WhenMarkersHaveDifferentAges_ReturnsOldestEligibleBatch()
     {
         // Arrange

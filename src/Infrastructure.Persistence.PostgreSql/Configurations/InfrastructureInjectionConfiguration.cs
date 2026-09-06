@@ -120,6 +120,7 @@ public static class InfrastructureInjectionConfiguration
         services.AddScoped<IGoogleAccountSessionService, GoogleAccountSessionService>();
         services.AddScoped<ICurrentSessionService, CurrentSessionService>();
         services.AddScoped<IMemberProfileService, MemberProfileService>();
+        services.AddScoped<IProfileImageService, ProfileImageService>();
         services.AddScoped<IMemberEmailChangeService, MemberEmailChangeService>();
         services.AddScoped<IMemberPasswordService, MemberPasswordService>();
         services.AddScoped<IPasswordResetService, PasswordResetService>();

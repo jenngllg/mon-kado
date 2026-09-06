@@ -13,7 +13,7 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Images.Services;
 /// <summary>
 /// Validates untrusted JPEG, PNG, and WebP content and normalizes it to WebP.
 /// </summary>
-public class GiftImageProcessor : IGiftImageProcessor
+public class GiftImageProcessor : IGiftImageProcessor, IProfileImageProcessor
 {
     private static readonly byte[] _pngSignature =
     [
@@ -30,6 +30,51 @@ public class GiftImageProcessor : IGiftImageProcessor
     /// <inheritdoc />
     public Task<ProcessedGiftImage> ProcessAsync(
         ReadOnlyMemory<byte> content,
+        CancellationToken cancellationToken)
+    {
+
+        return ProcessAsync(
+            content,
+            GiftImageConstraints.MaximumOutputEdgeLength,
+            cancellationToken);
+    }
+
+    /// <summary>Normalizes profile photos with the shared secure image pipeline.</summary>
+    /// <param name="content">The untrusted image bytes.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The normalized photo and its content hash.</returns>
+    async Task<ProcessedGiftImage> IProfileImageProcessor.ProcessAsync(
+        ReadOnlyMemory<byte> content,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+
+            return await ProcessAsync(
+                content,
+                ProfileImageConstraints.MaximumOutputEdgeLength,
+                cancellationToken);
+        }
+        catch (GiftImageUnsupportedFormatException)
+        {
+
+            throw new ProfileImageUnsupportedFormatException();
+        }
+        catch (GiftImageInvalidException)
+        {
+
+            throw new ProfileImageInvalidException();
+        }
+    }
+
+    /// <summary>Validates and normalizes image bytes for the requested output size.</summary>
+    /// <param name="content">The untrusted image bytes.</param>
+    /// <param name="maximumEdgeLength">The maximum normalized edge length.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The normalized bytes and content hash.</returns>
+    private Task<ProcessedGiftImage> ProcessAsync(
+        ReadOnlyMemory<byte> content,
+        int maximumEdgeLength,
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -68,7 +113,7 @@ public class GiftImageProcessor : IGiftImageProcessor
         var orientedHeight = swapsEdges ? source.Width : source.Height;
         var scale = Math.Min(
             1D,
-            (double)GiftImageConstraints.MaximumOutputEdgeLength /
+            (double)maximumEdgeLength /
             Math.Max(
                 orientedWidth,
                 orientedHeight));

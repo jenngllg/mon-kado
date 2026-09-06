@@ -17,6 +17,12 @@ public class MemberProfile(
     /// </summary>
     public string DisplayName { get; } = displayName;
 
+    /// <summary>Gets the current normalized profile-photo identifier.</summary>
+    public Guid? ProfileImageId
+    {
+        get; init;
+    }
+
     /// <summary>
     /// Gets the member profile version used for optimistic concurrency.
     /// </summary>

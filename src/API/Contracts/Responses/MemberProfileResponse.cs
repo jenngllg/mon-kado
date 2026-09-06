@@ -13,4 +13,10 @@ public class MemberProfileResponse(string displayName)
     /// Gets the member display name.
     /// </summary>
     public string DisplayName { get; } = displayName;
+
+    /// <summary>Gets the public profile-photo URL, or null for a generated avatar.</summary>
+    public string? ProfileImageUrl
+    {
+        get; init;
+    }
 }

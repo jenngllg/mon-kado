@@ -27,13 +27,15 @@ namespace JennGllg.Fr.MonKado.Back.Api.Controllers;
 /// <param name="sender">The mediator sender.</param>
 /// <param name="entityTagService">The entity tag service.</param>
 /// <param name="refreshTokenCookieService">The refresh token cookie service.</param>
+/// <param name="profileImageUrlService">The public profile-photo URL service.</param>
 [ApiController]
 [Authorize(Policy = AuthorizationPolicies.CurrentSession)]
 [Route("api/v1/members")]
 public class MembersController(
     ISender sender,
     IEntityTagService entityTagService,
-    IRefreshTokenCookieService refreshTokenCookieService) : ControllerBase
+    IRefreshTokenCookieService refreshTokenCookieService,
+    IProfileImageUrlService profileImageUrlService) : ControllerBase
 {
     private const int MaximumRequestBodySize = 4 * 1024;
     private const string NoStoreCacheControl = "no-store";
@@ -43,7 +45,7 @@ public class MembersController(
     /// <param name="page">The one-based page number, defaulting to 1.</param>
     /// <param name="pageSize">The page size, defaulting to 20 and limited to 100.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>A page containing only member identifiers and display names.</returns>
+    /// <returns>A page containing member identifiers, display names and public photo URLs.</returns>
     [HttpGet]
     [AllowAnonymous]
     [EnableRateLimiting(AuthenticationRateLimitingExtensions.UserSearchPolicy)]
@@ -69,7 +71,12 @@ public class MembersController(
         return Ok(new PaginatedResponse<UserSearchResponse>(
             result.Items.Select(item => new UserSearchResponse(
                 item.Id,
-                item.DisplayName)),
+                item.DisplayName)
+            {
+                ProfileImageUrl = profileImageUrlService.CreateUrl(
+                    item.Id,
+                    item.ProfileImageId)
+            }),
             result.CurrentPage,
             result.PageSize,
             result.TotalCount));
@@ -201,7 +208,12 @@ public class MembersController(
                 request.DisplayName,
                 expectedVersion),
             cancellationToken);
-        var response = new MemberProfileResponse(profile.DisplayName);
+        var response = new MemberProfileResponse(profile.DisplayName)
+        {
+            ProfileImageUrl = profileImageUrlService.CreateUrl(
+                memberId,
+                profile.ProfileImageId)
+        };
         Response.Headers.ETag = entityTagService.Format(profile.Version);
         Response.Headers.CacheControl = NoStoreCacheControl;
 

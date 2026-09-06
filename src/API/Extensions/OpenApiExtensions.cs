@@ -109,7 +109,7 @@ public static class OpenApiExtensions
                 if (ReturnsRedirect(metadata))
                     AddRedirectResponseHeaders(operation);
 
-                if (metadata.OfType<GiftImageUploadAttribute>().Any())
+                if (metadata.OfType<GiftImageUploadAttribute>().Any() || metadata.OfType<ProfileImageUploadAttribute>().Any())
                     AddGiftImageUploadRequestBody(operation);
 
                 if (CreatesResource(metadata))

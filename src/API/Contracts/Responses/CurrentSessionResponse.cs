@@ -31,6 +31,12 @@ public class CurrentSessionResponse(
     /// </summary>
     public string DisplayName { get; } = displayName;
 
+    /// <summary>Gets the public profile-photo URL, or null for a generated avatar.</summary>
+    public string? ProfileImageUrl
+    {
+        get; init;
+    }
+
     /// <summary>
     /// Gets the current member roles.
     /// </summary>

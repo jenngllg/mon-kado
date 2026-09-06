@@ -191,6 +191,14 @@ public class MemberAccountDeletionService(
             .Where(participant => participant.MemberId == member.Id)
             .ExecuteDeleteAsync(cancellationToken);
         context.Wishlists.RemoveRange(wishlists.Where(wishlist => wishlist.OwnerId == member.Id));
+
+        if (member.ProfileImageId is { } profileImageId)
+        {
+            context.GiftImageDeletionOutboxMessages.Add(GiftImageDeletionOutboxMessage.Create(
+                profileImageId,
+                timeProvider.GetUtcNow().UtcDateTime));
+        }
+
         context.Users.Remove(member);
     }
 

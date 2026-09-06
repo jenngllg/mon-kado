@@ -26,6 +26,7 @@ public class GiftImageRateLimitIdentityMiddleware(RequestDelegate next)
             .PolicyName;
 
         if (policyName is not (AuthenticationRateLimitingExtensions.GiftImageUploadPolicy or
+            AuthenticationRateLimitingExtensions.ProfileImageUploadPolicy or
             AuthenticationRateLimitingExtensions.WishImportPreviewPolicy))
         {
             await next(context);

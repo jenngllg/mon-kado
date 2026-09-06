@@ -43,7 +43,10 @@ public class MemberProfileService(
 
                 return new MemberProfile(
                     member.DisplayName,
-                    member.Version);
+                    member.Version)
+                {
+                    ProfileImageId = member.ProfileImageId
+                };
             }
 
             member.DisplayName = displayName;
@@ -51,7 +54,10 @@ public class MemberProfileService(
 
             return new MemberProfile(
                 member.DisplayName,
-                member.Version);
+                member.Version)
+            {
+                ProfileImageId = member.ProfileImageId
+            };
         }
         catch (DbUpdateConcurrencyException)
         {

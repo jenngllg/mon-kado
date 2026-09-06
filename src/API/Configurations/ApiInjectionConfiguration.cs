@@ -45,6 +45,7 @@ public static class ApiInjectionConfiguration
         services.AddSingleton<IEntityTagService, EntityTagService>();
         services.AddSingleton<IWishlistShareLinkUrlService, WishlistShareLinkUrlService>();
         services.AddSingleton<IWishImageUrlService, WishImageUrlService>();
+        services.AddScoped<IProfileImageUrlService, ProfileImageUrlService>();
         services.AddScoped<IWishImageDeliveryService, WishImageDeliveryService>();
         services.AddSingleton<IValidateOptions<WishlistSharingOptions>, WishlistSharingOptionsValidator>();
         services.AddOptions<WishlistSharingOptions>()

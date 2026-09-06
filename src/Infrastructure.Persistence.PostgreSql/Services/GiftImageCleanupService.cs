@@ -76,9 +76,13 @@ public class GiftImageCleanupService(
     {
         return context.Wishes
             .AsNoTracking()
-            .AnyAsync(
-                wish => wish.ImageId == imageId,
-                cancellationToken);
+            .Where(wish => wish.ImageId == imageId)
+            .Select(wish => wish.ImageId)
+            .Concat(context.Users
+                .AsNoTracking()
+                .Where(member => member.ProfileImageId == imageId)
+                .Select(member => member.ProfileImageId))
+            .AnyAsync(cancellationToken);
     }
 
     /// <summary>

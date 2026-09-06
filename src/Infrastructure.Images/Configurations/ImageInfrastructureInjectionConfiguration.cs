@@ -28,6 +28,7 @@ public static class ImageInfrastructureInjectionConfiguration
             .Bind(configuration.GetSection(GiftImageStorageOptions.SectionName))
             .ValidateOnStart();
         services.AddSingleton<IGiftImageProcessor, GiftImageProcessor>();
+        services.AddSingleton<IProfileImageProcessor, GiftImageProcessor>();
         services.AddSingleton<IGiftImageStore, LocalGiftImageStore>();
 
         return services;

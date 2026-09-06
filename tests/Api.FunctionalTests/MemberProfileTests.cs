@@ -58,7 +58,15 @@ public class MemberProfileTests
             TestContext.Current.CancellationToken)
             ?? throw new InvalidOperationException("The member profile response is empty.");
         var properties = document.RootElement.EnumerateObject().ToArray();
-        var property = Assert.Single(properties);
+        Assert.Equal(
+            2,
+            properties.Length);
+        Assert.Equal(
+            JsonValueKind.Null,
+            document.RootElement.GetProperty("profileImageUrl").ValueKind);
+        var property = Assert.Single(
+            properties,
+            property => property.Name == "displayName");
         Assert.Equal(
             "displayName",
             property.Name);

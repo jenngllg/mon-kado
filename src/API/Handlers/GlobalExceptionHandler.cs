@@ -35,6 +35,24 @@ public class GlobalExceptionHandler(
     {
         var response = exception switch
         {
+            ProfileImageUnsupportedFormatException => new ErrorResponse(
+                StatusCodes.Status415UnsupportedMediaType,
+                "Unsupported profile image",
+                "Only JPEG, PNG and non-animated WebP profile images are supported.",
+                ErrorCodes.ProfileImageUnsupportedFormat,
+                null),
+            ProfileImageInvalidException => new ErrorResponse(
+                StatusCodes.Status400BadRequest,
+                "Invalid profile image",
+                "The supplied profile image is corrupt or exceeds the permitted dimensions.",
+                ErrorCodes.ProfileImageInvalid,
+                null),
+            ProfileImageNotFoundException => new ErrorResponse(
+                StatusCodes.Status404NotFound,
+                "Profile image not found",
+                "The profile image is unavailable.",
+                ErrorCodes.ProfileImageNotFound,
+                null),
             MemberAccountDeletionInvalidException => new ErrorResponse(
                 StatusCodes.Status400BadRequest,
                 "Account deletion failed",
