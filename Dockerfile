@@ -9,6 +9,7 @@ COPY src/Domain/Domain.csproj src/Domain/
 COPY src/Application/Application.csproj src/Application/
 COPY src/Infrastructure.Persistence.PostgreSql/Infrastructure.Persistence.PostgreSql.csproj src/Infrastructure.Persistence.PostgreSql/
 COPY src/Infrastructure.Images/Infrastructure.Images.csproj src/Infrastructure.Images/
+COPY src/Infrastructure.UrlImport/Infrastructure.UrlImport.csproj src/Infrastructure.UrlImport/
 COPY src/API/Api.csproj src/API/
 COPY src/Worker/Worker.csproj src/Worker/
 

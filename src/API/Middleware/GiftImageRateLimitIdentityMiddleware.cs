@@ -25,10 +25,8 @@ public class GiftImageRateLimitIdentityMiddleware(RequestDelegate next)
             .GetMetadata<EnableRateLimitingAttribute>()?
             .PolicyName;
 
-        if (!string.Equals(
-                policyName,
-                AuthenticationRateLimitingExtensions.GiftImageUploadPolicy,
-                StringComparison.Ordinal))
+        if (policyName is not (AuthenticationRateLimitingExtensions.GiftImageUploadPolicy or
+            AuthenticationRateLimitingExtensions.WishImportPreviewPolicy))
         {
             await next(context);
 
