@@ -22,6 +22,66 @@ namespace JennGllg.Fr.MonKado.Back.Worker.UnitTests;
 public class GmailAuthenticationEmailSenderTests
 {
     [Fact]
+    public async Task SendAccountDeletionConfirmationAsync_WhenCalled_DescribesIrreversibleConfirmationWithoutLeakingToken()
+    {
+        // Arrange
+        var client = new CapturingGmailClient();
+        var logger = new RecordingLogger<GmailAuthenticationEmailSender>();
+        var sender = CreateSender(
+            client,
+            logger);
+        var message = new AuthenticationEmailMessage(
+            Guid.CreateVersion7(),
+            "member@example.test",
+            new Uri("https://mon-kado.fr/confirm-account-deletion#token=sensitive-token&extra=value"));
+
+        // Act
+        var result = await sender.SendAccountDeletionConfirmationAsync(
+            message,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(
+            "gmail-message-id",
+            result.ProviderMessageId);
+        var mime = await DecodeAsync(client.RawMessage ?? string.Empty);
+        Assert.Equal(
+            message.RecipientAddress,
+            mime.To.Mailboxes
+                .Single()
+                .Address);
+        Assert.Contains(
+            "suppression",
+            mime.Subject,
+            StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(
+            "définitive",
+            mime.TextBody);
+        Assert.Contains(
+            "même compte",
+            mime.TextBody);
+        Assert.Contains(
+            "L'ouverture du lien ne supprime rien",
+            mime.TextBody);
+        Assert.Contains(
+            message.ConfirmationUrl.AbsoluteUri,
+            mime.TextBody);
+        Assert.Contains(
+            "&amp;extra=value",
+            mime.HtmlBody);
+        var entry = Assert.Single(logger.Entries);
+        Assert.Equal(
+            LogEventIds.AccountDeletionConfirmationSent,
+            entry.EventId.Id);
+        Assert.DoesNotContain(
+            "sensitive-token",
+            entry.Message);
+        Assert.DoesNotContain(
+            message.RecipientAddress,
+            entry.Message);
+    }
+
+    [Fact]
     public async Task SendEmailConfirmationAsync_WhenSender_CreatesDeterministicMultipartMessageWithoutTracking()
     {
         // Arrange
@@ -29,12 +89,10 @@ public class GmailAuthenticationEmailSenderTests
         var logger = new RecordingLogger<GmailAuthenticationEmailSender>();
         var sender = new GmailAuthenticationEmailSender(
             client,
-            Microsoft.Extensions.Options.Options.Create(
-                new GmailOptions { SenderAddress = "monkado.app@gmail.com" }),
+            Microsoft.Extensions.Options.Options.Create(new GmailOptions { SenderAddress = "monkado.app@gmail.com" }),
             logger);
         var outboxId = Guid.Parse("019c52dd-56c1-7cc6-8a95-243f3a032e03");
-        var confirmationUrl = new Uri(
-            "https://mon-kado.fr/confirm-email#userId=019c52dd-56c1-7cc6-8a95-243f3a032e04&token=a-b_c");
+        var confirmationUrl = new Uri("https://mon-kado.fr/confirm-email#userId=019c52dd-56c1-7cc6-8a95-243f3a032e04&token=a-b_c");
 
         // Act
         var result = await sender.SendEmailConfirmationAsync(
@@ -51,13 +109,19 @@ public class GmailAuthenticationEmailSenderTests
         var mime = await DecodeAsync(client.RawMessage!);
         Assert.Equal(
             "MonKado",
-            mime.From.Mailboxes.Single().Name);
+            mime.From.Mailboxes
+                .Single()
+                .Name);
         Assert.Equal(
             "monkado.app@gmail.com",
-            mime.From.Mailboxes.Single().Address);
+            mime.From.Mailboxes
+                .Single()
+                .Address);
         Assert.Equal(
             "member@example.fr",
-            mime.To.Mailboxes.Single().Address);
+            mime.To.Mailboxes
+                .Single()
+                .Address);
         Assert.Equal(
             $"{outboxId:N}@mon-kado.fr",
             mime.MessageId);
@@ -102,8 +166,7 @@ public class GmailAuthenticationEmailSenderTests
             client,
             logger);
         var outboxMessageId = Guid.CreateVersion7();
-        var resetUrl = new Uri(
-            "https://mon-kado.fr/reset-password#userId=019c52dd-56c1-7cc6-8a95-243f3a032e04&token=a-b_c");
+        var resetUrl = new Uri("https://mon-kado.fr/reset-password#userId=019c52dd-56c1-7cc6-8a95-243f3a032e04&token=a-b_c");
         var message = new AuthenticationPasswordResetMessage(
             outboxMessageId,
             "member@example.fr",
@@ -121,7 +184,9 @@ public class GmailAuthenticationEmailSenderTests
         var mime = await DecodeAsync(client.RawMessage ?? string.Empty);
         Assert.Equal(
             "member@example.fr",
-            mime.To.Mailboxes.Single().Address);
+            mime.To.Mailboxes
+                .Single()
+                .Address);
         Assert.Contains(
             "réinitialisez votre mot de passe",
             mime.Subject,
@@ -171,46 +236,30 @@ public class GmailAuthenticationEmailSenderTests
     }
 
     [Theory]
-    [InlineData(
-        HttpStatusCode.BadRequest,
-        AuthenticationEmailFailureCategory.InvalidRequest)]
-    [InlineData(
-        HttpStatusCode.Unauthorized,
-        AuthenticationEmailFailureCategory.Authentication)]
-    [InlineData(
-        HttpStatusCode.Forbidden,
-        AuthenticationEmailFailureCategory.Permission)]
-    [InlineData(
-        HttpStatusCode.RequestTimeout,
-        AuthenticationEmailFailureCategory.Transient)]
-    [InlineData(
-        HttpStatusCode.TooManyRequests,
-        AuthenticationEmailFailureCategory.RateLimited)]
-    [InlineData(
-        HttpStatusCode.InternalServerError,
-        AuthenticationEmailFailureCategory.Transient)]
-    [InlineData(
-        HttpStatusCode.NotFound,
-        AuthenticationEmailFailureCategory.Unknown)]
+    [InlineData(HttpStatusCode.BadRequest, AuthenticationEmailFailureCategory.InvalidRequest)]
+    [InlineData(HttpStatusCode.Unauthorized, AuthenticationEmailFailureCategory.Authentication)]
+    [InlineData(HttpStatusCode.Forbidden, AuthenticationEmailFailureCategory.Permission)]
+    [InlineData(HttpStatusCode.RequestTimeout, AuthenticationEmailFailureCategory.Transient)]
+    [InlineData(HttpStatusCode.TooManyRequests, AuthenticationEmailFailureCategory.RateLimited)]
+    [InlineData(HttpStatusCode.InternalServerError, AuthenticationEmailFailureCategory.Transient)]
+    [InlineData(HttpStatusCode.NotFound, AuthenticationEmailFailureCategory.Unknown)]
     public async Task SendEmailConfirmationAsync_WhenSenderClassifiesGmailFailures_Completes(
         HttpStatusCode statusCode,
         AuthenticationEmailFailureCategory expectedCategory)
     {
         // Arrange
+
         // Act
         var retryAfter = TimeSpan.FromMinutes(12);
         var logger = new RecordingLogger<GmailAuthenticationEmailSender>();
         var sender = CreateSender(
             new ThrowingGmailClient(new GmailRequestException(
-                statusCode,
-                retryAfter)),
+                    statusCode,
+                    retryAfter)),
             logger);
-
-        var exception =
-            await Assert.ThrowsAsync<AuthenticationEmailDeliveryException>(() =>
-                sender.SendEmailConfirmationAsync(
-                    CreateMessage(),
-                    TestContext.Current.CancellationToken));
+        var exception = await Assert.ThrowsAsync<AuthenticationEmailDeliveryException>(() => sender.SendEmailConfirmationAsync(
+                CreateMessage(),
+                TestContext.Current.CancellationToken));
 
         // Assert
         Assert.Equal(
@@ -240,18 +289,15 @@ public class GmailAuthenticationEmailSenderTests
     public async Task SendEmailConfirmationAsync_WhenSenderClassifiesNetworkFailureFromHttpClient_Completes()
     {
         // Arrange
-        // Act
-        var sender = CreateSender(
-            new ThrowingGmailClient(new HttpRequestException(
-                "Network failure.",
-                inner: null,
-                HttpStatusCode.ServiceUnavailable)));
 
-        var exception =
-            await Assert.ThrowsAsync<AuthenticationEmailDeliveryException>(() =>
-                sender.SendEmailConfirmationAsync(
-                    CreateMessage(),
-                    TestContext.Current.CancellationToken));
+        // Act
+        var sender = CreateSender(new ThrowingGmailClient(new HttpRequestException(
+                    "Network failure.",
+                    inner: null,
+                    HttpStatusCode.ServiceUnavailable)));
+        var exception = await Assert.ThrowsAsync<AuthenticationEmailDeliveryException>(() => sender.SendEmailConfirmationAsync(
+                CreateMessage(),
+                TestContext.Current.CancellationToken));
 
         // Assert
         Assert.Equal(
@@ -263,14 +309,12 @@ public class GmailAuthenticationEmailSenderTests
     public async Task SendEmailConfirmationAsync_WhenGmailFailureHasNoStatus_ClassifiesAsTransient()
     {
         // Arrange
-        var sender = CreateSender(
-            new ThrowingGmailClient(new GmailRequestException(
-                statusCode: null,
-                retryAfter: null)));
+        var sender = CreateSender(new ThrowingGmailClient(new GmailRequestException(
+                    statusCode: null,
+                    retryAfter: null)));
 
         // Act
-        var exception = await Assert.ThrowsAsync<AuthenticationEmailDeliveryException>(() =>
-            sender.SendEmailConfirmationAsync(
+        var exception = await Assert.ThrowsAsync<AuthenticationEmailDeliveryException>(() => sender.SendEmailConfirmationAsync(
                 CreateMessage(),
                 TestContext.Current.CancellationToken));
 
@@ -284,15 +328,12 @@ public class GmailAuthenticationEmailSenderTests
     public async Task SendEmailConfirmationAsync_WhenSenderClassifiesProviderTimeoutAsTransient_Completes()
     {
         // Arrange
-        // Act
-        var sender = CreateSender(
-            new ThrowingGmailClient(new TaskCanceledException("Provider timeout.")));
 
-        var exception =
-            await Assert.ThrowsAsync<AuthenticationEmailDeliveryException>(() =>
-                sender.SendEmailConfirmationAsync(
-                    CreateMessage(),
-                    TestContext.Current.CancellationToken));
+        // Act
+        var sender = CreateSender(new ThrowingGmailClient(new TaskCanceledException("Provider timeout.")));
+        var exception = await Assert.ThrowsAsync<AuthenticationEmailDeliveryException>(() => sender.SendEmailConfirmationAsync(
+                CreateMessage(),
+                TestContext.Current.CancellationToken));
 
         // Assert
         Assert.Equal(
@@ -304,15 +345,12 @@ public class GmailAuthenticationEmailSenderTests
     public async Task SendEmailConfirmationAsync_WhenSenderClassifiesUnexpectedFailureWithoutLeakingDetails_Completes()
     {
         // Arrange
-        // Act
-        var sender = CreateSender(
-            new ThrowingGmailClient(new InvalidOperationException("Sensitive provider detail.")));
 
-        var exception =
-            await Assert.ThrowsAsync<AuthenticationEmailDeliveryException>(() =>
-                sender.SendEmailConfirmationAsync(
-                    CreateMessage(),
-                    TestContext.Current.CancellationToken));
+        // Act
+        var sender = CreateSender(new ThrowingGmailClient(new InvalidOperationException("Sensitive provider detail.")));
+        var exception = await Assert.ThrowsAsync<AuthenticationEmailDeliveryException>(() => sender.SendEmailConfirmationAsync(
+                CreateMessage(),
+                TestContext.Current.CancellationToken));
 
         // Assert
         Assert.Equal(
@@ -328,15 +366,14 @@ public class GmailAuthenticationEmailSenderTests
     public async Task SendEmailConfirmationAsync_WhenSender_PreservesCallerCancellation()
     {
         // Arrange
+
         // Act
         using var source = new CancellationTokenSource();
         source.Cancel();
-        var sender = CreateSender(
-            new ThrowingGmailClient(new OperationCanceledException(source.Token)));
+        var sender = CreateSender(new ThrowingGmailClient(new OperationCanceledException(source.Token)));
 
         // Assert
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
-            sender.SendEmailConfirmationAsync(
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => sender.SendEmailConfirmationAsync(
                 CreateMessage(),
                 source.Token));
     }
@@ -350,8 +387,7 @@ public class GmailAuthenticationEmailSenderTests
         var sender = CreateSender(
             client,
             logger);
-        var confirmationUrl = new Uri(
-            "https://mon-kado.fr/confirm-email-change#requestId=request&token=a-b_c");
+        var confirmationUrl = new Uri("https://mon-kado.fr/confirm-email-change#requestId=request&token=a-b_c");
         var message = new AuthenticationEmailMessage(
             Guid.CreateVersion7(),
             "new@example.fr",
@@ -369,7 +405,9 @@ public class GmailAuthenticationEmailSenderTests
         var mime = await DecodeAsync(client.RawMessage ?? string.Empty);
         Assert.Equal(
             "new@example.fr",
-            mime.To.Mailboxes.Single().Address);
+            mime.To.Mailboxes
+                .Single()
+                .Address);
         Assert.Contains(
             "nouvelle adresse",
             mime.Subject,
@@ -426,7 +464,9 @@ public class GmailAuthenticationEmailSenderTests
         var mime = await DecodeAsync(client.RawMessage ?? string.Empty);
         Assert.Equal(
             "old@example.fr",
-            mime.To.Mailboxes.Single().Address);
+            mime.To.Mailboxes
+                .Single()
+                .Address);
         Assert.Contains(
             expectedMaskedAddress,
             mime.TextBody,
@@ -489,7 +529,9 @@ public class GmailAuthenticationEmailSenderTests
         var mime = await DecodeAsync(client.RawMessage ?? string.Empty);
         Assert.Equal(
             "member@example.fr",
-            mime.To.Mailboxes.Single().Address);
+            mime.To.Mailboxes
+                .Single()
+                .Address);
         Assert.Contains(
             "mot de passe",
             mime.Subject,
@@ -527,8 +569,7 @@ public class GmailAuthenticationEmailSenderTests
 
         return new(
             client,
-            Microsoft.Extensions.Options.Options.Create(
-                new GmailOptions { SenderAddress = "monkado.app@gmail.com" }),
+            Microsoft.Extensions.Options.Options.Create(new GmailOptions { SenderAddress = "monkado.app@gmail.com" }),
             logger ?? NullLogger<GmailAuthenticationEmailSender>.Instance);
     }
 
@@ -543,11 +584,13 @@ public class GmailAuthenticationEmailSenderTests
 
     private static async Task<MimeMessage> DecodeAsync(string raw)
     {
-        var base64 = raw.Replace(
+        var base64 = raw
+            .Replace(
             '-',
-            '+').Replace(
-                '_',
-                '/');
+            '+')
+            .Replace(
+            '_',
+            '/');
         base64 = base64.PadRight(
             base64.Length + ((4 - (base64.Length % 4)) % 4),
             '=');
@@ -557,5 +600,4 @@ public class GmailAuthenticationEmailSenderTests
             stream,
             TestContext.Current.CancellationToken);
     }
-
 }

@@ -6,6 +6,7 @@ using JennGllg.Fr.MonKado.Back.Application.Common.Exceptions;
 using Microsoft.AspNetCore.Diagnostics;
 
 namespace JennGllg.Fr.MonKado.Back.Api.Handlers;
+
 /// <summary>
 /// Represents global exception handler.
 /// </summary>
@@ -13,7 +14,6 @@ namespace JennGllg.Fr.MonKado.Back.Api.Handlers;
 /// <param name="refreshTokenCookieService">The refresh token cookie service.</param>
 /// <param name="googleExternalAuthenticationService">The protected Google external cookie service.</param>
 /// <param name="guestSessionCookieService">The guest-session cookie service.</param>
-
 public class GlobalExceptionHandler(
     ILogger<GlobalExceptionHandler> logger,
     IRefreshTokenCookieService refreshTokenCookieService,
@@ -27,7 +27,7 @@ public class GlobalExceptionHandler(
     /// <param name="exception">The exception.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>A task that represents the asynchronous operation.</returns>
-    /// <exception cref="OperationCanceledException">The request is canceled.</exception>
+    /// <exception cref = "OperationCanceledException">The request is canceled.</exception>
     public async ValueTask<bool> TryHandleAsync(
         HttpContext httpContext,
         Exception exception,
@@ -35,6 +35,18 @@ public class GlobalExceptionHandler(
     {
         var response = exception switch
         {
+            MemberAccountDeletionInvalidException => new ErrorResponse(
+                StatusCodes.Status400BadRequest,
+                "Account deletion failed",
+                "The account deletion link is invalid or expired.",
+                ErrorCodes.AccountDeletionInvalid,
+                null),
+            MemberAccountDeletionRateLimitException => new ErrorResponse(
+                StatusCodes.Status429TooManyRequests,
+                "Account deletion rate limit exceeded",
+                "Too many account deletion requests. Try again later.",
+                ErrorCodes.AccountDeletionRateLimited,
+                null),
             WishImportUrlRejectedException => new ErrorResponse(
                 StatusCodes.Status400BadRequest,
                 "Import URL rejected",
@@ -95,14 +107,12 @@ public class GlobalExceptionHandler(
                 "One or more fields are invalid.",
                 ErrorCodes.RequestValidationError,
                 validationException.ValidationErrors),
-            BadHttpRequestException badRequestException
-                when badRequestException.StatusCode == StatusCodes.Status413PayloadTooLarge =>
-                new ErrorResponse(
-                    StatusCodes.Status413PayloadTooLarge,
-                    "Payload too large",
-                    "The request body is too large.",
-                    ErrorCodes.RequestPayloadTooLarge,
-                    null),
+            BadHttpRequestException badRequestException when badRequestException.StatusCode == StatusCodes.Status413PayloadTooLarge => new ErrorResponse(
+                StatusCodes.Status413PayloadTooLarge,
+                "Payload too large",
+                "The request body is too large.",
+                ErrorCodes.RequestPayloadTooLarge,
+                null),
             MemberProfileVersionConflictException => new ErrorResponse(
                 StatusCodes.Status412PreconditionFailed,
                 "Profile update conflict",
@@ -290,7 +300,6 @@ public class GlobalExceptionHandler(
                 null,
                 null)
         };
-
         LogException(
             response,
             exception);
@@ -305,7 +314,6 @@ public class GlobalExceptionHandler(
             await googleExternalAuthenticationService.DeleteAsync(
                 httpContext,
                 cancellationToken);
-
         httpContext.Response.StatusCode = response.StatusCode;
         httpContext.Response.Headers.CacheControl = "no-store";
         await httpContext.Response.WriteAsJsonAsync(
@@ -368,6 +376,9 @@ public class GlobalExceptionHandler(
     private static string GetDependencyName(DependencyUnavailableException exception)
     {
 
-        return exception.InnerException?.GetType().Name ?? exception.GetType().Name;
+        return exception.InnerException?.GetType()
+            .Name ?? exception
+            .GetType()
+            .Name;
     }
 }

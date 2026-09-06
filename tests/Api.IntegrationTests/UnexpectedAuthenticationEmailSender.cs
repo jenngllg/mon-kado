@@ -8,7 +8,17 @@ namespace JennGllg.Fr.MonKado.Back.Api.IntegrationTests;
 /// </summary>
 public class UnexpectedAuthenticationEmailSender : IAuthenticationEmailSender
 {
-    /// <inheritdoc />
+    /// <inheritdoc/>
+    public Task<AuthenticationEmailSendResult> SendAccountDeletionConfirmationAsync(
+        AuthenticationEmailMessage message,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        return CreateFailure();
+    }
+
+    /// <inheritdoc/>
     public Task<AuthenticationEmailSendResult> SendEmailConfirmationAsync(
         AuthenticationEmailMessage message,
         CancellationToken cancellationToken)
@@ -18,7 +28,7 @@ public class UnexpectedAuthenticationEmailSender : IAuthenticationEmailSender
         return CreateFailure();
     }
 
-    /// <inheritdoc />
+    /// <inheritdoc/>
     public Task<AuthenticationEmailSendResult> SendEmailChangeConfirmationAsync(
         AuthenticationEmailMessage message,
         CancellationToken cancellationToken)
@@ -28,7 +38,7 @@ public class UnexpectedAuthenticationEmailSender : IAuthenticationEmailSender
         return CreateFailure();
     }
 
-    /// <inheritdoc />
+    /// <inheritdoc/>
     public Task<AuthenticationEmailSendResult> SendEmailChangeSecurityNotificationAsync(
         AuthenticationEmailSecurityNotification message,
         CancellationToken cancellationToken)
@@ -38,7 +48,7 @@ public class UnexpectedAuthenticationEmailSender : IAuthenticationEmailSender
         return CreateFailure();
     }
 
-    /// <inheritdoc />
+    /// <inheritdoc/>
     public Task<AuthenticationEmailSendResult> SendPasswordChangedSecurityNotificationAsync(
         AuthenticationPasswordChangedNotification message,
         CancellationToken cancellationToken)
@@ -48,7 +58,7 @@ public class UnexpectedAuthenticationEmailSender : IAuthenticationEmailSender
         return CreateFailure();
     }
 
-    /// <inheritdoc />
+    /// <inheritdoc/>
     public Task<AuthenticationEmailSendResult> SendPasswordResetAsync(
         AuthenticationPasswordResetMessage message,
         CancellationToken cancellationToken)
@@ -65,7 +75,6 @@ public class UnexpectedAuthenticationEmailSender : IAuthenticationEmailSender
     private static Task<AuthenticationEmailSendResult> CreateFailure()
     {
 
-        return Task.FromException<AuthenticationEmailSendResult>(
-            new InvalidOperationException("No authentication email delivery was expected."));
+        return Task.FromException<AuthenticationEmailSendResult>(new InvalidOperationException("No authentication email delivery was expected."));
     }
 }

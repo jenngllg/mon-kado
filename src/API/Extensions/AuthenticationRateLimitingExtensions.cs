@@ -7,14 +7,13 @@ using System.Security.Claims;
 using System.Threading.RateLimiting;
 
 namespace JennGllg.Fr.MonKado.Back.Api.Extensions;
+
 /// <summary>
 /// Represents authentication rate limiting extensions.
 /// </summary>
-
 public static class AuthenticationRateLimitingExtensions
 {
     private const string UnlimitedPartitionKey = "NonSharedWishlist";
-
     /// <summary>
     /// Identifies registration policy.
     /// </summary>
@@ -55,6 +54,8 @@ public static class AuthenticationRateLimitingExtensions
     /// Identifies the password reset policy.
     /// </summary>
     public const string PasswordResetPolicy = "PasswordReset";
+    /// <summary>Identifies the authenticated account deletion confirmation quota.</summary>
+    public const string AccountDeletionConfirmationPolicy = "AccountDeletionConfirmation";
     /// <summary>
     /// Identifies the Google authentication challenge policy.
     /// </summary>
@@ -117,7 +118,6 @@ public static class AuthenticationRateLimitingExtensions
     /// Gets the per-minute gift-image upload limit for one member.
     /// </summary>
     public const int GiftImageUploadPermitLimit = 10;
-
     private static readonly TimeSpan _window = TimeSpan.FromMinutes(1);
     private static readonly TimeSpan _wishlistReportWindow = TimeSpan.FromHours(1);
     private static readonly PathString _sharedWishlistsPath = new("/api/v1/shared-wishlists");
@@ -126,156 +126,156 @@ public static class AuthenticationRateLimitingExtensions
     /// </summary>
     /// <param name="services">The services.</param>
     /// <returns>The operation result.</returns>
-
     public static IServiceCollection AddAuthenticationRateLimiting(this IServiceCollection services)
     {
         services.AddRateLimiter(options =>
-        {
-            options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(
-                CreateGlobalLimiterPartition);
-            options.AddPolicy(
-                RegistrationPolicy,
-                context => CreateLimiter(
-                    context,
-                    5));
-            options.AddPolicy(
-                LoginPolicy,
-                context => CreateLimiter(
-                    context,
-                    10));
-            options.AddPolicy(
-                RefreshPolicy,
-                context => CreateLimiter(
-                    context,
-                    10));
-            options.AddPolicy(
-                EmailConfirmationPolicy,
-                context => CreateLimiter(
-                    context,
-                    10));
-            options.AddPolicy(
-                EmailConfirmationRequestPolicy,
-                context => CreateLimiter(
-                    context,
-                    5));
-            options.AddPolicy(
-                EmailChangeRequestPolicy,
-                context => CreateLimiter(
-                    context,
-                    5));
-            options.AddPolicy(
-                EmailChangeConfirmationPolicy,
-                context => CreateLimiter(
-                    context,
-                    10));
-            options.AddPolicy(
-                PasswordChangePolicy,
-                context => CreateLimiter(
-                    context,
-                    5));
-            options.AddPolicy(
-                PasswordResetRequestPolicy,
-                context => CreateLimiter(
-                    context,
-                    5));
-            options.AddPolicy(
-                PasswordResetPolicy,
-                context => CreateLimiter(
-                    context,
-                    10));
-            options.AddPolicy(
-                GoogleChallengePolicy,
-                context => CreateLimiter(
-                    context,
-                    10));
-            options.AddPolicy(
-                GoogleCallbackPolicy,
-                context => CreateLimiter(
-                    context,
-                    GoogleTransientFlowPermitLimit));
-            options.AddPolicy(
-                GoogleCompletionPolicy,
-                context => CreateLimiter(
-                    context,
-                    GoogleTransientFlowPermitLimit));
-            options.AddPolicy(
-                GoogleLinkPolicy,
-                context => CreateLimiter(
-                    context,
-                    5));
-            options.AddPolicy(
-                SharedWishlistPolicy,
-                context => CreateLimiter(
-                    context,
-                    SharedWishlistPermitLimit));
-            options.AddPolicy(
-                SharedWishlistJoinPolicy,
-                context => CreateSharedWishlistScopedLimiter(
-                    context,
-                    SharedWishlistJoinPermitLimit,
-                    _window));
-            options.AddPolicy(
-                SharedWishlistReservationPolicy,
-                context => CreateSharedWishlistScopedLimiter(
-                    context,
-                    SharedWishlistReservationPermitLimit,
-                    _window));
-            options.AddPolicy(
-                SharedWishlistReportPolicy,
-                context => CreateSharedWishlistScopedLimiter(
-                    context,
-                    SharedWishlistReportPermitLimit,
-                    _wishlistReportWindow));
-            options.AddPolicy(
-                GiftImageUploadPolicy,
-                context => CreateMemberLimiter(
-                    context,
-                    GiftImageUploadPermitLimit));
-            options.AddPolicy(
-                WishImportPreviewPolicy,
-                context => CreateMemberLimiter(
-                    context,
-                    context.RequestServices
-                        .GetRequiredService<Microsoft.Extensions.Options.IOptions<JennGllg.Fr.MonKado.Back.Infrastructure.UrlImport.Options.UrlImportOptions>>()
-                        .Value.PermitLimit));
-
-            options.OnRejected = async (
-                rejectionContext,
-                cancellationToken) =>
             {
-                var context = rejectionContext.HttpContext;
-                var retryAfter = _window;
+                options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(CreateGlobalLimiterPartition);
+                options.AddPolicy(
+                    RegistrationPolicy,
+                    context => CreateLimiter(
+                        context,
+                        5));
+                options.AddPolicy(
+                    LoginPolicy,
+                    context => CreateLimiter(
+                        context,
+                        10));
+                options.AddPolicy(
+                    RefreshPolicy,
+                    context => CreateLimiter(
+                        context,
+                        10));
+                options.AddPolicy(
+                    EmailConfirmationPolicy,
+                    context => CreateLimiter(
+                        context,
+                        10));
+                options.AddPolicy(
+                    EmailConfirmationRequestPolicy,
+                    context => CreateLimiter(
+                        context,
+                        5));
+                options.AddPolicy(
+                    EmailChangeRequestPolicy,
+                    context => CreateLimiter(
+                        context,
+                        5));
+                options.AddPolicy(
+                    EmailChangeConfirmationPolicy,
+                    context => CreateLimiter(
+                        context,
+                        10));
+                options.AddPolicy(
+                    PasswordChangePolicy,
+                    context => CreateLimiter(
+                        context,
+                        5));
+                options.AddPolicy(
+                    PasswordResetRequestPolicy,
+                    context => CreateLimiter(
+                        context,
+                        5));
+                options.AddPolicy(
+                    PasswordResetPolicy,
+                    context => CreateLimiter(
+                        context,
+                        10));
+                options.AddPolicy(
+                    AccountDeletionConfirmationPolicy,
+                    context => CreateMemberLimiter(
+                        context,
+                        5));
+                options.AddPolicy(
+                    GoogleChallengePolicy,
+                    context => CreateLimiter(
+                        context,
+                        10));
+                options.AddPolicy(
+                    GoogleCallbackPolicy,
+                    context => CreateLimiter(
+                        context,
+                        GoogleTransientFlowPermitLimit));
+                options.AddPolicy(
+                    GoogleCompletionPolicy,
+                    context => CreateLimiter(
+                        context,
+                        GoogleTransientFlowPermitLimit));
+                options.AddPolicy(
+                    GoogleLinkPolicy,
+                    context => CreateLimiter(
+                        context,
+                        5));
+                options.AddPolicy(
+                    SharedWishlistPolicy,
+                    context => CreateLimiter(
+                        context,
+                        SharedWishlistPermitLimit));
+                options.AddPolicy(
+                    SharedWishlistJoinPolicy,
+                    context => CreateSharedWishlistScopedLimiter(
+                        context,
+                        SharedWishlistJoinPermitLimit,
+                        _window));
+                options.AddPolicy(
+                    SharedWishlistReservationPolicy,
+                    context => CreateSharedWishlistScopedLimiter(
+                        context,
+                        SharedWishlistReservationPermitLimit,
+                        _window));
+                options.AddPolicy(
+                    SharedWishlistReportPolicy,
+                    context => CreateSharedWishlistScopedLimiter(
+                        context,
+                        SharedWishlistReportPermitLimit,
+                        _wishlistReportWindow));
+                options.AddPolicy(
+                    GiftImageUploadPolicy,
+                    context => CreateMemberLimiter(
+                        context,
+                        GiftImageUploadPermitLimit));
+                options.AddPolicy(
+                    WishImportPreviewPolicy,
+                    context => CreateMemberLimiter(
+                        context,
+                        context.RequestServices
+                            .GetRequiredService<Microsoft.Extensions.Options.IOptions<JennGllg.Fr.MonKado.Back.Infrastructure.UrlImport.Options.UrlImportOptions>>()
+                            .Value.PermitLimit));
+                options.OnRejected = async (
+                    rejectionContext,
+                    cancellationToken) =>
+                {
+                    var context = rejectionContext.HttpContext;
+                    var retryAfter = _window;
 
-                if (rejectionContext.Lease.TryGetMetadata(
-                    MetadataName.RetryAfter,
-                    out var metadata))
-                    retryAfter = metadata;
-
-                context.Response.Headers.RetryAfter = Math.Max(
-                    1,
-                    (int)Math.Ceiling(retryAfter.TotalSeconds))
-                    .ToString(CultureInfo.InvariantCulture);
-                context.Response.Headers.CacheControl = "no-store";
-
-                var errorResponse = new ErrorResponse(
-                    StatusCodes.Status429TooManyRequests,
-                    "Rate limit exceeded",
-                    "Too many requests. Retry later.",
-                    ErrorCodes.RequestRateLimitExceeded,
-                    null);
-                var loggerFactory = context.RequestServices.GetRequiredService<ILoggerFactory>();
-                var logger = loggerFactory.CreateLogger(typeof(AuthenticationRateLimitingExtensions));
-                ApiLogMessages.ExpectedHttpError(
-                    logger,
-                    errorResponse.StatusCode,
-                    ErrorCodes.RequestRateLimitExceeded);
-
-                context.Response.StatusCode = errorResponse.StatusCode;
-                await context.Response.WriteAsJsonAsync(
-                    errorResponse,
-                    cancellationToken);
-            };
-        });
+                    if (rejectionContext.Lease.TryGetMetadata(
+                        MetadataName.RetryAfter,
+                        out var metadata))
+                        retryAfter = metadata;
+                    context.Response.Headers.RetryAfter = Math
+                        .Max(
+                        1,
+                        (int)Math.Ceiling(retryAfter.TotalSeconds))
+                        .ToString(CultureInfo.InvariantCulture);
+                    context.Response.Headers.CacheControl = "no-store";
+                    var errorResponse = new ErrorResponse(
+                        StatusCodes.Status429TooManyRequests,
+                        "Rate limit exceeded",
+                        "Too many requests. Retry later.",
+                        ErrorCodes.RequestRateLimitExceeded,
+                        null);
+                    var loggerFactory = context.RequestServices.GetRequiredService<ILoggerFactory>();
+                    var logger = loggerFactory.CreateLogger(typeof(AuthenticationRateLimitingExtensions));
+                    ApiLogMessages.ExpectedHttpError(
+                        logger,
+                        errorResponse.StatusCode,
+                        ErrorCodes.RequestRateLimitExceeded);
+                    context.Response.StatusCode = errorResponse.StatusCode;
+                    await context.Response.WriteAsJsonAsync(
+                        errorResponse,
+                        cancellationToken);
+                };
+            });
 
         return services;
     }
@@ -295,6 +295,7 @@ public static class AuthenticationRateLimitingExtensions
         HttpContext context,
         int permitLimit)
     {
+
         return RateLimitPartition.GetFixedWindowLimiter(
             context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
             _ => new FixedWindowRateLimiterOptions
@@ -313,11 +314,12 @@ public static class AuthenticationRateLimitingExtensions
         TimeSpan window)
     {
         var remoteAddress = context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
-        var shareLinkId = Guid.Parse(
-                Convert.ToString(
-                        context.Request.RouteValues["shareLinkId"],
-                        CultureInfo.InvariantCulture)
-                    .AsSpan())
+        var shareLinkId = Guid
+            .Parse(Convert
+                .ToString(
+                context.Request.RouteValues["shareLinkId"],
+                CultureInfo.InvariantCulture)
+                .AsSpan())
             .ToString("D");
         var partitionKey = string.Concat(
             remoteAddress,
@@ -341,9 +343,7 @@ public static class AuthenticationRateLimitingExtensions
         int permitLimit)
     {
         var memberId = context.User.FindFirstValue(JwtRegisteredClaimNames.Sub);
-        var partitionKey = string.IsNullOrWhiteSpace(memberId)
-            ? context.Connection.RemoteIpAddress?.ToString() ?? "unknown"
-            : memberId;
+        var partitionKey = string.IsNullOrWhiteSpace(memberId) ? context.Connection.RemoteIpAddress?.ToString() ?? "unknown" : memberId;
 
         return RateLimitPartition.GetFixedWindowLimiter(
             partitionKey,
@@ -356,5 +356,4 @@ public static class AuthenticationRateLimitingExtensions
                 Window = _window
             });
     }
-
 }

@@ -1,5 +1,6 @@
 using JennGllg.Fr.MonKado.Back.Api.Authorization;
 using JennGllg.Fr.MonKado.Back.Api.Middleware;
+using JennGllg.Fr.MonKado.Back.Application.Abstractions;
 using JennGllg.Fr.MonKado.Back.Application.Common.Exceptions;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Options;
 
@@ -29,32 +30,35 @@ public static class JwtAuthenticationExtensions
     {
         var section = configuration.GetSection(JwtOptions.SectionName);
         services.AddSingleton<IValidateOptions<JwtOptions>, JwtOptionsValidator>();
-        services.AddOptions<JwtOptions>()
+        services
+            .AddOptions<JwtOptions>()
             .Bind(section)
             .ValidateOnStart();
-        services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+        services
+            .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             .AddJwtBearer();
-        services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme)
+        services
+            .AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme)
             .Configure<IOptions<JwtOptions>>((
                 options,
                 jwtOptions) => ConfigureBearerOptions(
-                    options,
-                    jwtOptions.Value));
+                options,
+                jwtOptions.Value));
         services.AddAuthorization(options => options.AddPolicy(
-            AuthorizationPolicies.CurrentSession,
-            policy =>
-            {
-                policy.AddAuthenticationSchemes(JwtBearerDefaults.AuthenticationScheme);
-                policy.RequireAuthenticatedUser();
-            }));
+                AuthorizationPolicies.CurrentSession,
+                policy =>
+                {
+                    policy.AddAuthenticationSchemes(JwtBearerDefaults.AuthenticationScheme);
+                    policy.RequireAuthenticatedUser();
+                }));
         services.AddAuthorization(options => options.AddPolicy(
-            AuthorizationPolicies.ManageWishlist,
-            policy =>
-            {
-                policy.AddAuthenticationSchemes(JwtBearerDefaults.AuthenticationScheme);
-                policy.RequireAuthenticatedUser();
-                policy.AddRequirements(new WishlistOwnerRequirement());
-            }));
+                AuthorizationPolicies.ManageWishlist,
+                policy =>
+                {
+                    policy.AddAuthenticationSchemes(JwtBearerDefaults.AuthenticationScheme);
+                    policy.RequireAuthenticatedUser();
+                    policy.AddRequirements(new WishlistOwnerRequirement());
+                }));
 
         return services;
     }
@@ -85,12 +89,12 @@ public static class JwtAuthenticationExtensions
             OnAuthenticationFailed = context =>
             {
 
-                if (context.Exception is InvalidAuthenticationSessionException)
+                if (context.Exception is InvalidAuthenticationSessionException or DependencyUnavailableException)
                     throw context.Exception;
 
                 return Task.CompletedTask;
             },
-            OnTokenValidated = context =>
+            OnTokenValidated = async context =>
             {
                 var subject = context.Principal?.FindFirstValue(JwtRegisteredClaimNames.Sub);
 
@@ -102,14 +106,16 @@ public static class JwtAuthenticationExtensions
                     throw new InvalidAuthenticationSessionException();
                 }
 
-                return Task.CompletedTask;
+                var memberValidation = context.HttpContext.RequestServices.GetRequiredService<IAuthenticatedMemberValidationService>();
+                await memberValidation.ValidateAsync(
+                    memberId,
+                    context.HttpContext.RequestAborted);
             }
         };
         options.TokenValidationParameters = new TokenValidationParameters
         {
             ClockSkew = TimeSpan.FromSeconds(30),
-            IssuerSigningKey = new SymmetricSecurityKey(
-                Convert.FromBase64String(jwtOptions.SigningKey)),
+            IssuerSigningKey = new SymmetricSecurityKey(Convert.FromBase64String(jwtOptions.SigningKey)),
             NameClaimType = JwtRegisteredClaimNames.Sub,
             RequireExpirationTime = true,
             RequireSignedTokens = true,
@@ -117,10 +123,7 @@ public static class JwtAuthenticationExtensions
             ValidateIssuer = true,
             ValidateIssuerSigningKey = true,
             ValidateLifetime = true,
-            ValidAlgorithms =
-            [
-                SecurityAlgorithms.HmacSha256
-            ],
+            ValidAlgorithms = [SecurityAlgorithms.HmacSha256],
             ValidAudience = jwtOptions.Audience,
             ValidIssuer = jwtOptions.Issuer
         };

@@ -28,12 +28,12 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
         await using var provider = CreateServiceProvider();
         await using var scope = provider.CreateAsyncScope();
         var context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
-
         await context.Database.MigrateAsync(cancellationToken);
         await context.Database.MigrateAsync(cancellationToken);
 
         // Act
         var migrations = await context.Database.GetAppliedMigrationsAsync(cancellationToken);
+
         // Assert
         Assert.Collection(
             migrations,
@@ -132,9 +132,12 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
             migration => Assert.EndsWith(
                 "_AddGiftImages",
                 migration,
+                StringComparison.Ordinal),
+            migration => Assert.EndsWith(
+                "_AddMemberAccountDeletion",
+                migration,
                 StringComparison.Ordinal));
         Assert.False(context.Database.HasPendingModelChanges());
-
         var tables = await GetPublicTablesAsync(
             context,
             cancellationToken);
@@ -147,6 +150,7 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
                 "gift_reservation_histories",
                 "gift_reservations",
                 "guest_sessions",
+                "member_account_deletion_requests",
                 "member_email_change_requests",
                 "role_claims",
                 "roles",
@@ -163,7 +167,6 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
                 "wishlists"
             ],
             tables);
-
         var constraints = await GetPublicConstraintsAsync(
             context,
             cancellationToken);
@@ -320,7 +323,6 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
         Assert.Contains(
             "fk_wishlist_reports_wishlists_wishlist_id",
             constraints);
-
         var indexes = await GetPublicIndexesAsync(
             context,
             cancellationToken);
@@ -402,7 +404,6 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
         Assert.Contains(
             "ix_wishlist_reports_wishlist_id",
             indexes);
-
         var columns = await GetAuthenticationEmailOutboxColumnsAsync(
             context,
             cancellationToken);
@@ -448,11 +449,11 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
                 context,
                 cancellationToken));
         Assert.True(await IsUserUpdatedAtNullableAsync(
-            context,
-            cancellationToken));
+                context,
+                cancellationToken));
         Assert.False(await HasUserVersionColumnAsync(
-            context,
-            cancellationToken));
+                context,
+                cancellationToken));
     }
 
     [Fact]
@@ -468,42 +469,39 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
         var wishlistId = Guid.CreateVersion7();
         var wishId = Guid.CreateVersion7();
         context.Users.Add(CreateMigrationMember(
-            ownerId,
-            "gift-image-constraint@example.test",
-            "Gift image constraint"));
+                ownerId,
+                "gift-image-constraint@example.test",
+                "Gift image constraint"));
         context.Wishlists.Add(new Wishlist(
-            wishlistId,
-            ownerId,
-            "Image constraint",
-            "IMAGE CONSTRAINT",
-            WishlistOccasion.Other,
-            null,
-            null));
+                wishlistId,
+                ownerId,
+                "Image constraint",
+                "IMAGE CONSTRAINT",
+                WishlistOccasion.Other,
+                null,
+                null));
         context.Wishes.Add(new Wish(
-            wishId,
-            wishlistId,
-            "Gift",
-            null,
-            null,
-            null,
-            1));
+                wishId,
+                wishlistId,
+                "Gift",
+                null,
+                null,
+                null,
+                1));
         await context.SaveChangesAsync(cancellationToken);
         var imageId = Guid.CreateVersion7();
         var validHash = new byte[Wish.ImageContentHashLength];
-
         try
         {
+
             // Act
-            var missingHashViolation = await Assert.ThrowsAsync<PostgresException>(() =>
-                context.Database.ExecuteSqlInterpolatedAsync(
+            var missingHashViolation = await Assert.ThrowsAsync<PostgresException>(() => context.Database.ExecuteSqlInterpolatedAsync(
                     $"UPDATE public.wishes SET image_id = {imageId}, image_content_hash = NULL WHERE id = {wishId};",
                     cancellationToken));
-            var missingImageIdViolation = await Assert.ThrowsAsync<PostgresException>(() =>
-                context.Database.ExecuteSqlInterpolatedAsync(
+            var missingImageIdViolation = await Assert.ThrowsAsync<PostgresException>(() => context.Database.ExecuteSqlInterpolatedAsync(
                     $"UPDATE public.wishes SET image_id = NULL, image_content_hash = {validHash} WHERE id = {wishId};",
                     cancellationToken));
-            var invalidHashViolation = await Assert.ThrowsAsync<PostgresException>(() =>
-                context.Database.ExecuteSqlInterpolatedAsync(
+            var invalidHashViolation = await Assert.ThrowsAsync<PostgresException>(() => context.Database.ExecuteSqlInterpolatedAsync(
                     $"UPDATE public.wishes SET image_id = {imageId}, image_content_hash = {new byte[1]} WHERE id = {wishId};",
                     cancellationToken));
 
@@ -657,13 +655,13 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
             EmailConfirmed = true
         });
         context.Wishlists.Add(new Wishlist(
-            wishlistId,
-            ownerId,
-            "Migration wishlist",
-            "MIGRATION WISHLIST",
-            WishlistOccasion.Other,
-            null,
-            null));
+                wishlistId,
+                ownerId,
+                "Migration wishlist",
+                "MIGRATION WISHLIST",
+                WishlistOccasion.Other,
+                null,
+                null));
         await context.SaveChangesAsync(cancellationToken);
         var createdAt = new DateTime(
             2026,
@@ -682,20 +680,20 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
                 position,
                 created_at)
             VALUES (
-                {wishId},
-                {wishlistId},
-                {"Existing gift"},
-                {1L},
-                {createdAt});
+            {wishId},
+            {wishlistId},
+            {"Existing gift"},
+            {1L},
+            {createdAt});
             """,
             cancellationToken);
         bool quantityColumnExistsAfterDown;
         int quantityAfterFirstUp;
         int quantityAfterSecondUp;
         bool quantityHasDefault;
-
         try
         {
+
             // Act
             await context.Database.MigrateAsync(cancellationToken);
             context.ChangeTracker.Clear();
@@ -767,38 +765,45 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
                 "quantity-member@example.test",
                 "Quantity member"));
         context.Wishlists.Add(new Wishlist(
-            wishlistId,
-            ownerId,
-            "Quantity migration",
-            "QUANTITY MIGRATION",
-            WishlistOccasion.Other,
-            null,
-            null));
+                wishlistId,
+                ownerId,
+                "Quantity migration",
+                "QUANTITY MIGRATION",
+                WishlistOccasion.Other,
+                null,
+                null));
         await context.SaveChangesAsync(cancellationToken);
         await context.Database.ExecuteSqlInterpolatedAsync(
             $"""
             INSERT INTO public.wishes
                 (id, wishlist_id, name, quantity, position, created_at)
             VALUES
-                ({wishId}, {wishlistId}, {"Reserved gift"}, {1}, {1L}, {new DateTime(2026, 9, 5, 10, 0, 0, DateTimeKind.Utc)});
+            ({wishId}, {wishlistId}, {"Reserved gift"}, {1}, {1L}, {new DateTime(
+                2026,
+                9,
+                5,
+                10,
+                0,
+                0,
+                DateTimeKind.Utc)});
             """,
             cancellationToken);
         context.WishlistParticipants.Add(WishlistParticipant.CreateMember(
-            participantId,
-            wishlistId,
-            memberId));
+                participantId,
+                wishlistId,
+                memberId));
         context.GiftReservations.Add(new GiftReservation(
-            Guid.CreateVersion7(),
-            wishlistId,
-            wishId,
-            participantId,
-            2));
+                Guid.CreateVersion7(),
+                wishlistId,
+                wishId,
+                participantId,
+                2));
         await context.SaveChangesAsync(cancellationToken);
         int quantityAfterMigration;
         PostgresException? violation;
-
         try
         {
+
             // Act
             await context.Database.MigrateAsync(cancellationToken);
             context.ChangeTracker.Clear();
@@ -806,8 +811,7 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
                 .Where(wish => wish.Id == wishId)
                 .Select(wish => wish.Quantity)
                 .SingleAsync(cancellationToken);
-            violation = await Assert.ThrowsAsync<PostgresException>(() =>
-                context.Database.ExecuteSqlInterpolatedAsync(
+            violation = await Assert.ThrowsAsync<PostgresException>(() => context.Database.ExecuteSqlInterpolatedAsync(
                     $"UPDATE public.wishes SET quantity = {1} WHERE id = {wishId};",
                     cancellationToken));
             await context.Database.MigrateAsync(
@@ -846,7 +850,9 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
         await using var scope = provider.CreateAsyncScope();
         var context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
         await context.Database.MigrateAsync(cancellationToken);
-        var suffix = Guid.CreateVersion7().ToString("N");
+        var suffix = Guid
+            .CreateVersion7()
+            .ToString("N");
         var email = $"rollback-{suffix}@example.test";
         var member = new MonKadoUser
         {
@@ -902,9 +908,9 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
                 now));
         await context.SaveChangesAsync(cancellationToken);
         IReadOnlyList<string> remainingKinds;
-
         try
         {
+
             // Act
             await context.Database.MigrateAsync(
                 "20260822180349_UseMemberXminVersion",
@@ -979,21 +985,21 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
                 available_at,
                 attempt_count)
             VALUES (
-                {messageId},
-                {memberId},
-                {request.Id},
-                {request.NewEmail},
+            {messageId},
+            {memberId},
+            {request.Id},
+            {request.NewEmail},
                 'EMAIL_CHANGE_CONFIRMATION',
-                {now},
-                {now},
-                {0});
+            {now},
+            {now},
+            {0});
             """,
             cancellationToken);
         string? snapshotAfterUp;
         string? snapshotAfterDown;
-
         try
         {
+
             // Act
             await context.Database.MigrateAsync(cancellationToken);
             snapshotAfterUp = await context.AuthenticationEmailOutboxMessages
@@ -1033,7 +1039,9 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
         await context.Database.MigrateAsync(
             "20260821115421_AddAuditableUtcDates",
             cancellationToken);
-        var suffix = Guid.NewGuid().ToString("N");
+        var suffix = Guid
+            .NewGuid()
+            .ToString("N");
         var userId = Guid.NewGuid();
         var sessionId = Guid.NewGuid();
         var now = DateTime.UtcNow;
@@ -1058,19 +1066,19 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
                 lockout_enabled,
                 access_failed_count)
             VALUES (
-                {userId},
-                {displayName},
-                {now},
-                {1},
-                {email},
-                {normalizedEmail},
-                {email},
-                {normalizedEmail},
-                {true},
-                {false},
-                {false},
-                {true},
-                {0});
+            {userId},
+            {displayName},
+            {now},
+            {1},
+            {email},
+            {normalizedEmail},
+            {email},
+            {normalizedEmail},
+            {true},
+            {false},
+            {false},
+            {true},
+            {0});
             """,
             cancellationToken);
         await context.Database.ExecuteSqlInterpolatedAsync(
@@ -1083,12 +1091,12 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
                 renewed_at,
                 expires_at)
             VALUES (
-                {sessionId},
-                {userId},
-                {protectedTicket},
-                {now},
-                {now},
-                {now.AddHours(8)});
+            {sessionId},
+            {userId},
+            {protectedTicket},
+            {now},
+            {now},
+            {now.AddHours(8)});
             """,
             cancellationToken);
 
@@ -1097,8 +1105,8 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
 
         // Assert
         Assert.Empty(await context.AuthenticationSessions
-            .AsNoTracking()
-            .ToArrayAsync(cancellationToken));
+                .AsNoTracking()
+                .ToArrayAsync(cancellationToken));
     }
 
     [Fact]
@@ -1138,25 +1146,24 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
                 lockout_enabled,
                 access_failed_count)
             VALUES (
-                {userId},
-                {"Migration test"},
-                {createdAt},
-                {1},
-                {"rollback@example.test"},
-                {"ROLLBACK@EXAMPLE.TEST"},
-                {"rollback@example.test"},
-                {"ROLLBACK@EXAMPLE.TEST"},
-                {true},
-                {false},
-                {false},
-                {true},
-                {0});
+            {userId},
+            {"Migration test"},
+            {createdAt},
+            {1},
+            {"rollback@example.test"},
+            {"ROLLBACK@EXAMPLE.TEST"},
+            {"rollback@example.test"},
+            {"ROLLBACK@EXAMPLE.TEST"},
+            {true},
+            {false},
+            {false},
+            {true},
+            {0});
             """,
             cancellationToken);
 
         // Act
         DateTime updatedAt;
-
         try
         {
             await context.Database.MigrateAsync(
@@ -1171,6 +1178,7 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
         {
             await context.Database.MigrateAsync(cancellationToken);
         }
+
         var hasNoDefault = await HasNoUserUpdatedAtDefaultAsync(
             context,
             cancellationToken);
@@ -1215,19 +1223,19 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
                 lockout_enabled,
                 access_failed_count)
             VALUES (
-                {memberId},
-                {"Existing member"},
-                {now},
-                {1},
-                {"existing@example.test"},
-                {"EXISTING@EXAMPLE.TEST"},
-                {"existing@example.test"},
-                {"EXISTING@EXAMPLE.TEST"},
-                {true},
-                {false},
-                {false},
-                {true},
-                {0});
+            {memberId},
+            {"Existing member"},
+            {now},
+            {1},
+            {"existing@example.test"},
+            {"EXISTING@EXAMPLE.TEST"},
+            {"existing@example.test"},
+            {"EXISTING@EXAMPLE.TEST"},
+            {true},
+            {false},
+            {false},
+            {true},
+            {0});
             """,
             cancellationToken);
 
@@ -1238,8 +1246,8 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
         var role = await context.Roles
             .AsNoTracking()
             .SingleAsync(
-                value => value.Id == RoleIds.Member,
-                cancellationToken);
+            value => value.Id == RoleIds.Member,
+            cancellationToken);
         Assert.Equal(
             RoleNames.Member,
             role.Name);
@@ -1258,22 +1266,21 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
         var member = await context.Users
             .AsNoTracking()
             .SingleAsync(
-                value => value.Id == memberId,
-                cancellationToken);
+            value => value.Id == memberId,
+            cancellationToken);
         Assert.NotEqual(
             0u,
             member.Version);
-
         await context.Database.MigrateAsync(
             "20260821191432_ReplaceAuthenticationTicketsWithRefreshSessions",
             cancellationToken);
         Assert.Empty(await context.Roles
-            .AsNoTracking()
-            .Where(value => value.Id == RoleIds.Member)
-            .ToArrayAsync(cancellationToken));
+                .AsNoTracking()
+                .Where(value => value.Id == RoleIds.Member)
+                .ToArrayAsync(cancellationToken));
         Assert.Empty(await context.UserRoles
-            .AsNoTracking()
-            .ToArrayAsync(cancellationToken));
+                .AsNoTracking()
+                .ToArrayAsync(cancellationToken));
     }
 
     [Fact]
@@ -1317,18 +1324,18 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
                 lockout_enabled,
                 access_failed_count)
             VALUES (
-                {memberId},
-                {"Google migration"},
-                {createdAt},
-                {email},
-                {normalizedEmail},
-                {email},
-                {normalizedEmail},
-                {true},
-                {false},
-                {false},
-                {true},
-                {0});
+            {memberId},
+            {"Google migration"},
+            {createdAt},
+            {email},
+            {normalizedEmail},
+            {email},
+            {normalizedEmail},
+            {true},
+            {false},
+            {false},
+            {true},
+            {0});
             """,
             cancellationToken);
         await context.Database.ExecuteSqlInterpolatedAsync(
@@ -1339,15 +1346,15 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
                 provider_display_name,
                 user_id)
             VALUES (
-                {"Google"},
-                {subject},
-                {"Google"},
-                {memberId});
+            {"Google"},
+            {subject},
+            {"Google"},
+            {memberId});
             """,
             cancellationToken);
-
         try
         {
+
             // Act
             await context.Database.MigrateAsync(cancellationToken);
             var subjectAfterUp = await GetGoogleSubjectAsync(
@@ -1411,29 +1418,37 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
             member.Email,
             createdAt);
         context.Users.Add(member);
-        context.AuthenticationEmailOutboxMessages.Add(message);
         await context.SaveChangesAsync(cancellationToken);
+        // The historical schema intentionally predates the current outbox model.
+        await context.Database.ExecuteSqlInterpolatedAsync(
+            $"""
+            INSERT INTO public.authentication_email_outbox
+                (id, user_id, recipient_email, kind, created_at, available_at, attempt_count)
+            VALUES ({message.Id}, {member.Id}, {member.Email},
+            'PASSWORD_CHANGED_SECURITY_NOTIFICATION', {createdAt}, {createdAt}, 0)
+            """,
+            cancellationToken);
         await context.AuthenticationEmailOutboxMessages
             .Where(value => value.Id == message.Id)
             .ExecuteUpdateAsync(
-                setters => setters.SetProperty(
-                    value => value.ProcessedAt,
-                    createdAt.AddMinutes(1)),
-                cancellationToken);
+            setters => setters.SetProperty(
+                value => value.ProcessedAt,
+                createdAt.AddMinutes(1)),
+            cancellationToken);
         bool rowExistsAfterUp;
         bool rowExistsAfterDown;
         bool indexExistsAfterUp;
         bool indexExistsAfterDown;
-
         try
         {
+
             // Act
             await context.Database.MigrateAsync(cancellationToken);
             rowExistsAfterUp = await context.AuthenticationEmailOutboxMessages
                 .AsNoTracking()
                 .AnyAsync(
-                    value => value.Id == message.Id,
-                    cancellationToken);
+                value => value.Id == message.Id,
+                cancellationToken);
             var indexesAfterUp = await GetPublicIndexesAsync(
                 context,
                 cancellationToken);
@@ -1446,8 +1461,8 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
             rowExistsAfterDown = await context.AuthenticationEmailOutboxMessages
                 .AsNoTracking()
                 .AnyAsync(
-                    value => value.Id == message.Id,
-                    cancellationToken);
+                value => value.Id == message.Id,
+                cancellationToken);
             var indexesAfterDown = await GetPublicIndexesAsync(
                 context,
                 cancellationToken);
@@ -1492,8 +1507,8 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
         {
             LoginProvider = "Google",
             ProviderKey = new string(
-                'S',
-                255),
+                    'S',
+                    255),
             ProviderDisplayName = "Google",
             UserId = member.Id
         });
@@ -1519,8 +1534,8 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
                 .AsNoTracking()
                 .Select(login => login.ProviderKey.Length)
                 .SingleAsync(
-                    loginLength => loginLength == 255,
-                    cancellationToken));
+                loginLength => loginLength == 255,
+                cancellationToken));
         Task rollbackAction() => context.Database.MigrateAsync(
             "20260823172356_AddMemberPasswordResets",
             cancellationToken);
@@ -1573,32 +1588,39 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
                 "history-member@example.test",
                 "History member"));
         context.Wishlists.Add(new Wishlist(
-            wishlistId,
-            ownerId,
-            "Birthday",
-            "BIRTHDAY",
-            WishlistOccasion.Birthday,
-            null,
-            null));
+                wishlistId,
+                ownerId,
+                "Birthday",
+                "BIRTHDAY",
+                WishlistOccasion.Birthday,
+                null,
+                null));
         await context.SaveChangesAsync(cancellationToken);
         await context.Database.ExecuteSqlInterpolatedAsync(
             $"""
             INSERT INTO public.wishes
                 (id, wishlist_id, name, quantity, position, created_at)
             VALUES
-                ({wishId}, {wishlistId}, {"Book"}, {3}, {1L}, {new DateTime(2026, 9, 5, 10, 0, 0, DateTimeKind.Utc)});
+            ({wishId}, {wishlistId}, {"Book"}, {3}, {1L}, {new DateTime(
+                2026,
+                9,
+                5,
+                10,
+                0,
+                0,
+                DateTimeKind.Utc)});
             """,
             cancellationToken);
         context.WishlistParticipants.Add(WishlistParticipant.CreateMember(
-            participantId,
-            wishlistId,
-            memberId));
+                participantId,
+                wishlistId,
+                memberId));
         context.GiftReservations.Add(new GiftReservation(
-            reservationId,
-            wishlistId,
-            wishId,
-            participantId,
-            2));
+                reservationId,
+                wishlistId,
+                wishId,
+                participantId,
+                2));
         await context.SaveChangesAsync(cancellationToken);
         context.ChangeTracker.Clear();
 
@@ -1647,6 +1669,7 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
         string email,
         string displayName)
     {
+
         return new MonKadoUser
         {
             Id = id,
@@ -1656,7 +1679,9 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
             NormalizedEmail = email.ToUpperInvariant(),
             EmailConfirmed = true,
             DisplayName = displayName,
-            SecurityStamp = Guid.CreateVersion7().ToString()
+            SecurityStamp = Guid
+                .CreateVersion7()
+                .ToString()
         };
     }
 
@@ -1668,16 +1693,14 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
 
         if (connection.State != System.Data.ConnectionState.Open)
             await connection.OpenAsync(cancellationToken);
-
         await using var command = connection.CreateCommand();
-        command.CommandText =
-            """
+        command.CommandText = """
             SELECT column_name
             FROM information_schema.columns
             WHERE table_schema = 'public'
               AND table_name = 'authentication_email_outbox'
             ORDER BY column_name;
-            """;
+        """;
         var columns = new List<string>();
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         while (await reader.ReadAsync(cancellationToken))
@@ -1709,14 +1732,12 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
 
         if (connection.State != System.Data.ConnectionState.Open)
             await connection.OpenAsync(cancellationToken);
-
         await using var command = connection.CreateCommand();
-        command.CommandText =
-            """
+        command.CommandText = """
             SELECT kind
             FROM public.authentication_email_outbox
             ORDER BY kind;
-            """;
+        """;
         var kinds = new List<string>();
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         while (await reader.ReadAsync(cancellationToken))
@@ -1735,16 +1756,14 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
 
         if (connection.State != System.Data.ConnectionState.Open)
             await connection.OpenAsync(cancellationToken);
-
         await using var command = connection.CreateCommand();
-        command.CommandText =
-            """
+        command.CommandText = """
             SELECT column_name
             FROM information_schema.columns
             WHERE table_schema = 'public'
               AND table_name = 'authentication_sessions'
             ORDER BY column_name;
-            """;
+        """;
         var columns = new List<string>();
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         while (await reader.ReadAsync(cancellationToken))
@@ -1763,16 +1782,14 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
 
         if (connection.State != System.Data.ConnectionState.Open)
             await connection.OpenAsync(cancellationToken);
-
         await using var command = connection.CreateCommand();
-        command.CommandText =
-            """
+        command.CommandText = """
             SELECT column_name
             FROM information_schema.columns
             WHERE table_schema = 'public'
               AND table_name = 'member_email_change_requests'
             ORDER BY column_name;
-            """;
+        """;
         var columns = new List<string>();
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         while (await reader.ReadAsync(cancellationToken))
@@ -1787,7 +1804,6 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
     {
         var configuration = new ConfigurationManager();
         configuration["ConnectionStrings:PostgreSql"] = fixture.Container.GetConnectionString();
-
         var services = new ServiceCollection();
         services.ConfigureInfrastructureInjection(configuration);
 
@@ -1802,17 +1818,14 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
 
         if (connection.State != System.Data.ConnectionState.Open)
             await connection.OpenAsync(cancellationToken);
-
         await using var command = connection.CreateCommand();
-        command.CommandText =
-            """
+        command.CommandText = """
             SELECT table_name
             FROM information_schema.tables
             WHERE table_schema = 'public'
               AND table_type = 'BASE TABLE'
             ORDER BY table_name;
-            """;
-
+        """;
         var tables = new List<string>();
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         while (await reader.ReadAsync(cancellationToken))
@@ -1831,16 +1844,13 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
 
         if (connection.State != System.Data.ConnectionState.Open)
             await connection.OpenAsync(cancellationToken);
-
         await using var command = connection.CreateCommand();
-        command.CommandText =
-            """
+        command.CommandText = """
             SELECT constraint_name
             FROM information_schema.table_constraints
             WHERE constraint_schema = 'public'
             ORDER BY constraint_name;
-            """;
-
+        """;
         var constraints = new List<string>();
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         while (await reader.ReadAsync(cancellationToken))
@@ -1859,16 +1869,13 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
 
         if (connection.State != System.Data.ConnectionState.Open)
             await connection.OpenAsync(cancellationToken);
-
         await using var command = connection.CreateCommand();
-        command.CommandText =
-            """
+        command.CommandText = """
             SELECT indexname
             FROM pg_indexes
             WHERE schemaname = 'public'
             ORDER BY indexname;
-            """;
-
+        """;
         var indexes = new List<string>();
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         while (await reader.ReadAsync(cancellationToken))
@@ -1887,19 +1894,16 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
 
         if (connection.State != System.Data.ConnectionState.Open)
             await connection.OpenAsync(cancellationToken);
-
         await using var command = connection.CreateCommand();
-        command.CommandText =
-            """
+        command.CommandText = """
             SELECT is_nullable = 'YES'
             FROM information_schema.columns
             WHERE table_schema = 'public'
               AND table_name = 'users'
               AND column_name = 'updated_at';
-            """;
+        """;
 
-        return (bool)(await command.ExecuteScalarAsync(cancellationToken)
-            ?? throw new InvalidOperationException("The users.updated_at column is missing."));
+        return (bool)(await command.ExecuteScalarAsync(cancellationToken) ?? throw new InvalidOperationException("The users.updated_at column is missing."));
     }
 
     private static async Task<DateTime> GetUserUpdatedAtAsync(
@@ -1911,21 +1915,18 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
 
         if (connection.State != System.Data.ConnectionState.Open)
             await connection.OpenAsync(cancellationToken);
-
         await using var command = connection.CreateCommand();
-        command.CommandText =
-            """
+        command.CommandText = """
             SELECT updated_at
             FROM public.users
             WHERE id = @user_id;
-            """;
+        """;
         var parameter = command.CreateParameter();
         parameter.ParameterName = "user_id";
         parameter.Value = userId;
         command.Parameters.Add(parameter);
 
-        return (DateTime)(await command.ExecuteScalarAsync(cancellationToken)
-            ?? throw new InvalidOperationException("The migration test user is missing."));
+        return (DateTime)(await command.ExecuteScalarAsync(cancellationToken) ?? throw new InvalidOperationException("The migration test user is missing."));
     }
 
     private static async Task<bool> HasNoUserUpdatedAtDefaultAsync(
@@ -1936,19 +1937,16 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
 
         if (connection.State != System.Data.ConnectionState.Open)
             await connection.OpenAsync(cancellationToken);
-
         await using var command = connection.CreateCommand();
-        command.CommandText =
-            """
+        command.CommandText = """
             SELECT column_default IS NULL
             FROM information_schema.columns
             WHERE table_schema = 'public'
               AND table_name = 'users'
               AND column_name = 'updated_at';
-            """;
+        """;
 
-        return (bool)(await command.ExecuteScalarAsync(cancellationToken)
-            ?? throw new InvalidOperationException("The users.updated_at column is missing."));
+        return (bool)(await command.ExecuteScalarAsync(cancellationToken) ?? throw new InvalidOperationException("The users.updated_at column is missing."));
     }
 
     private static async Task<bool> HasUserVersionColumnAsync(
@@ -1959,20 +1957,17 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
 
         if (connection.State != System.Data.ConnectionState.Open)
             await connection.OpenAsync(cancellationToken);
-
         await using var command = connection.CreateCommand();
-        command.CommandText =
-            """
+        command.CommandText = """
             SELECT EXISTS (
                 SELECT 1
                 FROM information_schema.columns
                 WHERE table_schema = 'public'
                   AND table_name = 'users'
                   AND column_name = 'version');
-            """;
+        """;
 
-        return (bool)(await command.ExecuteScalarAsync(cancellationToken)
-            ?? throw new InvalidOperationException("The users table could not be inspected."));
+        return (bool)(await command.ExecuteScalarAsync(cancellationToken) ?? throw new InvalidOperationException("The users table could not be inspected."));
     }
 
     private static async Task<bool> HasWishQuantityColumnAsync(
@@ -1983,20 +1978,17 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
 
         if (connection.State != System.Data.ConnectionState.Open)
             await connection.OpenAsync(cancellationToken);
-
         await using var command = connection.CreateCommand();
-        command.CommandText =
-            """
+        command.CommandText = """
             SELECT EXISTS (
                 SELECT 1
                 FROM information_schema.columns
                 WHERE table_schema = 'public'
                   AND table_name = 'wishes'
                   AND column_name = 'quantity');
-            """;
+        """;
 
-        return (bool)(await command.ExecuteScalarAsync(cancellationToken)
-            ?? throw new InvalidOperationException("The wishes table could not be inspected."));
+        return (bool)(await command.ExecuteScalarAsync(cancellationToken) ?? throw new InvalidOperationException("The wishes table could not be inspected."));
     }
 
     private static async Task<bool> HasWishQuantityDefaultAsync(
@@ -2007,18 +1999,15 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
 
         if (connection.State != System.Data.ConnectionState.Open)
             await connection.OpenAsync(cancellationToken);
-
         await using var command = connection.CreateCommand();
-        command.CommandText =
-            """
+        command.CommandText = """
             SELECT column_default IS NOT NULL
             FROM information_schema.columns
             WHERE table_schema = 'public'
               AND table_name = 'wishes'
               AND column_name = 'quantity';
-            """;
+        """;
 
-        return (bool)(await command.ExecuteScalarAsync(cancellationToken)
-            ?? throw new InvalidOperationException("The wishes.quantity column is missing."));
+        return (bool)(await command.ExecuteScalarAsync(cancellationToken) ?? throw new InvalidOperationException("The wishes.quantity column is missing."));
     }
 }

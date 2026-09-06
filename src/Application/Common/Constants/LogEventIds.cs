@@ -1,17 +1,28 @@
 using System.Diagnostics.CodeAnalysis;
 
 namespace JennGllg.Fr.MonKado.Back.Application.Common.Constants;
+
 /// <summary>
 /// Represents log event ids.
 /// </summary>
-
 [ExcludeFromCodeCoverage]
 public static class LogEventIds
 {
+    #region Account
+
+    /// <summary>Identifies delivery of an account deletion confirmation.</summary>
+    public const int AccountDeletionConfirmationSent = 1120;
+    /// <summary>Identifies AccountDeletionRequestStarted.</summary>
+    public const int AccountDeletionRequestStarted = 1121;
+    /// <summary>Identifies AccountDeletionRequested.</summary>
+    public const int AccountDeletionRequested = 1122;
+    /// <summary>Identifies AccountDeletionStarted.</summary>
+    public const int AccountDeletionStarted = 1123;
+    /// <summary>Identifies AccountDeleted.</summary>
+    public const int AccountDeleted = 1124;
     /// <summary>
     /// Identifies authentication email delivery disabled.
     /// </summary>
-    #region Account
 
     public const int AuthenticationEmailDeliveryDisabled = 1000;
     /// <summary>
@@ -219,119 +230,95 @@ public static class LogEventIds
     /// </summary>
     public const int RefreshSessionCompleted = 1109;
     #endregion
-
     #region Wishlist
-
     /// <summary>
     /// Identifies the start of a wishlist creation.
     /// </summary>
     public const int WishlistCreationStarted = 2000;
-
     /// <summary>
     /// Identifies a created wishlist.
     /// </summary>
     public const int WishlistCreated = 2001;
-
     /// <summary>
     /// Identifies the start of a private wishlist retrieval.
     /// </summary>
     public const int WishlistRetrievalStarted = 2002;
-
     /// <summary>
     /// Identifies a retrieved private wishlist.
     /// </summary>
     public const int WishlistRetrieved = 2003;
-
     /// <summary>
     /// Identifies the start of an owned wishlist collection retrieval.
     /// </summary>
     public const int WishlistCollectionRetrievalStarted = 2004;
-
     /// <summary>
     /// Identifies a retrieved owned wishlist collection.
     /// </summary>
     public const int WishlistCollectionRetrieved = 2005;
-
     /// <summary>
     /// Identifies the start of a private wishlist update.
     /// </summary>
     public const int WishlistUpdateStarted = 2006;
-
     /// <summary>
     /// Identifies an updated private wishlist.
     /// </summary>
     public const int WishlistUpdated = 2007;
-
     /// <summary>
     /// Identifies the start of a private wishlist deletion.
     /// </summary>
     public const int WishlistDeletionStarted = 2008;
-
     /// <summary>
     /// Identifies a deleted private wishlist.
     /// </summary>
     public const int WishlistDeleted = 2009;
-
     /// <summary>
     /// Identifies the start of a gift wish creation.
     /// </summary>
     public const int WishCreationStarted = 2010;
-
     /// <summary>
     /// Identifies a created gift wish.
     /// </summary>
     public const int WishCreated = 2011;
-
     /// <summary>
     /// Identifies the start of a private gift wish retrieval.
     /// </summary>
     public const int WishRetrievalStarted = 2012;
-
     /// <summary>
     /// Identifies a retrieved private gift wish.
     /// </summary>
     public const int WishRetrieved = 2013;
-
     /// <summary>
     /// Identifies the start of a gift wish update.
     /// </summary>
     public const int WishUpdateStarted = 2014;
-
     /// <summary>
     /// Identifies an updated gift wish.
     /// </summary>
     public const int WishUpdated = 2015;
-
     /// <summary>
     /// Identifies the start of a gift wish deletion.
     /// </summary>
     public const int WishDeletionStarted = 2016;
-
     /// <summary>
     /// Identifies a deleted gift wish.
     /// </summary>
     public const int WishDeleted = 2017;
-
     /// <summary>
     /// Identifies the start of a gift wish collection retrieval.
     /// </summary>
     public const int WishCollectionRetrievalStarted = 2018;
-
     /// <summary>
     /// Identifies a retrieved gift wish collection.
     /// </summary>
     public const int WishCollectionRetrieved = 2019;
-
     /// <summary>
     /// Identifies the start of a gift wish reorder.
     /// </summary>
     public const int WishReorderStarted = 2020;
-
     /// <summary>
     /// Identifies a reordered gift wish collection.
     /// </summary>
     public const int WishReordered = 2021;
-
     /// <summary>Identifies the start of share-link creation.</summary>
     public const int WishlistShareLinkCreationStarted = 2022;
     /// <summary>Identifies a created share link.</summary>
@@ -364,77 +351,52 @@ public static class LogEventIds
     public const int ExpiredGuestSessionsDeleted = 2036;
     /// <summary>Identifies an expired guest-session cleanup failure.</summary>
     public const int ExpiredGuestSessionCleanupFailed = 2037;
-
     /// <summary>Identifies the start of a gift-reservation mutation.</summary>
     public const int GiftReservationMutationStarted = 2038;
-
     /// <summary>Identifies a created or replaced gift reservation.</summary>
     public const int GiftReservationMutated = 2039;
-
     /// <summary>Identifies the start of a current gift-reservation retrieval.</summary>
     public const int GiftReservationRetrievalStarted = 2040;
-
     /// <summary>Identifies a retrieved current gift reservation.</summary>
     public const int GiftReservationRetrieved = 2041;
-
     /// <summary>Identifies the start of a gift-reservation cancellation.</summary>
     public const int GiftReservationCancellationStarted = 2042;
-
     /// <summary>Identifies a cancelled gift reservation.</summary>
     public const int GiftReservationCancelled = 2043;
-
     /// <summary>Identifies the start of detailed public gift-wish retrieval.</summary>
     public const int SharedWishRetrievalStarted = 2044;
-
     /// <summary>Identifies a retrieved detailed public gift wish.</summary>
     public const int SharedWishRetrieved = 2045;
-
     /// <summary>Identifies the start of an anonymous wishlist report creation.</summary>
     public const int WishlistReportCreationStarted = 2046;
-
     /// <summary>Identifies a created anonymous wishlist report.</summary>
     public const int WishlistReportCreated = 2047;
-
     /// <summary>Identifies the start of a member reservation history retrieval.</summary>
     public const int GiftReservationHistoryRetrievalStarted = 2048;
-
     /// <summary>Identifies a retrieved member reservation history page.</summary>
     public const int GiftReservationHistoryRetrieved = 2049;
-
     /// <summary>Identifies the start of a gift-image add or replacement.</summary>
     public const int GiftImageUpsertStarted = 2050;
-
     /// <summary>Identifies an added, replaced, or unchanged gift image.</summary>
     public const int GiftImageUpserted = 2051;
-
     /// <summary>Identifies a failed gift-image pending-marker cleanup.</summary>
     public const int GiftImagePendingCleanupFailed = 2052;
-
     /// <summary>Identifies a physically deleted obsolete gift image.</summary>
     public const int GiftImageDeleted = 2053;
-
     /// <summary>Identifies a reconciled pending gift image.</summary>
     public const int PendingGiftImageReconciled = 2054;
-
     /// <summary>Identifies a failed gift-image cleanup cycle.</summary>
     public const int GiftImageCleanupFailed = 2055;
-
     /// <summary>Identifies the start of a gift-image removal.</summary>
     public const int GiftImageRemovalStarted = 2056;
-
     /// <summary>Identifies a removed gift-image reference.</summary>
     public const int GiftImageRemoved = 2057;
-
     /// <summary>Identifies the start of a merchant preview.</summary>
     public const int WishImportPreviewStarted = 2058;
-
     /// <summary>Identifies a completed merchant preview.</summary>
     public const int WishImportPreviewCreated = 2059;
-
     #endregion
-
     #region Technical
-
     /// <summary>
     /// Identifies expected http error.
     /// </summary>
@@ -451,6 +413,5 @@ public static class LogEventIds
     /// Identifies a completed HTTP request logged without query-string values.
     /// </summary>
     public const int HttpRequestCompleted = 9003;
-
     #endregion
 }

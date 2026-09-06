@@ -20,6 +20,7 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Service
 /// <param name="userManager">The Identity user manager.</param>
 /// <param name="sender">The authentication email sender.</param>
 /// <param name="timeProvider">The time provider.</param>
+/// <param name="deletionTokenService">The member-bound account deletion token service.</param>
 public class AuthenticationEmailDispatcher(
     MonKadoDbContext context,
     IUnitOfWork unitOfWork,
@@ -28,11 +29,11 @@ public class AuthenticationEmailDispatcher(
     IMemberEmailChangeRequestRepository emailChangeRequestRepository,
     UserManager<MonKadoUser> userManager,
     IAuthenticationEmailSender sender,
-    TimeProvider timeProvider) : IAuthenticationEmailDispatcher
+    TimeProvider timeProvider,
+    IMemberAccountDeletionTokenService deletionTokenService) : IAuthenticationEmailDispatcher
 {
     private static readonly TimeSpan _passwordResetLifetime = TimeSpan.FromHours(1);
-
-    /// <inheritdoc />
+    /// <inheritdoc/>
     public async Task<int> DispatchPendingAsync(
         Uri frontendOrigin,
         AuthenticationEmailDeliveryPolicy policy,
@@ -40,18 +41,18 @@ public class AuthenticationEmailDispatcher(
     {
         ArgumentNullException.ThrowIfNull(frontendOrigin);
         ArgumentNullException.ThrowIfNull(policy);
-
         var claimedCount = 0;
         while (claimedCount < policy.BatchSize)
         {
             var messageId = await ClaimPendingMessageAsync(
-                timeProvider.GetUtcNow().UtcDateTime,
+                timeProvider
+                    .GetUtcNow()
+                    .UtcDateTime,
                 policy.LeaseDuration,
                 cancellationToken);
 
             if (messageId is null)
                 break;
-
             await DeliverMessageAsync(
                 messageId.Value,
                 frontendOrigin,
@@ -84,8 +85,7 @@ public class AuthenticationEmailDispatcher(
         CancellationToken cancellationToken)
     {
         context.ChangeTracker.Clear();
-        await using var transaction =
-            await context.Database.BeginTransactionAsync(cancellationToken);
+        await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
         var message = await outboxRepository.GetNextForUpdateAsync(
             now,
             cancellationToken);
@@ -114,13 +114,14 @@ public class AuthenticationEmailDispatcher(
         var message = await outboxRepository.GetByIdForUpdateAsync(
             messageId,
             cancellationToken);
-        var now = timeProvider.GetUtcNow().UtcDateTime;
+        var now = timeProvider
+            .GetUtcNow()
+            .UtcDateTime;
 
         if (!CanDeliver(
             message,
             now))
             return;
-
         var deliverableMessage = message;
         try
         {
@@ -130,13 +131,19 @@ public class AuthenticationEmailDispatcher(
                 now,
                 cancellationToken);
             deliverableMessage.MarkProcessed(
-                timeProvider.GetUtcNow().UtcDateTime,
+                timeProvider
+                    .GetUtcNow()
+                    .UtcDateTime,
                 result?.ProviderMessageId);
         }
         catch (AuthenticationEmailDeliveryException exception)
         {
-            var failedAt = timeProvider.GetUtcNow().UtcDateTime;
-            var failureCategory = exception.Category.ToString().ToUpperInvariant();
+            var failedAt = timeProvider
+                .GetUtcNow()
+                .UtcDateTime;
+            var failureCategory = exception.Category
+                .ToString()
+                .ToUpperInvariant();
 
             if (deliverableMessage.AttemptCount >= policy.MaximumAttempts)
             {
@@ -167,14 +174,21 @@ public class AuthenticationEmailDispatcher(
     /// <param name="frontendOrigin">The trusted frontend origin.</param>
     /// <param name="now">The current UTC date and time.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>The provider result, or <see langword="null" /> when the message is no longer eligible.</returns>
-    /// <exception cref="AuthenticationEmailDeliveryException">Thrown when the external provider rejects delivery.</exception>
+    /// <returns>The provider result, or <see langword="null"/> when the message is no longer eligible.</returns>
+    /// <exception cref = "AuthenticationEmailDeliveryException">Thrown when the external provider rejects delivery.</exception>
     private async Task<AuthenticationEmailSendResult?> SendMessageAsync(
         AuthenticationEmailOutboxMessage message,
         Uri frontendOrigin,
         DateTime now,
         CancellationToken cancellationToken)
     {
+
+        if (message.Kind == AuthenticationEmailKind.AccountDeletionConfirmation)
+            return await SendAccountDeletionConfirmationAsync(
+                message,
+                frontendOrigin,
+                now,
+                cancellationToken);
 
         if (message.Kind == AuthenticationEmailKind.EmailConfirmation)
             return await SendAccountConfirmationAsync(
@@ -208,6 +222,51 @@ public class AuthenticationEmailDispatcher(
             cancellationToken);
     }
 
+    /// <summary>Sends a deletion link only while its durable request and account state still match.</summary>
+    /// <param name="message">The claimed message.</param>
+    /// <param name="frontendOrigin">The trusted frontend origin.</param>
+    /// <param name="now">The current UTC time.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The provider result, or null for an obsolete request.</returns>
+    private async Task<AuthenticationEmailSendResult?> SendAccountDeletionConfirmationAsync(
+        AuthenticationEmailOutboxMessage message,
+        Uri frontendOrigin,
+        DateTime now,
+        CancellationToken cancellationToken)
+    {
+        var request = await context.MemberAccountDeletionRequests
+            .AsNoTracking()
+            .SingleOrDefaultAsync(
+            candidate => candidate.Id == message.MemberAccountDeletionRequestId && candidate.MemberId == message.UserId,
+            cancellationToken);
+
+        if (request is null)
+            return null;
+        var member = await userRepository
+            .Query()
+            .SingleOrDefaultAsync(
+            candidate => candidate.Id == message.UserId,
+            cancellationToken);
+
+        if (member is null || !member.EmailConfirmed || !request.IsValid(
+            member.Email,
+            member.SecurityStamp,
+            now))
+            return null;
+        var token = deletionTokenService.Create(
+            member.Id,
+            request.Id);
+        var origin = frontendOrigin.GetLeftPart(UriPartial.Authority);
+        var url = new Uri($"{origin}/confirm-account-deletion#token={Uri.EscapeDataString(token)}");
+
+        return await sender.SendAccountDeletionConfirmationAsync(
+            new AuthenticationEmailMessage(
+                message.Id,
+                request.Email,
+                url),
+            cancellationToken);
+    }
+
     /// <summary>
     /// Sends a password reset link when the account still matches its request snapshot.
     /// </summary>
@@ -215,8 +274,8 @@ public class AuthenticationEmailDispatcher(
     /// <param name="frontendOrigin">The trusted frontend origin.</param>
     /// <param name="now">The current UTC date and time.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>The provider result, or <see langword="null" /> when the request is no longer eligible.</returns>
-    /// <exception cref="AuthenticationEmailDeliveryException">Thrown when the external provider rejects delivery.</exception>
+    /// <returns>The provider result, or <see langword="null"/> when the request is no longer eligible.</returns>
+    /// <exception cref = "AuthenticationEmailDeliveryException">Thrown when the external provider rejects delivery.</exception>
     private async Task<AuthenticationEmailSendResult?> SendPasswordResetAsync(
         AuthenticationEmailOutboxMessage message,
         Uri frontendOrigin,
@@ -224,33 +283,28 @@ public class AuthenticationEmailDispatcher(
         CancellationToken cancellationToken)
     {
 
-        if (message.RecipientEmail is not { } recipientEmail ||
-            message.SecurityStampSnapshot is not { } securityStampSnapshot ||
-            message.CreatedAt <= now.Subtract(_passwordResetLifetime))
+        if (message.RecipientEmail is not { } recipientEmail || message.SecurityStampSnapshot is not { } securityStampSnapshot || message.CreatedAt <= now.Subtract(_passwordResetLifetime))
             return null;
-
-        var user = await userRepository.Query()
+        var user = await userRepository
+            .Query()
             .SingleOrDefaultAsync(
-                candidate => candidate.Id == message.UserId,
-                cancellationToken);
+            candidate => candidate.Id == message.UserId,
+            cancellationToken);
 
-        if (user is null ||
-            !user.EmailConfirmed ||
-            !string.Equals(
-                user.Email,
-                recipientEmail,
-                StringComparison.OrdinalIgnoreCase) ||
-            !string.Equals(
-                user.SecurityStamp,
-                securityStampSnapshot,
-                StringComparison.Ordinal))
+        if (user is null || !user.EmailConfirmed || !string.Equals(
+            user.Email,
+            recipientEmail,
+            StringComparison.OrdinalIgnoreCase) || !string.Equals(
+            user.SecurityStamp,
+            securityStampSnapshot,
+            StringComparison.Ordinal))
             return null;
-
-        var tokenCreationTime = timeProvider.GetUtcNow().UtcDateTime;
+        var tokenCreationTime = timeProvider
+            .GetUtcNow()
+            .UtcDateTime;
 
         if (message.CreatedAt <= tokenCreationTime.Subtract(_passwordResetLifetime))
             return null;
-
         var token = await userManager.GeneratePasswordResetTokenAsync(user);
         var resetUrl = BuildPasswordResetUrl(
             frontendOrigin,
@@ -271,16 +325,16 @@ public class AuthenticationEmailDispatcher(
         DateTime now,
         CancellationToken cancellationToken)
     {
-        var user = await userRepository.Query()
+        var user = await userRepository
+            .Query()
             .SingleOrDefaultAsync(
-                candidate => candidate.Id == message.UserId,
-                cancellationToken);
+            candidate => candidate.Id == message.UserId,
+            cancellationToken);
 
         if (!CanReceiveAccountConfirmation(
             user,
             now))
             return null;
-
         var eligibleUser = user;
         ArgumentNullException.ThrowIfNull(eligibleUser.Email);
         var token = await userManager.GenerateEmailConfirmationTokenAsync(eligibleUser);
@@ -304,36 +358,28 @@ public class AuthenticationEmailDispatcher(
         CancellationToken cancellationToken)
     {
 
-        if (message.MemberEmailChangeRequestId is not { } requestId ||
-            message.RecipientEmail is not { } recipientEmail ||
-            message.SecurityStampSnapshot is not { } securityStampSnapshot)
+        if (message.MemberEmailChangeRequestId is not { } requestId || message.RecipientEmail is not { } recipientEmail || message.SecurityStampSnapshot is not { } securityStampSnapshot)
             return null;
-
         var request = await emailChangeRequestRepository.GetByIdAsync(
             requestId,
             cancellationToken);
-        var user = await userRepository.Query()
+        var user = await userRepository
+            .Query()
             .SingleOrDefaultAsync(
-                candidate => candidate.Id == message.UserId,
-                cancellationToken);
+            candidate => candidate.Id == message.UserId,
+            cancellationToken);
 
-        if (request is null ||
-            user is null ||
-            !request.IsActive(now) ||
-            !string.Equals(
-                user.Email,
-                request.CurrentEmail,
-                StringComparison.OrdinalIgnoreCase) ||
-            !string.Equals(
-                recipientEmail,
-                request.NewEmail,
-                StringComparison.OrdinalIgnoreCase) ||
-            !string.Equals(
-                user.SecurityStamp,
-                securityStampSnapshot,
-                StringComparison.Ordinal))
+        if (request is null || user is null || !request.IsActive(now) || !string.Equals(
+            user.Email,
+            request.CurrentEmail,
+            StringComparison.OrdinalIgnoreCase) || !string.Equals(
+            recipientEmail,
+            request.NewEmail,
+            StringComparison.OrdinalIgnoreCase) || !string.Equals(
+            user.SecurityStamp,
+            securityStampSnapshot,
+            StringComparison.Ordinal))
             return null;
-
         var purpose = MemberEmailChangeTokenPurpose.Create(
             request.Id,
             request.NormalizedNewEmail);
@@ -360,21 +406,16 @@ public class AuthenticationEmailDispatcher(
         CancellationToken cancellationToken)
     {
 
-        if (message.MemberEmailChangeRequestId is not { } requestId ||
-            message.RecipientEmail is not { } recipientEmail)
+        if (message.MemberEmailChangeRequestId is not { } requestId || message.RecipientEmail is not { } recipientEmail)
             return null;
-
         var request = await emailChangeRequestRepository.GetByIdAsync(
             requestId,
             cancellationToken);
 
-        if (request is null ||
-            request.RevokedAt is not null ||
-            (request.ConfirmedAt is null && request.ExpiresAt <= now) ||
-            !string.Equals(
-                recipientEmail,
-                request.CurrentEmail,
-                StringComparison.OrdinalIgnoreCase))
+        if (request is null || request.RevokedAt is not null || (request.ConfirmedAt is null && request.ExpiresAt <= now) || !string.Equals(
+            recipientEmail,
+            request.CurrentEmail,
+            StringComparison.OrdinalIgnoreCase))
             return null;
 
         return await sender.SendEmailChangeSecurityNotificationAsync(
@@ -390,7 +431,7 @@ public class AuthenticationEmailDispatcher(
     /// </summary>
     /// <param name="message">The claimed outbox message.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>The provider result, or <see langword="null" /> when the message cannot be delivered.</returns>
+    /// <returns>The provider result, or <see langword="null"/> when the message cannot be delivered.</returns>
     private async Task<AuthenticationEmailSendResult?> SendPasswordChangedSecurityNotificationAsync(
         AuthenticationEmailOutboxMessage message,
         CancellationToken cancellationToken)
@@ -408,29 +449,19 @@ public class AuthenticationEmailDispatcher(
     }
 
     private static bool CanReceiveAccountConfirmation(
-        [NotNullWhen(true)]
-        MonKadoUser? user,
+        [NotNullWhen(true)] MonKadoUser? user,
         DateTime now)
     {
 
-        return user is
-        {
-            EmailConfirmed: false,
-            UnconfirmedAccountExpiresAt: { } expiration
-        } && expiration > now;
+        return user is { EmailConfirmed: false, UnconfirmedAccountExpiresAt: { } expiration } && expiration > now;
     }
 
     private static bool CanDeliver(
-        [NotNullWhen(true)]
-        AuthenticationEmailOutboxMessage? message,
+        [NotNullWhen(true)] AuthenticationEmailOutboxMessage? message,
         DateTime now)
     {
 
-        return message is
-        {
-            ProcessedAt: null,
-            LockedUntil: { } lockedUntil
-        } && lockedUntil > now;
+        return message is { ProcessedAt: null, LockedUntil: { } lockedUntil } && lockedUntil > now;
     }
 
     private static Uri BuildAccountConfirmationUrl(
@@ -485,27 +516,17 @@ public class AuthenticationEmailDispatcher(
         TimeSpan? providerRetryAfter,
         AuthenticationEmailDeliveryPolicy policy)
     {
-        var slowRetry = category is
-            AuthenticationEmailFailureCategory.Authentication or
-            AuthenticationEmailFailureCategory.Permission or
-            AuthenticationEmailFailureCategory.InvalidRequest or
-            AuthenticationEmailFailureCategory.Unknown;
-        var configuredDelay = slowRetry
-            ? policy.SlowRetryDelay
-            : attemptCount switch
-            {
-                <= 1 => policy.FirstRetryDelay,
-                2 => policy.SecondRetryDelay,
-                3 => policy.ThirdRetryDelay,
-                4 => policy.FourthRetryDelay,
-                _ => policy.SubsequentRetryDelay
-            };
-        var requestedDelay = providerRetryAfter is { } retryAfter && retryAfter > configuredDelay
-            ? retryAfter
-            : configuredDelay;
+        var slowRetry = category is AuthenticationEmailFailureCategory.Authentication or AuthenticationEmailFailureCategory.Permission or AuthenticationEmailFailureCategory.InvalidRequest or AuthenticationEmailFailureCategory.Unknown;
+        var configuredDelay = slowRetry ? policy.SlowRetryDelay : attemptCount switch
+        {
+            <= 1 => policy.FirstRetryDelay,
+            2 => policy.SecondRetryDelay,
+            3 => policy.ThirdRetryDelay,
+            4 => policy.FourthRetryDelay,
+            _ => policy.SubsequentRetryDelay
+        };
+        var requestedDelay = providerRetryAfter is { } retryAfter && retryAfter > configuredDelay ? retryAfter : configuredDelay;
 
-        return requestedDelay > policy.MaximumRetryDelay
-            ? policy.MaximumRetryDelay
-            : requestedDelay;
+        return requestedDelay > policy.MaximumRetryDelay ? policy.MaximumRetryDelay : requestedDelay;
     }
 }

@@ -21,10 +21,10 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 
 namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Configurations;
+
 /// <summary>
 /// Represents infrastructure injection configuration.
 /// </summary>
-
 public static class InfrastructureInjectionConfiguration
 {
     private const string ConnectionStringName = "PostgreSql";
@@ -34,7 +34,6 @@ public static class InfrastructureInjectionConfiguration
     /// <param name="services">The services.</param>
     /// <param name="configuration">The configuration.</param>
     /// <returns>The operation result.</returns>
-
     public static IServiceCollection ConfigureInfrastructureInjection(
         this IServiceCollection services,
         IConfiguration configuration)
@@ -44,20 +43,17 @@ public static class InfrastructureInjectionConfiguration
         if (string.IsNullOrWhiteSpace(connectionString))
         {
 
-            throw new InvalidOperationException(
-                $"Connection string '{ConnectionStringName}' is required. " +
-                $"Configure it with 'ConnectionStrings:{ConnectionStringName}'.");
+            throw new InvalidOperationException($"Connection string '{ConnectionStringName}' is required. " + $"Configure it with 'ConnectionStrings:{ConnectionStringName}'.");
         }
 
         services.TryAddSingleton(TimeProvider.System);
         services.AddSingleton<AuditableEntityInterceptor>();
         services.AddDbContextPool<MonKadoDbContext>((
-            provider,
-            options) =>
-            options
+                provider,
+                options) => options
                 .UseNpgsql(
-                    connectionString,
-                    npgsqlOptions =>
+                connectionString,
+                npgsqlOptions =>
                 {
                     npgsqlOptions.MigrationsAssembly(typeof(MonKadoDbContext).Assembly.FullName);
                     npgsqlOptions.MigrationsHistoryTable(
@@ -66,7 +62,6 @@ public static class InfrastructureInjectionConfiguration
                 })
                 .UseSnakeCaseNamingConvention()
                 .AddInterceptors(provider.GetRequiredService<AuditableEntityInterceptor>()));
-
         services
             .AddIdentityCore<MonKadoUser>(options =>
             {
@@ -88,17 +83,14 @@ public static class InfrastructureInjectionConfiguration
             .AddPasswordValidator<MaximumPasswordLengthValidator<MonKadoUser>>();
         services.RemoveAll<ILookupNormalizer>();
         services.AddSingleton<UpperInvariantLookupNormalizer>();
-        services.AddSingleton<ILookupNormalizer>(provider =>
-            new InvariantFallbackLookupNormalizer(
-                provider.GetRequiredService<UpperInvariantLookupNormalizer>()));
+        services.AddSingleton<ILookupNormalizer>(provider => new InvariantFallbackLookupNormalizer(provider.GetRequiredService<UpperInvariantLookupNormalizer>()));
         services.Configure<PasswordHasherOptions>(options => options.IterationCount = 220_000);
         services.AddSingleton<IValidateOptions<GuestSessionOptions>, GuestSessionOptionsValidator>();
-        services.AddOptions<GuestSessionOptions>()
+        services
+            .AddOptions<GuestSessionOptions>()
             .Bind(configuration.GetSection(GuestSessionOptions.SectionName))
             .ValidateOnStart();
-
-        services.AddScoped<IUnitOfWork>(provider =>
-            provider.GetRequiredService<MonKadoDbContext>());
+        services.AddScoped<IUnitOfWork>(provider => provider.GetRequiredService<MonKadoDbContext>());
         services.AddScoped<IMonKadoUserRepository, MonKadoUserRepository>();
         services.AddScoped<IMemberRepository, MemberRepository>();
         services.AddScoped<IAuthenticationEmailOutboxRepository, AuthenticationEmailOutboxRepository>();
@@ -130,6 +122,14 @@ public static class InfrastructureInjectionConfiguration
         services.AddScoped<IMemberEmailChangeService, MemberEmailChangeService>();
         services.AddScoped<IMemberPasswordService, MemberPasswordService>();
         services.AddScoped<IPasswordResetService, PasswordResetService>();
+        services.AddScoped<IMemberAccountDeletionService, MemberAccountDeletionService>();
+        services.AddScoped<IAuthenticatedMemberValidationService, AuthenticatedMemberValidationService>();
+        services.AddScoped<IMemberAccountDeletionTokenService, MemberAccountDeletionTokenService>();
+        services.AddSingleton<IValidateOptions<MemberAccountDeletionOptions>, MemberAccountDeletionOptionsValidator>();
+        services
+            .AddOptions<MemberAccountDeletionOptions>()
+            .Bind(configuration.GetSection("MemberAccountDeletion"))
+            .ValidateOnStart();
         services.AddScoped<IExpiredAuthenticationSessionCleanup, ExpiredAuthenticationSessionCleanup>();
         services.AddScoped<IProcessedAuthenticationEmailCleanup, ProcessedAuthenticationEmailCleanup>();
         services.AddScoped<IWishlistService, WishlistService>();
@@ -144,18 +144,16 @@ public static class InfrastructureInjectionConfiguration
         services.AddScoped<IGiftReservationHistoryService, GiftReservationHistoryService>();
         services.AddScoped<IWishlistReportService, WishlistReportService>();
         services.AddScoped<IExpiredGuestSessionCleanup, ExpiredGuestSessionCleanup>();
-        services.AddScoped<
-            IExpiredMemberEmailChangeRequestCleanup,
-            ExpiredMemberEmailChangeRequestCleanup>();
+        services.AddScoped<IExpiredMemberEmailChangeRequestCleanup, ExpiredMemberEmailChangeRequestCleanup>();
 
         return services;
     }
+
     /// <summary>
     /// Executes the configure authentication email delivery operation.
     /// </summary>
     /// <param name="services">The services.</param>
     /// <returns>The operation result.</returns>
-
     public static IServiceCollection ConfigureAuthenticationEmailDelivery(this IServiceCollection services)
     {
         services.AddScoped<IAuthenticationEmailDispatcher, AuthenticationEmailDispatcher>();

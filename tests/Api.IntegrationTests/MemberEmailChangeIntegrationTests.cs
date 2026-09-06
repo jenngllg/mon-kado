@@ -25,7 +25,6 @@ public class MemberEmailChangeIntegrationTests(PostgreSqlContainerFixture fixtur
 {
     private const string CurrentPassword = "a long secure password";
     private static readonly DateTimeOffset _referenceTime = DateTimeOffset.UtcNow;
-
     [Fact]
     public async Task UpdateEmailAsync_WhenRequestIsValid_PersistsRequestAndBothRecipientSnapshots()
     {
@@ -87,16 +86,10 @@ public class MemberEmailChangeIntegrationTests(PostgreSqlContainerFixture fixtur
             messages.Length);
         Assert.Contains(
             messages,
-            message =>
-                message.Kind == AuthenticationEmailKind.EmailChangeConfirmation &&
-                message.RecipientEmail == "new@example.fr" &&
-                message.MemberEmailChangeRequestId == request.Id);
+            message => message.Kind == AuthenticationEmailKind.EmailChangeConfirmation && message.RecipientEmail == "new@example.fr" && message.MemberEmailChangeRequestId == request.Id);
         Assert.Contains(
             messages,
-            message =>
-                message.Kind == AuthenticationEmailKind.EmailChangeSecurityNotification &&
-                message.RecipientEmail == "old@example.fr" &&
-                message.MemberEmailChangeRequestId == request.Id);
+            message => message.Kind == AuthenticationEmailKind.EmailChangeSecurityNotification && message.RecipientEmail == "old@example.fr" && message.MemberEmailChangeRequestId == request.Id);
         Assert.Equal(
             "old@example.fr",
             storedMember.Email);
@@ -173,19 +166,22 @@ public class MemberEmailChangeIntegrationTests(PostgreSqlContainerFixture fixtur
             storedMember.NormalizedUserName);
         Assert.True(storedMember.EmailConfirmed);
         AssertTimestampClose(
-            timeProvider.GetUtcNow().UtcDateTime,
+            timeProvider
+                .GetUtcNow()
+                .UtcDateTime,
             storedRequest.ConfirmedAt ?? DateTime.MinValue,
             TimeSpan.FromMilliseconds(1));
         Assert.All(
             sessions,
             session => AssertTimestampClose(
-                timeProvider.GetUtcNow().UtcDateTime,
+                timeProvider
+                    .GetUtcNow()
+                    .UtcDateTime,
                 session.RevokedAt ?? DateTime.MinValue,
                 TimeSpan.FromMilliseconds(1)));
         Assert.NotEqual(
             member.Version,
             storedMember.Version);
-
         var userManager = scope.ServiceProvider.GetRequiredService<UserManager<MonKadoUser>>();
         Assert.Null(await userManager.FindByEmailAsync("old@example.fr"));
         Assert.NotNull(await userManager.FindByEmailAsync("new@example.fr"));
@@ -220,8 +216,7 @@ public class MemberEmailChangeIntegrationTests(PostgreSqlContainerFixture fixtur
             anonymousClient,
             confirmation.RequestId,
             confirmation.Token);
-        var error = await secondResponse.Content.ReadFromJsonAsync<ErrorResponse>(
-            TestContext.Current.CancellationToken);
+        var error = await secondResponse.Content.ReadFromJsonAsync<ErrorResponse>(TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(
@@ -361,10 +356,8 @@ public class MemberEmailChangeIntegrationTests(PostgreSqlContainerFixture fixtur
         Assert.Equal(
             HttpStatusCode.PreconditionFailed,
             staleResponse.StatusCode);
-        Assert.Empty(await context.MemberEmailChangeRequests
-            .ToArrayAsync(TestContext.Current.CancellationToken));
-        Assert.Empty(await context.AuthenticationEmailOutboxMessages
-            .ToArrayAsync(TestContext.Current.CancellationToken));
+        Assert.Empty(await context.MemberEmailChangeRequests.ToArrayAsync(TestContext.Current.CancellationToken));
+        Assert.Empty(await context.AuthenticationEmailOutboxMessages.ToArrayAsync(TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -393,10 +386,8 @@ public class MemberEmailChangeIntegrationTests(PostgreSqlContainerFixture fixtur
         Assert.Equal(
             HttpStatusCode.Accepted,
             response.StatusCode);
-        Assert.Empty(await context.MemberEmailChangeRequests
-            .ToArrayAsync(TestContext.Current.CancellationToken));
-        Assert.Empty(await context.AuthenticationEmailOutboxMessages
-            .ToArrayAsync(TestContext.Current.CancellationToken));
+        Assert.Empty(await context.MemberEmailChangeRequests.ToArrayAsync(TestContext.Current.CancellationToken));
+        Assert.Empty(await context.AuthenticationEmailOutboxMessages.ToArrayAsync(TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -529,20 +520,16 @@ public class MemberEmailChangeIntegrationTests(PostgreSqlContainerFixture fixtur
         await using (var setupScope = factory.Services.CreateAsyncScope())
         {
             var context = setupScope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
-            var storedMember = await context.Users
-                .SingleAsync(
-                    candidate => candidate.Id == member.Id,
-                    TestContext.Current.CancellationToken);
-            var legacyHasher = new PasswordHasher<MonKadoUser>(
-                Microsoft.Extensions.Options.Options.Create(
-                    new PasswordHasherOptions { IterationCount = 10_000 }));
+            var storedMember = await context.Users.SingleAsync(
+                candidate => candidate.Id == member.Id,
+                TestContext.Current.CancellationToken);
+            var legacyHasher = new PasswordHasher<MonKadoUser>(Microsoft.Extensions.Options.Options.Create(new PasswordHasherOptions { IterationCount = 10_000 }));
             var legacyHash = legacyHasher.HashPassword(
                 storedMember,
                 CurrentPassword);
             storedMember.PasswordHash = legacyHash;
             await context.SaveChangesAsync(TestContext.Current.CancellationToken);
-            var currentHasher = setupScope.ServiceProvider
-                .GetRequiredService<IPasswordHasher<MonKadoUser>>();
+            var currentHasher = setupScope.ServiceProvider.GetRequiredService<IPasswordHasher<MonKadoUser>>();
             Assert.Equal(
                 PasswordVerificationResult.SuccessRehashNeeded,
                 currentHasher.VerifyHashedPassword(
@@ -600,8 +587,8 @@ public class MemberEmailChangeIntegrationTests(PostgreSqlContainerFixture fixtur
         await using var scope = factory.Services.CreateAsyncScope();
         var context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
         Assert.Empty(await context.MemberEmailChangeRequests
-            .AsNoTracking()
-            .ToArrayAsync(TestContext.Current.CancellationToken));
+                .AsNoTracking()
+                .ToArrayAsync(TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -659,14 +646,11 @@ public class MemberEmailChangeIntegrationTests(PostgreSqlContainerFixture fixtur
     public async Task EmailChangeAsync_WhenInnerNormalizerReturnsNull_UsesInvariantNormalizationThroughConfirmation()
     {
         // Arrange
-        await using var factory = await CreateMigratedFactoryAsync(
-            configureServices: services =>
+        await using var factory = await CreateMigratedFactoryAsync(configureServices: services =>
             {
                 services.RemoveAll<ILookupNormalizer>();
                 services.AddSingleton<ConditionalNullLookupNormalizer>();
-                services.AddSingleton<ILookupNormalizer>(provider =>
-                    new InvariantFallbackLookupNormalizer(
-                        provider.GetRequiredService<ConditionalNullLookupNormalizer>()));
+                services.AddSingleton<ILookupNormalizer>(provider => new InvariantFallbackLookupNormalizer(provider.GetRequiredService<ConditionalNullLookupNormalizer>()));
             });
         var member = await CreateMemberAsync(
             factory,
@@ -750,8 +734,8 @@ public class MemberEmailChangeIntegrationTests(PostgreSqlContainerFixture fixtur
         var storedMember = await context.Users
             .AsNoTracking()
             .SingleAsync(
-                candidate => candidate.Id == member.Id,
-                TestContext.Current.CancellationToken);
+            candidate => candidate.Id == member.Id,
+            TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(
@@ -766,8 +750,7 @@ public class MemberEmailChangeIntegrationTests(PostgreSqlContainerFixture fixtur
     public async Task ConfirmEmailChangeAsync_WhenTwoMembersConfirmSameEmailConcurrently_OnlyOneSucceeds()
     {
         // Arrange
-        await using var factory = await CreateMigratedFactoryAsync(
-            configureServices: services =>
+        await using var factory = await CreateMigratedFactoryAsync(configureServices: services =>
             {
                 services.AddSingleton<ConcurrentEmailChangeCoordinator>();
                 services.RemoveAll<UserManager<MonKadoUser>>();
@@ -816,23 +799,17 @@ public class MemberEmailChangeIntegrationTests(PostgreSqlContainerFixture fixtur
                 secondConfirmation.Token));
         using var firstResponse = responses[0];
         using var secondResponse = responses[1];
-        var conflictResponse = responses.Single(response =>
-            response.StatusCode == HttpStatusCode.Conflict);
-        var error = await conflictResponse.Content.ReadFromJsonAsync<ErrorResponse>(
-            TestContext.Current.CancellationToken);
+        var conflictResponse = responses.Single(response => response.StatusCode == HttpStatusCode.Conflict);
+        var error = await conflictResponse.Content.ReadFromJsonAsync<ErrorResponse>(TestContext.Current.CancellationToken);
         await using var scope = factory.Services.CreateAsyncScope();
         var context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
         var storedMembers = await context.Users
             .AsNoTracking()
-            .Where(member =>
-                member.Id == firstMember.Id ||
-                member.Id == secondMember.Id)
+            .Where(member => member.Id == firstMember.Id || member.Id == secondMember.Id)
             .ToArrayAsync(TestContext.Current.CancellationToken);
         var storedRequests = await context.MemberEmailChangeRequests
             .AsNoTracking()
-            .Where(request =>
-                request.Id == firstConfirmation.RequestId ||
-                request.Id == secondConfirmation.RequestId)
+            .Where(request => request.Id == firstConfirmation.RequestId || request.Id == secondConfirmation.RequestId)
             .ToArrayAsync(TestContext.Current.CancellationToken);
 
         // Assert
@@ -851,8 +828,7 @@ public class MemberEmailChangeIntegrationTests(PostgreSqlContainerFixture fixtur
             storedMembers.Count(member => member.NormalizedEmail == "SHARED@EXAMPLE.FR"));
         Assert.Equal(
             1,
-            storedMembers.Count(member =>
-                member.Email is "first-old@example.fr" or "second-old@example.fr"));
+            storedMembers.Count(member => member.Email is "first-old@example.fr" or "second-old@example.fr"));
         Assert.Equal(
             1,
             storedRequests.Count(request => request.ConfirmedAt is not null));
@@ -892,8 +868,7 @@ public class MemberEmailChangeIntegrationTests(PostgreSqlContainerFixture fixtur
             client,
             Guid.CreateVersion7(),
             AuthenticationEmailTokenEncoding.Encode("token"));
-        var error = await response.Content.ReadFromJsonAsync<ErrorResponse>(
-            TestContext.Current.CancellationToken);
+        var error = await response.Content.ReadFromJsonAsync<ErrorResponse>(TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(
@@ -923,10 +898,7 @@ public class MemberEmailChangeIntegrationTests(PostgreSqlContainerFixture fixtur
             CurrentPassword,
             entityTag);
         var confirmation = await CreateConfirmationAsync(factory);
-        var alteredToken = confirmation.Token[..^1] +
-            (confirmation.Token[^1] == 'A'
-                ? "B"
-                : "A");
+        var alteredToken = confirmation.Token[..^1] + (confirmation.Token[^1] == 'A' ? "B" : "A");
 
         // Act
         using var response = await ConfirmEmailChangeAsync(
@@ -943,8 +915,7 @@ public class MemberEmailChangeIntegrationTests(PostgreSqlContainerFixture fixtur
     [Theory]
     [InlineData("missing-member")]
     [InlineData("changed-current-email")]
-    public async Task ConfirmEmailChangeAsync_WhenMemberStateNoLongerMatches_ReturnsGenericBadRequest(
-        string scenario)
+    public async Task ConfirmEmailChangeAsync_WhenMemberStateNoLongerMatches_ReturnsGenericBadRequest(string scenario)
     {
         // Arrange
         await using var factory = await CreateMigratedFactoryAsync();
@@ -969,16 +940,14 @@ public class MemberEmailChangeIntegrationTests(PostgreSqlContainerFixture fixtur
                 await context.Users
                     .Where(user => user.Id == member.Id)
                     .ExecuteUpdateAsync(
-                        setters => setters.SetProperty(
-                            user => user.Email,
-                            "changed@example.fr"),
-                        TestContext.Current.CancellationToken);
+                    setters => setters.SetProperty(
+                        user => user.Email,
+                        "changed@example.fr"),
+                    TestContext.Current.CancellationToken);
 
             if (scenario == "missing-member")
             {
-                await context.Database.OpenConnectionAsync(
-                    TestContext.Current.CancellationToken);
-
+                await context.Database.OpenConnectionAsync(TestContext.Current.CancellationToken);
                 try
                 {
                     await context.Database.ExecuteSqlRawAsync(
@@ -1006,51 +975,36 @@ public class MemberEmailChangeIntegrationTests(PostgreSqlContainerFixture fixtur
 
         // Assert
         Assert.Equal(
-            HttpStatusCode.BadRequest,
+            scenario == "missing-member" ? HttpStatusCode.Unauthorized : HttpStatusCode.BadRequest,
             response.StatusCode);
+
+        if (scenario == "missing-member")
+        {
+            await using var verificationScope = factory.Services.CreateAsyncScope();
+            var service = verificationScope.ServiceProvider.GetRequiredService<IMemberEmailChangeService>();
+            Assert.False(await service.ConfirmAsync(
+                confirmation.RequestId,
+                confirmation.Token,
+                TestContext.Current.CancellationToken));
+        }
     }
 
     [Theory]
-    [InlineData(
-        "duplicate-email@example.fr",
-        HttpStatusCode.Conflict,
-        ErrorCodes.MemberEmailAlreadyUsed)]
-    [InlineData(
-        "duplicate-user-name@example.fr",
-        HttpStatusCode.Conflict,
-        ErrorCodes.MemberEmailAlreadyUsed)]
-    [InlineData(
-        "unique-violation@example.fr",
-        HttpStatusCode.Conflict,
-        ErrorCodes.MemberEmailAlreadyUsed)]
-    [InlineData(
-        "concurrency-failure@example.fr",
-        HttpStatusCode.BadRequest,
-        ErrorCodes.MemberEmailChangeInvalid)]
-    [InlineData(
-        "concurrency-exception@example.fr",
-        HttpStatusCode.BadRequest,
-        ErrorCodes.MemberEmailChangeInvalid)]
-    [InlineData(
-        "generic-failure@example.fr",
-        HttpStatusCode.InternalServerError,
-        null)]
-    [InlineData(
-        "stamp-concurrency-failure@example.fr",
-        HttpStatusCode.BadRequest,
-        ErrorCodes.MemberEmailChangeInvalid)]
-    [InlineData(
-        "stamp-generic-failure@example.fr",
-        HttpStatusCode.InternalServerError,
-        null)]
+    [InlineData("duplicate-email@example.fr", HttpStatusCode.Conflict, ErrorCodes.MemberEmailAlreadyUsed)]
+    [InlineData("duplicate-user-name@example.fr", HttpStatusCode.Conflict, ErrorCodes.MemberEmailAlreadyUsed)]
+    [InlineData("unique-violation@example.fr", HttpStatusCode.Conflict, ErrorCodes.MemberEmailAlreadyUsed)]
+    [InlineData("concurrency-failure@example.fr", HttpStatusCode.BadRequest, ErrorCodes.MemberEmailChangeInvalid)]
+    [InlineData("concurrency-exception@example.fr", HttpStatusCode.BadRequest, ErrorCodes.MemberEmailChangeInvalid)]
+    [InlineData("generic-failure@example.fr", HttpStatusCode.InternalServerError, null)]
+    [InlineData("stamp-concurrency-failure@example.fr", HttpStatusCode.BadRequest, ErrorCodes.MemberEmailChangeInvalid)]
+    [InlineData("stamp-generic-failure@example.fr", HttpStatusCode.InternalServerError, null)]
     public async Task ConfirmEmailChangeAsync_WhenIdentityCannotPersist_RollsBackAndReturnsExpectedError(
         string requestedEmail,
         HttpStatusCode expectedStatusCode,
         string? expectedErrorCode)
     {
         // Arrange
-        await using var factory = await CreateMigratedFactoryAsync(
-            configureServices: services =>
+        await using var factory = await CreateMigratedFactoryAsync(configureServices: services =>
             {
                 services.RemoveAll<UserManager<MonKadoUser>>();
                 services.AddScoped<UserManager<MonKadoUser>, FailingMemberEmailChangeUserManager>();
@@ -1074,8 +1028,7 @@ public class MemberEmailChangeIntegrationTests(PostgreSqlContainerFixture fixtur
             client,
             confirmation.RequestId,
             confirmation.Token);
-        var error = await response.Content.ReadFromJsonAsync<ErrorResponse>(
-            TestContext.Current.CancellationToken);
+        var error = await response.Content.ReadFromJsonAsync<ErrorResponse>(TestContext.Current.CancellationToken);
         await using var scope = factory.Services.CreateAsyncScope();
         var context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
         var storedMember = await context.Users
@@ -1102,30 +1055,23 @@ public class MemberEmailChangeIntegrationTests(PostgreSqlContainerFixture fixtur
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task EmailChangeAsync_WhenPostgreSqlIsUnavailable_ReturnsServiceUnavailable(
-        bool confirmsRequest)
+    public async Task EmailChangeAsync_WhenPostgreSqlIsUnavailable_ReturnsServiceUnavailable(bool confirmsRequest)
     {
         // Arrange
-        await using var factory = new PostgreSqlApiFactory(
-            "Host=127.0.0.1;Port=1;Database=mon_kado;Username=mon_kado;" +
-            "Password=unavailable;Timeout=1;Command Timeout=1;Pooling=false;SSL Mode=Disable");
-        using var client = confirmsRequest
-            ? factory.CreateClient()
-            : CreateAuthorizedClient(
-                factory,
-                Guid.CreateVersion7());
+        await using var factory = new PostgreSqlApiFactory("Host=127.0.0.1;Port=1;Database=mon_kado;Username=mon_kado;" + "Password=unavailable;Timeout=1;Command Timeout=1;Pooling=false;SSL Mode=Disable");
+        using var client = confirmsRequest ? factory.CreateClient() : CreateAuthorizedClient(
+            factory,
+            Guid.CreateVersion7());
 
         // Act
-        using var response = confirmsRequest
-            ? await ConfirmEmailChangeAsync(
-                client,
-                Guid.CreateVersion7(),
-                AuthenticationEmailTokenEncoding.Encode("token"))
-            : await RequestEmailChangeAsync(
-                client,
-                "new@example.fr",
-                CurrentPassword,
-                "\"00000001\"");
+        using var response = confirmsRequest ? await ConfirmEmailChangeAsync(
+            client,
+            Guid.CreateVersion7(),
+            AuthenticationEmailTokenEncoding.Encode("token")) : await RequestEmailChangeAsync(
+            client,
+            "new@example.fr",
+            CurrentPassword,
+            "\"00000001\"");
 
         // Assert
         Assert.Equal(
@@ -1152,8 +1098,7 @@ public class MemberEmailChangeIntegrationTests(PostgreSqlContainerFixture fixtur
             CurrentPassword,
             entityTag);
         await using var scope = factory.Services.CreateAsyncScope();
-        var cleanup = scope.ServiceProvider
-            .GetRequiredService<IExpiredMemberEmailChangeRequestCleanup>();
+        var cleanup = scope.ServiceProvider.GetRequiredService<IExpiredMemberEmailChangeRequestCleanup>();
 
         // Act
         var beforeExpiration = await cleanup.DeleteExpiredRequestsAsync(
@@ -1161,12 +1106,11 @@ public class MemberEmailChangeIntegrationTests(PostgreSqlContainerFixture fixtur
             500,
             TestContext.Current.CancellationToken);
         var context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
-        await context.AuthenticationEmailOutboxMessages
-            .ExecuteUpdateAsync(
-                setters => setters.SetProperty(
-                    message => message.ProcessedAt,
-                    _referenceTime.UtcDateTime),
-                TestContext.Current.CancellationToken);
+        await context.AuthenticationEmailOutboxMessages.ExecuteUpdateAsync(
+            setters => setters.SetProperty(
+                message => message.ProcessedAt,
+                _referenceTime.UtcDateTime),
+            TestContext.Current.CancellationToken);
         var atExpiration = await cleanup.DeleteExpiredRequestsAsync(
             _referenceTime.UtcDateTime.AddHours(24),
             500,
@@ -1179,10 +1123,8 @@ public class MemberEmailChangeIntegrationTests(PostgreSqlContainerFixture fixtur
         Assert.Equal(
             1,
             atExpiration);
-        Assert.Empty(await context.MemberEmailChangeRequests
-            .ToArrayAsync(TestContext.Current.CancellationToken));
-        Assert.Empty(await context.AuthenticationEmailOutboxMessages
-            .ToArrayAsync(TestContext.Current.CancellationToken));
+        Assert.Empty(await context.MemberEmailChangeRequests.ToArrayAsync(TestContext.Current.CancellationToken));
+        Assert.Empty(await context.AuthenticationEmailOutboxMessages.ToArrayAsync(TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -1204,8 +1146,7 @@ public class MemberEmailChangeIntegrationTests(PostgreSqlContainerFixture fixtur
             entityTag);
         await using var scope = factory.Services.CreateAsyncScope();
         var context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
-        var cleanup = scope.ServiceProvider
-            .GetRequiredService<IExpiredMemberEmailChangeRequestCleanup>();
+        var cleanup = scope.ServiceProvider.GetRequiredService<IExpiredMemberEmailChangeRequestCleanup>();
         var cutoff = _referenceTime.UtcDateTime.AddHours(24);
 
         // Act
@@ -1213,12 +1154,11 @@ public class MemberEmailChangeIntegrationTests(PostgreSqlContainerFixture fixtur
             cutoff,
             500,
             TestContext.Current.CancellationToken);
-        await context.AuthenticationEmailOutboxMessages
-            .ExecuteUpdateAsync(
-                setters => setters.SetProperty(
-                    message => message.ProcessedAt,
-                    cutoff),
-                TestContext.Current.CancellationToken);
+        await context.AuthenticationEmailOutboxMessages.ExecuteUpdateAsync(
+            setters => setters.SetProperty(
+                message => message.ProcessedAt,
+                cutoff),
+            TestContext.Current.CancellationToken);
         var afterProcessing = await cleanup.DeleteExpiredRequestsAsync(
             cutoff,
             500,
@@ -1232,18 +1172,17 @@ public class MemberEmailChangeIntegrationTests(PostgreSqlContainerFixture fixtur
             1,
             afterProcessing);
         Assert.Empty(await context.MemberEmailChangeRequests
-            .AsNoTracking()
-            .ToArrayAsync(TestContext.Current.CancellationToken));
+                .AsNoTracking()
+                .ToArrayAsync(TestContext.Current.CancellationToken));
         Assert.Empty(await context.AuthenticationEmailOutboxMessages
-            .AsNoTracking()
-            .ToArrayAsync(TestContext.Current.CancellationToken));
+                .AsNoTracking()
+                .ToArrayAsync(TestContext.Current.CancellationToken));
     }
 
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task DeleteExpiredRequestsAsync_WhenRequestIsCompleted_AppliesSevenDayRetention(
-        bool isConfirmed)
+    public async Task DeleteExpiredRequestsAsync_WhenRequestIsCompleted_AppliesSevenDayRetention(bool isConfirmed)
     {
         // Arrange
         await using var factory = await CreateMigratedFactoryAsync();
@@ -1261,28 +1200,26 @@ public class MemberEmailChangeIntegrationTests(PostgreSqlContainerFixture fixtur
             entityTag);
         await using var scope = factory.Services.CreateAsyncScope();
         var context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
-        var request = await context.MemberEmailChangeRequests
-            .SingleAsync(TestContext.Current.CancellationToken);
+        var request = await context.MemberEmailChangeRequests.SingleAsync(TestContext.Current.CancellationToken);
 
         if (isConfirmed)
             request.Confirm(_referenceTime.UtcDateTime);
 
         if (!isConfirmed)
             request.Revoke(_referenceTime.UtcDateTime);
-
         await context.SaveChangesAsync(TestContext.Current.CancellationToken);
-        await context.AuthenticationEmailOutboxMessages
-            .ExecuteUpdateAsync(
-                setters => setters.SetProperty(
-                    message => message.ProcessedAt,
-                    _referenceTime.UtcDateTime),
-                TestContext.Current.CancellationToken);
-        var cleanup = scope.ServiceProvider
-            .GetRequiredService<IExpiredMemberEmailChangeRequestCleanup>();
+        await context.AuthenticationEmailOutboxMessages.ExecuteUpdateAsync(
+            setters => setters.SetProperty(
+                message => message.ProcessedAt,
+                _referenceTime.UtcDateTime),
+            TestContext.Current.CancellationToken);
+        var cleanup = scope.ServiceProvider.GetRequiredService<IExpiredMemberEmailChangeRequestCleanup>();
 
         // Act
         var beforeRetention = await cleanup.DeleteExpiredRequestsAsync(
-            _referenceTime.UtcDateTime.AddDays(7).AddMilliseconds(-1),
+            _referenceTime.UtcDateTime
+                .AddDays(7)
+                .AddMilliseconds(-1),
             500,
             TestContext.Current.CancellationToken);
         var atRetention = await cleanup.DeleteExpiredRequestsAsync(
@@ -1298,11 +1235,11 @@ public class MemberEmailChangeIntegrationTests(PostgreSqlContainerFixture fixtur
             1,
             atRetention);
         Assert.Empty(await context.MemberEmailChangeRequests
-            .AsNoTracking()
-            .ToArrayAsync(TestContext.Current.CancellationToken));
+                .AsNoTracking()
+                .ToArrayAsync(TestContext.Current.CancellationToken));
         Assert.Empty(await context.AuthenticationEmailOutboxMessages
-            .AsNoTracking()
-            .ToArrayAsync(TestContext.Current.CancellationToken));
+                .AsNoTracking()
+                .ToArrayAsync(TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -1324,12 +1261,10 @@ public class MemberEmailChangeIntegrationTests(PostgreSqlContainerFixture fixtur
             entityTag);
         await using var scope = factory.Services.CreateAsyncScope();
         var context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
-        var request = await context.MemberEmailChangeRequests
-            .SingleAsync(TestContext.Current.CancellationToken);
+        var request = await context.MemberEmailChangeRequests.SingleAsync(TestContext.Current.CancellationToken);
         request.Confirm(_referenceTime.UtcDateTime);
         await context.SaveChangesAsync(TestContext.Current.CancellationToken);
-        var cleanup = scope.ServiceProvider
-            .GetRequiredService<IExpiredMemberEmailChangeRequestCleanup>();
+        var cleanup = scope.ServiceProvider.GetRequiredService<IExpiredMemberEmailChangeRequestCleanup>();
         var cutoff = _referenceTime.UtcDateTime.AddDays(7);
 
         // Act
@@ -1337,12 +1272,11 @@ public class MemberEmailChangeIntegrationTests(PostgreSqlContainerFixture fixtur
             cutoff,
             500,
             TestContext.Current.CancellationToken);
-        await context.AuthenticationEmailOutboxMessages
-            .ExecuteUpdateAsync(
-                setters => setters.SetProperty(
-                    message => message.ProcessedAt,
-                    cutoff),
-                TestContext.Current.CancellationToken);
+        await context.AuthenticationEmailOutboxMessages.ExecuteUpdateAsync(
+            setters => setters.SetProperty(
+                message => message.ProcessedAt,
+                cutoff),
+            TestContext.Current.CancellationToken);
         var afterProcessing = await cleanup.DeleteExpiredRequestsAsync(
             cutoff,
             500,
@@ -1356,11 +1290,11 @@ public class MemberEmailChangeIntegrationTests(PostgreSqlContainerFixture fixtur
             1,
             afterProcessing);
         Assert.Empty(await context.MemberEmailChangeRequests
-            .AsNoTracking()
-            .ToArrayAsync(TestContext.Current.CancellationToken));
+                .AsNoTracking()
+                .ToArrayAsync(TestContext.Current.CancellationToken));
         Assert.Empty(await context.AuthenticationEmailOutboxMessages
-            .AsNoTracking()
-            .ToArrayAsync(TestContext.Current.CancellationToken));
+                .AsNoTracking()
+                .ToArrayAsync(TestContext.Current.CancellationToken));
     }
 
     private async Task<PostgreSqlApiFactory> CreateMigratedFactoryAsync(
@@ -1418,11 +1352,9 @@ public class MemberEmailChangeIntegrationTests(PostgreSqlContainerFixture fixtur
             DisplayName = "Email change test",
             EmailConfirmed = true
         };
-        var creationResult = password is null
-            ? await userManager.CreateAsync(member)
-            : await userManager.CreateAsync(
-                member,
-                password);
+        var creationResult = password is null ? await userManager.CreateAsync(member) : await userManager.CreateAsync(
+            member,
+            password);
         Assert.True(
             creationResult.Succeeded,
             string.Join(
@@ -1463,8 +1395,7 @@ public class MemberEmailChangeIntegrationTests(PostgreSqlContainerFixture fixtur
             HttpStatusCode.OK,
             response.StatusCode);
 
-        return response.Headers.ETag?.Tag
-            ?? throw new InvalidOperationException("The current member ETag is missing.");
+        return response.Headers.ETag?.Tag ?? throw new InvalidOperationException("The current member ETag is missing.");
     }
 
     private static async Task<HttpResponseMessage> RequestEmailChangeAsync(
@@ -1477,11 +1408,7 @@ public class MemberEmailChangeIntegrationTests(PostgreSqlContainerFixture fixtur
             HttpMethod.Put,
             "/api/v1/members/current/email")
         {
-            Content = JsonContent.Create(new
-            {
-                email,
-                currentPassword
-            })
+            Content = JsonContent.Create(new { email, currentPassword })
         };
         request.Headers.IfMatch.ParseAdd(entityTag);
 
@@ -1490,8 +1417,7 @@ public class MemberEmailChangeIntegrationTests(PostgreSqlContainerFixture fixtur
             TestContext.Current.CancellationToken);
     }
 
-    private static async Task<(Guid RequestId, string Token)> CreateConfirmationAsync(
-        PostgreSqlApiFactory factory)
+    private static async Task<(Guid RequestId, string Token)> CreateConfirmationAsync(PostgreSqlApiFactory factory)
     {
 
         return await CreateConfirmationAsync(
@@ -1508,13 +1434,10 @@ public class MemberEmailChangeIntegrationTests(PostgreSqlContainerFixture fixtur
         var request = await context.MemberEmailChangeRequests
             .AsNoTracking()
             .SingleAsync(
-                candidate =>
-                    candidate.RevokedAt == null &&
-                    (memberId == null || candidate.UserId == memberId),
-                TestContext.Current.CancellationToken);
+            candidate => candidate.RevokedAt == null && (memberId == null || candidate.UserId == memberId),
+            TestContext.Current.CancellationToken);
         var userManager = scope.ServiceProvider.GetRequiredService<UserManager<MonKadoUser>>();
-        var user = await userManager.FindByIdAsync(request.UserId.ToString("D"))
-            ?? throw new InvalidOperationException("The member does not exist.");
+        var user = await userManager.FindByIdAsync(request.UserId.ToString("D")) ?? throw new InvalidOperationException("The member does not exist.");
         var purpose = MemberEmailChangeTokenPurpose.Create(
             request.Id,
             request.NormalizedNewEmail);
@@ -1523,9 +1446,7 @@ public class MemberEmailChangeIntegrationTests(PostgreSqlContainerFixture fixtur
             EmailChangeTokenProviderOptions.ProviderName,
             purpose);
 
-        return (
-            request.Id,
-            AuthenticationEmailTokenEncoding.Encode(token));
+        return (request.Id, AuthenticationEmailTokenEncoding.Encode(token));
     }
 
     private static async Task<HttpResponseMessage> ConfirmEmailChangeAsync(
@@ -1538,11 +1459,7 @@ public class MemberEmailChangeIntegrationTests(PostgreSqlContainerFixture fixtur
             HttpMethod.Post,
             "/api/v1/auth/email-change-confirmations")
         {
-            Content = JsonContent.Create(new
-            {
-                requestId,
-                token
-            })
+            Content = JsonContent.Create(new { requestId, token })
         };
         request.Headers.Add(
             WebSecurityOptions.AntiforgeryHeaderName,
@@ -1558,9 +1475,7 @@ public class MemberEmailChangeIntegrationTests(PostgreSqlContainerFixture fixtur
         using var response = await client.GetAsync(
             "/security/csrf-token",
             TestContext.Current.CancellationToken);
-        var payload = await response.Content.ReadFromJsonAsync<CsrfTokenResponse>(
-            TestContext.Current.CancellationToken)
-            ?? throw new InvalidOperationException("The CSRF token response is empty.");
+        var payload = await response.Content.ReadFromJsonAsync<CsrfTokenResponse>(TestContext.Current.CancellationToken) ?? throw new InvalidOperationException("The CSRF token response is empty.");
 
         return payload.Token;
     }
@@ -1583,9 +1498,11 @@ public class MemberEmailChangeIntegrationTests(PostgreSqlContainerFixture fixtur
             AuthenticationSession.Create(
                 Guid.CreateVersion7(_referenceTime.AddMilliseconds(1)),
                 memberId,
-                Enumerable.Repeat(
+                Enumerable
+                    .Repeat(
                     (byte)1,
-                    32).ToArray(),
+                    32)
+                    .ToArray(),
                 isPersistent: true,
                 now,
                 now.AddDays(30)));
