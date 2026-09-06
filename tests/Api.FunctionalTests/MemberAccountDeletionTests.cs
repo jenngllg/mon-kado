@@ -16,13 +16,35 @@ public class MemberAccountDeletionTests
     private const string RequestPath = "/api/v1/members/current/deletion-requests";
     private readonly RecordingMemberAccountDeletionService _service = new();
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task ExecuteAsync_WhenAnonymous_ReturnsUnauthorized(bool confirmation)
+    [InlineData(
+        false,
+        false)]
+    [InlineData(
+        true,
+        false)]
+    [InlineData(
+        false,
+        true)]
+    [InlineData(
+        true,
+        true)]
+    public async Task ExecuteAsync_WhenBearerIsAbsent_ReturnsUnauthorized(
+        bool confirmation,
+        bool cookieOnly)
     {
         // Arrange
         await using var factory = new RegistrationApiFactory();
         using var client = factory.CreateClient();
+
+        if (cookieOnly)
+        {
+            var accessToken = factory.Services
+                .GetRequiredService<IAccessTokenService>()
+                .Create(Guid.CreateVersion7());
+            client.DefaultRequestHeaders.Add(
+                "Cookie",
+                $"MonKado.Refresh={accessToken.Value}; .AspNetCore.Identity.Application={accessToken.Value}");
+        }
 
         // Act
         using var response = await client.PostAsJsonAsync(
