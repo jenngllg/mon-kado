@@ -80,6 +80,7 @@ public class MonKadoDbContext(DbContextOptions<MonKadoDbContext> options) : Iden
     {
         base.OnModelCreating(builder);
         builder.HasDefaultSchema("public");
+        builder.HasPostgresExtension("unaccent");
         builder
             .Entity<IdentityRole<Guid>>()
             .ToTable("roles");
