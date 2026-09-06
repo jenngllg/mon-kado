@@ -3,6 +3,7 @@ using JennGllg.Fr.MonKado.Back.Application.Common.Exceptions;
 using JennGllg.Fr.MonKado.Back.Application.Models;
 using JennGllg.Fr.MonKado.Back.Domain.Entities;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Abstractions;
+using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Constants;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Entities;
 
 using Microsoft.EntityFrameworkCore;
@@ -71,7 +72,7 @@ public class WishService(
         {
 
             throw new DependencyUnavailableException(
-                "PostgreSQL",
+                DependencyNames.PostgreSql,
                 exception);
         }
 
@@ -179,7 +180,7 @@ public class WishService(
             {
 
                 throw new DependencyUnavailableException(
-                    "PostgreSQL",
+                    DependencyNames.PostgreSql,
                     exception);
             }
 
@@ -263,7 +264,7 @@ public class WishService(
             {
 
                 throw new DependencyUnavailableException(
-                    "PostgreSQL",
+                    DependencyNames.PostgreSql,
                     exception);
             }
 
@@ -312,7 +313,7 @@ public class WishService(
         {
 
             throw new DependencyUnavailableException(
-                "PostgreSQL",
+                DependencyNames.PostgreSql,
                 originalException);
         }
 
@@ -522,7 +523,7 @@ public class WishService(
             {
 
                 throw new DependencyUnavailableException(
-                    "PostgreSQL",
+                    DependencyNames.PostgreSql,
                     exception);
             }
 
@@ -614,7 +615,7 @@ public class WishService(
             {
 
                 throw new DependencyUnavailableException(
-                    "PostgreSQL",
+                    DependencyNames.PostgreSql,
                     exception);
             }
 
@@ -712,7 +713,7 @@ public class WishService(
             }
 
             throw new DependencyUnavailableException(
-                "PostgreSQL",
+                DependencyNames.PostgreSql,
                 exception);
         }
     }
@@ -796,7 +797,7 @@ public class WishService(
             {
 
                 throw new DependencyUnavailableException(
-                    "PostgreSQL",
+                    DependencyNames.PostgreSql,
                     exception);
             }
 
@@ -843,7 +844,7 @@ public class WishService(
         {
 
             throw new DependencyUnavailableException(
-                "PostgreSQL",
+                DependencyNames.PostgreSql,
                 originalException);
         }
 
@@ -939,7 +940,7 @@ public class WishService(
             return true;
 
         throw new DependencyUnavailableException(
-            "PostgreSQL",
+            DependencyNames.PostgreSql,
             originalException);
     }
 
@@ -1048,7 +1049,7 @@ public class WishService(
         {
 
             throw new DependencyUnavailableException(
-                "PostgreSQL",
+                DependencyNames.PostgreSql,
                 originalException);
         }
 
@@ -1137,7 +1138,7 @@ public class WishService(
             return null;
 
         throw new DependencyUnavailableException(
-            "PostgreSQL",
+            DependencyNames.PostgreSql,
             originalException);
     }
 
@@ -1190,7 +1191,7 @@ public class WishService(
         {
 
             throw new DependencyUnavailableException(
-                "PostgreSQL",
+                DependencyNames.PostgreSql,
                 exception);
         }
     }
@@ -1220,7 +1221,7 @@ public class WishService(
         {
 
             throw new DependencyUnavailableException(
-                "PostgreSQL",
+                DependencyNames.PostgreSql,
                 exception);
         }
     }

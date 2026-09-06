@@ -3,6 +3,7 @@ using JennGllg.Fr.MonKado.Back.Application.Common.Exceptions;
 using JennGllg.Fr.MonKado.Back.Application.Models;
 using JennGllg.Fr.MonKado.Back.Domain.Entities;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Abstractions;
+using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Constants;
 
 using Microsoft.EntityFrameworkCore;
 
@@ -39,6 +40,7 @@ public class WishlistShareService(
         Guid wishlistId,
         CancellationToken cancellationToken)
     {
+        var commitAttempted = false;
         await EnsureOwnershipAsync(
             ownerId,
             wishlistId,
@@ -50,7 +52,6 @@ public class WishlistShareService(
             token.SecretHash,
             token.ProtectedSecret);
         shareLinkRepository.Add(shareLink);
-        var commitAttempted = false;
         try
         {
             WishlistShareLinkDetails? completedResult;
@@ -87,7 +88,7 @@ public class WishlistShareService(
 
             if (!commitAttempted)
                 throw new DependencyUnavailableException(
-                    "PostgreSQL",
+                    DependencyNames.PostgreSql,
                     exception);
 
             return await ResolveAmbiguousCreationAsync(
@@ -134,7 +135,7 @@ public class WishlistShareService(
         {
 
             throw new DependencyUnavailableException(
-                "PostgreSQL",
+                DependencyNames.PostgreSql,
                 exception);
         }
     }
@@ -147,7 +148,6 @@ public class WishlistShareService(
         CancellationToken cancellationToken)
     {
         (Guid Id, byte[] OriginalHash, string OriginalProtectedSecret, WishlistShareToken Token)? attemptedRotation = null;
-        var commitAttempted = false;
         await EnsureOwnershipAsync(
             ownerId,
             wishlistId,
@@ -173,12 +173,12 @@ public class WishlistShareService(
                 if (shareLink.Version != expectedVersion)
                     throw new WishlistShareLinkVersionConflictException();
                 var token = tokenService.Create();
-                attemptedRotation = (shareLink.Id, shareLink.SecretHash.ToArray(), shareLink.ProtectedSecret, token);
+                var rotation = (shareLink.Id, shareLink.SecretHash.ToArray(), shareLink.ProtectedSecret, token);
                 shareLink.Rotate(
                     token.SecretHash,
                     token.ProtectedSecret);
                 await unitOfWork.SaveChangesAsync(cancellationToken);
-                commitAttempted = true;
+                attemptedRotation = rotation;
                 await transaction.CommitAsync(cancellationToken);
                 completedResult = CreateDetails(
                     shareLink,
@@ -201,11 +201,11 @@ public class WishlistShareService(
             if (!PostgreSqlFailureClassifier.IsUnavailable(exception))
                 throw;
 
-            if (!commitAttempted || attemptedRotation is null)
+            if (attemptedRotation is null)
             {
 
                 throw new DependencyUnavailableException(
-                    "PostgreSQL",
+                    DependencyNames.PostgreSql,
                     exception);
             }
 
@@ -275,7 +275,7 @@ public class WishlistShareService(
             {
 
                 throw new DependencyUnavailableException(
-                    "PostgreSQL",
+                    DependencyNames.PostgreSql,
                     exception);
             }
 
@@ -312,7 +312,7 @@ public class WishlistShareService(
         {
 
             throw new DependencyUnavailableException(
-                "PostgreSQL",
+                DependencyNames.PostgreSql,
                 exception);
         }
     }
@@ -354,7 +354,7 @@ public class WishlistShareService(
         {
 
             throw new DependencyUnavailableException(
-                "PostgreSQL",
+                DependencyNames.PostgreSql,
                 exception);
         }
     }
@@ -429,7 +429,7 @@ public class WishlistShareService(
             return null;
 
         throw new DependencyUnavailableException(
-            "PostgreSQL",
+            DependencyNames.PostgreSql,
             originalException);
     }
 
@@ -474,7 +474,7 @@ public class WishlistShareService(
         {
 
             throw new DependencyUnavailableException(
-                "PostgreSQL",
+                DependencyNames.PostgreSql,
                 originalException);
         }
 
@@ -566,7 +566,7 @@ public class WishlistShareService(
             throw new WishlistShareLinkVersionConflictException();
 
         throw new DependencyUnavailableException(
-            "PostgreSQL",
+            DependencyNames.PostgreSql,
             originalException);
     }
 
@@ -653,7 +653,7 @@ public class WishlistShareService(
         {
 
             throw new DependencyUnavailableException(
-                "PostgreSQL",
+                DependencyNames.PostgreSql,
                 exception);
         }
     }
@@ -680,7 +680,7 @@ public class WishlistShareService(
         {
 
             throw new DependencyUnavailableException(
-                "PostgreSQL",
+                DependencyNames.PostgreSql,
                 exception);
         }
     }
@@ -710,7 +710,7 @@ public class WishlistShareService(
         {
 
             throw new DependencyUnavailableException(
-                "PostgreSQL",
+                DependencyNames.PostgreSql,
                 exception);
         }
     }

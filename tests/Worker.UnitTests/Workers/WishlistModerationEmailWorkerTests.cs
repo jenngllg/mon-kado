@@ -46,7 +46,9 @@ public class WishlistModerationEmailWorkerTests : IAsyncDisposable
         // Act
         await worker.StartAsync(_cancellationSource.Token);
         await Assert
-            .IsAssignableFrom<Task>(worker.ExecuteTask)
+            .IsType<Task>(
+                worker.ExecuteTask,
+                exactMatch: false)
             .WaitAsync(TestContext.Current.CancellationToken);
 
         // Assert
@@ -78,7 +80,9 @@ public class WishlistModerationEmailWorkerTests : IAsyncDisposable
         // Act
         await _worker.StartAsync(_cancellationSource.Token);
         await Assert
-            .IsAssignableFrom<Task>(_worker.ExecuteTask)
+            .IsType<Task>(
+                _worker.ExecuteTask,
+                exactMatch: false)
             .WaitAsync(TestContext.Current.CancellationToken);
 
         // Assert
@@ -131,7 +135,9 @@ public class WishlistModerationEmailWorkerTests : IAsyncDisposable
         // Act
         await _worker.StartAsync(_cancellationSource.Token);
         await Assert
-            .IsAssignableFrom<Task>(_worker.ExecuteTask)
+            .IsType<Task>(
+                _worker.ExecuteTask,
+                exactMatch: false)
             .WaitAsync(TestContext.Current.CancellationToken);
 
         // Assert
@@ -183,7 +189,9 @@ public class WishlistModerationEmailWorkerTests : IAsyncDisposable
         // Act
         await _worker.StartAsync(_cancellationSource.Token);
         await Assert
-            .IsAssignableFrom<Task>(_worker.ExecuteTask)
+            .IsType<Task>(
+                _worker.ExecuteTask,
+                exactMatch: false)
             .WaitAsync(TestContext.Current.CancellationToken);
 
         // Assert
@@ -228,7 +236,9 @@ public class WishlistModerationEmailWorkerTests : IAsyncDisposable
         // Act
         await worker.StartAsync(_cancellationSource.Token);
         await Assert
-            .IsAssignableFrom<Task>(worker.ExecuteTask)
+            .IsType<Task>(
+                worker.ExecuteTask,
+                exactMatch: false)
             .WaitAsync(TestContext.Current.CancellationToken);
 
         // Assert

@@ -4,6 +4,7 @@ using JennGllg.Fr.MonKado.Back.Application.Models;
 using JennGllg.Fr.MonKado.Back.Domain.Entities;
 using JennGllg.Fr.MonKado.Back.Domain.Enums;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Abstractions;
+using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Constants;
 
 using Microsoft.EntityFrameworkCore;
 
@@ -41,7 +42,7 @@ public class WishlistModerationService(
         {
 
             throw new DependencyUnavailableException(
-                "PostgreSQL",
+                DependencyNames.PostgreSql,
                 exception);
         }
     }
@@ -56,7 +57,6 @@ public class WishlistModerationService(
         CancellationToken cancellationToken)
     {
         WishlistModerationEvent? attemptedDecision = null;
-        var commitAttempted = false;
         try
         {
             WishlistModerationDetails completedResult;
@@ -98,7 +98,7 @@ public class WishlistModerationService(
                 var action = GetAction(
                     wasSuspended,
                     isSuspended);
-                attemptedDecision = new WishlistModerationEvent(
+                var decision = new WishlistModerationEvent(
                     Guid.CreateVersion7(),
                     wishlistId,
                     administratorId,
@@ -106,9 +106,9 @@ public class WishlistModerationService(
                     action,
                     wishlist.SuspensionReason,
                     occurredAt);
-                repository.AddDecision(attemptedDecision);
+                repository.AddDecision(decision);
                 await unitOfWork.SaveChangesAsync(cancellationToken);
-                commitAttempted = true;
+                attemptedDecision = decision;
                 await transaction.CommitAsync(cancellationToken);
                 completedResult = CreateDetails(wishlist);
             }
@@ -123,11 +123,11 @@ public class WishlistModerationService(
         catch (Exception exception) when (PostgreSqlFailureClassifier.IsUnavailable(exception))
         {
 
-            if (!commitAttempted || attemptedDecision is null)
+            if (attemptedDecision is null)
             {
 
                 throw new DependencyUnavailableException(
-                    "PostgreSQL",
+                    DependencyNames.PostgreSql,
                     exception);
             }
 
@@ -171,7 +171,7 @@ public class WishlistModerationService(
         {
 
             throw new DependencyUnavailableException(
-                "PostgreSQL",
+                DependencyNames.PostgreSql,
                 exception);
         }
     }
@@ -236,12 +236,12 @@ public class WishlistModerationService(
         {
 
             throw new DependencyUnavailableException(
-                "PostgreSQL",
+                DependencyNames.PostgreSql,
                 exception);
         }
 
         throw new DependencyUnavailableException(
-            "PostgreSQL",
+            DependencyNames.PostgreSql,
             originalException);
     }
 
