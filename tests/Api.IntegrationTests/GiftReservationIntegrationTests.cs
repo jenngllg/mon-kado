@@ -854,15 +854,19 @@ public class GiftReservationIntegrationTests(PostgreSqlContainerFixture fixture)
         try
         {
             // Assert
+            var updateSucceeded = responses[0].StatusCode == HttpStatusCode.OK;
             Assert.Equal(
-                [
-                    HttpStatusCode.Created,
-                    HttpStatusCode.Conflict
-                ],
-                responses
-                    .Select(response => response.StatusCode)
-                    .Order());
-            Assert.True(storedReservations.Sum(item => item.Quantity) <= storedWish.Quantity);
+                updateSucceeded ? HttpStatusCode.OK : HttpStatusCode.Conflict,
+                responses[0].StatusCode);
+            Assert.Equal(
+                updateSucceeded ? HttpStatusCode.Conflict : HttpStatusCode.Created,
+                responses[1].StatusCode);
+            Assert.Equal(
+                updateSucceeded ? 1 : 2,
+                storedWish.Quantity);
+            Assert.Equal(
+                storedWish.Quantity,
+                storedReservations.Sum(item => item.Quantity));
         }
         finally
         {

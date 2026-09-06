@@ -8,6 +8,12 @@ namespace JennGllg.Fr.MonKado.Back.Api.Errors;
 [ExcludeFromCodeCoverage]
 public static class ErrorCodes
 {
+    #region WishImport
+
+    /// <summary>Identifies an unsafe URL import destination.</summary>
+    public const string WishImportUrlRejected = "WISH_IMPORT_URL_REJECTED";
+
+    #endregion
     /// <summary>
     /// Identifies account email not confirmed.
     /// </summary>

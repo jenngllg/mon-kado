@@ -8,6 +8,7 @@ $requiredModules = @(
     'JennGllg.Fr.MonKado.Back.Application',
     'JennGllg.Fr.MonKado.Back.Domain',
     'JennGllg.Fr.MonKado.Back.Infrastructure.Images',
+    'JennGllg.Fr.MonKado.Back.Infrastructure.UrlImport',
     'JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql',
     'JennGllg.Fr.MonKado.Back.Tools.GmailOAuthBootstrap',
     'JennGllg.Fr.MonKado.Back.Worker'

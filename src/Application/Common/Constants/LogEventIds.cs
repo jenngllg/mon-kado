@@ -425,6 +425,12 @@ public static class LogEventIds
     /// <summary>Identifies a removed gift-image reference.</summary>
     public const int GiftImageRemoved = 2057;
 
+    /// <summary>Identifies the start of a merchant preview.</summary>
+    public const int WishImportPreviewStarted = 2058;
+
+    /// <summary>Identifies a completed merchant preview.</summary>
+    public const int WishImportPreviewCreated = 2059;
+
     #endregion
 
     #region Technical

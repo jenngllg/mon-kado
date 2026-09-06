@@ -91,6 +91,8 @@ public static class AuthenticationRateLimitingExtensions
     /// Identifies authenticated gift-image upload policy.
     /// </summary>
     public const string GiftImageUploadPolicy = "GiftImageUpload";
+    /// <summary>Identifies authenticated merchant preview requests.</summary>
+    public const string WishImportPreviewPolicy = "WishImportPreview";
     /// <summary>
     /// Gets the per-minute Google callback and completion limit for one remote address.
     /// </summary>
@@ -229,6 +231,13 @@ public static class AuthenticationRateLimitingExtensions
                 context => CreateMemberLimiter(
                     context,
                     GiftImageUploadPermitLimit));
+            options.AddPolicy(
+                WishImportPreviewPolicy,
+                context => CreateMemberLimiter(
+                    context,
+                    context.RequestServices
+                        .GetRequiredService<Microsoft.Extensions.Options.IOptions<JennGllg.Fr.MonKado.Back.Infrastructure.UrlImport.Options.UrlImportOptions>>()
+                        .Value.PermitLimit));
 
             options.OnRejected = async (
                 rejectionContext,

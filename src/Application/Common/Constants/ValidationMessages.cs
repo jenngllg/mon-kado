@@ -8,6 +8,8 @@ namespace JennGllg.Fr.MonKado.Back.Application.Common.Constants;
 [ExcludeFromCodeCoverage]
 public static class ValidationMessages
 {
+    /// <summary>Gets the safe URL import validation message.</summary>
+    public const string InvalidWishImportUrl = "The property {PropertyName} must be an absolute public HTTP or HTTPS URL without credentials or a custom port.";
     /// <summary>
     /// Gets the validation message for an empty gift image.
     /// </summary>

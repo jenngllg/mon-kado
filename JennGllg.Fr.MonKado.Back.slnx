@@ -1,5 +1,6 @@
 <Solution>
   <Folder Name="/Tests/">
+    <Project Path="tests/Infrastructure.UrlImport.UnitTests/Infrastructure.UrlImport.UnitTests.csproj" />
     <Project Path="tests/Api.IntegrationTests/Api.IntegrationTests.csproj" />
     <Project Path="tests/Api.FunctionalTests/Api.FunctionalTests.csproj" />
     <Project Path="tests/Api.UnitTests/Api.UnitTests.csproj" />
@@ -18,6 +19,7 @@
   <Project Path="src/Domain/Domain.csproj" />
   <Project Path="src/Infrastructure.Persistence.PostgreSql/Infrastructure.Persistence.PostgreSql.csproj" />
   <Project Path="src/Infrastructure.Images/Infrastructure.Images.csproj" />
+  <Project Path="src/Infrastructure.UrlImport/Infrastructure.UrlImport.csproj" />
   <Project Path="src/Worker/Worker.csproj" />
   <Project Path="src/Tools.GmailOAuthBootstrap/Tools.GmailOAuthBootstrap.csproj" />
 </Solution>

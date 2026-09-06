@@ -35,6 +35,12 @@ public class GlobalExceptionHandler(
     {
         var response = exception switch
         {
+            WishImportUrlRejectedException => new ErrorResponse(
+                StatusCodes.Status400BadRequest,
+                "Import URL rejected",
+                "The URL does not identify an allowed public HTTP destination.",
+                ErrorCodes.WishImportUrlRejected,
+                null),
             EmailNotConfirmedException => new ErrorResponse(
                 StatusCodes.Status401Unauthorized,
                 "Authentication failed",

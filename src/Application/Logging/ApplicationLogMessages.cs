@@ -9,6 +9,25 @@ namespace JennGllg.Fr.MonKado.Back.Application.Logging;
 /// </summary>
 public static partial class ApplicationLogMessages
 {
+    /// <summary>Logs the beginning of a merchant preview without its URL.</summary>
+    /// <param name="logger">The logger.</param>
+    /// <param name="ownerId">The owner identifier.</param>
+    /// <param name="wishlistId">The wishlist identifier.</param>
+    [LoggerMessage(EventId = LogEventIds.WishImportPreviewStarted, Level = LogLevel.Debug, Message = "Preparing a gift import preview for owner {OwnerId} and wishlist {WishlistId}.")]
+    public static partial void WishImportPreviewStarted(
+        ILogger logger,
+        Guid ownerId,
+        Guid wishlistId);
+
+    /// <summary>Logs a completed preview without merchant content.</summary>
+    /// <param name="logger">The logger.</param>
+    /// <param name="ownerId">The owner identifier.</param>
+    /// <param name="wishlistId">The wishlist identifier.</param>
+    [LoggerMessage(EventId = LogEventIds.WishImportPreviewCreated, Level = LogLevel.Information, Message = "Prepared a gift import preview for owner {OwnerId} and wishlist {WishlistId}.")]
+    public static partial void WishImportPreviewCreated(
+        ILogger logger,
+        Guid ownerId,
+        Guid wishlistId);
     /// <summary>Logs the start of gift-image removal.</summary>
     /// <param name="logger">The logger.</param>
     /// <param name="ownerId">The owner identifier.</param>

@@ -5,6 +5,7 @@ using JennGllg.Fr.MonKado.Back.Application.Configurations;
 using JennGllg.Fr.MonKado.Back.Domain.Configurations;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Images.Configurations;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Configurations;
+using JennGllg.Fr.MonKado.Back.Infrastructure.UrlImport.Configurations;
 
 using Microsoft.IdentityModel.Logging;
 
@@ -22,6 +23,7 @@ builder.Logging.AddFilter(
 builder.Services.ConfigureDomainInjection();
 builder.Services.ConfigureApplicationInjection();
 builder.Services.ConfigureImageInfrastructureInjection(builder.Configuration);
+builder.Services.ConfigureUrlImportInjection(builder.Configuration);
 builder.Services.ConfigureInfrastructureInjection(builder.Configuration);
 builder.Services.ConfigureApiInjection(
     builder.Configuration,
