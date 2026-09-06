@@ -8,6 +8,14 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Abstrac
 /// </summary>
 public interface IWishlistShareLinkRepository
 {
+    /// <summary>Locks an active parent wishlist before its share link, within the caller's transaction.</summary>
+    /// <param name="shareLinkId">The share-link identifier.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The current share link, or null if missing or suspended.</returns>
+    Task<WishlistShareLink?> LockActiveAsync(
+        Guid shareLinkId,
+        CancellationToken cancellationToken);
+
     /// <summary>Adds a share link to the current unit of work.</summary>
     /// <param name="shareLink">The share link.</param>
     void Add(WishlistShareLink shareLink);

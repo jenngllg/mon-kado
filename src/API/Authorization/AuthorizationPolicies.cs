@@ -24,5 +24,11 @@ public static class AuthorizationPolicies
     /// </summary>
     public const string ManageWishlist = "ManageWishlist";
 
+    /// <summary>Identifies writable owner access, excluding administratively suspended wishlists.</summary>
+    public const string ModifyWishlist = "ModifyWishlist";
+
+    /// <summary>Identifies the database-backed administrator moderation policy.</summary>
+    public const string ModerateWishlist = "ModerateWishlist";
+
     #endregion
 }

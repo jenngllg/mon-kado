@@ -82,6 +82,14 @@ public class WishlistParticipantService : IWishlistParticipantService
         try
         {
             await using var transaction = await _transactionFactory.BeginAsync(cancellationToken);
+
+            if (request.MemberId is Guid authenticatedMemberId)
+            {
+                await _transactionFactory.LockMemberAsync(
+                    authenticatedMemberId,
+                    cancellationToken);
+            }
+
             var shareLink = await _transactionFactory.LockShareLinkAsync(
                 request.ShareLinkId,
                 cancellationToken);

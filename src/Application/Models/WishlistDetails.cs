@@ -57,4 +57,22 @@ public class WishlistDetails(
     /// Gets the optimistic concurrency version.
     /// </summary>
     public uint Version { get; } = version;
+
+    /// <summary>Gets whether an administrator suspended this wishlist.</summary>
+    public bool IsSuspended
+    {
+        get; init;
+    }
+
+    /// <summary>Gets the current suspension reason, visible only to its owner and administrators.</summary>
+    public string? SuspensionReason
+    {
+        get; init;
+    }
+
+    /// <summary>Gets the UTC start of the current suspension.</summary>
+    public DateTime? SuspendedAt
+    {
+        get; init;
+    }
 }

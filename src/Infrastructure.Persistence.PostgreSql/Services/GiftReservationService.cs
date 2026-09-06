@@ -125,6 +125,14 @@ public class GiftReservationService : IGiftReservationService
         try
         {
             await using var transaction = await _transactionFactory.BeginAsync(cancellationToken);
+
+            if (request.MemberId is Guid authenticatedMemberId)
+            {
+                await _transactionFactory.LockMemberAsync(
+                    authenticatedMemberId,
+                    cancellationToken);
+            }
+
             await ValidateShareLinkAsync(
                 request,
                 cancellationToken);
@@ -233,6 +241,14 @@ public class GiftReservationService : IGiftReservationService
         try
         {
             await using var transaction = await _transactionFactory.BeginAsync(cancellationToken);
+
+            if (request.MemberId is Guid authenticatedMemberId)
+            {
+                await _transactionFactory.LockMemberAsync(
+                    authenticatedMemberId,
+                    cancellationToken);
+            }
+
             await ValidateShareLinkAsync(
                 request.ShareLinkId,
                 request.WishlistId,

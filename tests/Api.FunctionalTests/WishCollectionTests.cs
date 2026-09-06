@@ -22,6 +22,7 @@ public class WishCollectionTests
         await using var factory = new RegistrationApiFactory();
         var ownerId = Guid.CreateVersion7();
         var wishlistId = Guid.CreateVersion7();
+        factory.WishlistService.SeedActiveWishlist(wishlistId);
         var firstWish = CreateDetails(
             wishlistId,
             1,
@@ -86,6 +87,7 @@ public class WishCollectionTests
         // Arrange
         await using var factory = new RegistrationApiFactory();
         var wishlistId = Guid.CreateVersion7();
+        factory.WishlistService.SeedActiveWishlist(wishlistId);
         using var client = CreateAuthorizedClient(
             factory,
             Guid.CreateVersion7());
@@ -114,6 +116,7 @@ public class WishCollectionTests
         await using var factory = new RegistrationApiFactory();
         var ownerId = Guid.CreateVersion7();
         var wishlistId = Guid.CreateVersion7();
+        factory.WishlistService.SeedActiveWishlist(wishlistId);
         var firstWish = CreateDetails(
             wishlistId,
             1,
@@ -204,6 +207,7 @@ public class WishCollectionTests
         factory.WishService.Exception = (Exception)(Activator.CreateInstance(exceptionType)
             ?? throw new InvalidOperationException("The expected exception could not be created."));
         var wishlistId = Guid.CreateVersion7();
+        factory.WishlistService.SeedActiveWishlist(wishlistId);
         using var client = CreateAuthorizedClient(
             factory,
             Guid.CreateVersion7());
@@ -234,6 +238,8 @@ public class WishCollectionTests
     {
         // Arrange
         await using var factory = new RegistrationApiFactory();
+        var wishlistId = Guid.CreateVersion7();
+        factory.WishlistService.SeedActiveWishlist(wishlistId);
         factory.WishService.Exception = new WishLimitReachedException();
         using var client = CreateAuthorizedClient(
             factory,
@@ -241,7 +247,7 @@ public class WishCollectionTests
 
         // Act
         using var response = await client.PostAsJsonAsync(
-            $"/api/v1/wishlists/{Guid.CreateVersion7()}/wishes",
+            $"/api/v1/wishlists/{wishlistId}/wishes",
             new
             {
                 name = "Cadeau"
@@ -264,6 +270,8 @@ public class WishCollectionTests
     {
         // Arrange
         await using var factory = new RegistrationApiFactory();
+        var wishlistId = Guid.CreateVersion7();
+        factory.WishlistService.SeedActiveWishlist(wishlistId);
         using var client = CreateAuthorizedClient(
             factory,
             Guid.CreateVersion7());
@@ -271,7 +279,7 @@ public class WishCollectionTests
         // Act
         using var response = await PatchAsync(
             client,
-            Guid.CreateVersion7(),
+            wishlistId,
             new
             {
                 wishIds = Array.Empty<Guid>()
@@ -290,6 +298,8 @@ public class WishCollectionTests
     {
         // Arrange
         await using var factory = new RegistrationApiFactory();
+        var wishlistId = Guid.CreateVersion7();
+        factory.WishlistService.SeedActiveWishlist(wishlistId);
         using var client = CreateAuthorizedClient(
             factory,
             Guid.CreateVersion7());
@@ -297,7 +307,7 @@ public class WishCollectionTests
         // Act
         using var response = await PatchAsync(
             client,
-            Guid.CreateVersion7(),
+            wishlistId,
             new
             {
                 wishIds = (Guid[]?)null

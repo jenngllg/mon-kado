@@ -133,7 +133,7 @@ public class WishlistsController(
         var authorization = await authorizationService.AuthorizeAsync(
             User,
             wishlistId,
-            AuthorizationPolicies.ManageWishlist);
+            AuthorizationPolicies.ModifyWishlist);
 
         if (!authorization.Succeeded)
             throw new WishlistNotFoundException();
@@ -169,6 +169,7 @@ public class WishlistsController(
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest, "application/json")]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status409Conflict, "application/json")]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status412PreconditionFailed, "application/json")]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status428PreconditionRequired, "application/json")]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status503ServiceUnavailable, "application/json")]
@@ -179,7 +180,7 @@ public class WishlistsController(
         var authorization = await authorizationService.AuthorizeAsync(
             User,
             wishlistId,
-            AuthorizationPolicies.ManageWishlist);
+            AuthorizationPolicies.ModifyWishlist);
 
         if (!authorization.Succeeded)
             throw new WishlistNotFoundException();
@@ -255,6 +256,11 @@ public class WishlistsController(
             wishlist.EventDate,
             wishlist.Message,
             wishlist.CreatedAt,
-            wishlist.UpdatedAt);
+            wishlist.UpdatedAt)
+        {
+            IsSuspended = wishlist.IsSuspended,
+            SuspensionReason = wishlist.SuspensionReason,
+            SuspendedAt = wishlist.SuspendedAt
+        };
     }
 }

@@ -23,20 +23,21 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Service
 /// <param name="wishTransactionFactory">The gift wish transaction factory.</param>
 /// <param name="giftImageDeletionOutboxRepository">The obsolete image deletion outbox repository.</param>
 /// <param name="timeProvider">The time provider.</param>
+/// <param name="mutationGuard">The transaction-scoped writable parent guard.</param>
 public class WishService(
     IWishRepository wishRepository,
     IWishlistRepository wishlistRepository,
     IUnitOfWork unitOfWork,
     IWishTransactionFactory wishTransactionFactory,
     IGiftImageDeletionOutboxRepository giftImageDeletionOutboxRepository,
-    TimeProvider timeProvider) : IWishService
+    TimeProvider timeProvider,
+    IWishlistMutationGuard mutationGuard) : IWishService
 {
     private const string WishlistForeignKeyName = "fk_wishes_wishlists_wishlist_id";
     private const string PositionWishlistForeignKeyName = "fk_wish_position_sequences_wishlists_wishlist_id";
     private const string WishCountConstraintName = "ck_wish_position_sequences_current_count_limit";
     private const string WishQuantityConstraintName = "ck_wishes_quantity_not_below_reserved";
-
-    /// <inheritdoc />
+    /// <inheritdoc/>
     public async Task<WishCollectionDetails> GetCollectionAsync(
         Guid ownerId,
         Guid wishlistId,
@@ -47,7 +48,6 @@ public class WishService(
             wishlistId,
             cancellationToken);
         WishCollectionDetails result;
-
         try
         {
             await using var transaction = await wishTransactionFactory.BeginAsync(
@@ -59,19 +59,17 @@ public class WishService(
 
             if (sequence is null)
                 throw new WishlistNotFoundException();
-
             var wishes = await wishRepository.GetByWishlistIdAsync(
                 wishlistId,
                 cancellationToken);
             await transaction.CommitAsync(cancellationToken);
-
             result = CreateCollectionDetails(
                 wishes,
                 sequence.Version);
         }
-        catch (Exception exception)
-            when (PostgreSqlFailureClassifier.IsUnavailable(exception))
+        catch (Exception exception) when (PostgreSqlFailureClassifier.IsUnavailable(exception))
         {
+
             throw new DependencyUnavailableException(
                 "PostgreSQL",
                 exception);
@@ -80,7 +78,7 @@ public class WishService(
         return result;
     }
 
-    /// <inheritdoc />
+    /// <inheritdoc/>
     public async Task<WishOrderDetails> ReorderAsync(
         Guid ownerId,
         Guid wishlistId,
@@ -95,13 +93,16 @@ public class WishService(
         IReadOnlyCollection<Guid> originalOrder = [];
         WishOrderDetails result;
         var commitAttempted = false;
-
         try
         {
             await using var transaction = await wishTransactionFactory.BeginAsync(
                 IsolationLevel.ReadCommitted,
                 cancellationToken);
-            // Lock wishes first to match update and delete trigger lock ordering.
+            await mutationGuard.LockAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken);
+            // Lock wishes before their sequence to match update and delete trigger ordering.
             var wishes = await wishRepository.GetByWishlistIdForUpdateAsync(
                 wishlistId,
                 cancellationToken);
@@ -122,6 +123,7 @@ public class WishService(
                 wishes,
                 wishIds))
             {
+
                 throw new WishOrderConflictException();
             }
 
@@ -147,7 +149,6 @@ public class WishService(
                     .Where(item => item.Wish.Position != item.Position)
                     .ToArray();
                 var temporaryPosition = checked(positions[^1] + 1);
-
                 foreach (var item in finalPositions)
                 {
                     item.Wish.MoveTo(temporaryPosition);
@@ -155,10 +156,8 @@ public class WishService(
                 }
 
                 await unitOfWork.SaveChangesAsync(cancellationToken);
-
                 foreach (var item in finalPositions)
                     item.Wish.MoveTo(item.Position);
-
                 await unitOfWork.SaveChangesAsync(cancellationToken);
                 await wishRepository.ReloadCollectionStateAsync(
                     sequence,
@@ -172,13 +171,13 @@ public class WishService(
                 await transaction.CommitAsync(cancellationToken);
             }
         }
-        catch (Exception exception)
-            when (PostgreSqlFailureClassifier.IsUnavailable(exception))
+        catch (Exception exception) when (PostgreSqlFailureClassifier.IsUnavailable(exception))
         {
             wishRepository.ClearTracking();
 
             if (!commitAttempted)
             {
+
                 throw new DependencyUnavailableException(
                     "PostgreSQL",
                     exception);
@@ -196,7 +195,7 @@ public class WishService(
         return result;
     }
 
-    /// <inheritdoc />
+    /// <inheritdoc/>
     public async Task<WishDetails?> CreateAsync(
         Guid id,
         Guid ownerId,
@@ -209,33 +208,46 @@ public class WishService(
         CancellationToken cancellationToken)
     {
         Wish? attemptedWish = null;
-
         try
         {
-            var position = await wishRepository.AllocatePositionAsync(
-                wishlistId,
-                cancellationToken);
-            var wish = new Wish(
-                id,
-                wishlistId,
-                name,
-                note,
-                url,
-                price,
-                position,
-                quantity);
-            attemptedWish = wish;
-            wishRepository.Add(wish);
-            await unitOfWork.SaveChangesAsync(cancellationToken);
+            WishDetails? completedResult;
+            await using (var transaction = await wishTransactionFactory.BeginAsync(
+                IsolationLevel.ReadCommitted,
+                cancellationToken))
+            {
+                await mutationGuard.LockAsync(
+                    ownerId,
+                    wishlistId,
+                    cancellationToken);
+                var position = await wishRepository.AllocatePositionAsync(
+                    wishlistId,
+                    cancellationToken);
+                var wish = new Wish(
+                    id,
+                    wishlistId,
+                    name,
+                    note,
+                    url,
+                    price,
+                    position,
+                    quantity);
+                wishRepository.Add(wish);
+                await unitOfWork.SaveChangesAsync(cancellationToken);
+                attemptedWish = wish;
+                await transaction.CommitAsync(cancellationToken);
+                completedResult = CreateDetails(wish);
+            }
 
-            return CreateDetails(wish);
+            return completedResult;
         }
         catch (Exception exception) when (IsWishLimitReached(exception))
         {
+
             throw new WishLimitReachedException();
         }
         catch (Exception exception) when (IsMissingWishlist(exception))
         {
+
             return await ResolveMissingWishlistAsync(
                 ownerId,
                 wishlistId,
@@ -249,6 +261,7 @@ public class WishService(
 
             if (attemptedWish is null)
             {
+
                 throw new DependencyUnavailableException(
                     "PostgreSQL",
                     exception);
@@ -297,6 +310,7 @@ public class WishService(
 
         if (currentOrder.SequenceEqual(originalOrder))
         {
+
             throw new DependencyUnavailableException(
                 "PostgreSQL",
                 originalException);
@@ -336,14 +350,14 @@ public class WishService(
     /// </summary>
     /// <param name="wishes">The current persisted collection.</param>
     /// <param name="wishIds">The requested identifiers.</param>
-    /// <returns><see langword="true" /> when both collections have exact membership.</returns>
+    /// <returns><see langword="true"/> when both collections have exact membership.</returns>
     private static bool HasExactMembership(
         IReadOnlyCollection<Wish> wishes,
         IReadOnlyCollection<Guid> wishIds)
     {
+
         if (wishes.Count != wishIds.Count)
             return false;
-
         var currentIds = wishes
             .Select(wish => wish.Id)
             .ToHashSet();
@@ -414,7 +428,7 @@ public class WishService(
             version);
     }
 
-    /// <inheritdoc />
+    /// <inheritdoc/>
     public async Task<WishDetails?> GetAsync(
         Guid wishlistId,
         Guid wishId,
@@ -425,12 +439,10 @@ public class WishService(
             wishId,
             cancellationToken);
 
-        return wish is null
-            ? null
-            : CreateDetails(wish);
+        return wish is null ? null : CreateDetails(wish);
     }
 
-    /// <inheritdoc />
+    /// <inheritdoc/>
     public async Task<WishDetails?> UpdateAsync(
         Guid ownerId,
         Guid wishlistId,
@@ -444,43 +456,51 @@ public class WishService(
         CancellationToken cancellationToken)
     {
         (Wish Attempted, Wish Original)? attemptedUpdate = null;
-
         try
         {
-            var wish = await wishRepository.GetByIdForUpdateAsync(
-                wishlistId,
-                wishId,
-                cancellationToken);
-
-            if (wish is null)
-                return await ResolveMissingWishAsync(
+            WishDetails? completedResult;
+            await using (var transaction = await wishTransactionFactory.BeginAsync(
+                IsolationLevel.ReadCommitted,
+                cancellationToken))
+            {
+                await mutationGuard.LockAsync(
                     ownerId,
                     wishlistId,
                     cancellationToken);
+                var wish = await wishRepository.GetByIdForUpdateAsync(
+                    wishlistId,
+                    wishId,
+                    cancellationToken);
 
-            if (wish.Version != expectedVersion)
-                throw new WishVersionConflictException();
+                if (wish is null)
+                    return await ResolveMissingWishAsync(
+                        ownerId,
+                        wishlistId,
+                        cancellationToken);
 
-            var originalWish = CopyClientState(wish);
-            var hasChanged = wish.Update(
-                name,
-                note,
-                url,
-                price,
-                quantity);
+                if (wish.Version != expectedVersion)
+                    throw new WishVersionConflictException();
+                var originalWish = CopyClientState(wish);
+                var hasChanged = wish.Update(
+                    name,
+                    note,
+                    url,
+                    price,
+                    quantity);
 
-            if (!hasChanged)
-                return CreateDetails(wish);
+                if (!hasChanged)
+                    return CreateDetails(wish);
+                await unitOfWork.SaveChangesAsync(cancellationToken);
+                attemptedUpdate = (wish, originalWish);
+                await transaction.CommitAsync(cancellationToken);
+                completedResult = CreateDetails(wish);
+            }
 
-            attemptedUpdate = (
-                wish,
-                originalWish);
-            await unitOfWork.SaveChangesAsync(cancellationToken);
-
-            return CreateDetails(wish);
+            return completedResult;
         }
         catch (DbUpdateConcurrencyException)
         {
+
             return await ResolveConcurrentUpdateAsync(
                 ownerId,
                 wishlistId,
@@ -489,17 +509,18 @@ public class WishService(
         }
         catch (Exception exception) when (IsWishQuantityBelowReserved(exception))
         {
+
             throw new WishQuantityBelowReservedException();
         }
         catch (Exception exception)
         {
 
-            if (exception is DependencyUnavailableException ||
-                !PostgreSqlFailureClassifier.IsUnavailable(exception))
+            if (exception is DependencyUnavailableException || !PostgreSqlFailureClassifier.IsUnavailable(exception))
                 throw;
 
             if (attemptedUpdate is null)
             {
+
                 throw new DependencyUnavailableException(
                     "PostgreSQL",
                     exception);
@@ -514,7 +535,7 @@ public class WishService(
         }
     }
 
-    /// <inheritdoc />
+    /// <inheritdoc/>
     public async Task<WishDetails?> UpsertImageAsync(
         Guid ownerId,
         Guid wishlistId,
@@ -526,45 +547,57 @@ public class WishService(
     {
         Guid? originalImageId = null;
         var saveAttempted = false;
-
         try
         {
-            var wish = await wishRepository.GetByIdForUpdateAsync(
-                wishlistId,
-                wishId,
-                cancellationToken);
-
-            if (wish is null)
-                return await ResolveMissingWishAsync(
+            WishDetails? completedResult;
+            await using (var transaction = await wishTransactionFactory.BeginAsync(
+                IsolationLevel.ReadCommitted,
+                cancellationToken))
+            {
+                await mutationGuard.LockAsync(
                     ownerId,
                     wishlistId,
                     cancellationToken);
+                var wish = await wishRepository.GetByIdForUpdateAsync(
+                    wishlistId,
+                    wishId,
+                    cancellationToken);
 
-            if (wish.Version != expectedVersion)
-                throw new WishVersionConflictException();
+                if (wish is null)
+                    return await ResolveMissingWishAsync(
+                        ownerId,
+                        wishlistId,
+                        cancellationToken);
 
-            if (wish.HasImageContentHash(contentHash))
-                return CreateDetails(wish);
+                if (wish.Version != expectedVersion)
+                    throw new WishVersionConflictException();
 
-            originalImageId = wish.ReplaceImage(
-                imageId,
-                contentHash);
+                if (wish.HasImageContentHash(contentHash))
+                    return CreateDetails(wish);
+                originalImageId = wish.ReplaceImage(
+                    imageId,
+                    contentHash);
 
-            if (originalImageId is Guid replacedImageId)
-            {
-                giftImageDeletionOutboxRepository.Add(
-                    GiftImageDeletionOutboxMessage.Create(
-                        replacedImageId,
-                        timeProvider.GetUtcNow().UtcDateTime));
+                if (originalImageId is Guid replacedImageId)
+                {
+                    giftImageDeletionOutboxRepository.Add(GiftImageDeletionOutboxMessage.Create(
+                            replacedImageId,
+                            timeProvider
+                                .GetUtcNow()
+                                .UtcDateTime));
+                }
+
+                await unitOfWork.SaveChangesAsync(cancellationToken);
+                saveAttempted = true;
+                await transaction.CommitAsync(cancellationToken);
+                completedResult = CreateDetails(wish);
             }
 
-            saveAttempted = true;
-            await unitOfWork.SaveChangesAsync(cancellationToken);
-
-            return CreateDetails(wish);
+            return completedResult;
         }
         catch (Exception exception) when (IsImageWriteConflict(exception))
         {
+
             return await ResolveConcurrentUpdateAsync(
                 ownerId,
                 wishlistId,
@@ -573,12 +606,13 @@ public class WishService(
         }
         catch (Exception exception)
         {
-            if (exception is DependencyUnavailableException ||
-                !PostgreSqlFailureClassifier.IsUnavailable(exception))
+
+            if (exception is DependencyUnavailableException || !PostgreSqlFailureClassifier.IsUnavailable(exception))
                 throw;
 
             if (!saveAttempted)
             {
+
                 throw new DependencyUnavailableException(
                     "PostgreSQL",
                     exception);
@@ -595,7 +629,7 @@ public class WishService(
         }
     }
 
-    /// <inheritdoc />
+    /// <inheritdoc/>
     public async Task<WishDetails?> DeleteImageAsync(
         Guid ownerId,
         Guid wishlistId,
@@ -604,37 +638,49 @@ public class WishService(
         CancellationToken cancellationToken)
     {
         var saveAttempted = false;
-
         try
         {
-            var wish = await wishRepository.GetByIdForUpdateAsync(
-                wishlistId,
-                wishId,
-                cancellationToken);
-
-            if (wish is null)
-                return await ResolveMissingWishAsync(
+            WishDetails? completedResult;
+            await using (var transaction = await wishTransactionFactory.BeginAsync(
+                IsolationLevel.ReadCommitted,
+                cancellationToken))
+            {
+                await mutationGuard.LockAsync(
                     ownerId,
                     wishlistId,
                     cancellationToken);
+                var wish = await wishRepository.GetByIdForUpdateAsync(
+                    wishlistId,
+                    wishId,
+                    cancellationToken);
 
-            if (wish.Version != expectedVersion)
-                throw new WishVersionConflictException();
+                if (wish is null)
+                    return await ResolveMissingWishAsync(
+                        ownerId,
+                        wishlistId,
+                        cancellationToken);
 
-            if (wish.RemoveImage() is not Guid imageId)
-                throw new GiftImageNotFoundException();
+                if (wish.Version != expectedVersion)
+                    throw new WishVersionConflictException();
 
-            giftImageDeletionOutboxRepository.Add(
-                GiftImageDeletionOutboxMessage.Create(
-                    imageId,
-                    timeProvider.GetUtcNow().UtcDateTime));
-            saveAttempted = true;
-            await unitOfWork.SaveChangesAsync(cancellationToken);
+                if (wish.RemoveImage() is not Guid imageId)
+                    throw new GiftImageNotFoundException();
+                giftImageDeletionOutboxRepository.Add(GiftImageDeletionOutboxMessage.Create(
+                        imageId,
+                        timeProvider
+                            .GetUtcNow()
+                            .UtcDateTime));
+                await unitOfWork.SaveChangesAsync(cancellationToken);
+                saveAttempted = true;
+                await transaction.CommitAsync(cancellationToken);
+                completedResult = CreateDetails(wish);
+            }
 
-            return CreateDetails(wish);
+            return completedResult;
         }
         catch (Exception exception) when (IsImageWriteConflict(exception))
         {
+
             return await ResolveConcurrentUpdateAsync(
                 ownerId,
                 wishlistId,
@@ -643,6 +689,7 @@ public class WishService(
         }
         catch (Exception exception)
         {
+
             if (!PostgreSqlFailureClassifier.IsUnavailable(exception))
                 throw;
 
@@ -670,7 +717,7 @@ public class WishService(
         }
     }
 
-    /// <inheritdoc />
+    /// <inheritdoc/>
     public async Task<bool> DeleteAsync(
         Guid ownerId,
         Guid wishlistId,
@@ -679,49 +726,60 @@ public class WishService(
         CancellationToken cancellationToken)
     {
         var saveAttempted = false;
-
         try
         {
-            var wish = await wishRepository.GetByIdForUpdateAsync(
-                wishlistId,
-                wishId,
-                cancellationToken);
-
-            if (wish is null)
+            await using (var transaction = await wishTransactionFactory.BeginAsync(
+                IsolationLevel.ReadCommitted,
+                cancellationToken))
             {
-                var access = await GetAccessSafelyAsync(
+                await mutationGuard.LockAsync(
                     ownerId,
                     wishlistId,
                     cancellationToken);
+                var wish = await wishRepository.GetByIdForUpdateAsync(
+                    wishlistId,
+                    wishId,
+                    cancellationToken);
 
-                if (access is WishlistAccess.MemberNotFound)
-                    throw new InvalidAuthenticationSessionException();
+                if (wish is null)
+                {
+                    var access = await GetAccessSafelyAsync(
+                        ownerId,
+                        wishlistId,
+                        cancellationToken);
 
-                if (access is WishlistAccess.NotOwned)
-                    throw new WishlistNotFoundException();
+                    if (access is WishlistAccess.MemberNotFound)
+                        throw new InvalidAuthenticationSessionException();
 
-                return false;
+                    if (access is WishlistAccess.NotOwned)
+                        throw new WishlistNotFoundException();
+
+                    return false;
+                }
+
+                if (wish.Version != expectedVersion)
+                    throw new WishVersionConflictException();
+
+                if (wish.ImageId is Guid imageId)
+                {
+                    giftImageDeletionOutboxRepository.Add(GiftImageDeletionOutboxMessage.Create(
+                            imageId,
+                            timeProvider
+                                .GetUtcNow()
+                                .UtcDateTime));
+                }
+
+                wishRepository.Remove(wish);
+                await unitOfWork.SaveChangesAsync(cancellationToken);
+                saveAttempted = true;
+                await transaction.CommitAsync(cancellationToken);
             }
-
-            if (wish.Version != expectedVersion)
-                throw new WishVersionConflictException();
-
-            if (wish.ImageId is Guid imageId)
-            {
-                giftImageDeletionOutboxRepository.Add(
-                    GiftImageDeletionOutboxMessage.Create(
-                        imageId,
-                        timeProvider.GetUtcNow().UtcDateTime));
-            }
-
-            wishRepository.Remove(wish);
-            saveAttempted = true;
-            await unitOfWork.SaveChangesAsync(cancellationToken);
 
             return true;
         }
         catch (Exception exception) when (IsImageWriteConflict(exception))
         {
+
             return await ResolveConcurrentDeletionAsync(
                 ownerId,
                 wishlistId,
@@ -730,12 +788,13 @@ public class WishService(
         }
         catch (Exception exception)
         {
-            if (exception is DependencyUnavailableException ||
-                !PostgreSqlFailureClassifier.IsUnavailable(exception))
+
+            if (exception is DependencyUnavailableException || !PostgreSqlFailureClassifier.IsUnavailable(exception))
                 throw;
 
             if (!saveAttempted)
             {
+
                 throw new DependencyUnavailableException(
                     "PostgreSQL",
                     exception);
@@ -760,7 +819,7 @@ public class WishService(
     /// <param name="originalImageId">The optional image identifier before the attempt.</param>
     /// <param name="originalException">The transient save exception.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>The committed wish, or <see langword="null" /> when it disappeared.</returns>
+    /// <returns>The committed wish, or <see langword="null"/> when it disappeared.</returns>
     private async Task<WishDetails?> ResolveAmbiguousImageUpsertAsync(
         Guid ownerId,
         Guid wishlistId,
@@ -778,11 +837,11 @@ public class WishService(
         if (currentWish?.ImageId == attemptedImageId)
             return CreateDetails(currentWish);
 
-        if (currentWish is not null &&
-            Nullable.Equals(
-                currentWish.ImageId,
-                originalImageId))
+        if (currentWish is not null && Nullable.Equals(
+            currentWish.ImageId,
+            originalImageId))
         {
+
             throw new DependencyUnavailableException(
                 "PostgreSQL",
                 originalException);
@@ -812,7 +871,7 @@ public class WishService(
     /// <param name="wishlistId">The parent wishlist identifier.</param>
     /// <param name="wishId">The wish identifier.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns><see langword="false" /> when the wish disappeared from an owned parent.</returns>
+    /// <returns><see langword="false"/> when the wish disappeared from an owned parent.</returns>
     /// <exception cref="InvalidAuthenticationSessionException">The authenticated member disappeared.</exception>
     /// <exception cref="WishlistNotFoundException">The parent wishlist is unavailable to the owner.</exception>
     /// <exception cref="WishVersionConflictException">The wish still exists with another version.</exception>
@@ -832,7 +891,6 @@ public class WishService(
 
         if (access is WishlistAccess.NotOwned)
             throw new WishlistNotFoundException();
-
         var currentWish = await GetByIdSafelyAsync(
             wishlistId,
             wishId,
@@ -852,7 +910,7 @@ public class WishService(
     /// <param name="wishId">The wish identifier.</param>
     /// <param name="originalException">The transient save exception.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns><see langword="true" /> when the wish is no longer available.</returns>
+    /// <returns><see langword="true"/> when the wish is no longer available.</returns>
     /// <exception cref="InvalidAuthenticationSessionException">The authenticated member disappeared.</exception>
     /// <exception cref="DependencyUnavailableException">The attempted deletion cannot be confirmed.</exception>
     private async Task<bool> ResolveAmbiguousDeletionAsync(
@@ -872,7 +930,6 @@ public class WishService(
 
         if (access is WishlistAccess.NotOwned)
             return true;
-
         var currentWish = await GetByIdSafelyAsync(
             wishlistId,
             wishId,
@@ -892,7 +949,7 @@ public class WishService(
     /// <param name="ownerId">The authenticated owner identifier.</param>
     /// <param name="wishlistId">The parent wishlist identifier.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns><see langword="null" /> when the owned parent does not contain the wish.</returns>
+    /// <returns><see langword="null"/> when the owned parent does not contain the wish.</returns>
     /// <exception cref="InvalidAuthenticationSessionException">The authenticated member disappeared.</exception>
     /// <exception cref="WishlistNotFoundException">The parent wishlist is unavailable to the owner.</exception>
     private async Task<WishDetails?> ResolveMissingWishAsync(
@@ -921,7 +978,7 @@ public class WishService(
     /// <param name="wishlistId">The parent wishlist identifier.</param>
     /// <param name="wishId">The wish identifier.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns><see langword="null" /> when the wish disappeared from an owned parent.</returns>
+    /// <returns><see langword="null"/> when the wish disappeared from an owned parent.</returns>
     /// <exception cref="InvalidAuthenticationSessionException">The authenticated member disappeared.</exception>
     /// <exception cref="WishlistNotFoundException">The parent wishlist is unavailable to the owner.</exception>
     /// <exception cref="WishVersionConflictException">The wish still exists with a different version.</exception>
@@ -941,7 +998,6 @@ public class WishService(
 
         if (access is WishlistAccess.NotOwned)
             throw new WishlistNotFoundException();
-
         var currentWish = await GetByIdSafelyAsync(
             wishlistId,
             wishId,
@@ -961,7 +1017,7 @@ public class WishService(
     /// <param name="originalWish">The exact wish state before the attempted update.</param>
     /// <param name="originalException">The transient save exception.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>The committed wish, or <see langword="null" /> when the wish disappeared.</returns>
+    /// <returns>The committed wish, or <see langword="null"/> when the wish disappeared.</returns>
     /// <exception cref="InvalidAuthenticationSessionException">The authenticated member disappeared.</exception>
     /// <exception cref="WishlistNotFoundException">The parent wishlist is unavailable to the owner.</exception>
     /// <exception cref="WishVersionConflictException">A different wish state was committed.</exception>
@@ -978,19 +1034,19 @@ public class WishService(
             attemptedWish.Id,
             cancellationToken);
 
-        if (currentWish is not null &&
-            HasSameClientValues(
-                currentWish,
-                attemptedWish))
+        if (currentWish is not null && HasSameClientValues(
+            currentWish,
+            attemptedWish))
         {
+
             return CreateDetails(currentWish);
         }
 
-        if (currentWish is not null &&
-            HasSameClientValues(
-                currentWish,
-                originalWish))
+        if (currentWish is not null && HasSameClientValues(
+            currentWish,
+            originalWish))
         {
+
             throw new DependencyUnavailableException(
                 "PostgreSQL",
                 originalException);
@@ -1029,12 +1085,10 @@ public class WishService(
             wish.Price,
             wish.Position,
             wish.Quantity);
-
         var contentHash = wish.ImageContentHash;
 
         if (contentHash is null)
             return copy;
-
         copy.ReplaceImage(
             wish.ImageId.GetValueOrDefault(),
             contentHash);
@@ -1049,7 +1103,7 @@ public class WishService(
     /// <param name="attemptedWish">The exact wish whose save was attempted.</param>
     /// <param name="originalException">The transient save exception.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>The committed wish, or <see langword="null" /> when its parent is unavailable.</returns>
+    /// <returns>The committed wish, or <see langword="null"/> when its parent is unavailable.</returns>
     /// <exception cref="InvalidAuthenticationSessionException">The authenticated member disappeared.</exception>
     /// <exception cref="DependencyUnavailableException">The attempted creation cannot be confirmed.</exception>
     private async Task<WishDetails?> ResolveAmbiguousCreationAsync(
@@ -1063,11 +1117,11 @@ public class WishService(
             attemptedWish.Id,
             cancellationToken);
 
-        if (currentWish is not null &&
-            HasSameClientValues(
-                currentWish,
-                attemptedWish))
+        if (currentWish is not null && HasSameClientValues(
+            currentWish,
+            attemptedWish))
         {
+
             return CreateDetails(currentWish);
         }
 
@@ -1093,7 +1147,7 @@ public class WishService(
     /// <param name="ownerId">The authenticated owner identifier.</param>
     /// <param name="wishlistId">The parent wishlist identifier.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns><see langword="null" /> when the parent is unavailable.</returns>
+    /// <returns><see langword="null"/> when the parent is unavailable.</returns>
     /// <exception cref="InvalidAuthenticationSessionException">The authenticated member disappeared.</exception>
     private async Task<WishDetails?> ResolveMissingWishlistAsync(
         Guid ownerId,
@@ -1117,7 +1171,7 @@ public class WishService(
     /// <param name="wishlistId">The parent wishlist identifier.</param>
     /// <param name="wishId">The wish identifier.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>The wish when found; otherwise, <see langword="null" />.</returns>
+    /// <returns>The wish when found; otherwise, <see langword="null"/>.</returns>
     /// <exception cref="DependencyUnavailableException">PostgreSQL is unavailable.</exception>
     private async Task<Wish?> GetByIdSafelyAsync(
         Guid wishlistId,
@@ -1126,6 +1180,7 @@ public class WishService(
     {
         try
         {
+
             return await wishRepository.GetByIdAsync(
                 wishlistId,
                 wishId,
@@ -1133,6 +1188,7 @@ public class WishService(
         }
         catch (Exception exception) when (PostgreSqlFailureClassifier.IsUnavailable(exception))
         {
+
             throw new DependencyUnavailableException(
                 "PostgreSQL",
                 exception);
@@ -1154,6 +1210,7 @@ public class WishService(
     {
         try
         {
+
             return await wishlistRepository.GetAccessAsync(
                 ownerId,
                 wishlistId,
@@ -1161,6 +1218,7 @@ public class WishService(
         }
         catch (Exception exception) when (PostgreSqlFailureClassifier.IsUnavailable(exception))
         {
+
             throw new DependencyUnavailableException(
                 "PostgreSQL",
                 exception);
@@ -1174,6 +1232,7 @@ public class WishService(
     /// <returns>The application wish details.</returns>
     private static WishDetails CreateDetails(Wish wish)
     {
+
         return new WishDetails(
             wish.Id,
             wish.WishlistId,
@@ -1193,7 +1252,7 @@ public class WishService(
     /// Determines whether an update violated the wish parent foreign key.
     /// </summary>
     /// <param name="exception">The database update exception.</param>
-    /// <returns><see langword="true" /> for the expected foreign-key violation.</returns>
+    /// <returns><see langword="true"/> for the expected foreign-key violation.</returns>
     private static bool IsMissingWishlist(Exception exception)
     {
         var postgresException = exception switch
@@ -1203,18 +1262,14 @@ public class WishService(
             _ => null
         };
 
-        return postgresException is
-        {
-            SqlState: PostgresErrorCodes.ForeignKeyViolation,
-            ConstraintName: WishlistForeignKeyName or PositionWishlistForeignKeyName
-        };
+        return postgresException is { SqlState: PostgresErrorCodes.ForeignKeyViolation, ConstraintName: WishlistForeignKeyName or PositionWishlistForeignKeyName };
     }
 
     /// <summary>
     /// Determines whether a database update exceeded the wishlist gift limit.
     /// </summary>
     /// <param name="exception">The database update exception.</param>
-    /// <returns><see langword="true" /> for the expected limit constraint.</returns>
+    /// <returns><see langword="true"/> for the expected limit constraint.</returns>
     private static bool IsWishLimitReached(Exception exception)
     {
         var postgresException = exception switch
@@ -1224,18 +1279,14 @@ public class WishService(
             _ => null
         };
 
-        return postgresException is
-        {
-            SqlState: PostgresErrorCodes.CheckViolation,
-            ConstraintName: WishCountConstraintName
-        };
+        return postgresException is { SqlState: PostgresErrorCodes.CheckViolation, ConstraintName: WishCountConstraintName };
     }
 
     /// <summary>
     /// Determines whether a database update reduced a wish below its reserved quantity.
     /// </summary>
     /// <param name="exception">The database update exception.</param>
-    /// <returns><see langword="true" /> for the expected reservation invariant violation.</returns>
+    /// <returns><see langword="true"/> for the expected reservation invariant violation.</returns>
     private static bool IsWishQuantityBelowReserved(Exception exception)
     {
         var postgresException = exception switch
@@ -1245,11 +1296,7 @@ public class WishService(
             _ => null
         };
 
-        return postgresException is
-        {
-            SqlState: PostgresErrorCodes.CheckViolation,
-            ConstraintName: WishQuantityConstraintName
-        };
+        return postgresException is { SqlState: PostgresErrorCodes.CheckViolation, ConstraintName: WishQuantityConstraintName };
     }
 
     /// <summary>
@@ -1257,31 +1304,13 @@ public class WishService(
     /// </summary>
     /// <param name="first">The first wish.</param>
     /// <param name="second">The second wish.</param>
-    /// <returns><see langword="true" /> when their client-controlled values match.</returns>
+    /// <returns><see langword="true"/> when their client-controlled values match.</returns>
     private static bool HasSameClientValues(
         Wish first,
         Wish second)
     {
-        var firstValues = (
-            first.Id,
-            first.WishlistId,
-            first.Name,
-            first.Note,
-            first.Url,
-            first.Price,
-            first.Quantity,
-            first.Position,
-            first.ImageId);
-        var secondValues = (
-            second.Id,
-            second.WishlistId,
-            second.Name,
-            second.Note,
-            second.Url,
-            second.Price,
-            second.Quantity,
-            second.Position,
-            second.ImageId);
+        var firstValues = (first.Id, first.WishlistId, first.Name, first.Note, first.Url, first.Price, first.Quantity, first.Position, first.ImageId);
+        var secondValues = (second.Id, second.WishlistId, second.Name, second.Note, second.Url, second.Price, second.Quantity, second.Position, second.ImageId);
 
         if (!firstValues.Equals(secondValues))
             return false;
@@ -1297,13 +1326,6 @@ public class WishService(
     private static bool IsImageWriteConflict(Exception exception)
     {
 
-        return exception is DbUpdateConcurrencyException or DbUpdateException
-        {
-            InnerException: PostgresException
-            {
-                SqlState: PostgresErrorCodes.UniqueViolation,
-                ConstraintName: "ux_gift_image_deletion_outbox_image_id"
-            }
-        };
+        return exception is DbUpdateConcurrencyException or DbUpdateException { InnerException: PostgresException { SqlState: PostgresErrorCodes.UniqueViolation, ConstraintName: "ux_gift_image_deletion_outbox_image_id" } };
     }
 }

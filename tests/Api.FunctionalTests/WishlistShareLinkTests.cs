@@ -46,6 +46,7 @@ public class WishlistShareLinkTests
         await using var factory = new RegistrationApiFactory();
         var ownerId = Guid.CreateVersion7();
         var wishlistId = Guid.CreateVersion7();
+        factory.WishlistService.SeedActiveWishlist(wishlistId);
         using var client = CreateAuthorizedClient(
             factory,
             ownerId);
@@ -99,6 +100,7 @@ public class WishlistShareLinkTests
         await using var factory = new RegistrationApiFactory();
         var ownerId = Guid.CreateVersion7();
         var wishlistId = Guid.CreateVersion7();
+        factory.WishlistService.SeedActiveWishlist(wishlistId);
         var shareLinkId = Guid.CreateVersion7();
         await factory.WishlistShareService.CreateAsync(
             shareLinkId,
@@ -148,6 +150,7 @@ public class WishlistShareLinkTests
         await using var factory = new RegistrationApiFactory();
         var ownerId = Guid.CreateVersion7();
         var wishlistId = Guid.CreateVersion7();
+        factory.WishlistService.SeedActiveWishlist(wishlistId);
         var shareLinkId = Guid.CreateVersion7();
         await factory.WishlistShareService.CreateAsync(
             shareLinkId,
@@ -193,6 +196,7 @@ public class WishlistShareLinkTests
         await using var factory = new RegistrationApiFactory();
         var ownerId = Guid.CreateVersion7();
         var wishlistId = Guid.CreateVersion7();
+        factory.WishlistService.SeedActiveWishlist(wishlistId);
         using var client = CreateAuthorizedClient(
             factory,
             ownerId);
@@ -221,6 +225,7 @@ public class WishlistShareLinkTests
         await using var factory = new RegistrationApiFactory();
         var ownerId = Guid.CreateVersion7();
         var wishlistId = Guid.CreateVersion7();
+        factory.WishlistService.SeedActiveWishlist(wishlistId);
         factory.WishlistService.Access = WishlistAccess.NotOwned;
         using var client = CreateAuthorizedClient(
             factory,
@@ -246,6 +251,7 @@ public class WishlistShareLinkTests
         await using var factory = new RegistrationApiFactory();
         var ownerId = Guid.CreateVersion7();
         var wishlistId = Guid.CreateVersion7();
+        factory.WishlistService.SeedActiveWishlist(wishlistId);
         await factory.WishlistShareService.CreateAsync(
             Guid.CreateVersion7(),
             ownerId,
@@ -285,6 +291,7 @@ public class WishlistShareLinkTests
         await using var factory = new RegistrationApiFactory();
         var ownerId = Guid.CreateVersion7();
         var wishlistId = Guid.CreateVersion7();
+        factory.WishlistService.SeedActiveWishlist(wishlistId);
         using var client = CreateAuthorizedClient(
             factory,
             ownerId);
@@ -314,6 +321,7 @@ public class WishlistShareLinkTests
         await using var factory = new RegistrationApiFactory();
         var ownerId = Guid.CreateVersion7();
         var wishlistId = Guid.CreateVersion7();
+        factory.WishlistService.SeedActiveWishlist(wishlistId);
         using var client = CreateAuthorizedClient(
             factory,
             ownerId);
@@ -680,6 +688,7 @@ public class WishlistShareLinkTests
         var memberId = Guid.CreateVersion7();
         var shareLinkId = Guid.CreateVersion7();
         var wishlistId = Guid.CreateVersion7();
+        factory.WishlistService.SeedActiveWishlist(wishlistId);
         var wishId = Guid.CreateVersion7();
         var participant = new WishlistParticipantDetails(
             Guid.CreateVersion7(),
@@ -1065,6 +1074,7 @@ public class WishlistShareLinkTests
         await using var factory = new RegistrationApiFactory();
         var ownerId = Guid.CreateVersion7();
         var wishlistId = Guid.CreateVersion7();
+        factory.WishlistService.SeedActiveWishlist(wishlistId);
         using var client = CreateAuthorizedClient(
             factory,
             ownerId);

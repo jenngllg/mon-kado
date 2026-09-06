@@ -286,9 +286,12 @@ public class WishlistOpenApiTests
                 "createdAt",
                 "eventDate",
                 "id",
+                "isSuspended",
                 "message",
                 "name",
                 "occasion",
+                "suspendedAt",
+                "suspensionReason",
                 "updatedAt"
             ],
             schema
@@ -317,9 +320,12 @@ public class WishlistOpenApiTests
                 "createdAt",
                 "eventDate",
                 "id",
+                "isSuspended",
                 "message",
                 "name",
                 "occasion",
+                "suspendedAt",
+                "suspensionReason",
                 "updatedAt"
             ],
             itemSchema

@@ -81,6 +81,7 @@ public class WishlistShareLinksController(
     [NoStoreResponse(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(WishlistShareLinkResponse), StatusCodes.Status200OK, "application/json")]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status409Conflict, "application/json")]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status503ServiceUnavailable, "application/json")]
     public async Task<ActionResult<WishlistShareLinkResponse>> GetAsync(
         Guid wishlistId,
@@ -110,6 +111,7 @@ public class WishlistShareLinksController(
     [ProducesResponseType(typeof(WishlistShareLinkResponse), StatusCodes.Status200OK, "application/json")]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest, "application/json")]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status409Conflict, "application/json")]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status412PreconditionFailed, "application/json")]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status428PreconditionRequired, "application/json")]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status503ServiceUnavailable, "application/json")]
@@ -142,6 +144,7 @@ public class WishlistShareLinksController(
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest, "application/json")]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status409Conflict, "application/json")]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status412PreconditionFailed, "application/json")]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status428PreconditionRequired, "application/json")]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status503ServiceUnavailable, "application/json")]
@@ -170,7 +173,7 @@ public class WishlistShareLinksController(
         var authorization = await authorizationService.AuthorizeAsync(
             User,
             wishlistId,
-            AuthorizationPolicies.ManageWishlist);
+            AuthorizationPolicies.ModifyWishlist);
         cancellationToken.ThrowIfCancellationRequested();
 
         if (!authorization.Succeeded)

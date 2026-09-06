@@ -33,6 +33,8 @@ internal sealed class WishlistConfiguration : IEntityTypeConfiguration<Wishlist>
             .HasColumnType("date");
         builder.Property(wishlist => wishlist.Message)
             .HasMaxLength(WishlistTextValidation.MaximumMessageLength);
+        builder.Property(wishlist => wishlist.SuspensionReason)
+            .HasMaxLength(WishlistModerationValidation.MaximumReasonLength);
         builder.Property(wishlist => wishlist.Version)
             .IsRowVersion();
 
@@ -51,6 +53,10 @@ internal sealed class WishlistConfiguration : IEntityTypeConfiguration<Wishlist>
 
         builder.ToTable(table =>
         {
+            table.HasCheckConstraint(
+                "ck_wishlists_suspension_consistent",
+                "(NOT is_suspended AND suspension_reason IS NULL AND suspended_at IS NULL) OR " +
+                "(is_suspended AND suspension_reason IS NOT NULL AND char_length(btrim(suspension_reason)) > 0 AND suspended_at IS NOT NULL)");
             table.HasCheckConstraint(
                 "ck_wishlists_name_valid",
                 "char_length(btrim(name)) > 0 AND name !~ '[[:cntrl:]]'");

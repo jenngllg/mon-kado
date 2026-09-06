@@ -47,6 +47,7 @@ public class WishImportPreviewsController(
     [ProducesResponseType(typeof(WishImportPreview), StatusCodes.Status200OK, "application/json")]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest, "application/json")]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status409Conflict, "application/json")]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status413PayloadTooLarge, "application/json")]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status415UnsupportedMediaType, "application/json")]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status429TooManyRequests, "application/json")]
@@ -61,7 +62,7 @@ public class WishImportPreviewsController(
         var access = await authorizationService.AuthorizeAsync(
             User,
             wishlistId,
-            AuthorizationPolicies.ManageWishlist);
+            AuthorizationPolicies.ModifyWishlist);
         cancellationToken.ThrowIfCancellationRequested();
 
         if (!access.Succeeded)

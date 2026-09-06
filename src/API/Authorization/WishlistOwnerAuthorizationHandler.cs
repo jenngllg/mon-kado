@@ -42,7 +42,22 @@ public class WishlistOwnerAuthorizationHandler(
         if (access is WishlistAccess.MemberNotFound)
             throw new InvalidAuthenticationSessionException();
 
-        if (access is WishlistAccess.Owner)
-            context.Succeed(requirement);
+        if (access is not WishlistAccess.Owner)
+            return;
+
+        if (requirement.RequiresWritable)
+        {
+            var wishlist = await wishlistService.GetAsync(
+                resource,
+                httpContextAccessor.HttpContext?.RequestAborted ?? CancellationToken.None);
+
+            if (wishlist is null)
+                return;
+
+            if (wishlist.IsSuspended)
+                throw new WishlistSuspendedException();
+        }
+
+        context.Succeed(requirement);
     }
 }

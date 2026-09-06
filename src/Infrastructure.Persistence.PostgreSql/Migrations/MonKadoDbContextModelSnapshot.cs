@@ -307,6 +307,10 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Migrati
                         .HasColumnType("date")
                         .HasColumnName("event_date");
 
+                    b.Property<bool>("IsSuspended")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_suspended");
+
                     b.Property<string>("Message")
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)")
@@ -334,6 +338,15 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Migrati
                         .HasColumnType("uuid")
                         .HasColumnName("owner_id");
 
+                    b.Property<DateTime?>("SuspendedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("suspended_at");
+
+                    b.Property<string>("SuspensionReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("suspension_reason");
+
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("updated_at");
@@ -357,7 +370,63 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Migrati
 
                             t.HasCheckConstraint("ck_wishlists_occasion_valid", "occasion IN ('Birthday', 'Christmas', 'Wedding', 'Birth', 'Other')");
 
+                            t.HasCheckConstraint("ck_wishlists_suspension_consistent", "(NOT is_suspended AND suspension_reason IS NULL AND suspended_at IS NULL) OR (is_suspended AND suspension_reason IS NOT NULL AND char_length(btrim(suspension_reason)) > 0 AND suspended_at IS NOT NULL)");
+
                             t.HasCheckConstraint("ck_wishlists_timestamps_consistent", "updated_at IS NULL OR updated_at >= created_at");
+                        });
+                });
+
+            modelBuilder.Entity("JennGllg.Fr.MonKado.Back.Domain.Entities.WishlistModerationEvent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("action");
+
+                    b.Property<Guid?>("AdministratorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("administrator_id");
+
+                    b.Property<DateTime>("OccurredAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("occurred_at");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("reason");
+
+                    b.Property<long>("Sequence")
+                        .HasColumnType("bigint")
+                        .HasColumnName("sequence");
+
+                    b.Property<Guid>("WishlistId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("wishlist_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_wishlist_moderation_events");
+
+                    b.HasIndex("AdministratorId")
+                        .HasDatabaseName("ix_wishlist_moderation_events_administrator_id");
+
+                    b.HasIndex("WishlistId", "Sequence")
+                        .IsUnique()
+                        .HasDatabaseName("ix_wishlist_moderation_events_wishlist_id_sequence");
+
+                    b.ToTable("wishlist_moderation_events", "public", t =>
+                        {
+                            t.HasCheckConstraint("ck_wishlist_moderation_events_action", "action IN ('Suspended', 'ReasonUpdated', 'Reactivated')");
+
+                            t.HasCheckConstraint("ck_wishlist_moderation_events_reason", "(action = 'Reactivated' AND reason IS NULL) OR (action IN ('Suspended', 'ReasonUpdated') AND reason IS NOT NULL AND char_length(btrim(reason)) > 0)");
+
+                            t.HasCheckConstraint("ck_wishlist_moderation_events_sequence", "sequence > 0");
                         });
                 });
 
@@ -999,6 +1068,62 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Migrati
                         });
                 });
 
+            modelBuilder.Entity("JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Entities.WishlistModerationEmail", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<int>("AttemptCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("attempt_count");
+
+                    b.Property<DateTime>("AvailableAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("available_at");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("LastError")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("last_error");
+
+                    b.Property<Guid?>("LeaseId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("lease_id");
+
+                    b.Property<DateTime?>("LockedUntil")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("locked_until");
+
+                    b.Property<DateTime?>("ProcessedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("processed_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_wishlist_moderation_email_outbox");
+
+                    b.HasIndex("AvailableAt", "Id")
+                        .HasDatabaseName("ix_wishlist_moderation_email_outbox_available_at_id")
+                        .HasFilter("processed_at IS NULL");
+
+                    b.HasIndex("ProcessedAt", "Id")
+                        .HasDatabaseName("ix_wishlist_moderation_email_outbox_processed_at_id")
+                        .HasFilter("processed_at IS NOT NULL");
+
+                    b.ToTable("wishlist_moderation_email_outbox", "public", t =>
+                        {
+                            t.HasCheckConstraint("ck_wishlist_moderation_email_attempts", "attempt_count >= 0");
+
+                            t.HasCheckConstraint("ck_wishlist_moderation_email_dates", "available_at >= created_at AND (processed_at IS NULL OR processed_at >= created_at)");
+
+                            t.HasCheckConstraint("ck_wishlist_moderation_email_lease", "(lease_id IS NULL) = (locked_until IS NULL)");
+                        });
+                });
+
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRole<System.Guid>", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1031,6 +1156,13 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Migrati
                     b.ToTable("roles", "public");
 
                     b.HasData(
+                        new
+                        {
+                            Id = new Guid("019ec170-1570-7000-8000-000000000001"),
+                            ConcurrencyStamp = "019ec170-1570-7000-8000-000000000002",
+                            Name = "Admin",
+                            NormalizedName = "ADMIN"
+                        },
                         new
                         {
                             Id = new Guid("0198d027-51c0-7000-8000-000000000002"),
@@ -1224,6 +1356,22 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Migrati
                         .HasConstraintName("fk_wishlists_users_owner_id");
                 });
 
+            modelBuilder.Entity("JennGllg.Fr.MonKado.Back.Domain.Entities.WishlistModerationEvent", b =>
+                {
+                    b.HasOne("JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Entities.MonKadoUser", null)
+                        .WithMany()
+                        .HasForeignKey("AdministratorId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_wishlist_moderation_events_users_administrator_id");
+
+                    b.HasOne("JennGllg.Fr.MonKado.Back.Domain.Entities.Wishlist", null)
+                        .WithMany()
+                        .HasForeignKey("WishlistId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_wishlist_moderation_events_wishlists_wishlist_id");
+                });
+
             modelBuilder.Entity("JennGllg.Fr.MonKado.Back.Domain.Entities.WishlistParticipant", b =>
                 {
                     b.HasOne("JennGllg.Fr.MonKado.Back.Domain.Entities.GuestSession", null)
@@ -1320,6 +1468,16 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Migrati
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_wish_position_sequences_wishlists_wishlist_id");
+                });
+
+            modelBuilder.Entity("JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Entities.WishlistModerationEmail", b =>
+                {
+                    b.HasOne("JennGllg.Fr.MonKado.Back.Domain.Entities.WishlistModerationEvent", null)
+                        .WithOne()
+                        .HasForeignKey("JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Entities.WishlistModerationEmail", "Id")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_wishlist_moderation_email_outbox_wishlist_moderation_events");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<System.Guid>", b =>

@@ -1655,6 +1655,159 @@ public class GiftReservationIntegrationTests(PostgreSqlContainerFixture fixture)
             history.GetProperty("status").GetString());
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task PutAsync_WhenWishlistIsSuspendedThenReactivated_PreservesAndUnfreezesReservations(bool isGuest)
+    {
+        // Arrange
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var factory = await CreateFactoryAsync(cancellationToken);
+        var ownerId = Guid.CreateVersion7();
+        var memberId = Guid.CreateVersion7();
+        var administratorId = Guid.CreateVersion7();
+        var wishlistId = Guid.CreateVersion7();
+        var wishId = Guid.CreateVersion7();
+        await SeedAsync(
+            factory,
+            ownerId,
+            [
+                (memberId, "participant@example.test", "Participant"),
+                (administratorId, "administrator@example.test", "Administrator")
+            ],
+            wishlistId,
+            wishId,
+            3,
+            cancellationToken);
+        await WishlistModerationHttpTestHelper.GrantAdministratorAsync(
+            factory,
+            administratorId,
+            cancellationToken);
+        using var owner = CreateAuthorizedClient(
+            factory,
+            ownerId);
+        using var administrator = CreateAuthorizedClient(
+            factory,
+            administratorId);
+        using var participant = isGuest ? factory.CreateClient() : CreateAuthorizedClient(
+            factory,
+            memberId);
+        var link = await CreateShareLinkAsync(
+            owner,
+            wishlistId,
+            cancellationToken);
+        var csrfToken = await GetCsrfTokenAsync(
+            participant,
+            cancellationToken);
+        using var join = isGuest
+            ? await JoinGuestAsync(
+                participant,
+                link.Id,
+                link.Secret,
+                csrfToken,
+                cancellationToken)
+            : await JoinAsync(
+                participant,
+                link.Id,
+                link.Secret,
+                csrfToken,
+                cancellationToken);
+        csrfToken = await GetCsrfTokenAsync(
+            participant,
+            cancellationToken);
+        using var reserved = await UpsertAsync(
+            participant,
+            link.Id,
+            wishId,
+            link.Secret,
+            csrfToken,
+            1,
+            null,
+            cancellationToken);
+        Assert.Equal(
+            HttpStatusCode.Created,
+            reserved.StatusCode);
+        var reservationTag = Assert.IsType<string>(reserved.Headers.ETag?.Tag);
+
+        // Act
+        await WishlistModerationHttpTestHelper.SetStateAsync(
+            administrator,
+            wishlistId,
+            true,
+            cancellationToken);
+        using var modification = await UpsertAsync(
+            participant,
+            link.Id,
+            wishId,
+            link.Secret,
+            csrfToken,
+            2,
+            reservationTag,
+            cancellationToken);
+        using var cancellation = await CancelAsync(
+            participant,
+            link.Id,
+            wishId,
+            link.Secret,
+            csrfToken,
+            reservationTag,
+            cancellationToken);
+        using var unavailableList = await GetSharedWishlistAsync(
+            participant,
+            link.Id,
+            link.Secret,
+            false,
+            cancellationToken);
+        await WishlistModerationHttpTestHelper.SetStateAsync(
+            administrator,
+            wishlistId,
+            false,
+            cancellationToken);
+        using var current = await GetCurrentAsync(
+            participant,
+            link.Id,
+            wishId,
+            link.Secret,
+            cancellationToken);
+        var reservation = await current.Content.ReadFromJsonAsync<JsonElement>(cancellationToken);
+        using var resumed = await UpsertAsync(
+            participant,
+            link.Id,
+            wishId,
+            link.Secret,
+            csrfToken,
+            2,
+            reservationTag,
+            cancellationToken);
+        var updated = await resumed.Content.ReadFromJsonAsync<JsonElement>(cancellationToken);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.NotFound,
+            modification.StatusCode);
+        Assert.Equal(
+            HttpStatusCode.NotFound,
+            cancellation.StatusCode);
+        Assert.Equal(
+            HttpStatusCode.NotFound,
+            unavailableList.StatusCode);
+        Assert.Equal(
+            HttpStatusCode.OK,
+            current.StatusCode);
+        Assert.Equal(
+            reservationTag,
+            current.Headers.ETag?.Tag);
+        Assert.Equal(
+            1,
+            reservation.GetProperty("quantity").GetInt32());
+        Assert.Equal(
+            HttpStatusCode.OK,
+            resumed.StatusCode);
+        Assert.Equal(
+            2,
+            updated.GetProperty("quantity").GetInt32());
+    }
+
     private async Task<PostgreSqlApiFactory> CreateFactoryAsync(
         CancellationToken cancellationToken,
         Action<IServiceCollection>? configureServices = null)

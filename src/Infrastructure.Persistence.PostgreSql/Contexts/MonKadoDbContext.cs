@@ -42,6 +42,10 @@ public class MonKadoDbContext(DbContextOptions<MonKadoDbContext> options) : Iden
     /// Gets private wishlists.
     /// </summary>
     public DbSet<Wishlist> Wishlists => Set<Wishlist>();
+    /// <summary>Gets private administrator moderation decisions.</summary>
+    public DbSet<WishlistModerationEvent> WishlistModerationEvents => Set<WishlistModerationEvent>();
+    /// <summary>Gets durable moderation notification deliveries.</summary>
+    public DbSet<WishlistModerationEmail> WishlistModerationEmails => Set<WishlistModerationEmail>();
     /// <summary>
     /// Gets gift wishes.
     /// </summary>

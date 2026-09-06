@@ -23,6 +23,7 @@ public class WishTests
         await using var factory = new RegistrationApiFactory();
         var ownerId = Guid.CreateVersion7();
         var wishlistId = Guid.CreateVersion7();
+        factory.WishlistService.SeedActiveWishlist(wishlistId);
         using var client = CreateAuthorizedClient(
             factory,
             ownerId);
@@ -107,6 +108,7 @@ public class WishTests
         await using var factory = new RegistrationApiFactory();
         var ownerId = Guid.CreateVersion7();
         var wishlistId = Guid.CreateVersion7();
+        factory.WishlistService.SeedActiveWishlist(wishlistId);
         var wishId = Guid.CreateVersion7();
         factory.WishService.Wishes[(wishlistId, wishId)] = CreateDetails(
             wishlistId,
@@ -153,13 +155,15 @@ public class WishTests
     {
         // Arrange
         await using var factory = new RegistrationApiFactory();
+        var wishlistId = Guid.CreateVersion7();
+        factory.WishlistService.SeedActiveWishlist(wishlistId);
         using var client = CreateAuthorizedClient(
             factory,
             Guid.CreateVersion7());
 
         // Act
         using var response = await client.PostAsJsonAsync(
-            $"/api/v1/wishlists/{Guid.CreateVersion7()}/wishes",
+            $"/api/v1/wishlists/{wishlistId}/wishes",
             new
             {
                 name = "Cadeau"
@@ -217,6 +221,7 @@ public class WishTests
         await using var factory = new RegistrationApiFactory();
         factory.WishlistService.Access = WishlistAccess.NotOwned;
         var wishlistId = Guid.CreateVersion7();
+        factory.WishlistService.SeedActiveWishlist(wishlistId);
         using var client = CreateAuthorizedClient(
             factory,
             Guid.CreateVersion7());
@@ -250,6 +255,7 @@ public class WishTests
         await using var factory = new RegistrationApiFactory();
         factory.WishService.WishlistExists = false;
         var wishlistId = Guid.CreateVersion7();
+        factory.WishlistService.SeedActiveWishlist(wishlistId);
         using var client = CreateAuthorizedClient(
             factory,
             Guid.CreateVersion7());
@@ -282,6 +288,7 @@ public class WishTests
         // Arrange
         await using var factory = new RegistrationApiFactory();
         var wishlistId = Guid.CreateVersion7();
+        factory.WishlistService.SeedActiveWishlist(wishlistId);
         using var client = CreateAuthorizedClient(
             factory,
             Guid.CreateVersion7());
@@ -313,6 +320,8 @@ public class WishTests
     {
         // Arrange
         await using var factory = new RegistrationApiFactory();
+        var wishlistId = Guid.CreateVersion7();
+        factory.WishlistService.SeedActiveWishlist(wishlistId);
         using var client = CreateAuthorizedClient(
             factory,
             Guid.CreateVersion7());
@@ -323,7 +332,7 @@ public class WishTests
 
         // Act
         using var response = await client.PostAsync(
-            $"/api/v1/wishlists/{Guid.CreateVersion7()}/wishes",
+            $"/api/v1/wishlists/{wishlistId}/wishes",
             content,
             TestContext.Current.CancellationToken);
 
@@ -347,6 +356,7 @@ public class WishTests
         await using var factory = new RegistrationApiFactory();
         var ownerId = Guid.CreateVersion7();
         var wishlistId = Guid.CreateVersion7();
+        factory.WishlistService.SeedActiveWishlist(wishlistId);
         var wishId = Guid.CreateVersion7();
         factory.WishService.Wishes[(wishlistId, wishId)] = CreateDetails(
             wishlistId,
@@ -461,6 +471,7 @@ public class WishTests
         // Arrange
         await using var factory = new RegistrationApiFactory();
         var wishlistId = Guid.CreateVersion7();
+        factory.WishlistService.SeedActiveWishlist(wishlistId);
         var wishId = Guid.CreateVersion7();
         factory.WishService.Wishes[(wishlistId, wishId)] = CreateDetails(
             wishlistId,
@@ -500,6 +511,7 @@ public class WishTests
         // Arrange
         await using var factory = new RegistrationApiFactory();
         var wishlistId = Guid.CreateVersion7();
+        factory.WishlistService.SeedActiveWishlist(wishlistId);
         var wishId = Guid.CreateVersion7();
         factory.WishService.Wishes[(wishlistId, wishId)] = CreateDetails(
             wishlistId,
@@ -539,6 +551,7 @@ public class WishTests
         // Arrange
         await using var factory = new RegistrationApiFactory();
         var wishlistId = Guid.CreateVersion7();
+        factory.WishlistService.SeedActiveWishlist(wishlistId);
         var wishId = Guid.CreateVersion7();
         factory.WishService.Wishes[(wishlistId, wishId)] = CreateDetails(
             wishlistId,
@@ -579,6 +592,7 @@ public class WishTests
         await using var factory = new RegistrationApiFactory();
         factory.WishlistService.Access = WishlistAccess.NotOwned;
         var wishlistId = Guid.CreateVersion7();
+        factory.WishlistService.SeedActiveWishlist(wishlistId);
         using var client = CreateAuthorizedClient(
             factory,
             Guid.CreateVersion7());
@@ -613,6 +627,8 @@ public class WishTests
     {
         // Arrange
         await using var factory = new RegistrationApiFactory();
+        var wishlistId = Guid.CreateVersion7();
+        factory.WishlistService.SeedActiveWishlist(wishlistId);
         using var client = CreateAuthorizedClient(
             factory,
             Guid.CreateVersion7());
@@ -620,7 +636,7 @@ public class WishTests
         // Act
         using var response = await PutAsync(
             client,
-            Guid.CreateVersion7(),
+            wishlistId,
             Guid.CreateVersion7(),
             new
             {
@@ -647,6 +663,7 @@ public class WishTests
         // Arrange
         await using var factory = new RegistrationApiFactory();
         var wishlistId = Guid.CreateVersion7();
+        factory.WishlistService.SeedActiveWishlist(wishlistId);
         var wishId = Guid.CreateVersion7();
         factory.WishService.Wishes[(wishlistId, wishId)] = CreateDetails(
             wishlistId,
@@ -694,6 +711,7 @@ public class WishTests
         // Arrange
         await using var factory = new RegistrationApiFactory();
         var wishlistId = Guid.CreateVersion7();
+        factory.WishlistService.SeedActiveWishlist(wishlistId);
         var wishId = Guid.CreateVersion7();
         factory.WishService.Wishes[(wishlistId, wishId)] = CreateDetails(
             wishlistId,
@@ -800,6 +818,7 @@ public class WishTests
         await using var factory = new RegistrationApiFactory();
         var ownerId = Guid.CreateVersion7();
         var wishlistId = Guid.CreateVersion7();
+        factory.WishlistService.SeedActiveWishlist(wishlistId);
         var wishId = Guid.CreateVersion7();
         factory.WishService.Wishes[(wishlistId, wishId)] = CreateDetails(
             wishlistId,
@@ -853,6 +872,7 @@ public class WishTests
         await using var factory = new RegistrationApiFactory();
         var ownerId = Guid.CreateVersion7();
         var wishlistId = Guid.CreateVersion7();
+        factory.WishlistService.SeedActiveWishlist(wishlistId);
         using var client = CreateAuthorizedClient(
             factory,
             ownerId);
@@ -886,12 +906,14 @@ public class WishTests
     {
         // Arrange
         await using var factory = new RegistrationApiFactory();
+        var wishlistId = Guid.CreateVersion7();
+        factory.WishlistService.SeedActiveWishlist(wishlistId);
         using var client = CreateAuthorizedClient(
             factory,
             Guid.CreateVersion7());
         using var request = new HttpRequestMessage(
             HttpMethod.Delete,
-            $"/api/v1/wishlists/{Guid.CreateVersion7()}/wishes/{Guid.CreateVersion7()}");
+            $"/api/v1/wishlists/{wishlistId}/wishes/{Guid.CreateVersion7()}");
         request.Headers.TryAddWithoutValidation(
             "If-Match",
             "invalid");
@@ -931,6 +953,7 @@ public class WishTests
         // Arrange
         await using var factory = new RegistrationApiFactory();
         var wishlistId = Guid.CreateVersion7();
+        factory.WishlistService.SeedActiveWishlist(wishlistId);
         var wishId = Guid.CreateVersion7();
         factory.WishService.Wishes[(wishlistId, wishId)] = CreateDetails(
             wishlistId,

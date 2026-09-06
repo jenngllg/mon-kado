@@ -8,6 +8,7 @@ using Microsoft.EntityFrameworkCore;
 
 using Npgsql;
 
+using System.Data;
 using System.Security.Cryptography;
 
 namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Services;
@@ -19,16 +20,19 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Service
 /// <param name="wishlistRepository">The wishlist repository.</param>
 /// <param name="tokenService">The share-token service.</param>
 /// <param name="unitOfWork">The unit of work.</param>
+/// <param name="transactionFactory">The explicit transaction factory.</param>
+/// <param name="mutationGuard">The transaction-scoped writable parent guard.</param>
 public class WishlistShareService(
     IWishlistShareLinkRepository shareLinkRepository,
     IWishlistRepository wishlistRepository,
     IWishlistShareTokenService tokenService,
-    IUnitOfWork unitOfWork) : IWishlistShareService
+    IUnitOfWork unitOfWork,
+    IWishTransactionFactory transactionFactory,
+    IWishlistMutationGuard mutationGuard) : IWishlistShareService
 {
     private const string WishlistForeignKeyName = "fk_wishlist_share_links_wishlists_wishlist_id";
     private const string WishlistIndexName = "ux_wishlist_share_links_wishlist_id";
-
-    /// <inheritdoc />
+    /// <inheritdoc/>
     public async Task<WishlistShareLinkDetails?> CreateAsync(
         Guid id,
         Guid ownerId,
@@ -46,25 +50,46 @@ public class WishlistShareService(
             token.SecretHash,
             token.ProtectedSecret);
         shareLinkRepository.Add(shareLink);
-
+        var commitAttempted = false;
         try
         {
-            await unitOfWork.SaveChangesAsync(cancellationToken);
+            WishlistShareLinkDetails? completedResult;
+            await using (var transaction = await transactionFactory.BeginAsync(
+                IsolationLevel.ReadCommitted,
+                cancellationToken))
+            {
+                await mutationGuard.LockAsync(
+                    ownerId,
+                    wishlistId,
+                    cancellationToken);
+                await unitOfWork.SaveChangesAsync(cancellationToken);
+                commitAttempted = true;
+                await transaction.CommitAsync(cancellationToken);
+                completedResult = CreateDetails(
+                    shareLink,
+                    token.Secret);
+            }
 
-            return CreateDetails(
-                shareLink,
-                token.Secret);
+            return completedResult;
         }
         catch (DbUpdateException exception) when (IsDuplicateWishlist(exception))
         {
+
             throw new WishlistShareLinkAlreadyExistsException();
         }
         catch (DbUpdateException exception) when (IsMissingWishlist(exception))
         {
+
             return null;
         }
         catch (Exception exception) when (PostgreSqlFailureClassifier.IsUnavailable(exception))
         {
+
+            if (!commitAttempted)
+                throw new DependencyUnavailableException(
+                    "PostgreSQL",
+                    exception);
+
             return await ResolveAmbiguousCreationAsync(
                 ownerId,
                 shareLink,
@@ -74,7 +99,7 @@ public class WishlistShareService(
         }
     }
 
-    /// <inheritdoc />
+    /// <inheritdoc/>
     public async Task<WishlistShareLinkDetails?> GetAsync(
         Guid ownerId,
         Guid wishlistId,
@@ -84,28 +109,37 @@ public class WishlistShareService(
             ownerId,
             wishlistId,
             cancellationToken);
-
         try
         {
-            var shareLink = await shareLinkRepository.GetByWishlistIdAsync(
-                wishlistId,
-                cancellationToken);
-
-            return shareLink is null
-                ? null
-                : CreateDetails(
+            WishlistShareLinkDetails? completedResult;
+            await using (var transaction = await transactionFactory.BeginAsync(
+                IsolationLevel.ReadCommitted,
+                cancellationToken))
+            {
+                await mutationGuard.LockAsync(
+                    ownerId,
+                    wishlistId,
+                    cancellationToken);
+                var shareLink = await shareLinkRepository.GetByWishlistIdAsync(
+                    wishlistId,
+                    cancellationToken);
+                completedResult = shareLink is null ? null : CreateDetails(
                     shareLink,
                     tokenService.Unprotect(shareLink.ProtectedSecret));
+            }
+
+            return completedResult;
         }
         catch (Exception exception) when (PostgreSqlFailureClassifier.IsUnavailable(exception))
         {
+
             throw new DependencyUnavailableException(
                 "PostgreSQL",
                 exception);
         }
     }
 
-    /// <inheritdoc />
+    /// <inheritdoc/>
     public async Task<WishlistShareLinkDetails?> RotateAsync(
         Guid ownerId,
         Guid wishlistId,
@@ -113,41 +147,49 @@ public class WishlistShareService(
         CancellationToken cancellationToken)
     {
         (Guid Id, byte[] OriginalHash, string OriginalProtectedSecret, WishlistShareToken Token)? attemptedRotation = null;
-
+        var commitAttempted = false;
         await EnsureOwnershipAsync(
             ownerId,
             wishlistId,
             cancellationToken);
-
         try
         {
-            var shareLink = await shareLinkRepository.GetByWishlistIdForUpdateAsync(
-                wishlistId,
-                cancellationToken);
+            WishlistShareLinkDetails? completedResult;
+            await using (var transaction = await transactionFactory.BeginAsync(
+                IsolationLevel.ReadCommitted,
+                cancellationToken))
+            {
+                await mutationGuard.LockAsync(
+                    ownerId,
+                    wishlistId,
+                    cancellationToken);
+                var shareLink = await shareLinkRepository.GetByWishlistIdForUpdateAsync(
+                    wishlistId,
+                    cancellationToken);
 
-            if (shareLink is null)
-                return null;
+                if (shareLink is null)
+                    return null;
 
-            if (shareLink.Version != expectedVersion)
-                throw new WishlistShareLinkVersionConflictException();
+                if (shareLink.Version != expectedVersion)
+                    throw new WishlistShareLinkVersionConflictException();
+                var token = tokenService.Create();
+                attemptedRotation = (shareLink.Id, shareLink.SecretHash.ToArray(), shareLink.ProtectedSecret, token);
+                shareLink.Rotate(
+                    token.SecretHash,
+                    token.ProtectedSecret);
+                await unitOfWork.SaveChangesAsync(cancellationToken);
+                commitAttempted = true;
+                await transaction.CommitAsync(cancellationToken);
+                completedResult = CreateDetails(
+                    shareLink,
+                    token.Secret);
+            }
 
-            var token = tokenService.Create();
-            attemptedRotation = (
-                shareLink.Id,
-                shareLink.SecretHash.ToArray(),
-                shareLink.ProtectedSecret,
-                token);
-            shareLink.Rotate(
-                token.SecretHash,
-                token.ProtectedSecret);
-            await unitOfWork.SaveChangesAsync(cancellationToken);
-
-            return CreateDetails(
-                shareLink,
-                token.Secret);
+            return completedResult;
         }
         catch (DbUpdateConcurrencyException)
         {
+
             return await ResolveConcurrentRotationAsync(
                 ownerId,
                 wishlistId,
@@ -155,11 +197,13 @@ public class WishlistShareService(
         }
         catch (Exception exception)
         {
+
             if (!PostgreSqlFailureClassifier.IsUnavailable(exception))
                 throw;
 
-            if (attemptedRotation is null)
+            if (!commitAttempted || attemptedRotation is null)
             {
+
                 throw new DependencyUnavailableException(
                     "PostgreSQL",
                     exception);
@@ -174,7 +218,7 @@ public class WishlistShareService(
         }
     }
 
-    /// <inheritdoc />
+    /// <inheritdoc/>
     public async Task<bool> DeleteAsync(
         Guid ownerId,
         Guid wishlistId,
@@ -182,32 +226,40 @@ public class WishlistShareService(
         CancellationToken cancellationToken)
     {
         Guid? attemptedShareLinkId = null;
-
         await EnsureOwnershipAsync(
             ownerId,
             wishlistId,
             cancellationToken);
-
         try
         {
-            var shareLink = await shareLinkRepository.GetByWishlistIdForUpdateAsync(
-                wishlistId,
-                cancellationToken);
+            await using (var transaction = await transactionFactory.BeginAsync(
+                IsolationLevel.ReadCommitted,
+                cancellationToken))
+            {
+                await mutationGuard.LockAsync(
+                    ownerId,
+                    wishlistId,
+                    cancellationToken);
+                var shareLink = await shareLinkRepository.GetByWishlistIdForUpdateAsync(
+                    wishlistId,
+                    cancellationToken);
 
-            if (shareLink is null)
-                return false;
+                if (shareLink is null)
+                    return false;
 
-            if (shareLink.Version != expectedVersion)
-                throw new WishlistShareLinkVersionConflictException();
-
-            attemptedShareLinkId = shareLink.Id;
-            shareLinkRepository.Remove(shareLink);
-            await unitOfWork.SaveChangesAsync(cancellationToken);
+                if (shareLink.Version != expectedVersion)
+                    throw new WishlistShareLinkVersionConflictException();
+                shareLinkRepository.Remove(shareLink);
+                await unitOfWork.SaveChangesAsync(cancellationToken);
+                attemptedShareLinkId = shareLink.Id;
+                await transaction.CommitAsync(cancellationToken);
+            }
 
             return true;
         }
         catch (DbUpdateConcurrencyException)
         {
+
             return await ResolveConcurrentDeletionAsync(
                 ownerId,
                 wishlistId,
@@ -215,11 +267,13 @@ public class WishlistShareService(
         }
         catch (Exception exception)
         {
+
             if (!PostgreSqlFailureClassifier.IsUnavailable(exception))
                 throw;
 
             if (attemptedShareLinkId is null)
             {
+
                 throw new DependencyUnavailableException(
                     "PostgreSQL",
                     exception);
@@ -234,7 +288,7 @@ public class WishlistShareService(
         }
     }
 
-    /// <inheritdoc />
+    /// <inheritdoc/>
     public async Task<SharedWishlistDetails?> GetSharedAsync(
         Guid shareLinkId,
         string secret,
@@ -256,13 +310,14 @@ public class WishlistShareService(
         }
         catch (Exception exception) when (PostgreSqlFailureClassifier.IsUnavailable(exception))
         {
+
             throw new DependencyUnavailableException(
                 "PostgreSQL",
                 exception);
         }
     }
 
-    /// <inheritdoc />
+    /// <inheritdoc/>
     public async Task<SharedWishLookupResult> GetSharedWishAsync(
         Guid shareLinkId,
         string secret,
@@ -278,6 +333,7 @@ public class WishlistShareService(
 
             if (shareLink is null)
             {
+
                 return new SharedWishLookupResult(
                     SharedWishLookupOutcome.SharedWishlistNotFound,
                     null,
@@ -290,14 +346,13 @@ public class WishlistShareService(
                 cancellationToken);
 
             return new SharedWishLookupResult(
-                wish is null
-                    ? SharedWishLookupOutcome.WishNotFound
-                    : SharedWishLookupOutcome.Found,
+                wish is null ? SharedWishLookupOutcome.WishNotFound : SharedWishLookupOutcome.Found,
                 shareLink.WishlistId,
                 wish);
         }
         catch (Exception exception) when (PostgreSqlFailureClassifier.IsUnavailable(exception))
         {
+
             throw new DependencyUnavailableException(
                 "PostgreSQL",
                 exception);
@@ -308,7 +363,7 @@ public class WishlistShareService(
     /// <param name="shareLinkId">The share-link identifier.</param>
     /// <param name="secret">The presented secret.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>The verified share link, or <see langword="null" />.</returns>
+    /// <returns>The verified share link, or <see langword="null"/>.</returns>
     private async Task<WishlistShareLink?> GetVerifiedShareLinkAsync(
         Guid shareLinkId,
         string secret,
@@ -337,7 +392,7 @@ public class WishlistShareService(
     /// <param name="token">The generated token material.</param>
     /// <param name="originalException">The transient save exception.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>The committed link, or <see langword="null" /> when the wishlist disappeared.</returns>
+    /// <returns>The committed link, or <see langword="null"/> when the wishlist disappeared.</returns>
     /// <exception cref="InvalidAuthenticationSessionException">The member disappeared.</exception>
     /// <exception cref="DependencyUnavailableException">The creation cannot be confirmed.</exception>
     private async Task<WishlistShareLinkDetails?> ResolveAmbiguousCreationAsync(
@@ -351,13 +406,12 @@ public class WishlistShareService(
             attemptedShareLink.Id,
             cancellationToken);
 
-        if (currentShareLink is not null &&
-            currentShareLink.WishlistId == attemptedShareLink.WishlistId &&
-            HasSameSecret(
-                currentShareLink,
-                attemptedShareLink.SecretHash,
-                attemptedShareLink.ProtectedSecret))
+        if (currentShareLink is not null && currentShareLink.WishlistId == attemptedShareLink.WishlistId && HasSameSecret(
+            currentShareLink,
+            attemptedShareLink.SecretHash,
+            attemptedShareLink.ProtectedSecret))
         {
+
             return CreateDetails(
                 currentShareLink,
                 token.Secret);
@@ -387,7 +441,7 @@ public class WishlistShareService(
     /// <param name="attemptedRotation">The exact rotation state.</param>
     /// <param name="originalException">The transient save exception.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>The committed link, or <see langword="null" /> when it disappeared.</returns>
+    /// <returns>The committed link, or <see langword="null"/> when it disappeared.</returns>
     /// <exception cref="InvalidAuthenticationSessionException">The member disappeared.</exception>
     /// <exception cref="WishlistShareLinkVersionConflictException">A different state was committed.</exception>
     /// <exception cref="DependencyUnavailableException">The rotation cannot be confirmed.</exception>
@@ -402,23 +456,23 @@ public class WishlistShareService(
             attemptedRotation.Id,
             cancellationToken);
 
-        if (currentShareLink is not null &&
-            HasSameSecret(
-                currentShareLink,
-                attemptedRotation.Token.SecretHash,
-                attemptedRotation.Token.ProtectedSecret))
+        if (currentShareLink is not null && HasSameSecret(
+            currentShareLink,
+            attemptedRotation.Token.SecretHash,
+            attemptedRotation.Token.ProtectedSecret))
         {
+
             return CreateDetails(
                 currentShareLink,
                 attemptedRotation.Token.Secret);
         }
 
-        if (currentShareLink is not null &&
-            HasSameSecret(
-                currentShareLink,
-                attemptedRotation.OriginalHash,
-                attemptedRotation.OriginalProtectedSecret))
+        if (currentShareLink is not null && HasSameSecret(
+            currentShareLink,
+            attemptedRotation.OriginalHash,
+            attemptedRotation.OriginalProtectedSecret))
         {
+
             throw new DependencyUnavailableException(
                 "PostgreSQL",
                 originalException);
@@ -444,7 +498,7 @@ public class WishlistShareService(
     /// <param name="ownerId">The owner identifier.</param>
     /// <param name="wishlistId">The wishlist identifier.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns><see langword="null" /> when the link disappeared.</returns>
+    /// <returns><see langword="null"/> when the link disappeared.</returns>
     /// <exception cref="InvalidAuthenticationSessionException">The member disappeared.</exception>
     /// <exception cref="WishlistShareLinkVersionConflictException">The link still exists with another version.</exception>
     private async Task<WishlistShareLinkDetails?> ResolveConcurrentRotationAsync(
@@ -462,7 +516,6 @@ public class WishlistShareService(
 
         if (access is not WishlistAccess.Owner)
             return null;
-
         var currentShareLink = await GetByWishlistIdSafelyAsync(
             wishlistId,
             cancellationToken);
@@ -481,7 +534,7 @@ public class WishlistShareService(
     /// <param name="attemptedShareLinkId">The deleted share-link identifier.</param>
     /// <param name="originalException">The transient save exception.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns><see langword="true" /> when the link no longer exists.</returns>
+    /// <returns><see langword="true"/> when the link no longer exists.</returns>
     /// <exception cref="InvalidAuthenticationSessionException">The member disappeared.</exception>
     /// <exception cref="WishlistShareLinkVersionConflictException">A replacement link exists.</exception>
     /// <exception cref="DependencyUnavailableException">The deletion cannot be confirmed.</exception>
@@ -502,7 +555,6 @@ public class WishlistShareService(
 
         if (access is not WishlistAccess.Owner)
             return true;
-
         var currentShareLink = await GetByWishlistIdSafelyAsync(
             wishlistId,
             cancellationToken);
@@ -524,7 +576,7 @@ public class WishlistShareService(
     /// <param name="ownerId">The owner identifier.</param>
     /// <param name="wishlistId">The wishlist identifier.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns><see langword="false" /> when the link disappeared.</returns>
+    /// <returns><see langword="false"/> when the link disappeared.</returns>
     /// <exception cref="InvalidAuthenticationSessionException">The member disappeared.</exception>
     /// <exception cref="WishlistShareLinkVersionConflictException">The link still exists.</exception>
     private async Task<bool> ResolveConcurrentDeletionAsync(
@@ -542,7 +594,6 @@ public class WishlistShareService(
 
         if (access is not WishlistAccess.Owner)
             return false;
-
         var currentShareLink = await GetByWishlistIdSafelyAsync(
             wishlistId,
             cancellationToken);
@@ -585,7 +636,7 @@ public class WishlistShareService(
     /// </summary>
     /// <param name="shareLinkId">The share-link identifier.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>The share link, or <see langword="null" />.</returns>
+    /// <returns>The share link, or <see langword="null"/>.</returns>
     /// <exception cref="DependencyUnavailableException">PostgreSQL is unavailable.</exception>
     private async Task<WishlistShareLink?> GetByIdSafelyAsync(
         Guid shareLinkId,
@@ -593,12 +644,14 @@ public class WishlistShareService(
     {
         try
         {
+
             return await shareLinkRepository.GetByIdAsync(
                 shareLinkId,
                 cancellationToken);
         }
         catch (Exception exception) when (PostgreSqlFailureClassifier.IsUnavailable(exception))
         {
+
             throw new DependencyUnavailableException(
                 "PostgreSQL",
                 exception);
@@ -610,7 +663,7 @@ public class WishlistShareService(
     /// </summary>
     /// <param name="wishlistId">The wishlist identifier.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>The share link, or <see langword="null" />.</returns>
+    /// <returns>The share link, or <see langword="null"/>.</returns>
     /// <exception cref="DependencyUnavailableException">PostgreSQL is unavailable.</exception>
     private async Task<WishlistShareLink?> GetByWishlistIdSafelyAsync(
         Guid wishlistId,
@@ -618,12 +671,14 @@ public class WishlistShareService(
     {
         try
         {
+
             return await shareLinkRepository.GetByWishlistIdAsync(
                 wishlistId,
                 cancellationToken);
         }
         catch (Exception exception) when (PostgreSqlFailureClassifier.IsUnavailable(exception))
         {
+
             throw new DependencyUnavailableException(
                 "PostgreSQL",
                 exception);
@@ -645,6 +700,7 @@ public class WishlistShareService(
     {
         try
         {
+
             return await wishlistRepository.GetAccessAsync(
                 ownerId,
                 wishlistId,
@@ -652,6 +708,7 @@ public class WishlistShareService(
         }
         catch (Exception exception) when (PostgreSqlFailureClassifier.IsUnavailable(exception))
         {
+
             throw new DependencyUnavailableException(
                 "PostgreSQL",
                 exception);
@@ -668,6 +725,7 @@ public class WishlistShareService(
         WishlistShareLink shareLink,
         string secret)
     {
+
         return new WishlistShareLinkDetails(
             shareLink.Id,
             shareLink.WishlistId,
@@ -681,28 +739,22 @@ public class WishlistShareService(
     /// Determines whether an update violated the one-link-per-wishlist index.
     /// </summary>
     /// <param name="exception">The database update exception.</param>
-    /// <returns><see langword="true" /> for the expected unique-index violation.</returns>
+    /// <returns><see langword="true"/> for the expected unique-index violation.</returns>
     private static bool IsDuplicateWishlist(DbUpdateException exception)
     {
-        return exception.InnerException is PostgresException
-        {
-            SqlState: PostgresErrorCodes.UniqueViolation,
-            ConstraintName: WishlistIndexName
-        };
+
+        return exception.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation, ConstraintName: WishlistIndexName };
     }
 
     /// <summary>
     /// Determines whether the referenced wishlist disappeared during creation.
     /// </summary>
     /// <param name="exception">The database update exception.</param>
-    /// <returns><see langword="true" /> for the expected foreign-key violation.</returns>
+    /// <returns><see langword="true"/> for the expected foreign-key violation.</returns>
     private static bool IsMissingWishlist(DbUpdateException exception)
     {
-        return exception.InnerException is PostgresException
-        {
-            SqlState: PostgresErrorCodes.ForeignKeyViolation,
-            ConstraintName: WishlistForeignKeyName
-        };
+
+        return exception.InnerException is PostgresException { SqlState: PostgresErrorCodes.ForeignKeyViolation, ConstraintName: WishlistForeignKeyName };
     }
 
     /// <summary>
@@ -711,15 +763,15 @@ public class WishlistShareService(
     /// <param name="shareLink">The persisted share link.</param>
     /// <param name="secretHash">The expected hash.</param>
     /// <param name="protectedSecret">The expected protected secret.</param>
-    /// <returns><see langword="true" /> when both secret representations match.</returns>
+    /// <returns><see langword="true"/> when both secret representations match.</returns>
     private static bool HasSameSecret(
         WishlistShareLink shareLink,
         byte[] secretHash,
         string protectedSecret)
     {
+
         return CryptographicOperations.FixedTimeEquals(
-                shareLink.SecretHash,
-                secretHash) &&
-            shareLink.ProtectedSecret == protectedSecret;
+            shareLink.SecretHash,
+            secretHash) && shareLink.ProtectedSecret == protectedSecret;
     }
 }

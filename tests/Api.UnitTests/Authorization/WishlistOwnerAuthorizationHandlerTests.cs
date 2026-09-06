@@ -2,6 +2,7 @@ using JennGllg.Fr.MonKado.Back.Api.Authorization;
 using JennGllg.Fr.MonKado.Back.Application.Abstractions;
 using JennGllg.Fr.MonKado.Back.Application.Common.Exceptions;
 using JennGllg.Fr.MonKado.Back.Application.Models;
+using JennGllg.Fr.MonKado.Back.Domain.Enums;
 
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
@@ -142,6 +143,123 @@ public class WishlistOwnerAuthorizationHandlerTests
 
         // Assert
         await Assert.ThrowsAsync<InvalidAuthenticationSessionException>(action);
+        _wishlistServiceMock.VerifyNoOtherCalls();
+    }
+
+    [Theory]
+    [InlineData("active", false)]
+    [InlineData("active", true)]
+    [InlineData("suspended", false)]
+    [InlineData("suspended", true)]
+    [InlineData("missing", false)]
+    [InlineData("missing", true)]
+    public async Task HandleAsync_WhenOwnerRequestsWritableAccess_EnforcesModerationState(
+        string state,
+        bool hasHttpContext)
+    {
+        // Arrange
+        var memberId = Guid.CreateVersion7();
+        var wishlistId = Guid.CreateVersion7();
+        var cancellationToken = hasHttpContext ? TestContext.Current.CancellationToken : CancellationToken.None;
+        _httpContextAccessor.HttpContext = hasHttpContext
+            ? new DefaultHttpContext { RequestAborted = cancellationToken }
+            : null;
+        var handler = CreateHandler();
+        var user = CreateAuthorizationContext(
+            memberId.ToString(),
+            wishlistId).User;
+        var requirement = new WishlistOwnerRequirement { RequiresWritable = true };
+        var context = new AuthorizationHandlerContext(
+            [requirement],
+            user,
+            wishlistId);
+        var wishlist = state == "missing"
+            ? null
+            : new WishlistDetails(
+                wishlistId,
+                "Wishlist",
+                WishlistOccasion.Other,
+                null,
+                null,
+                DateTime.UnixEpoch,
+                null,
+                1)
+            {
+                IsSuspended = state == "suspended"
+            };
+        _wishlistServiceMock
+            .Setup(service => service.GetAccessAsync(
+                memberId,
+                wishlistId,
+                cancellationToken))
+            .ReturnsAsync(WishlistAccess.Owner);
+        _wishlistServiceMock
+            .Setup(service => service.GetAsync(
+                wishlistId,
+                cancellationToken))
+            .ReturnsAsync(wishlist);
+
+        // Act
+        var exception = await Record.ExceptionAsync(() => handler.HandleAsync(context));
+
+        // Assert
+        if (state == "suspended")
+            Assert.IsType<WishlistSuspendedException>(exception);
+        else
+            Assert.Null(exception);
+
+        Assert.Equal(
+            state == "active",
+            context.HasSucceeded);
+        _wishlistServiceMock.Verify(
+            service => service.GetAccessAsync(
+                memberId,
+                wishlistId,
+                cancellationToken),
+            Times.Once);
+        _wishlistServiceMock.Verify(
+            service => service.GetAsync(
+                wishlistId,
+                cancellationToken),
+            Times.Once);
+        _wishlistServiceMock.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task HandleAsync_WhenAnotherMemberRequestsWritableAccess_DoesNotReadPrivateModerationState()
+    {
+        // Arrange
+        var memberId = Guid.CreateVersion7();
+        var wishlistId = Guid.CreateVersion7();
+        var cancellationToken = TestContext.Current.CancellationToken;
+        _httpContextAccessor.HttpContext = new DefaultHttpContext { RequestAborted = cancellationToken };
+        var user = CreateAuthorizationContext(
+            memberId.ToString(),
+            wishlistId).User;
+        var requirement = new WishlistOwnerRequirement { RequiresWritable = true };
+        var context = new AuthorizationHandlerContext(
+            [requirement],
+            user,
+            wishlistId);
+        var handler = CreateHandler();
+        _wishlistServiceMock
+            .Setup(service => service.GetAccessAsync(
+                memberId,
+                wishlistId,
+                cancellationToken))
+            .ReturnsAsync(WishlistAccess.NotOwned);
+
+        // Act
+        await handler.HandleAsync(context);
+
+        // Assert
+        Assert.False(context.HasSucceeded);
+        _wishlistServiceMock.Verify(
+            service => service.GetAccessAsync(
+                memberId,
+                wishlistId,
+                cancellationToken),
+            Times.Once);
         _wishlistServiceMock.VerifyNoOtherCalls();
     }
 
