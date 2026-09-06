@@ -15,6 +15,33 @@ namespace JennGllg.Fr.MonKado.Back.Api.FunctionalTests;
 
 public class WishImportPreviewTests
 {
+    [Theory]
+    [InlineData("application/x-www-form-urlencoded")]
+    [InlineData("text/plain")]
+    [InlineData("multipart/form-data")]
+    public async Task CreateAsync_WhenContentTypeIsNotJson_RejectsBeforeFetchingMerchant(string contentType)
+    {
+        // Arrange
+        await using var factory = new WishImportApiFactory();
+        using var client = CreateClient(
+            factory,
+            Guid.CreateVersion7());
+        using var content = new StringContent("url=https://merchant.example");
+        content.Headers.ContentType = new MediaTypeHeaderValue(contentType);
+
+        // Act
+        using var response = await client.PostAsync(
+            GetPath(Guid.CreateVersion7()),
+            content,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.UnsupportedMediaType,
+            response.StatusCode);
+        Assert.Empty(factory.ImportClient.Requests);
+    }
+
     [Fact]
     public async Task CreateAsync_WhenPostgreSqlIsUnavailable_DoesNotFetchMerchant()
     {

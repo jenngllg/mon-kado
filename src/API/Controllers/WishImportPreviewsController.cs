@@ -42,6 +42,7 @@ public class WishImportPreviewsController(
     [HttpPost]
     [EnableRateLimiting(AuthenticationRateLimitingExtensions.WishImportPreviewPolicy)]
     [RequestSizeLimit(16 * 1024)]
+    [Consumes("application/json")]
     [NoStoreResponse(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(WishImportPreview), StatusCodes.Status200OK, "application/json")]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest, "application/json")]

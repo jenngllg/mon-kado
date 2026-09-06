@@ -37,6 +37,16 @@ public class WishImportPreviewOpenApiTests
                 "security",
                 out _));
         var responses = operation.GetProperty("responses");
+        Assert.Equal(
+            [
+                "application/json",
+                "application/*+json"
+            ],
+            operation
+                .GetProperty("requestBody")
+                .GetProperty("content")
+                .EnumerateObject()
+                .Select(property => property.Name));
         foreach (var status in new[]
         {
             "200",
