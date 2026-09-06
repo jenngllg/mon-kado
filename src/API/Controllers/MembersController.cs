@@ -37,6 +37,44 @@ public class MembersController(
 {
     private const int MaximumRequestBodySize = 4 * 1024;
     private const string NoStoreCacheControl = "no-store";
+
+    /// <summary>Searches confirmed members by a partial display name, ignoring case and accents.</summary>
+    /// <param name="displayName">The required search term, between 2 and 80 Unicode characters.</param>
+    /// <param name="page">The one-based page number, defaulting to 1.</param>
+    /// <param name="pageSize">The page size, defaulting to 20 and limited to 100.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A page containing only member identifiers and display names.</returns>
+    [HttpGet]
+    [AllowAnonymous]
+    [EnableRateLimiting(AuthenticationRateLimitingExtensions.UserSearchPolicy)]
+    [NoStoreResponse(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(PaginatedResponse<UserSearchResponse>), StatusCodes.Status200OK, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status429TooManyRequests, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status503ServiceUnavailable, "application/json")]
+    public async Task<ActionResult<PaginatedResponse<UserSearchResponse>>> SearchAsync(
+        [FromQuery] string? displayName,
+        [FromQuery] int? page,
+        [FromQuery] int? pageSize,
+        CancellationToken cancellationToken)
+    {
+        var result = await sender.Send(
+            new SearchUsersQuery(
+                displayName,
+                page,
+                pageSize),
+            cancellationToken);
+        Response.Headers.CacheControl = NoStoreCacheControl;
+
+        return Ok(new PaginatedResponse<UserSearchResponse>(
+            result.Items.Select(item => new UserSearchResponse(
+                item.Id,
+                item.DisplayName)),
+            result.CurrentPage,
+            result.PageSize,
+            result.TotalCount));
+    }
+
     /// <summary>Requests an email confirmation before permanently deleting the current account.</summary>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>An accepted response once the confirmation email is durably queued.</returns>

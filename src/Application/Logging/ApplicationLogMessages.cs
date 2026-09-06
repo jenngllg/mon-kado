@@ -9,6 +9,22 @@ namespace JennGllg.Fr.MonKado.Back.Application.Logging;
 /// </summary>
 public static partial class ApplicationLogMessages
 {
+    /// <summary>Logs the start of a search without its term.</summary>
+    /// <param name="logger">The logger.</param>
+    [LoggerMessage(
+        EventId = LogEventIds.UserSearchStarted,
+        Level = LogLevel.Debug,
+        Message = "Searching public member profiles.")]
+    public static partial void UserSearchStarted(ILogger logger);
+
+    /// <summary>Logs a successful search without exposing its results.</summary>
+    /// <param name="logger">The logger.</param>
+    [LoggerMessage(
+        EventId = LogEventIds.UserSearchCompleted,
+        Level = LogLevel.Information,
+        Message = "Public member search completed.")]
+    public static partial void UserSearchCompleted(ILogger logger);
+
     /// <summary>Logs AccountDeletionRequestStarted without personal data.</summary>
     /// <param name="logger">The logger.</param>
     /// <param name="memberId">The member identifier.</param>

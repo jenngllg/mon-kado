@@ -92,6 +92,7 @@ public static class InfrastructureInjectionConfiguration
             .ValidateOnStart();
         services.AddScoped<IUnitOfWork>(provider => provider.GetRequiredService<MonKadoDbContext>());
         services.AddScoped<IMonKadoUserRepository, MonKadoUserRepository>();
+        services.AddScoped<IUserSearchService, UserSearchService>();
         services.AddScoped<IMemberRepository, MemberRepository>();
         services.AddScoped<IAuthenticationEmailOutboxRepository, AuthenticationEmailOutboxRepository>();
         services.AddScoped<IAuthenticationSessionRepository, AuthenticationSessionRepository>();

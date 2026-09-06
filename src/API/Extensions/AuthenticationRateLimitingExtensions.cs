@@ -14,6 +14,10 @@ namespace JennGllg.Fr.MonKado.Back.Api.Extensions;
 public static class AuthenticationRateLimitingExtensions
 {
     private const string UnlimitedPartitionKey = "NonSharedWishlist";
+    /// <summary>Identifies the per-address public member search quota.</summary>
+    public const string UserSearchPolicy = "UserSearch";
+    /// <summary>Gets the maximum public searches per minute and address.</summary>
+    public const int UserSearchPermitLimit = 60;
     /// <summary>
     /// Identifies registration policy.
     /// </summary>
@@ -241,6 +245,11 @@ public static class AuthenticationRateLimitingExtensions
                         context.RequestServices
                             .GetRequiredService<Microsoft.Extensions.Options.IOptions<JennGllg.Fr.MonKado.Back.Infrastructure.UrlImport.Options.UrlImportOptions>>()
                             .Value.PermitLimit));
+                options.AddPolicy(
+                    UserSearchPolicy,
+                    context => CreateLimiter(
+                        context,
+                        UserSearchPermitLimit));
                 options.OnRejected = async (
                     rejectionContext,
                     cancellationToken) =>
