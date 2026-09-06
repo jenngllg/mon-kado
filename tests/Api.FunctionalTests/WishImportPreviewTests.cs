@@ -15,6 +15,32 @@ namespace JennGllg.Fr.MonKado.Back.Api.FunctionalTests;
 
 public class WishImportPreviewTests
 {
+    [Fact]
+    public async Task CreateAsync_WhenOnlyCookiesArePresent_ReturnsUnauthorizedWithoutFetchingMerchant()
+    {
+        // Arrange
+        await using var factory = new WishImportApiFactory();
+        using var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Add(
+            "Cookie",
+            "MonKado.Refresh=opaque-refresh; __Host-MonKado.Refresh=opaque-refresh; .AspNetCore.Identity.Application=opaque-ticket");
+
+        // Act
+        using var response = await client.PostAsJsonAsync(
+            GetPath(Guid.CreateVersion7()),
+            new
+            {
+                url = "https://merchant.example"
+            },
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.Unauthorized,
+            response.StatusCode);
+        Assert.Empty(factory.ImportClient.Requests);
+    }
+
     [Theory]
     [InlineData("application/x-www-form-urlencoded")]
     [InlineData("text/plain")]

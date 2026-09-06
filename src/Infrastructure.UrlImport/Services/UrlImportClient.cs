@@ -24,7 +24,8 @@ public class UrlImportClient(
         CancellationToken cancellationToken)
     {
         ImportDocument document;
-        for (var redirects = 0; ; redirects++)
+        var redirects = 0;
+        while (true)
         {
 
             if (!WishImportUrlValidation.IsValid(url.AbsoluteUri))
@@ -48,41 +49,18 @@ public class UrlImportClient(
                     out var destination))
                     throw new HttpRequestException("The merchant redirect destination is invalid.");
                 url = destination;
+                redirects++;
                 continue;
             }
 
             response.EnsureSuccessStatusCode();
-
-            if (response.Content.Headers.ContentLength > maximumBytes)
-                throw new HttpRequestException("The merchant response exceeds the size limit.");
-            using var source = await response.Content.ReadAsStreamAsync(cancellationToken);
-            using var content = new MemoryStream();
-            var buffer = new byte[8192];
-            while (true)
-            {
-                var read = await source.ReadAsync(
-                    buffer.AsMemory(
-                        0,
-                        Math.Min(
-                            buffer.Length,
-                            maximumBytes - (int)content.Length + 1)),
-                    cancellationToken);
-
-                if (read == 0)
-                    break;
-
-                if (content.Length + read > maximumBytes)
-                    throw new HttpRequestException("The merchant response exceeds the size limit.");
-                content.Write(
-                    buffer,
-                    0,
-                    read);
-            }
-
             document = new ImportDocument
             {
                 Url = url,
-                Content = content.ToArray(),
+                Content = await ReadContentAsync(
+                    response.Content,
+                    maximumBytes,
+                    cancellationToken),
                 MediaType = response.Content.Headers.ContentType?.MediaType,
                 Charset = response.Content.Headers.ContentType?.CharSet
             };
@@ -90,6 +68,47 @@ public class UrlImportClient(
         }
 
         return document;
+    }
+
+    /// <summary>Buffers only the allowed decompressed bytes and detects oversized streaming responses.</summary>
+    /// <param name="responseContent">The merchant response content.</param>
+    /// <param name="maximumBytes">The maximum accepted document size.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The bounded response bytes.</returns>
+    private static async Task<byte[]> ReadContentAsync(
+        HttpContent responseContent,
+        int maximumBytes,
+        CancellationToken cancellationToken)
+    {
+
+        if (responseContent.Headers.ContentLength > maximumBytes)
+            throw new HttpRequestException("The merchant response exceeds the size limit.");
+        using var source = await responseContent.ReadAsStreamAsync(cancellationToken);
+        using var content = new MemoryStream();
+        var buffer = new byte[8192];
+        while (true)
+        {
+            var read = await source.ReadAsync(
+                buffer.AsMemory(
+                    0,
+                    Math.Min(
+                        buffer.Length,
+                        maximumBytes - (int)content.Length + 1)),
+                cancellationToken);
+
+            if (read == 0)
+                break;
+
+            if (content.Length + read > maximumBytes)
+                throw new HttpRequestException("The merchant response exceeds the size limit.");
+            await content.WriteAsync(
+                buffer.AsMemory(
+                    0,
+                    read),
+                cancellationToken);
+        }
+
+        return content.ToArray();
     }
 
     /// <summary>Preserves safe destination rejection through the HTTP transport wrapper.</summary>

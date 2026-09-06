@@ -51,6 +51,8 @@ public class WishImportPreviewsController(
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status415UnsupportedMediaType, "application/json")]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status429TooManyRequests, "application/json")]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status503ServiceUnavailable, "application/json")]
+    // CurrentSession explicitly accepts JWT Bearer only, never ambient cookies; the request must be JSON.
+    // codeql[cs/web/missing-token-validation]
     public async Task<ActionResult<WishImportPreview>> CreateAsync(
         Guid wishlistId,
         CreateWishImportPreviewRequest request,
