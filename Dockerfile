@@ -17,6 +17,7 @@ RUN dotnet restore src/API/Api.csproj \
     && dotnet restore src/Worker/Worker.csproj \
     && dotnet tool restore
 
+COPY .editorconfig ./
 COPY src/ src/
 
 RUN dotnet publish src/API/Api.csproj \
