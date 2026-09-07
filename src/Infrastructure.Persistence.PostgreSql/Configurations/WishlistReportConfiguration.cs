@@ -1,5 +1,6 @@
 using JennGllg.Fr.MonKado.Back.Application.Validators;
 using JennGllg.Fr.MonKado.Back.Domain.Entities;
+using JennGllg.Fr.MonKado.Back.Domain.Enums;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Entities;
 
 using Microsoft.EntityFrameworkCore;
@@ -19,6 +20,31 @@ public class WishlistReportConfiguration : IEntityTypeConfiguration<WishlistRepo
     {
         builder.ToTable("wishlist_reports");
         builder.HasKey(report => report.Id);
+        builder.Property(report => report.Version)
+            .IsRowVersion();
+        builder.Property(report => report.Status)
+            .HasConversion<string>()
+            .HasMaxLength(16)
+            .HasDefaultValue(WishlistReportStatus.Pending);
+        builder.Property(report => report.ReviewNote)
+            .HasMaxLength(WishlistReportTextValidation.MaximumDetailsLength);
+        builder.HasOne<MonKadoUser>()
+            .WithMany()
+            .HasForeignKey(report => report.ReviewedByAdministratorId)
+            .OnDelete(DeleteBehavior.SetNull);
+        builder.HasIndex(report => new
+        {
+            report.WishlistId,
+            report.Status,
+            report.CreatedAt,
+            report.Id
+        })
+            .IsDescending(
+                false,
+                false,
+                true,
+                true)
+            .HasDatabaseName("ix_wishlist_reports_wishlist_id_status_created_at_id");
         builder.Property(report => report.Reason)
             .HasConversion<string>()
             .HasMaxLength(MaximumReasonLength)
@@ -49,6 +75,13 @@ public class WishlistReportConfiguration : IEntityTypeConfiguration<WishlistRepo
 
         builder.ToTable(table =>
         {
+            table.HasCheckConstraint(
+                "ck_wishlist_reports_status",
+                "status IN ('Pending', 'Upheld', 'Dismissed')");
+            table.HasCheckConstraint(
+                "ck_wishlist_reports_review_consistent",
+                "(reviewed_at IS NULL AND status = 'Pending' AND review_note IS NULL AND reviewed_by_administrator_id IS NULL) OR " +
+                "(reviewed_at IS NOT NULL AND reviewed_at >= created_at)");
             table.HasCheckConstraint(
                 "ck_wishlist_reports_reason_valid",
                 "reason IN ('SpamOrScam', 'InappropriateContent', 'PrivacyViolation', 'Other')");

@@ -11,6 +11,8 @@ public class GetWishlistReportsQueryValidator : AbstractValidator<GetWishlistRep
     /// <summary>Configures centralized request validation.</summary>
     public GetWishlistReportsQueryValidator()
     {
+        RuleFor(query => query.Status)
+            .IsInEnum();
         RuleFor(query => query.WishlistId)
             .NotEmpty()
             .WithMessage(ValidationMessages.MandatoryProperty);

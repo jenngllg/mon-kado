@@ -78,6 +78,8 @@ public class MonKadoDbContext(DbContextOptions<MonKadoDbContext> options) : Iden
     /// Gets anonymous wishlist reports.
     /// </summary>
     public DbSet<WishlistReport> WishlistReports => Set<WishlistReport>();
+    /// <summary>Gets immutable private report review events.</summary>
+    public DbSet<WishlistReportReviewEvent> WishlistReportReviewEvents => Set<WishlistReportReviewEvent>();
 
     /// <inheritdoc/>
     protected override void OnModelCreating(ModelBuilder builder)

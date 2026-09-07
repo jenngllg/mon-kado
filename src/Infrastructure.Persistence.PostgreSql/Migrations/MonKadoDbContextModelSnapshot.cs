@@ -513,9 +513,36 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Migrati
                         .HasColumnType("character varying(32)")
                         .HasColumnName("reason");
 
+                    b.Property<string>("ReviewNote")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("review_note");
+
+                    b.Property<DateTime?>("ReviewedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("reviewed_at");
+
+                    b.Property<Guid?>("ReviewedByAdministratorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("reviewed_by_administrator_id");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasDefaultValue("Pending")
+                        .HasColumnName("status");
+
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("updated_at");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
 
                     b.Property<Guid>("WishlistId")
                         .HasColumnType("uuid")
@@ -524,15 +551,84 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Migrati
                     b.HasKey("Id")
                         .HasName("pk_wishlist_reports");
 
+                    b.HasIndex("ReviewedByAdministratorId")
+                        .HasDatabaseName("ix_wishlist_reports_reviewed_by_administrator_id");
+
                     b.HasIndex("WishlistId", "CreatedAt", "Id")
                         .IsDescending(false, true, true)
                         .HasDatabaseName("ix_wishlist_reports_wishlist_id_created_at_id");
+
+                    b.HasIndex("WishlistId", "Status", "CreatedAt", "Id")
+                        .IsDescending(false, false, true, true)
+                        .HasDatabaseName("ix_wishlist_reports_wishlist_id_status_created_at_id");
 
                     b.ToTable("wishlist_reports", "public", t =>
                         {
                             t.HasCheckConstraint("ck_wishlist_reports_reason_valid", "reason IN ('SpamOrScam', 'InappropriateContent', 'PrivacyViolation', 'Other')");
 
+                            t.HasCheckConstraint("ck_wishlist_reports_review_consistent", "(reviewed_at IS NULL AND status = 'Pending' AND review_note IS NULL AND reviewed_by_administrator_id IS NULL) OR (reviewed_at IS NOT NULL AND reviewed_at >= created_at)");
+
+                            t.HasCheckConstraint("ck_wishlist_reports_status", "status IN ('Pending', 'Upheld', 'Dismissed')");
+
                             t.HasCheckConstraint("ck_wishlist_reports_timestamps_consistent", "updated_at IS NULL OR updated_at >= created_at");
+                        });
+                });
+
+            modelBuilder.Entity("JennGllg.Fr.MonKado.Back.Domain.Entities.WishlistReportReviewEvent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid?>("AdministratorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("administrator_id");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("note");
+
+                    b.Property<DateTime>("OccurredAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("occurred_at");
+
+                    b.Property<string>("PreviousStatus")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("previous_status");
+
+                    b.Property<Guid>("ReportId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("report_id");
+
+                    b.Property<long>("Sequence")
+                        .HasColumnType("bigint")
+                        .HasColumnName("sequence");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("status");
+
+                    b.HasKey("Id")
+                        .HasName("pk_wishlist_report_review_events");
+
+                    b.HasIndex("AdministratorId")
+                        .HasDatabaseName("ix_wishlist_report_review_events_administrator_id");
+
+                    b.HasIndex("ReportId", "Sequence")
+                        .IsUnique()
+                        .HasDatabaseName("ix_wishlist_report_review_events_report_id_sequence");
+
+                    b.ToTable("wishlist_report_review_events", "public", t =>
+                        {
+                            t.HasCheckConstraint("ck_wishlist_report_review_events_sequence", "sequence > 0");
+
+                            t.HasCheckConstraint("ck_wishlist_report_review_events_status", "status IN ('Pending', 'Upheld', 'Dismissed') AND previous_status IN ('Pending', 'Upheld', 'Dismissed')");
                         });
                 });
 
@@ -1397,12 +1493,34 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Migrati
 
             modelBuilder.Entity("JennGllg.Fr.MonKado.Back.Domain.Entities.WishlistReport", b =>
                 {
+                    b.HasOne("JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Entities.MonKadoUser", null)
+                        .WithMany()
+                        .HasForeignKey("ReviewedByAdministratorId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_wishlist_reports_users_reviewed_by_administrator_id");
+
                     b.HasOne("JennGllg.Fr.MonKado.Back.Domain.Entities.Wishlist", null)
                         .WithMany()
                         .HasForeignKey("WishlistId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_wishlist_reports_wishlists_wishlist_id");
+                });
+
+            modelBuilder.Entity("JennGllg.Fr.MonKado.Back.Domain.Entities.WishlistReportReviewEvent", b =>
+                {
+                    b.HasOne("JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Entities.MonKadoUser", null)
+                        .WithMany()
+                        .HasForeignKey("AdministratorId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_wishlist_report_review_events_users_administrator_id");
+
+                    b.HasOne("JennGllg.Fr.MonKado.Back.Domain.Entities.WishlistReport", null)
+                        .WithMany()
+                        .HasForeignKey("ReportId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_wishlist_report_review_events_wishlist_reports_report_id");
                 });
 
             modelBuilder.Entity("JennGllg.Fr.MonKado.Back.Domain.Entities.WishlistShareLink", b =>

@@ -35,6 +35,18 @@ public class GlobalExceptionHandler(
     {
         var response = exception switch
         {
+            WishlistReportNotFoundException => new ErrorResponse(
+                StatusCodes.Status404NotFound,
+                "Report not found",
+                "The report was not found under the requested wishlist.",
+                ErrorCodes.WishlistReportNotFound,
+                null),
+            WishlistReportVersionConflictException => new ErrorResponse(
+                StatusCodes.Status412PreconditionFailed,
+                "Report version conflict",
+                "The report has changed. Retrieve it again before retrying.",
+                ErrorCodes.WishlistReportVersionConflict,
+                null),
             AdministratorAccessDeniedException => new ErrorResponse(
                 StatusCodes.Status403Forbidden,
                 "Administrator access required",

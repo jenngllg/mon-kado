@@ -107,6 +107,8 @@ public static class InfrastructureInjectionConfiguration
         services.AddScoped<IGiftReservationRepository, GiftReservationRepository>();
         services.AddScoped<IWishlistReportRepository, WishlistReportRepository>();
         services.AddScoped<IReportedWishlistService, ReportedWishlistService>();
+        services.AddScoped<IWishlistReportReviewRepository, WishlistReportReviewRepository>();
+        services.AddScoped<IWishlistReportReviewService, WishlistReportReviewService>();
         services.AddScoped<IWishTransactionFactory, WishTransactionFactory>();
         services.AddScoped<IWishlistParticipantTransactionFactory, WishlistParticipantTransactionFactory>();
         services.AddScoped<IGiftReservationTransactionFactory, GiftReservationTransactionFactory>();

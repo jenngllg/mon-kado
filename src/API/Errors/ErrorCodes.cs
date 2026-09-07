@@ -119,6 +119,10 @@ public static class ErrorCodes
     public const string WishlistSuspended = "WISHLIST_SUSPENDED";
     /// <summary>Identifies missing administrator privileges for moderation.</summary>
     public const string WishlistModerationForbidden = "WISHLIST_MODERATION_FORBIDDEN";
+    /// <summary>The report does not exist under the requested wishlist.</summary>
+    public const string WishlistReportNotFound = "WISHLIST_REPORT_NOT_FOUND";
+    /// <summary>The report changed since it was read.</summary>
+    public const string WishlistReportVersionConflict = "WISHLIST_REPORT_VERSION_CONFLICT";
     /// <summary>
     /// Identifies a private wishlist that is unavailable to the current member.
     /// </summary>

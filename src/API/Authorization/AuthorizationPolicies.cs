@@ -33,5 +33,8 @@ public static class AuthorizationPolicies
     /// <summary>Identifies database-backed administrator access to reported wishlists.</summary>
     public const string ViewWishlistReports = "ViewWishlistReports";
 
+    /// <summary>Allows PostgreSQL-authorized administrators to review reports.</summary>
+    public const string ProcessWishlistReports = "ProcessWishlistReports";
+
     #endregion
 }

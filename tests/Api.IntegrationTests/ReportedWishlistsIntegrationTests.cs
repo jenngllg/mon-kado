@@ -353,7 +353,11 @@ public class ReportedWishlistsIntegrationTests(PostgreSqlContainerFixture fixtur
                 "createdAt",
                 "details",
                 "id",
-                "reason"
+                "reason",
+                "reviewedAt",
+                "reviewedByAdministratorId",
+                "reviewNote",
+                "status"
             ],
             report
                 .EnumerateObject()

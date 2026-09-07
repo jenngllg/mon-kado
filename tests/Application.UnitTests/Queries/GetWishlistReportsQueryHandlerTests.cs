@@ -44,6 +44,7 @@ public class GetWishlistReportsQueryHandlerTests
             .Setup(service => service.GetReportsAsync(
                 request.WishlistId,
                 request.Reason,
+                WishlistReportStatusFilter.Pending,
                 request.Page ?? 1,
                 request.PageSize ?? 20,
                 cancellationToken))
@@ -62,6 +63,7 @@ public class GetWishlistReportsQueryHandlerTests
             service => service.GetReportsAsync(
                 request.WishlistId,
                 request.Reason,
+                WishlistReportStatusFilter.Pending,
                 request.Page ?? 1,
                 request.PageSize ?? 20,
                 cancellationToken),

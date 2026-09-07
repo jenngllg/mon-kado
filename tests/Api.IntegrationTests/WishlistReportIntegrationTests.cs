@@ -110,6 +110,10 @@ public class WishlistReportIntegrationTests(PostgreSqlContainerFixture fixture)
                     _now,
                     report.CreatedAt);
                 Assert.Null(report.UpdatedAt);
+                Assert.Equal(WishlistReportStatus.Pending, report.Status);
+                Assert.Null(report.ReviewNote);
+                Assert.Null(report.ReviewedAt);
+                Assert.Null(report.ReviewedByAdministratorId);
             });
         Assert.Equal(
             [
@@ -117,6 +121,10 @@ public class WishlistReportIntegrationTests(PostgreSqlContainerFixture fixture)
                 "details",
                 "id",
                 "reason",
+                "review_note",
+                "reviewed_at",
+                "reviewed_by_administrator_id",
+                "status",
                 "updated_at",
                 "wishlist_id"
             ],

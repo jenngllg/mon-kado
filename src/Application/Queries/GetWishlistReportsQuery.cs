@@ -15,12 +15,16 @@ namespace JennGllg.Fr.MonKado.Back.Application.Queries;
 /// <param name="reason">The reason.</param>
 /// <param name="page">The page.</param>
 /// <param name="pageSize">The pageSize.</param>
+/// <param name="status">The optional disposition filter, defaulting to pending.</param>
 public class GetWishlistReportsQuery(
     Guid wishlistId,
     WishlistReportReason? reason,
     int? page,
-    int? pageSize) : IRequest<WishlistReportPage>
+    int? pageSize,
+    WishlistReportStatusFilter? status = null) : IRequest<WishlistReportPage>
 {
+    /// <summary>Gets the optional disposition filter.</summary>
+    public WishlistReportStatusFilter? Status { get; } = status;
     /// <summary>Gets the wishlistId.</summary>
     public Guid WishlistId { get; } = wishlistId;
     /// <summary>Gets the reason.</summary>
@@ -49,6 +53,7 @@ public class GetWishlistReportsQueryHandler(
         var result = await service.GetReportsAsync(
             request.WishlistId,
             request.Reason,
+            request.Status ?? WishlistReportStatusFilter.Pending,
             request.Page ?? ReportedWishlistValidation.DefaultPage,
             request.PageSize ?? ReportedWishlistValidation.DefaultPageSize,
             cancellationToken);
