@@ -97,9 +97,6 @@ public static class OpenApiExtensions
                         operation,
                         googleExternalCookie.IsRequired);
 
-                if (metadata.OfType<GoogleFlowBindingAttribute>().Any())
-                    AddGoogleFlowBindingParameter(operation);
-
                 if (ReturnsAccessToken(metadata))
                     AddAccessTokenResponseHeaders(operation);
 
@@ -345,7 +342,7 @@ public static class OpenApiExtensions
             {
                 Description =
                     "Redirect destination for the provider challenge or callback completion/failure route. " +
-                    "A successful callback completion route includes only an opaque flow binding. " +
+                    "A successful callback redirects to /login/google-return#flow={binding}, with only an opaque flow binding and no session created yet. " +
                     "It never contains an access token, refresh token or identity claim.",
                 Schema = new OpenApiSchema { Type = JsonSchemaType.String }
             });
@@ -362,8 +359,7 @@ public static class OpenApiExtensions
             HeaderNames.SetCookie,
             new OpenApiHeader
             {
-                Description =
-                    "Issues a five-minute HttpOnly, Secure, SameSite=Lax and host-only Google external cookie. " +
+                Description = "Issues an HttpOnly, Secure, SameSite=Lax and host-only Google external cookie within the original five-minute challenge deadline. " +
                     "It contains no Google token, MonKado token or unprotected identity claim.",
                 Schema = new OpenApiSchema { Type = JsonSchemaType.String }
             });
@@ -455,29 +451,11 @@ public static class OpenApiExtensions
                 Required = isRequired,
                 Description = string.Concat(
                     "Short-lived Data Protection cookie containing only validated Google identity claims and protected flow state. ",
-                    "It is HttpOnly, Secure, SameSite=Lax, host-only and expires after five minutes. Local development uses ",
+                    "It is HttpOnly, Secure, SameSite=Lax, host-only and expires no later than five minutes after the Google challenge. Local development uses ",
                     GoogleAuthenticationConstants.LocalExternalCookieName,
                     ". It never contains Google or MonKado tokens."),
                 Schema = new OpenApiSchema { Type = JsonSchemaType.String }
             });
-    }
-
-    private static void AddGoogleFlowBindingParameter(OpenApiOperation operation)
-    {
-        ArgumentNullException.ThrowIfNull(operation.Parameters);
-        var parameter = operation.Parameters
-            .OfType<OpenApiParameter>()
-            .Single(parameter =>
-                parameter.In == ParameterLocation.Query &&
-                string.Equals(
-                    parameter.Name,
-                    GoogleAuthenticationConstants.FlowBindingParameter,
-                    StringComparison.Ordinal));
-
-        parameter.Required = true;
-        parameter.Description =
-            "Opaque five-minute browser-flow binding returned in the frontend redirect fragment. " +
-            "It is required to prevent concurrent Google flows from being crossed and is not an access, refresh or Google token.";
     }
 
     private static void AddDeletedRefreshTokenResponseHeaders(OpenApiOperation operation)

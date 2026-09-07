@@ -20,6 +20,7 @@ public class WishlistShareLinkUrlService(IOptions<WishlistSharingOptions> option
         Guid shareLinkId,
         string secret)
     {
-        return $"{_frontendOrigin}/#/shared-wishlists/{shareLinkId:N}.{secret}";
+
+        return $"{_frontendOrigin}/shared-wishlists/{shareLinkId:D}#{secret}";
     }
 }

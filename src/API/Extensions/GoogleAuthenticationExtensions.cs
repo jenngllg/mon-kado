@@ -3,6 +3,7 @@ using JennGllg.Fr.MonKado.Back.Api.Constants;
 using JennGllg.Fr.MonKado.Back.Api.Handlers;
 using JennGllg.Fr.MonKado.Back.Api.Options;
 using JennGllg.Fr.MonKado.Back.Api.Services;
+using JennGllg.Fr.MonKado.Back.Application.Common.Exceptions;
 
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
@@ -103,6 +104,20 @@ public static class GoogleAuthenticationExtensions
         options.Cookie.MaxAge = GoogleAuthenticationConstants.TransientLifetime;
         options.ExpireTimeSpan = GoogleAuthenticationConstants.TransientLifetime;
         options.SlidingExpiration = false;
+        options.Events.OnSigningIn = context =>
+        {
+            var remaining = context.Properties.ExpiresUtc.GetValueOrDefault() - context.HttpContext.RequestServices
+                .GetRequiredService<TimeProvider>()
+                .GetUtcNow();
+
+            if (remaining <= TimeSpan.Zero)
+                throw new GoogleAuthenticationFailedException();
+
+            context.CookieOptions.MaxAge = remaining;
+            context.CookieOptions.Expires = context.Properties.ExpiresUtc;
+
+            return Task.CompletedTask;
+        };
         options.Events.OnRedirectToLogin = context =>
         {
             context.Response.StatusCode = StatusCodes.Status401Unauthorized;

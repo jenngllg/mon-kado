@@ -1,4 +1,5 @@
 using JennGllg.Fr.MonKado.Back.Api.Abstractions;
+using JennGllg.Fr.MonKado.Back.Api.Constants;
 
 using Microsoft.Extensions.Options;
 
@@ -113,6 +114,9 @@ public class GoogleAuthenticationOptionsValidator(
     {
         var allowedReturnPaths = options.AllowedReturnPaths;
 
+        if (options.DefaultReturnPath != GoogleAuthenticationConstants.FrontendReturnPath)
+            failures.Add("GoogleAuthentication:DefaultReturnPath must be /login/google-return.");
+
         if (allowedReturnPaths is null || allowedReturnPaths.Length == 0)
         {
             failures.Add("GoogleAuthentication:AllowedReturnPaths must contain at least one path.");
@@ -124,7 +128,12 @@ public class GoogleAuthenticationOptionsValidator(
             failures.Add(
                 "GoogleAuthentication:AllowedReturnPaths must contain only canonical relative paths without query strings or fragments.");
 
-        if (allowedReturnPaths.Distinct(StringComparer.Ordinal).Count() !=
+        if (allowedReturnPaths.Any(path => path != GoogleAuthenticationConstants.FrontendReturnPath))
+            failures.Add("GoogleAuthentication:AllowedReturnPaths may contain only /login/google-return.");
+
+        if (allowedReturnPaths
+            .Distinct(StringComparer.Ordinal)
+            .Count() !=
             allowedReturnPaths.Length)
             failures.Add("GoogleAuthentication:AllowedReturnPaths cannot contain duplicates.");
 

@@ -44,11 +44,9 @@ public class GoogleOpenIdConnectEventsTests
                 Enabled = true,
                 ClientId = ClientId,
                 FrontendOrigin = "https://app.example.test",
-                DefaultReturnPath = "/my-lists",
+                DefaultReturnPath = "/login/google-return",
                 AllowedReturnPaths =
-                [
-                    "/my-lists"
-                ]
+                ["/login/google-return"]
             }),
             new GoogleReturnPathValidator());
         var externalAuthenticationService = new GoogleExternalAuthenticationService(
@@ -67,6 +65,126 @@ public class GoogleOpenIdConnectEventsTests
             _senderMock.Object);
     }
 
+    [Theory]
+    [InlineData("missingProperties", "failed")]
+    [InlineData("missingDeadline", "failed")]
+    [InlineData("expired", "failed")]
+    [InlineData("valid", "cancelled")]
+    public async Task AccessDenied_WhenProtectedDeadlineIsChecked_ReturnsSafeError(
+        string scenario,
+        string expectedError)
+    {
+        // Arrange
+        var context = new AccessDeniedContext(
+            new DefaultHttpContext(),
+            CreateScheme(),
+            new OpenIdConnectOptions())
+        {
+            Properties = scenario == "missingProperties" ? null : new AuthenticationProperties
+            {
+                ExpiresUtc = scenario switch
+                {
+                    "missingDeadline" => null,
+                    "expired" => _now,
+                    _ => _now.AddSeconds(1)
+                }
+            }
+        };
+
+        // Act
+        await _events.AccessDenied(context);
+
+        // Assert
+        Assert.Equal(
+            $"https://app.example.test/login/google-return#error={expectedError}",
+            context.Response.Headers.Location);
+        Assert.Equal(
+            "no-store",
+            context.Response.Headers.CacheControl);
+        Assert.Equal(
+            "no-referrer",
+            context.Response.Headers["Referrer-Policy"]);
+        Assert.False(context.Response.Headers.ContainsKey("Set-Cookie"));
+        _senderMock.VerifyNoOtherCalls();
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public async Task TicketReceived_WhenDeadlineIsMissingOrExpired_DoesNotResolveMember(int? remainingSeconds)
+    {
+        // Arrange
+        var context = CreateTicketReceivedContext(CreateValidPrincipal());
+        Assert.NotNull(context.Properties);
+        context.Properties.ExpiresUtc = remainingSeconds.HasValue ? _now.AddSeconds(remainingSeconds.Value) : null;
+
+        // Act
+        await _events.TicketReceived(context);
+
+        // Assert
+        Assert.Equal(
+            "https://app.example.test/login/google-return#error=failed",
+            context.Response.Headers.Location);
+        Assert.False(context.Response.Headers.ContainsKey("Set-Cookie"));
+        _senderMock.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task TicketReceived_WhenDeadlineExpiresDuringMemberResolution_DoesNotIssueProof()
+    {
+        // Arrange
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var context = CreateTicketReceivedContext(CreateValidPrincipal());
+        context.HttpContext.RequestAborted = cancellationToken;
+        var clockMock = new Mock<TimeProvider>(MockBehavior.Strict);
+        clockMock
+            .SetupSequence(clock => clock.GetUtcNow())
+            .Returns(_now)
+            .Returns(_now.AddMinutes(5));
+        var returnPathMock = new Mock<JennGllg.Fr.MonKado.Back.Api.Abstractions.IGoogleReturnPathService>(MockBehavior.Strict);
+        returnPathMock
+            .Setup(service => service.BuildAbsoluteUri(GoogleAuthenticationConstants.AuthenticationFailurePath))
+            .Returns("https://app.example.test/login/google-return#error=failed");
+        var externalMock = new Mock<JennGllg.Fr.MonKado.Back.Api.Abstractions.IGoogleExternalAuthenticationService>(MockBehavior.Strict);
+        var events = new GoogleOpenIdConnectEvents(
+            NullLogger<GoogleOpenIdConnectEvents>.Instance,
+            returnPathMock.Object,
+            externalMock.Object,
+            Microsoft.Extensions.Options.Options.Create(new GoogleAuthenticationOptions()),
+            clockMock.Object,
+            _senderMock.Object);
+        _senderMock
+            .Setup(sender => sender.Send(
+                It.IsAny<ResolveGoogleExpectedMemberCommand>(),
+                cancellationToken))
+            .ReturnsAsync((Guid?)null);
+
+        // Act
+        await events.TicketReceived(context);
+
+        // Assert
+        Assert.Equal(
+            "https://app.example.test/login/google-return#error=failed",
+            context.Response.Headers.Location);
+        Assert.False(context.Response.Headers.ContainsKey("Set-Cookie"));
+        _senderMock.Verify(
+            sender => sender.Send(
+                It.IsAny<ResolveGoogleExpectedMemberCommand>(),
+                cancellationToken),
+            Times.Once);
+        clockMock.Verify(
+            clock => clock.GetUtcNow(),
+            Times.Exactly(2));
+        returnPathMock.Verify(
+            service => service.BuildAbsoluteUri(GoogleAuthenticationConstants.AuthenticationFailurePath),
+            Times.Once);
+        _senderMock.VerifyNoOtherCalls();
+        clockMock.VerifyNoOtherCalls();
+        returnPathMock.VerifyNoOtherCalls();
+        externalMock.VerifyNoOtherCalls();
+    }
+
     [Fact]
     public async Task AuthorizationCodeReceived_WhenProtectedPropertiesAreMissing_RejectsFlow()
     {
@@ -83,7 +201,7 @@ public class GoogleOpenIdConnectEventsTests
 
         // Assert
         Assert.Equal(
-            "https://app.example.test/#/login?error=google_auth_failed",
+            "https://app.example.test/login/google-return#error=failed",
             context.Response.Headers.Location);
         Assert.Equal(
             "no-store",
@@ -179,7 +297,7 @@ public class GoogleOpenIdConnectEventsTests
             43,
             flowBinding.Length);
         Assert.Equal(
-            $"{GoogleAuthenticationConstants.CompletionPath}?flow={flowBinding}",
+            $"https://app.example.test{GoogleAuthenticationConstants.FrontendReturnPath}#flow={flowBinding}",
             properties.RedirectUri);
         Assert.Equal(
             properties.RedirectUri,
@@ -257,7 +375,7 @@ public class GoogleOpenIdConnectEventsTests
 
         // Assert
         Assert.Equal(
-            "https://app.example.test/#/login?error=google_auth_failed",
+            "https://app.example.test/login/google-return#error=failed",
             context.Response.Headers.Location);
         Assert.Equal(
             "no-store",
@@ -288,7 +406,7 @@ public class GoogleOpenIdConnectEventsTests
 
         // Assert
         Assert.Equal(
-            "https://app.example.test/#/login?error=google_auth_failed",
+            "https://app.example.test/login/google-return#error=failed",
             context.Response.Headers.Location);
         authenticationServiceMock.VerifyNoOtherCalls();
         _senderMock.Verify(sender => sender.Send(
@@ -587,7 +705,7 @@ public class GoogleOpenIdConnectEventsTests
         Assert.False(properties.Items.ContainsKey(
             GoogleAuthenticationConstants.ExpectedMemberIdProperty));
         Assert.Equal(
-            "https://app.example.test/#/login?error=google_authentication_unavailable",
+            "https://app.example.test/login/google-return#error=unavailable",
             context.Response.Headers.Location);
         Assert.Equal(
             "no-store",
@@ -621,7 +739,7 @@ public class GoogleOpenIdConnectEventsTests
             StatusCodes.Status302Found,
             httpContext.Response.StatusCode);
         Assert.Equal(
-            "https://app.example.test/#/login?error=google_auth_failed",
+            "https://app.example.test/login/google-return#error=failed",
             httpContext.Response.Headers.Location);
         Assert.DoesNotContain(
             "sensitive",
@@ -651,7 +769,7 @@ public class GoogleOpenIdConnectEventsTests
 
         // Assert
         Assert.Equal(
-            "https://app.example.test/#/login?error=google_auth_failed",
+            "https://app.example.test/login/google-return#error=failed",
             httpContext.Response.Headers.Location);
         Assert.Equal(
             "no-store",
@@ -682,7 +800,7 @@ public class GoogleOpenIdConnectEventsTests
 
         // Assert
         Assert.Equal(
-            "https://app.example.test/#/login?error=google_authentication_unavailable",
+            "https://app.example.test/login/google-return#error=unavailable",
             httpContext.Response.Headers.Location);
         Assert.Equal(
             "no-store",
@@ -715,7 +833,7 @@ public class GoogleOpenIdConnectEventsTests
 
         // Assert
         Assert.Equal(
-            "https://app.example.test/#/login?error=google_authentication_unavailable",
+            "https://app.example.test/login/google-return#error=unavailable",
             httpContext.Response.Headers.Location);
         authenticationServiceMock.VerifyNoOtherCalls();
         _senderMock.VerifyNoOtherCalls();
@@ -741,7 +859,7 @@ public class GoogleOpenIdConnectEventsTests
 
         // Assert
         Assert.Equal(
-            "https://app.example.test/#/login?error=google_auth_failed",
+            "https://app.example.test/login/google-return#error=failed",
             httpContext.Response.Headers.Location);
         authenticationServiceMock.VerifyNoOtherCalls();
         _senderMock.VerifyNoOtherCalls();
@@ -898,7 +1016,10 @@ public class GoogleOpenIdConnectEventsTests
 
     private static TicketReceivedContext CreateTicketReceivedContext(ClaimsPrincipal principal)
     {
-        var properties = new AuthenticationProperties();
+        var properties = new AuthenticationProperties
+        {
+            ExpiresUtc = _now.AddMinutes(5)
+        };
         var ticket = new AuthenticationTicket(
             principal,
             properties,

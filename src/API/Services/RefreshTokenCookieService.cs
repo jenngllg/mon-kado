@@ -49,18 +49,6 @@ public class RefreshTokenCookieService(IWebHostEnvironment environment)
             tokens.IsPersistent);
     }
 
-    /// <inheritdoc />
-    public void Append(
-        HttpContext context,
-        AccountRefreshSession session)
-    {
-        Append(
-            context,
-            session.RefreshToken,
-            session.RefreshTokenExpiresAt,
-            session.IsPersistent);
-    }
-
     /// <summary>
     /// Deletes the refresh token cookie.
     /// </summary>

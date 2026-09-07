@@ -22,34 +22,24 @@ public static class GoogleAuthenticationConstants
     /// Gets the public callback path handled by OpenID Connect middleware.
     /// </summary>
     public const string CallbackPath = "/api/v1/auth/google/callback";
-
     /// <summary>
-    /// Gets the API completion path used after the remote callback.
+    /// Gets the sole frontend route that can consume a validated Google callback.
     /// </summary>
-    public const string CompletionPath = "/api/v1/auth/google/completion";
-
+    public const string FrontendReturnPath = "/login/google-return";
     /// <summary>
-    /// Gets the fixed frontend path used when explicit account linking is required.
+    /// Gets the fixed frontend path used when authorization is declined.
     /// </summary>
-    public const string LinkPath = "/#/login/link-google";
+    public const string AuthenticationCancelledPath = FrontendReturnPath + "#error=cancelled";
 
     /// <summary>
     /// Gets the fixed frontend path used when the Google protocol fails.
     /// </summary>
-    public const string AuthenticationFailurePath = "/#/login?error=google_auth_failed";
+    public const string AuthenticationFailurePath = FrontendReturnPath + "#error=failed";
 
     /// <summary>
     /// Gets the fixed frontend path used when Google authentication is temporarily unavailable.
     /// </summary>
-    public const string AuthenticationUnavailablePath =
-        "/#/login?error=google_authentication_unavailable";
-
-    /// <summary>
-    /// Gets the fixed frontend path used when an additional local verification is required.
-    /// </summary>
-    public const string AdditionalVerificationPath =
-        "/#/login?error=google_additional_verification_required";
-
+    public const string AuthenticationUnavailablePath = FrontendReturnPath + "#error=unavailable";
     /// <summary>
     /// Gets the Google login provider name persisted by ASP.NET Core Identity.
     /// </summary>
@@ -84,9 +74,8 @@ public static class GoogleAuthenticationConstants
     /// Gets the protected authentication property containing the opaque browser-flow binding.
     /// </summary>
     public const string FlowBindingProperty = ".monkado.flowBinding";
-
     /// <summary>
-    /// Gets the query parameter carrying the opaque browser-flow binding.
+    /// Gets the fragment property and JSON member carrying the opaque browser-flow binding.
     /// </summary>
     public const string FlowBindingParameter = "flow";
 

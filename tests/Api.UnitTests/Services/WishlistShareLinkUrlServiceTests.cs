@@ -23,7 +23,7 @@ public class WishlistShareLinkUrlServiceTests
 
         // Assert
         Assert.Equal(
-            "https://app.example.test/#/shared-wishlists/0198e75d828070008000000000000001.secret",
+            "https://app.example.test/shared-wishlists/0198e75d-8280-7000-8000-000000000001#secret",
             url);
     }
 

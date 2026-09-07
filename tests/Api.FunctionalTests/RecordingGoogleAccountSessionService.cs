@@ -131,7 +131,8 @@ public class RecordingGoogleAccountSessionService(TimeProvider timeProvider)
 
         return Task.FromResult(new GoogleAuthenticationResult(
             CompletionOutcome,
-            session));
+            session,
+                ExpectedMemberId ?? Guid.Parse("0198e75d-8280-7000-8000-000000000001")));
     }
 
     public Task<GoogleAccountLinkResult> LinkAsync(

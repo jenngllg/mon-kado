@@ -55,7 +55,7 @@ public class GoogleAuthenticationControllerTests
 
         // Act
         using var response = await client.GetAsync(
-            "/api/v1/auth/google?returnPath=%2Fmy-lists&rememberMe=true",
+            "/api/v1/auth/google?returnPath=%2Flogin%2Fgoogle-return&rememberMe=true",
             TestContext.Current.CancellationToken);
 
         // Assert
@@ -365,7 +365,7 @@ public class GoogleAuthenticationControllerTests
             HttpStatusCode.Redirect,
             response.StatusCode);
         Assert.Equal(
-            "https://app.example.test/#/login?error=google_auth_failed",
+            "https://app.example.test/login/google-return#error=failed",
             response.Headers.Location?.OriginalString);
         Assert.Equal(
             "no-store",
@@ -394,17 +394,36 @@ public class GoogleAuthenticationControllerTests
         });
 
         // Act
-        using var response = await client.GetAsync(
-            GoogleAuthenticationConstants.CompletionPath,
+        using var csrfClient = factory.CreateGoogleClient(handleCookies: false);
+        var csrf = await GetAntiforgeryContextAsync(
+            csrfClient,
+            TestContext.Current.CancellationToken);
+        using var request = new HttpRequestMessage(
+            HttpMethod.Post,
+            "/api/v1/auth/google/completions")
+        {
+            Content = JsonContent.Create(new
+            {
+                flow = new string(
+                    'A',
+                    43)
+            })
+        };
+        request.Headers.TryAddWithoutValidation(
+            WebSecurityOptions.AntiforgeryHeaderName,
+            csrf.Token);
+        request.Headers.TryAddWithoutValidation(
+            "Cookie",
+            csrf.Cookie);
+        using var response = await client.SendAsync(
+            request,
             TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(
-            HttpStatusCode.Redirect,
+            isEnabled ? HttpStatusCode.BadRequest : HttpStatusCode.ServiceUnavailable,
             response.StatusCode);
-        Assert.Equal(
-            "https://app.example.test/#/login?error=google_auth_failed",
-            response.Headers.Location?.OriginalString);
+        Assert.Null(response.Headers.Location);
         Assert.False(response.Headers.Contains("Set-Cookie"));
         Assert.Contains(
             factory.LogMessages,
@@ -412,7 +431,7 @@ public class GoogleAuthenticationControllerTests
                     "[Error]",
                     StringComparison.Ordinal) &&
                 message.Contains(
-                    "DisabledOrInsecureRequest",
+                isEnabled ? ErrorCodes.RequestValidationError : "Dependency",
                     StringComparison.Ordinal));
         Assert.Null(factory.GoogleSessionService.LastCompletionContext);
     }
@@ -575,7 +594,8 @@ public class GoogleAuthenticationControllerTests
         var externalCookie = GetCookiePair(
             callback,
             ExternalCookieName);
-        using var completion = await client.GetAsync(
+        using var completion = await PostCompletionAsync(
+            client,
             callback.Headers.Location,
             TestContext.Current.CancellationToken);
 
@@ -584,7 +604,7 @@ public class GoogleAuthenticationControllerTests
             HttpStatusCode.Redirect,
             callback.StatusCode);
         Assert.Equal(
-            $"{GoogleAuthenticationConstants.CompletionPath}?flow={flowBinding}",
+            $"https://app.example.test{GoogleAuthenticationConstants.FrontendReturnPath}#flow={flowBinding}",
             callback.Headers.Location?.OriginalString);
         Assert.Contains(
             "no-store",
@@ -675,17 +695,18 @@ public class GoogleAuthenticationControllerTests
                         "google-access-token-not-persisted",
                         StringComparison.Ordinal)));
         Assert.Equal(
-            $"{GoogleAuthenticationConstants.CompletionPath}?flow={flowBinding}",
+            $"https://app.example.test{GoogleAuthenticationConstants.FrontendReturnPath}#flow={flowBinding}",
             ticket.Properties.RedirectUri);
         Assert.Equal(
             GoogleAuthenticationConstants.TransientLifetime,
             ticket.Properties.ExpiresUtc - ticket.Properties.IssuedUtc);
         Assert.Equal(
-            HttpStatusCode.Redirect,
+            HttpStatusCode.OK,
             completion.StatusCode);
         Assert.Equal(
-            "https://app.example.test/my-lists",
-            completion.Headers.Location?.OriginalString);
+            HttpStatusCode.OK,
+            completion.StatusCode);
+        Assert.Null(completion.Headers.Location);
         Assert.Equal(
             "no-store",
             completion.Headers.CacheControl?.ToString());
@@ -728,7 +749,7 @@ public class GoogleAuthenticationControllerTests
             context.CurrentSessionId);
         Assert.True(context.IsPersistent);
         Assert.Equal(
-            "/my-lists",
+            "/login/google-return",
             context.ReturnPath);
         Assert.Equal(
             "functional-google-subject",
@@ -749,18 +770,19 @@ public class GoogleAuthenticationControllerTests
             factory.GoogleSessionService.ResolveCallCount);
 
         using var replayClient = factory.CreateGoogleClient(handleCookies: false);
-        using var replayRequest = new HttpRequestMessage(
-            HttpMethod.Get,
-            callback.Headers.Location);
-        replayRequest.Headers.TryAddWithoutValidation(
-            "Cookie",
-            externalCookie);
+        using var replayRequest = await CreateCompletionRequestAsync(
+            replayClient,
+            callback.Headers.Location,
+            externalCookie,
+            TestContext.Current.CancellationToken);
         using var replay = await replayClient.SendAsync(
             replayRequest,
             TestContext.Current.CancellationToken);
-        Assert.Equal(
-            "https://app.example.test/#/login?error=google_auth_failed",
-            replay.Headers.Location?.OriginalString);
+        await AssertGoogleErrorAsync(
+            replay,
+            HttpStatusCode.Unauthorized,
+            ErrorCodes.GoogleAuthenticationFailed,
+            TestContext.Current.CancellationToken);
         Assert.DoesNotContain(
             replay.Headers.GetValues("Set-Cookie"),
             cookie => cookie.StartsWith(
@@ -801,10 +823,12 @@ public class GoogleAuthenticationControllerTests
         var secondFlowBinding = GetFlowBinding(secondCallback.Headers.Location);
 
         // Act
-        using var mismatchedCompletion = await client.GetAsync(
+        using var mismatchedCompletion = await PostCompletionAsync(
+            client,
             firstCallback.Headers.Location,
             TestContext.Current.CancellationToken);
-        using var currentCompletion = await client.GetAsync(
+        using var currentCompletion = await PostCompletionAsync(
+            client,
             secondCallback.Headers.Location,
             TestContext.Current.CancellationToken);
 
@@ -812,13 +836,16 @@ public class GoogleAuthenticationControllerTests
         Assert.NotEqual(
             firstFlowBinding,
             secondFlowBinding);
-        Assert.Equal(
-            "https://app.example.test/#/login?error=google_auth_failed",
-            mismatchedCompletion.Headers.Location?.OriginalString);
+        await AssertGoogleErrorAsync(
+            mismatchedCompletion,
+            HttpStatusCode.Unauthorized,
+            ErrorCodes.GoogleAuthenticationFailed,
+            TestContext.Current.CancellationToken);
         Assert.False(mismatchedCompletion.Headers.Contains("Set-Cookie"));
         Assert.Equal(
-            "https://app.example.test/my-lists",
-            currentCompletion.Headers.Location?.OriginalString);
+            HttpStatusCode.OK,
+            currentCompletion.StatusCode);
+        Assert.Null(currentCompletion.Headers.Location);
         Assert.Contains(
             currentCompletion.Headers.GetValues("Set-Cookie"),
             cookie => cookie.StartsWith(
@@ -872,12 +899,16 @@ public class GoogleAuthenticationControllerTests
             secondCallback,
             ExternalCookieName);
         var secondFlowBinding = GetFlowBinding(secondCallback.Headers.Location);
-        using var mismatchedRequest = CreateCompletionRequest(
+        using var mismatchedRequest = await CreateCompletionRequestAsync(
+            client,
             firstCallback.Headers.Location,
-            secondExternalCookie);
-        using var currentRequest = CreateCompletionRequest(
+            secondExternalCookie,
+            TestContext.Current.CancellationToken);
+        using var currentRequest = await CreateCompletionRequestAsync(
+            client,
             secondCallback.Headers.Location,
-            secondExternalCookie);
+            secondExternalCookie,
+            TestContext.Current.CancellationToken);
 
         // Act
         using var mismatchedCompletion = await client.SendAsync(
@@ -894,13 +925,16 @@ public class GoogleAuthenticationControllerTests
         Assert.NotEqual(
             firstFlowBinding,
             secondFlowBinding);
-        Assert.Equal(
-            "https://app.example.test/#/login?error=google_auth_failed",
-            mismatchedCompletion.Headers.Location?.OriginalString);
+        await AssertGoogleErrorAsync(
+            mismatchedCompletion,
+            HttpStatusCode.Unauthorized,
+            ErrorCodes.GoogleAuthenticationFailed,
+            TestContext.Current.CancellationToken);
         Assert.False(mismatchedCompletion.Headers.Contains("Set-Cookie"));
         Assert.Equal(
-            "https://app.example.test/my-lists",
-            currentCompletion.Headers.Location?.OriginalString);
+            HttpStatusCode.OK,
+            currentCompletion.StatusCode);
+        Assert.Null(currentCompletion.Headers.Location);
         Assert.Equal(
             "second-google-subject",
             factory.GoogleSessionService.LastCompletionContext?.Identity.Subject);
@@ -955,13 +989,14 @@ public class GoogleAuthenticationControllerTests
         using var failingCallback = await client.SendAsync(
             failingRequest,
             TestContext.Current.CancellationToken);
-        using var currentCompletion = await client.GetAsync(
+        using var currentCompletion = await PostCompletionAsync(
+            client,
             currentCallback.Headers.Location,
             TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(
-            "https://app.example.test/#/login?error=google_auth_failed",
+            "https://app.example.test/login/google-return#error=failed",
             failingCallback.Headers.Location?.OriginalString);
         Assert.DoesNotContain(
             failingCallback.Headers.TryGetValues(
@@ -973,8 +1008,9 @@ public class GoogleAuthenticationControllerTests
                 $"{ExternalCookieName}=",
                 StringComparison.Ordinal));
         Assert.Equal(
-            "https://app.example.test/my-lists",
-            currentCompletion.Headers.Location?.OriginalString);
+            HttpStatusCode.OK,
+            currentCompletion.StatusCode);
+        Assert.Null(currentCompletion.Headers.Location);
         Assert.Equal(
             1,
             factory.GoogleSessionService.CompletionCallCount);
@@ -1017,10 +1053,12 @@ public class GoogleAuthenticationControllerTests
             ExternalCookieName);
 
         // Act
-        using var absentCompletion = await absentClient.GetAsync(
+        using var absentCompletion = await PostCompletionAsync(
+            absentClient,
             absentCallback.Headers.Location,
             TestContext.Current.CancellationToken);
-        using var presentCompletion = await presentClient.GetAsync(
+        using var presentCompletion = await PostCompletionAsync(
+            presentClient,
             presentCallback.Headers.Location,
             TestContext.Current.CancellationToken);
 
@@ -1033,10 +1071,10 @@ public class GoogleAuthenticationControllerTests
             expectedMemberId,
             presentFactory.GoogleSessionService.LastCompletionContext?.ExpectedMemberId);
         Assert.Equal(
-            HttpStatusCode.Redirect,
+            HttpStatusCode.OK,
             absentCompletion.StatusCode);
         Assert.Equal(
-            HttpStatusCode.Redirect,
+            HttpStatusCode.OK,
             presentCompletion.StatusCode);
     }
 
@@ -1055,7 +1093,7 @@ public class GoogleAuthenticationControllerTests
                 dataProtectionKeysPath: keysPath);
             using var firstClient = firstFactory.CreateGoogleClient(handleCookies: false);
             using var challenge = await firstClient.GetAsync(
-                "/api/v1/auth/google?returnPath=%2Fmy-lists&rememberMe=false",
+                "/api/v1/auth/google?returnPath=%2Flogin%2Fgoogle-return&rememberMe=false",
                 TestContext.Current.CancellationToken);
             var challengeLocation = Assert.IsType<Uri>(challenge.Headers.Location);
             var query = QueryHelpers.ParseQuery(challengeLocation.Query);
@@ -1097,12 +1135,11 @@ public class GoogleAuthenticationControllerTests
             var externalCookie = GetCookiePair(
                 callback,
                 ExternalCookieName);
-            using var completionRequest = new HttpRequestMessage(
-                HttpMethod.Get,
-                callback.Headers.Location);
-            completionRequest.Headers.TryAddWithoutValidation(
-                "Cookie",
-                externalCookie);
+            using var completionRequest = await CreateCompletionRequestAsync(
+                firstClient,
+                callback.Headers.Location,
+                externalCookie,
+                TestContext.Current.CancellationToken);
 
             // Act
             using var completion = await firstClient.SendAsync(
@@ -1111,7 +1148,7 @@ public class GoogleAuthenticationControllerTests
 
             // Assert
             Assert.StartsWith(
-                $"{GoogleAuthenticationConstants.CompletionPath}?flow=",
+                $"https://app.example.test{GoogleAuthenticationConstants.FrontendReturnPath}#flow=",
                 callback.Headers.Location?.OriginalString,
                 StringComparison.Ordinal);
             Assert.Equal(
@@ -1121,11 +1158,12 @@ public class GoogleAuthenticationControllerTests
                 1,
                 secondFactory.GoogleSessionService.ResolveCallCount);
             Assert.Equal(
-                HttpStatusCode.Redirect,
+                HttpStatusCode.OK,
                 completion.StatusCode);
             Assert.Equal(
-                "https://app.example.test/my-lists",
-                completion.Headers.Location?.OriginalString);
+                HttpStatusCode.OK,
+                completion.StatusCode);
+            Assert.Null(completion.Headers.Location);
             Assert.NotNull(firstFactory.GoogleSessionService.LastCompletionContext);
             Assert.Contains(
                 completion.Headers.GetValues("Set-Cookie"),
@@ -1160,7 +1198,7 @@ public class GoogleAuthenticationControllerTests
                 dataProtectionKeysPath: firstKeysPath);
             using var firstClient = firstFactory.CreateGoogleClient(handleCookies: false);
             using var challenge = await firstClient.GetAsync(
-                "/api/v1/auth/google?returnPath=%2Fmy-lists&rememberMe=false",
+                "/api/v1/auth/google?returnPath=%2Flogin%2Fgoogle-return&rememberMe=false",
                 TestContext.Current.CancellationToken);
             var challengeLocation = Assert.IsType<Uri>(challenge.Headers.Location);
             var query = QueryHelpers.ParseQuery(challengeLocation.Query);
@@ -1205,7 +1243,7 @@ public class GoogleAuthenticationControllerTests
                 HttpStatusCode.Redirect,
                 callback.StatusCode);
             Assert.Equal(
-                "https://app.example.test/#/login?error=google_auth_failed",
+                "https://app.example.test/login/google-return#error=failed",
                 callback.Headers.Location?.OriginalString);
             Assert.Equal(
                 0,
@@ -1254,7 +1292,8 @@ public class GoogleAuthenticationControllerTests
         var flowBinding = GetFlowBinding(callback.Headers.Location);
 
         // Act
-        using var unavailable = await client.GetAsync(
+        using var unavailable = await PostCompletionAsync(
+            client,
             callback.Headers.Location,
             TestContext.Current.CancellationToken);
         var error = await unavailable.Content.ReadFromJsonAsync<ErrorResponse>(
@@ -1273,12 +1312,14 @@ public class GoogleAuthenticationControllerTests
             StringComparison.Ordinal);
         Assert.False(unavailable.Headers.Contains("Set-Cookie"));
         factory.GoogleSessionService.IsCompletionUnavailable = false;
-        using var retry = await client.GetAsync(
+        using var retry = await PostCompletionAsync(
+            client,
             callback.Headers.Location,
             TestContext.Current.CancellationToken);
         Assert.Equal(
-            "https://app.example.test/my-lists",
-            retry.Headers.Location?.OriginalString);
+            HttpStatusCode.OK,
+            retry.StatusCode);
+        Assert.Null(retry.Headers.Location);
         var retryRefreshCookie = Assert.Single(
             retry.Headers.GetValues("Set-Cookie"),
             cookie => cookie.StartsWith(
@@ -1295,7 +1336,7 @@ public class GoogleAuthenticationControllerTests
     }
 
     [Fact]
-    public async Task CompleteAsync_WhenApplicationRejectsFlow_DeletesExternalCookieAndRedirectsSafely()
+    public async Task CompleteAsync_WhenApplicationRejectsFlow_DeletesExternalCookieAndReturnsUnauthorized()
     {
         // Arrange
         using var factory = new GoogleAuthenticationApiFactory();
@@ -1313,14 +1354,17 @@ public class GoogleAuthenticationControllerTests
         var flowBinding = GetFlowBinding(callback.Headers.Location);
 
         // Act
-        using var completion = await client.GetAsync(
+        using var completion = await PostCompletionAsync(
+            client,
             callback.Headers.Location,
             TestContext.Current.CancellationToken);
 
         // Assert
-        Assert.Equal(
-            "https://app.example.test/#/login?error=google_auth_failed",
-            completion.Headers.Location?.OriginalString);
+        await AssertGoogleErrorAsync(
+            completion,
+            HttpStatusCode.Unauthorized,
+            ErrorCodes.GoogleAuthenticationFailed,
+            TestContext.Current.CancellationToken);
         Assert.Contains(
             completion.Headers.GetValues("Set-Cookie"),
             cookie => cookie.StartsWith(
@@ -1332,14 +1376,14 @@ public class GoogleAuthenticationControllerTests
                     "[Error]",
                     StringComparison.Ordinal) &&
                 message.Contains(
-                    "ApplicationRejected",
+                ErrorCodes.GoogleAuthenticationFailed,
                     StringComparison.Ordinal));
     }
 
     [Theory]
     [InlineData(999, false)]
     [InlineData((int)GoogleAuthenticationOutcome.SessionCreated, true)]
-    public async Task CompleteAsync_WhenCompletionResultIsInconsistent_DeletesExternalCookieAndRedirectsSafely(
+    public async Task CompleteAsync_WhenCompletionResultIsInconsistent_DeletesExternalCookieAndReturnsUnauthorized(
         int outcome,
         bool returnNullSession)
     {
@@ -1359,14 +1403,17 @@ public class GoogleAuthenticationControllerTests
             TestContext.Current.CancellationToken);
 
         // Act
-        using var completion = await client.GetAsync(
+        using var completion = await PostCompletionAsync(
+            client,
             callback.Headers.Location,
             TestContext.Current.CancellationToken);
 
         // Assert
-        Assert.Equal(
-            "https://app.example.test/#/login?error=google_auth_failed",
-            completion.Headers.Location?.OriginalString);
+        await AssertGoogleErrorAsync(
+            completion,
+            HttpStatusCode.Unauthorized,
+            ErrorCodes.GoogleAuthenticationFailed,
+            TestContext.Current.CancellationToken);
         Assert.Contains(
             completion.Headers.GetValues("Set-Cookie"),
             cookie => cookie.StartsWith(
@@ -1378,12 +1425,12 @@ public class GoogleAuthenticationControllerTests
                     "[Error]",
                     StringComparison.Ordinal) &&
                 message.Contains(
-                    "InvalidCompletionOutcome",
+                ErrorCodes.GoogleAuthenticationFailed,
                     StringComparison.Ordinal));
     }
 
     [Fact]
-    public async Task CompleteAsync_WhenAdditionalVerificationIsRequired_PreservesExternalCookieForGenericLinkAttempt()
+    public async Task CompleteAsync_WhenAdditionalVerificationIsRequired_ReturnsConflictAndEndsExternalFlow()
     {
         // Arrange
         using var factory = new GoogleAuthenticationApiFactory();
@@ -1402,18 +1449,26 @@ public class GoogleAuthenticationControllerTests
         var flowBinding = GetFlowBinding(callback.Headers.Location);
 
         // Act
-        using var completion = await client.GetAsync(
+        using var completion = await PostCompletionAsync(
+            client,
             callback.Headers.Location,
             TestContext.Current.CancellationToken);
 
         // Assert
-        Assert.Equal(
-            HttpStatusCode.Redirect,
-            completion.StatusCode);
-        Assert.Equal(
-            $"https://app.example.test/#/login?error=google_additional_verification_required&flow={flowBinding}",
-            completion.Headers.Location?.OriginalString);
-        Assert.False(completion.Headers.Contains("Set-Cookie"));
+        await AssertGoogleErrorAsync(
+            completion,
+            HttpStatusCode.Conflict,
+            ErrorCodes.GoogleAdditionalVerificationRequired,
+            TestContext.Current.CancellationToken);
+        Assert.Contains(
+            completion.Headers.GetValues("Set-Cookie"),
+            cookie => cookie.StartsWith(
+                $"{ExternalCookieName}=;",
+                StringComparison.Ordinal));
+        Assert.DoesNotContain(completion.Headers.GetValues("Set-Cookie"),
+            cookie => cookie.StartsWith(
+                $"{RefreshCookieName}=",
+                StringComparison.Ordinal));
         var csrfToken = await GetAntiforgeryTokenAsync(
             client,
             TestContext.Current.CancellationToken);
@@ -1424,8 +1479,11 @@ public class GoogleAuthenticationControllerTests
             flowBinding,
             TestContext.Current.CancellationToken);
         Assert.Equal(
-            HttpStatusCode.OK,
+            HttpStatusCode.Unauthorized,
             linked.StatusCode);
+        Assert.Equal(
+            0,
+            factory.GoogleSessionService.LinkCallCount);
     }
 
     [Fact]
@@ -1447,17 +1505,20 @@ public class GoogleAuthenticationControllerTests
             GoogleAuthenticationConstants.TransientLifetime.Add(TimeSpan.FromSeconds(1)));
 
         // Act
-        using var completion = await client.GetAsync(
+        using var completion = await PostCompletionAsync(
+            client,
             callback.Headers.Location,
             TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(
-            HttpStatusCode.Redirect,
+            HttpStatusCode.Unauthorized,
             completion.StatusCode);
-        Assert.Equal(
-            "https://app.example.test/#/login?error=google_auth_failed",
-            completion.Headers.Location?.OriginalString);
+        await AssertGoogleErrorAsync(
+            completion,
+            HttpStatusCode.Unauthorized,
+            ErrorCodes.GoogleAuthenticationFailed,
+            TestContext.Current.CancellationToken);
         Assert.Contains(
             completion.Headers.GetValues("Set-Cookie"),
             cookie => cookie.StartsWith(
@@ -1470,12 +1531,12 @@ public class GoogleAuthenticationControllerTests
                     "[Error]",
                     StringComparison.Ordinal) &&
                 message.Contains(
-                    "Classification: InvalidExternalTicket",
+                ErrorCodes.GoogleAuthenticationFailed,
                     StringComparison.Ordinal));
     }
 
     [Fact]
-    public async Task CompleteAsync_WhenCallbackOccursNearStateExpiry_GetsFreshExternalCookieLifetime()
+    public async Task CompleteAsync_WhenCallbackOccursNearStateExpiry_PreservesOriginalDeadline()
     {
         // Arrange
         using var factory = new GoogleAuthenticationApiFactory();
@@ -1495,18 +1556,24 @@ public class GoogleAuthenticationControllerTests
             GoogleAuthenticationConstants.TransientLifetime.Subtract(TimeSpan.FromSeconds(1)));
 
         // Act
-        using var completion = await client.GetAsync(
+        using var completion = await PostCompletionAsync(
+            client,
             callback.Headers.Location,
             TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(
-            HttpStatusCode.Redirect,
+            HttpStatusCode.Unauthorized,
             completion.StatusCode);
-        Assert.Equal(
-            "https://app.example.test/my-lists",
-            completion.Headers.Location?.OriginalString);
-        Assert.NotNull(factory.GoogleSessionService.LastCompletionContext);
+        Assert.Null(completion.Headers.Location);
+        Assert.Null(factory.GoogleSessionService.LastCompletionContext);
+        Assert.Contains(
+            callback.Headers.GetValues("Set-Cookie"),
+            cookie => cookie.StartsWith(
+                $"{ExternalCookieName}=",
+                StringComparison.Ordinal) && cookie.Contains(
+                "max-age=10",
+                StringComparison.Ordinal));
     }
 
     [Theory]
@@ -1536,7 +1603,7 @@ public class GoogleAuthenticationControllerTests
             HttpStatusCode.Redirect,
             response.StatusCode);
         Assert.Equal(
-            "https://app.example.test/#/login?error=google_auth_failed",
+            "https://app.example.test/login/google-return#error=failed",
             response.Headers.Location?.OriginalString);
         Assert.Contains(
             "no-store",
@@ -1564,7 +1631,7 @@ public class GoogleAuthenticationControllerTests
         using var factory = new GoogleAuthenticationApiFactory();
         using var httpsClient = factory.CreateGoogleClient(handleCookies: false);
         using var challenge = await httpsClient.GetAsync(
-            "/api/v1/auth/google?returnPath=%2Fmy-lists&rememberMe=false",
+            "/api/v1/auth/google?returnPath=%2Flogin%2Fgoogle-return&rememberMe=false",
             TestContext.Current.CancellationToken);
         var challengeLocation = Assert.IsType<Uri>(challenge.Headers.Location);
         var query = QueryHelpers.ParseQuery(challengeLocation.Query);
@@ -1613,7 +1680,7 @@ public class GoogleAuthenticationControllerTests
             HttpStatusCode.Redirect,
             callback.StatusCode);
         Assert.Equal(
-            "https://app.example.test/#/login?error=google_auth_failed",
+            "https://app.example.test/login/google-return#error=failed",
             callback.Headers.Location?.OriginalString);
         Assert.Equal(
             0,
@@ -1645,7 +1712,7 @@ public class GoogleAuthenticationControllerTests
 
         // Assert
         Assert.Equal(
-            "https://app.example.test/#/login?error=google_auth_failed",
+            "https://app.example.test/login/google-return#error=failed",
             response.Headers.Location?.OriginalString);
         Assert.Equal(
             0,
@@ -1687,7 +1754,7 @@ public class GoogleAuthenticationControllerTests
 
         // Assert
         Assert.Equal(
-            "https://app.example.test/#/login?error=google_auth_failed",
+            "https://app.example.test/login/google-return#error=failed",
             response.Headers.Location?.OriginalString);
         Assert.Equal(
             0,
@@ -1731,7 +1798,7 @@ public class GoogleAuthenticationControllerTests
 
         // Assert
         Assert.Equal(
-            "https://app.example.test/#/login?error=google_auth_failed",
+            "https://app.example.test/login/google-return#error=failed",
             callback.Headers.Location?.OriginalString);
         Assert.Equal(
             1,
@@ -1785,7 +1852,7 @@ public class GoogleAuthenticationControllerTests
 
         // Assert
         Assert.Equal(
-            "https://app.example.test/#/login?error=google_auth_failed",
+            "https://app.example.test/login/google-return#error=failed",
             response.Headers.Location?.OriginalString);
         Assert.Equal(
             0,
@@ -1816,7 +1883,7 @@ public class GoogleAuthenticationControllerTests
 
         // Assert
         Assert.Equal(
-            "https://app.example.test/#/login?error=google_auth_failed",
+            "https://app.example.test/login/google-return#error=failed",
             callback.Headers.Location?.OriginalString);
         Assert.Equal(
             0,
@@ -1879,7 +1946,7 @@ public class GoogleAuthenticationControllerTests
 
         // Assert
         Assert.Equal(
-            "https://app.example.test/#/login?error=google_auth_failed",
+            "https://app.example.test/login/google-return#error=failed",
             response.Headers.Location?.OriginalString);
         Assert.Equal(
             1,
@@ -1913,7 +1980,7 @@ public class GoogleAuthenticationControllerTests
             HttpStatusCode.Redirect,
             response.StatusCode);
         Assert.StartsWith(
-            $"{GoogleAuthenticationConstants.CompletionPath}?flow=",
+            $"https://app.example.test{GoogleAuthenticationConstants.FrontendReturnPath}#flow=",
             response.Headers.Location?.OriginalString,
             StringComparison.Ordinal);
         Assert.Contains(
@@ -1954,7 +2021,8 @@ public class GoogleAuthenticationControllerTests
             cookieOptions.TicketDataFormat.Unprotect(cookieValue));
 
         // Act
-        using var completion = await client.GetAsync(
+        using var completion = await PostCompletionAsync(
+            client,
             callback.Headers.Location,
             TestContext.Current.CancellationToken);
 
@@ -1963,11 +2031,12 @@ public class GoogleAuthenticationControllerTests
             ticket.Principal.Claims,
             claim => claim.Type == "name");
         Assert.Equal(
-            HttpStatusCode.Redirect,
+            HttpStatusCode.OK,
             completion.StatusCode);
         Assert.Equal(
-            "https://app.example.test/my-lists",
-            completion.Headers.Location?.OriginalString);
+            HttpStatusCode.OK,
+            completion.StatusCode);
+        Assert.Null(completion.Headers.Location);
         Assert.Null(factory.GoogleSessionService.LastCompletionContext?.Identity.DisplayName);
     }
 
@@ -1995,7 +2064,7 @@ public class GoogleAuthenticationControllerTests
 
         // Assert
         Assert.Equal(
-            "https://app.example.test/#/login?error=google_authentication_unavailable",
+            "https://app.example.test/login/google-return#error=unavailable",
             response.Headers.Location?.OriginalString);
         Assert.Equal(
             "no-store",
@@ -2070,7 +2139,7 @@ public class GoogleAuthenticationControllerTests
 
         // Assert
         Assert.Equal(
-            "https://app.example.test/#/login?error=google_auth_failed",
+            useInvalidIdentityToken ? "https://app.example.test/login/google-return#error=failed" : "https://app.example.test/login/google-return#error=cancelled",
             response.Headers.Location?.OriginalString);
 
         var logs = string.Join(
@@ -2131,7 +2200,7 @@ public class GoogleAuthenticationControllerTests
 
         // Assert
         Assert.Equal(
-            "https://app.example.test/#/login?error=google_authentication_unavailable",
+            "https://app.example.test/login/google-return#error=unavailable",
             callback.Headers.Location?.OriginalString);
         Assert.Equal(
             0,
@@ -2190,7 +2259,7 @@ public class GoogleAuthenticationControllerTests
 
         // Assert
         Assert.Equal(
-            "https://app.example.test/#/login?error=google_authentication_unavailable",
+            "https://app.example.test/login/google-return#error=unavailable",
             callback.Headers.Location?.OriginalString);
         Assert.Equal(
             1,
@@ -2252,7 +2321,7 @@ public class GoogleAuthenticationControllerTests
 
         // Assert
         Assert.Equal(
-            "https://app.example.test/#/login?error=google_authentication_unavailable",
+            "https://app.example.test/login/google-return#error=unavailable",
             callback.Headers.Location?.OriginalString);
         Assert.Equal(
             1,
@@ -2382,21 +2451,25 @@ public class GoogleAuthenticationControllerTests
              index < AuthenticationRateLimitingExtensions.GoogleTransientFlowPermitLimit;
              index++)
         {
-            using var acceptedRequest = CreateCompletionRequest(
+            using var acceptedRequest = await CreateCompletionRequestAsync(
+                client,
                 callbackResponse.Headers.Location,
-                externalCookie);
+                externalCookie,
+                TestContext.Current.CancellationToken);
             using var acceptedResponse = await client.SendAsync(
                 acceptedRequest,
                 TestContext.Current.CancellationToken);
             Assert.Equal(
-                HttpStatusCode.Redirect,
+                index == 0 ? HttpStatusCode.OK : HttpStatusCode.Unauthorized,
                 acceptedResponse.StatusCode);
         }
 
         var completionCallCount = factory.GoogleSessionService.CompletionCallCount;
-        using var rejectedRequest = CreateCompletionRequest(
+        using var rejectedRequest = await CreateCompletionRequestAsync(
+            client,
             callbackResponse.Headers.Location,
-            externalCookie);
+            externalCookie,
+            TestContext.Current.CancellationToken);
         using var rejectedResponse = await client.SendAsync(
             rejectedRequest,
             TestContext.Current.CancellationToken);
@@ -2504,7 +2577,7 @@ public class GoogleAuthenticationControllerTests
 
         // Assert
         Assert.StartsWith(
-            $"{GoogleAuthenticationConstants.CompletionPath}?flow=",
+            $"https://app.example.test{GoogleAuthenticationConstants.FrontendReturnPath}#flow=",
             callback.Headers.Location?.OriginalString,
             StringComparison.Ordinal);
         Assert.Equal(
@@ -2516,10 +2589,13 @@ public class GoogleAuthenticationControllerTests
     }
 
     [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public async Task LinkAsync_WhenBodyExceedsLimit_ReturnsStructuredPayloadTooLargeBeforeAuthentication(
-        bool hasKnownLength)
+    [InlineData(true, "link")]
+    [InlineData(false, "link")]
+    [InlineData(true, "completions")]
+    [InlineData(false, "completions")]
+    public async Task SubmitAsync_WhenBodyExceedsLimit_ReturnsStructuredPayloadTooLargeBeforeAuthentication(
+        bool hasKnownLength,
+        string endpoint)
     {
         // Arrange
         using var factory = new GoogleAuthenticationApiFactory();
@@ -2538,7 +2614,7 @@ public class GoogleAuthenticationControllerTests
             "application/json");
         using var request = new HttpRequestMessage(
             HttpMethod.Post,
-            "/api/v1/auth/google/link")
+            $"/api/v1/auth/google/{endpoint}")
         {
             Content = content
         };
@@ -2586,6 +2662,9 @@ public class GoogleAuthenticationControllerTests
         {
             Content = JsonContent.Create(new
             {
+                flow = new string(
+                    'A',
+                    43),
                 currentPassword = "valid-current-password"
             })
         };
@@ -2715,9 +2794,9 @@ public class GoogleAuthenticationControllerTests
             TestContext.Current.CancellationToken);
         using var request = new HttpRequestMessage(
             HttpMethod.Post,
-            BuildLinkPath(flowBinding))
+            "/api/v1/auth/google/link")
         {
-            Content = JsonContent.Create(new { })
+            Content = JsonContent.Create(new { flow = flowBinding })
         };
         request.Headers.TryAddWithoutValidation(
             WebSecurityOptions.AntiforgeryHeaderName,
@@ -2746,8 +2825,10 @@ public class GoogleAuthenticationControllerTests
             factory.GoogleSessionService.LinkCallCount);
     }
 
-    [Fact]
-    public async Task LinkAsync_WhenContentTypeIsNotJson_ReturnsUnsupportedMediaTypeAndPreservesCookie()
+    [Theory]
+    [InlineData("link")]
+    [InlineData("completions")]
+    public async Task SubmitAsync_WhenContentTypeIsNotJson_ReturnsUnsupportedMediaTypeAndPreservesCookie(string endpoint)
     {
         // Arrange
         using var factory = new GoogleAuthenticationApiFactory();
@@ -2758,7 +2839,7 @@ public class GoogleAuthenticationControllerTests
             TestContext.Current.CancellationToken);
         using var request = new HttpRequestMessage(
             HttpMethod.Post,
-            BuildLinkPath(flowBinding))
+            $"/api/v1/auth/google/{endpoint}")
         {
             Content = new StringContent(
                 "valid-current-password",
@@ -2790,10 +2871,13 @@ public class GoogleAuthenticationControllerTests
     }
 
     [Theory]
-    [InlineData(null)]
-    [InlineData("altered-antiforgery-token")]
-    public async Task LinkAsync_WhenAntiforgeryTokenIsMissingOrAltered_ReturnsBadRequestAndPreservesCookie(
-        string? antiforgeryToken)
+    [InlineData(null, "link")]
+    [InlineData("altered-antiforgery-token", "link")]
+    [InlineData(null, "completions")]
+    [InlineData("altered-antiforgery-token", "completions")]
+    public async Task SubmitAsync_WhenAntiforgeryTokenIsMissingOrAltered_ReturnsBadRequestAndPreservesCookie(
+        string? antiforgeryToken,
+        string endpoint)
     {
         // Arrange
         using var factory = new GoogleAuthenticationApiFactory();
@@ -2804,12 +2888,18 @@ public class GoogleAuthenticationControllerTests
             TestContext.Current.CancellationToken);
         using var request = new HttpRequestMessage(
             HttpMethod.Post,
-            BuildLinkPath(flowBinding))
+            $"/api/v1/auth/google/{endpoint}")
         {
-            Content = JsonContent.Create(new
-            {
-                currentPassword = "valid-current-password"
-            })
+            Content = endpoint == "link"
+                ? JsonContent.Create(new
+                {
+                    flow = flowBinding,
+                    currentPassword = "valid-current-password"
+                })
+                : JsonContent.Create(new
+                {
+                    flow = flowBinding
+                })
         };
 
         if (antiforgeryToken is not null)
@@ -2901,7 +2991,8 @@ public class GoogleAuthenticationControllerTests
             state,
             TestContext.Current.CancellationToken);
         var flowBinding = GetFlowBinding(callback.Headers.Location);
-        using var completion = await client.GetAsync(
+        using var completion = await PostCompletionAsync(
+            client,
             callback.Headers.Location,
             TestContext.Current.CancellationToken);
         var csrfToken = await GetAntiforgeryTokenAsync(
@@ -2989,7 +3080,8 @@ public class GoogleAuthenticationControllerTests
             state,
             TestContext.Current.CancellationToken);
         var flowBinding = GetFlowBinding(callback.Headers.Location);
-        using var completion = await client.GetAsync(
+        using var completion = await PostCompletionAsync(
+            client,
             callback.Headers.Location,
             TestContext.Current.CancellationToken);
         var csrfToken = await GetAntiforgeryTokenAsync(
@@ -3047,7 +3139,8 @@ public class GoogleAuthenticationControllerTests
             state,
             TestContext.Current.CancellationToken);
         var flowBinding = GetFlowBinding(callback.Headers.Location);
-        using var completion = await client.GetAsync(
+        using var completion = await PostCompletionAsync(
+            client,
             callback.Headers.Location,
             TestContext.Current.CancellationToken);
         var csrfToken = await GetAntiforgeryTokenAsync(
@@ -3117,7 +3210,7 @@ public class GoogleAuthenticationControllerTests
 
         // Assert
         Assert.False(paths.TryGetProperty(
-            GoogleAuthenticationConstants.CompletionPath,
+                "/api/v1/auth/google/completion",
             out _));
         Assert.Equal(
             "Starts Google sign-in with Authorization Code, PKCE, state and nonce.",
@@ -3207,15 +3300,48 @@ public class GoogleAuthenticationControllerTests
             parameter => parameter.GetProperty("name").GetString() ==
                 GoogleAuthenticationConstants.ProductionExternalCookieName);
         Assert.True(externalCookie.GetProperty("required").GetBoolean());
-        var flow = Assert.Single(
+        Assert.DoesNotContain(
             linkParameters,
-            parameter => parameter.GetProperty("name").GetString() ==
-                GoogleAuthenticationConstants.FlowBindingParameter);
-        Assert.True(flow.GetProperty("required").GetBoolean());
-        Assert.Contains(
-            "not an access, refresh or Google token",
-            flow.GetProperty("description").GetString(),
-            StringComparison.Ordinal);
+            parameter => parameter.GetProperty("name").GetString() == "flow");
+        var schemas = document.RootElement
+            .GetProperty("components")
+            .GetProperty("schemas");
+        var linkProperties = schemas
+            .GetProperty("LinkGoogleAccountRequest")
+            .GetProperty("properties");
+        Assert.Equal(
+            [
+                "currentPassword",
+                "flow"
+            ],
+            linkProperties
+                .EnumerateObject()
+                .Select(property => property.Name)
+                .OrderBy(name => name));
+        var completion = paths
+            .GetProperty("/api/v1/auth/google/completions")
+            .GetProperty("post");
+        Assert.True(completion
+                .GetProperty("responses").TryGetProperty(
+                "200",
+                out _));
+        Assert.True(completion
+                .GetProperty("responses")
+                .TryGetProperty(
+                "409",
+                out _));
+        Assert.Single(
+            completion
+                .GetProperty("parameters").EnumerateArray(),
+            parameter => parameter
+                .GetProperty("name")
+                .GetString() == WebSecurityOptions.AntiforgeryHeaderName);
+        Assert.True(schemas
+                .GetProperty("CompleteGoogleSessionRequest")
+                .GetProperty("properties")
+                .TryGetProperty(
+                "flow",
+                out _));
         Assert.Single(
             linkParameters,
             parameter => parameter.GetProperty("name").GetString() ==
@@ -3230,6 +3356,117 @@ public class GoogleAuthenticationControllerTests
         Assert.True(successHeaders.TryGetProperty(
             "Set-Cookie",
             out _));
+    }
+
+    [Theory]
+    [InlineData("completions", "{}")]
+    [InlineData("completions", "{\"flow\":null}")]
+    [InlineData("completions", "{\"flow\":\"invalid\"}")]
+    [InlineData("completions", "{\"flow\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB\"}")]
+    [InlineData("completions", "{\"flow\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\",\"email\":\"untrusted@example.test\"}")]
+    [InlineData("link", "{\"currentPassword\":\"password\"}")]
+    [InlineData("link", "{\"flow\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\",\"currentPassword\":null}")]
+    public async Task SubmitAsync_WhenBodyIsInvalid_PreservesCookieAndDoesNotUseQueryBinding(
+        string endpoint,
+        string body)
+    {
+        // Arrange
+        using var factory = new GoogleAuthenticationApiFactory();
+        using var client = factory.CreateGoogleClient();
+        var protocol = await StartFlowAsync(
+            client,
+            false,
+            TestContext.Current.CancellationToken);
+        factory.Backchannel.Nonce = protocol.nonce;
+        using var callback = await PostCallbackAsync(
+            client,
+            protocol.state,
+            TestContext.Current.CancellationToken);
+        var flow = GetFlowBinding(callback.Headers.Location);
+        var csrf = await GetAntiforgeryTokenAsync(
+            client,
+            TestContext.Current.CancellationToken);
+        using var request = new HttpRequestMessage(
+            HttpMethod.Post,
+            $"/api/v1/auth/google/{endpoint}?flow={flow}")
+        {
+            Content = new StringContent(
+                body,
+                Encoding.UTF8,
+                "application/json")
+        };
+        request.Headers.TryAddWithoutValidation(
+            WebSecurityOptions.AntiforgeryHeaderName,
+            csrf);
+
+        // Act
+        using var rejected = await client.SendAsync(
+            request,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        await AssertGoogleErrorAsync(
+            rejected,
+            HttpStatusCode.BadRequest,
+            ErrorCodes.RequestValidationError,
+            TestContext.Current.CancellationToken);
+        Assert.False(rejected.Headers.Contains("Set-Cookie"));
+        Assert.Equal(
+            0,
+            factory.GoogleSessionService.CompletionCallCount);
+        Assert.Equal(
+            0,
+            factory.GoogleSessionService.LinkCallCount);
+        using var completed = await PostCompletionAsync(
+            client,
+            callback.Headers.Location,
+            TestContext.Current.CancellationToken);
+        Assert.Equal(
+            HttpStatusCode.OK,
+            completed.StatusCode);
+    }
+
+    [Fact]
+    public async Task CompleteAsync_WhenLegacyGetIsRequested_DoesNotCreateSessionOrConsumeCookie()
+    {
+        // Arrange
+        using var factory = new GoogleAuthenticationApiFactory();
+        using var client = factory.CreateGoogleClient();
+        var protocol = await StartFlowAsync(
+            client,
+            false,
+            TestContext.Current.CancellationToken);
+        factory.Backchannel.Nonce = protocol.nonce;
+        using var callback = await PostCallbackAsync(
+            client,
+            protocol.state,
+            TestContext.Current.CancellationToken);
+
+        // Act
+        using var response = await client.GetAsync(
+            $"/api/v1/auth/google/completion?flow={GetFlowBinding(callback.Headers.Location)}",
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.NotFound,
+            response.StatusCode);
+        Assert.False(response.Headers.Contains("Set-Cookie"));
+        Assert.Equal(
+            0,
+            factory.GoogleSessionService.CompletionCallCount);
+        Assert.DoesNotContain(
+            callback.Headers.GetValues("Set-Cookie"),
+            cookie => cookie.StartsWith(
+                $"{RefreshCookieName}=",
+                StringComparison.Ordinal));
+        using var completed = await PostCompletionAsync(
+            client,
+            callback.Headers.Location,
+            TestContext.Current.CancellationToken);
+        Assert.Equal(
+            HttpStatusCode.OK,
+            completed.StatusCode);
     }
 
     private static bool HasHardenedCrossSiteAttributes(string cookie)
@@ -3315,7 +3552,7 @@ public class GoogleAuthenticationControllerTests
         CancellationToken cancellationToken)
     {
         using var response = await client.GetAsync(
-            "/api/v1/auth/google?returnPath=%2Fmy-lists&rememberMe=false",
+            "/api/v1/auth/google?returnPath=%2Flogin%2Fgoogle-return&rememberMe=false",
             cancellationToken);
         var location = Assert.IsType<Uri>(response.Headers.Location);
         var query = QueryHelpers.ParseQuery(location.Query);
@@ -3353,18 +3590,75 @@ public class GoogleAuthenticationControllerTests
         return request;
     }
 
-    private static HttpRequestMessage CreateCompletionRequest(
-        Uri? completionLocation,
-        string externalCookie)
+    private static async Task<HttpResponseMessage> PostCompletionAsync(
+        HttpClient client,
+        Uri? callbackLocation,
+        CancellationToken cancellationToken)
     {
+        using var request = await CreateCompletionRequestAsync(
+            client,
+            callbackLocation,
+            null,
+            cancellationToken);
+
+        return await client.SendAsync(
+            request,
+            cancellationToken);
+    }
+
+    private static async Task<HttpRequestMessage> CreateCompletionRequestAsync(
+        HttpClient client,
+        Uri? callbackLocation,
+        string? externalCookie,
+        CancellationToken cancellationToken)
+    {
+        var csrf = await GetAntiforgeryContextAsync(
+            client,
+            cancellationToken);
         var request = new HttpRequestMessage(
-            HttpMethod.Get,
-            completionLocation);
+            HttpMethod.Post,
+            "/api/v1/auth/google/completions")
+        {
+            Content = JsonContent.Create(new { flow = GetFlowBinding(callbackLocation) })
+        };
+        request.Headers.TryAddWithoutValidation(
+            WebSecurityOptions.AntiforgeryHeaderName,
+            csrf.Token);
+        var cookies = new List<string>();
+
+        if (!string.IsNullOrEmpty(csrf.Cookie))
+            cookies.Add(csrf.Cookie);
+
+        if (externalCookie is not null)
+            cookies.Add(externalCookie);
+
+        if (client.DefaultRequestHeaders.TryGetValues(
+            "Cookie",
+            out var existingCookies))
+            cookies.AddRange(existingCookies);
         request.Headers.TryAddWithoutValidation(
             "Cookie",
-            externalCookie);
+            string.Join(
+                "; ",
+                cookies));
 
         return request;
+    }
+
+    private static async Task AssertGoogleErrorAsync(
+        HttpResponseMessage response,
+        HttpStatusCode status,
+        string errorCode,
+        CancellationToken cancellationToken)
+    {
+        Assert.Equal(
+            status,
+            response.StatusCode);
+        Assert.Null(response.Headers.Location);
+        var error = await response.Content.ReadFromJsonAsync<ErrorResponse>(cancellationToken);
+        Assert.Equal(
+            errorCode,
+            error?.ErrorCode);
     }
 
     private static string ExtractResponseCookie(
@@ -3388,7 +3682,7 @@ public class GoogleAuthenticationControllerTests
         CancellationToken cancellationToken)
     {
         using var response = await client.GetAsync(
-            $"/api/v1/auth/google?returnPath=%2Fmy-lists&rememberMe={rememberMe}",
+            $"/api/v1/auth/google?returnPath=%2Flogin%2Fgoogle-return&rememberMe={rememberMe}",
             cancellationToken);
         Assert.Equal(
             HttpStatusCode.Redirect,
@@ -3441,12 +3735,15 @@ public class GoogleAuthenticationControllerTests
             state,
             cancellationToken);
         var flowBinding = GetFlowBinding(callback.Headers.Location);
-        using var completion = await client.GetAsync(
+        using var completion = await PostCompletionAsync(
+            client,
             callback.Headers.Location,
             cancellationToken);
-        Assert.Equal(
-            $"https://app.example.test/#/login/link-google?flow={flowBinding}",
-            completion.Headers.Location?.OriginalString);
+        await AssertGoogleErrorAsync(
+            completion,
+            HttpStatusCode.Conflict,
+            ErrorCodes.GoogleAccountLinkRequired,
+            cancellationToken);
 
         return (
             await GetAntiforgeryTokenAsync(
@@ -3466,10 +3763,9 @@ public class GoogleAuthenticationControllerTests
             cancellationToken);
 
         return (
-            Assert.IsType<string>(payload?.Token),
-            GetCookiePair(
+            Assert.IsType<string>(payload?.Token), response.Headers.Contains("Set-Cookie") ? GetCookiePair(
                 response,
-                AntiforgeryCookieName));
+                AntiforgeryCookieName) : string.Empty);
     }
 
     private static async Task<string> GetAntiforgeryTokenAsync(
@@ -3494,10 +3790,11 @@ public class GoogleAuthenticationControllerTests
     {
         using var request = new HttpRequestMessage(
             HttpMethod.Post,
-            BuildLinkPath(flowBinding))
+            "/api/v1/auth/google/link")
         {
             Content = JsonContent.Create(new
             {
+                flow = flowBinding,
                 currentPassword
             })
         };
@@ -3510,15 +3807,6 @@ public class GoogleAuthenticationControllerTests
             cancellationToken);
     }
 
-    private static string BuildLinkPath(string flowBinding)
-    {
-
-        return QueryHelpers.AddQueryString(
-            "/api/v1/auth/google/link",
-            GoogleAuthenticationConstants.FlowBindingParameter,
-            flowBinding);
-    }
-
     private static string GetFlowBinding(Uri? completionLocation)
     {
         var location = Assert.IsType<Uri>(completionLocation);
@@ -3527,7 +3815,7 @@ public class GoogleAuthenticationControllerTests
             : new Uri(
                 new Uri("https://localhost"),
                 location);
-        var query = QueryHelpers.ParseQuery(absoluteLocation.Query);
+        var query = QueryHelpers.ParseQuery(absoluteLocation.Fragment.TrimStart('#'));
         Assert.True(
             query.TryGetValue(
                 GoogleAuthenticationConstants.FlowBindingParameter,

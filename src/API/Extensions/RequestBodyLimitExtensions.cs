@@ -24,6 +24,8 @@ public static class RequestBodyLimitExtensions
         new("/api/v1/auth/password-resets");
     private static readonly PathString _googleLinkPath =
         new("/api/v1/auth/google/link");
+    private static readonly PathString _googleCompletionPath =
+        new("/api/v1/auth/google/completions");
     private static readonly PathString _googleCallbackPath =
         new("/api/v1/auth/google/callback");
     private static readonly PathString _memberProfilePath =
@@ -188,6 +190,7 @@ public static class RequestBodyLimitExtensions
                 MatchesPath(request.Path, _passwordResetRequestPath) ||
                 MatchesPath(request.Path, _passwordResetPath) ||
                 MatchesPath(request.Path, _googleLinkPath) ||
+                MatchesPath(request.Path, _googleCompletionPath) ||
                 MatchesPath(request.Path, _googleCallbackPath) ||
                 MatchesPath(request.Path, _loginPath) ||
                 MatchesPath(request.Path, _wishlistsPath) ||

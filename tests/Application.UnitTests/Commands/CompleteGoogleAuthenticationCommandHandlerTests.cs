@@ -35,7 +35,7 @@ public class CompleteGoogleAuthenticationCommandHandlerTests
         var command = new CompleteGoogleAuthenticationCommand(
             identity,
             true,
-            "/my-lists",
+            "/login/google-return",
             flowId,
             null,
             currentSessionId);
@@ -46,7 +46,7 @@ public class CompleteGoogleAuthenticationCommandHandlerTests
                         context.Identity,
                         identity) &&
                     context.IsPersistent &&
-                    context.ReturnPath == "/my-lists" &&
+                    context.ReturnPath == "/login/google-return" &&
                     context.FlowId == flowId &&
                     context.CurrentSessionId == currentSessionId),
                 cancellationToken))
@@ -68,7 +68,7 @@ public class CompleteGoogleAuthenticationCommandHandlerTests
                         context.Identity,
                         identity) &&
                     context.IsPersistent &&
-                    context.ReturnPath == "/my-lists" &&
+                    context.ReturnPath == "/login/google-return" &&
                     context.FlowId == flowId &&
                     context.CurrentSessionId == currentSessionId),
                 cancellationToken),

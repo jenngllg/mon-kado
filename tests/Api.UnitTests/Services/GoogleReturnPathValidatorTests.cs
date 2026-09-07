@@ -9,7 +9,7 @@ public class GoogleReturnPathValidatorTests
 
     [Theory]
     [InlineData("/")]
-    [InlineData("/my-lists")]
+    [InlineData("/login/google-return")]
     [InlineData("/members/123")]
     public void IsCanonical_WhenPathIsCanonical_ReturnsTrue(string returnPath)
     {
@@ -27,11 +27,11 @@ public class GoogleReturnPathValidatorTests
     [InlineData("")]
     [InlineData("my-lists")]
     [InlineData("//evil.example/path")]
-    [InlineData("/my-lists/")]
+    [InlineData("/login/google-return/")]
     [InlineData("/my//lists")]
-    [InlineData("/my-lists?next=/")]
-    [InlineData("/my-lists#fragment")]
-    [InlineData("/my-lists%2Fother")]
+    [InlineData("/login/google-return?next=/")]
+    [InlineData("/login/google-return#fragment")]
+    [InlineData("/login/google-return%2Fother")]
     [InlineData("/my\\lists")]
     [InlineData("/my/../lists")]
     [InlineData("/my/./lists")]

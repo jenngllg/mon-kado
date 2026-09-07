@@ -2775,7 +2775,7 @@ public class GoogleAuthenticationIntegrationTests(PostgreSqlContainerFixture fix
         return new GoogleAuthenticationContext(
             identity,
             isPersistent,
-            "/my-lists",
+            "/login/google-return",
             flowId,
             expectedMemberId,
             null);

@@ -55,7 +55,7 @@ public class GoogleAuthenticationOptionsValidatorTests
             ClientId = "client.apps.googleusercontent.com",
             ClientSecret = "client-secret",
             FrontendOrigin = "https://app.example.test",
-            DefaultReturnPath = "/my-lists"
+            DefaultReturnPath = "/login/google-return"
         };
 
         // Act
@@ -114,8 +114,8 @@ public class GoogleAuthenticationOptionsValidatorTests
             DefaultReturnPath = "/missing",
             AllowedReturnPaths =
             [
-                "/my-lists",
-                "/my-lists",
+                "/login/google-return",
+                "/login/google-return",
                 "https://evil.example"
             ]
         };
@@ -128,7 +128,7 @@ public class GoogleAuthenticationOptionsValidatorTests
         // Assert
         Assert.True(result.Failed);
         Assert.Equal(
-            6,
+            8,
             result.Failures.Count());
     }
 
@@ -235,11 +235,9 @@ public class GoogleAuthenticationOptionsValidatorTests
             ClientId = "client.apps.googleusercontent.com",
             ClientSecret = "client-secret",
             FrontendOrigin = "https://app.example.test",
-            DefaultReturnPath = "/my-lists",
+            DefaultReturnPath = "/login/google-return",
             AllowedReturnPaths =
-            [
-                "/my-lists"
-            ]
+            ["/login/google-return"]
         };
     }
 }

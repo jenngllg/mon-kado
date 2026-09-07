@@ -97,7 +97,8 @@ The local launch profile listens on `http://localhost:7000` and uses the `Local`
 | `POST /api/v1/auth/sessions/refresh` | Rotates the browser refresh token and returns a new access token |
 | `GET /api/v1/auth/google` | Starts Google OpenID Connect authentication |
 | `POST /api/v1/auth/google/callback` | Receives the Google OpenID Connect `form_post` callback |
-| `POST /api/v1/auth/google/link?flow=<opaque-binding>` | Links a verified Google identity after local password confirmation |
+| `POST /api/v1/auth/google/completions` | Completes a validated Google browser flow and returns session tokens |
+| `POST /api/v1/auth/google/link` | Links a verified Google identity after local password confirmation |
 | `GET /api/v1/auth/sessions/current` | Returns the current member identity and profile ETag |
 | `DELETE /api/v1/auth/sessions/current` | Ends the current browser refresh session |
 | `PUT /api/v1/members/current/profile` | Updates the current member display name with optimistic concurrency |
@@ -302,9 +303,12 @@ keeps the one-shot authorization code out of the URL, browser history, and reque
 https://<api-host>/api/v1/auth/google/callback
 ```
 
-After validating that callback, the API generates a callback-specific opaque binding and redirects internally to
-`/api/v1/auth/google/completion?flow=<opaque-binding>`. The value contains no token, claim, member identifier, or
-refresh-session identifier.
+After validating that callback, the API issues only a protected external cookie and redirects to
+`https://<frontend-host>/login/google-return#flow=<opaque-binding>`. No account, external login or MonKado session is
+created by the callback. The canonical 32-byte Base64URL binding contains no token, claim, member identifier, or
+refresh-session identifier. The frontend consumes the fragment immediately and keeps the binding only in memory.
+Provider refusals with valid state and correlation return `#error=cancelled`; other protocol failures return
+`#error=failed`, and dependency outages return `#error=unavailable`. Provider error descriptions are never reflected.
 
 Create a Google Cloud OAuth client of type **Web application** for this callback. It must be different from the Gmail
 Desktop client used for transactional e-mail. Give the sign-in client only the `openid`, `email`, and `profile` scopes;
@@ -317,15 +321,26 @@ never synchronized automatically afterward. The API does not persist Google auth
 tokens, refresh tokens, or unused claims, and never logs e-mail addresses, names, tokens, codes, or the Google `sub`.
 A MonKado access token is never placed in a redirect URL.
 
-On automatic completion, the callback creates the HTTP-only MonKado refresh cookie and redirects to an allowlisted
-frontend route. The frontend then obtains an antiforgery token, calls `POST /api/v1/auth/sessions/refresh` with
-`credentials: "include"`, and keeps the returned JWT only in memory. If a safe automatic link is not possible, the
-frontend redirect fragment contains a 256-bit opaque `flow` binding. The frontend keeps this binding only in the
-fragment or memory, asks for the current MonKado password, and calls
-`POST /api/v1/auth/google/link?flow=<opaque-binding>`. The binding is required together with antiforgery protection;
-it is not a Google token, MonKado token, member identifier, or session identifier, and it is never logged. The
-validated Google identity remains only in a short-lived protected cookie. A third-party Google Account for which
-Google is not authoritative must complete the additional MonKado verification flow before it can be linked.
+The frontend obtains an antiforgery token and calls `POST /api/v1/auth/google/completions` with JSON
+`{ "flow": "<opaque-binding>" }`, the `X-CSRF-TOKEN` header, and `credentials: "include"`. No bearer token or ETag is
+required. The API verifies the protected cookie and binding before using its server-validated identity. A successful
+commit produces `200 AccessTokenResponse` (`accessToken`, `tokenType: "Bearer"`, `expiresIn: 900`) and the HttpOnly
+refresh cookie. The access JWT stays in frontend memory; the external cookie is deleted. No initial refresh rotation
+is needed. Token and error responses use `Cache-Control: no-store`.
+
+A `409 GOOGLE_ACCOUNT_LINK_REQUIRED` preserves the external cookie and lets the frontend show `/login/link-google`.
+The client submits `POST /api/v1/auth/google/link` with JSON `{ "flow": "<opaque-binding>", "currentPassword": "..." }`
+and the same cookie/CSRF protections, without a query-string proof. Only the current **MonKado** password is requested;
+it is required, at most 128 Unicode characters, and is neither trimmed nor subject to the new-password minimum.
+The result is also `200 AccessTokenResponse`. A wrong password preserves the external cookie for an explicit retry.
+Both submissions validate input with FluentValidation before reading the protected cookie.
+
+`409 GOOGLE_ADDITIONAL_VERIFICATION_REQUIRED` ends the external flow without a session. That additional verification
+is not implemented and must not be bypassed by offering arbitrary password linking. Invalid or expired authentication
+returns `401 GOOGLE_AUTHENTICATION_FAILED`; incorrect link proof returns `401 GOOGLE_ACCOUNT_LINK_FAILED`. A mismatch
+between two browser flows never deletes the other flow's valid cookie. PostgreSQL outages return
+`503 TECHNICAL_DEPENDENCY_UNAVAILABLE` without clearing either cookie. Terminal errors never delete an existing
+MonKado refresh cookie. Existing transactional replay protection and ambiguous-commit recovery remain in place.
 
 An existing confirmed MonKado account is linked automatically only for a matching `@gmail.com` address. A Google
 Workspace address can be reassigned by its organization, so a matching confirmed account requires the current
@@ -342,8 +357,9 @@ and explicit-link requests to the exact validated callback so concurrent tabs, i
 remote state, cannot consume each other's external identity cookie.
 
 The temporary Google completion cookie is encrypted, HTTP-only, host-only, and `SameSite=Lax` so that it survives the
-single top-level redirect whose chain began on `accounts.google.com`; it expires after five minutes and is deleted when
-the flow ends. This narrow exception does not change the long-lived MonKado refresh cookie, which remains
+top-level return from Google; it expires at the original challenge deadline (five minutes after departure), not five
+minutes after callback. Its remaining Max-Age and expiration are bounded by that deadline, with no sliding extension.
+It is deleted when the flow ends. This narrow exception does not change the long-lived MonKado refresh cookie, which remains
 `SameSite=Strict`.
 
 A Google-only member has no local password initially. The existing password-reset flow may establish a first password,
@@ -380,11 +396,34 @@ client variables, and the same-site `FRONTEND_ORIGIN` in the protected VPS `.env
 and token exchange timeout defaults to 15 seconds and accepts values from 1 through 60 seconds. Never reuse
 `GMAIL_CLIENT_ID`/`GMAIL_CLIENT_SECRET`, and never commit either client secret.
 
-Run the production smoke test in a private browser window: start Google sign-in, verify that the account selector is
-shown, complete the callback, confirm that no token or Google claim appears in the final URL, exchange the refresh
-cookie for the in-memory JWT, load the current session, and log out. Inspect the browser cookie attributes and verify
-that refresh and logout work from the custom frontend domain. Automated CI keeps the provider disabled and never uses
-real Google credentials.
+Before enabling Google, align any existing User Secrets or environment overrides: `GoogleAuthentication:DefaultReturnPath`
+must be `/login/google-return`, and `GoogleAuthentication:AllowedReturnPaths` must contain that path alone. Other
+destinations, including `/my-lists` and `/lists`, are rejected; post-sign-in navigation belongs to the frontend.
+
+Backend delivery does not enable Google, change Google Cloud, or certify the real browser flow. After merging the
+backend, regenerate frontend OpenAPI types from a clean backend checkout of `origin/develop`, replace the temporary
+Google request aliases and run `pnpm api:types:check`. Keep the frontend Google flag disabled until an explicitly
+authorized real HTTPS smoke test passes. The registered Google callback URI is unchanged.
+
+For that smoke test, verify account selection, callback return, fragment removal, the CSRF-protected completion POST,
+the current session and its ETag, refresh, and logout. Also check explicit password linking, cancellation, expiry,
+concurrent tabs, and that a newer logout/account change prevents a stale attempt from being submitted. After a
+successful completion, a failed identity read is recovered through session restoration, never by silently replaying
+the completion or link POST. Inspect cookies and confirm that no credentials or binding appear in logs or browser
+storage. Automated CI uses a simulated provider, never real Google credentials.
+
+### Frontend link compatibility
+
+Copyable wishlist links use `https://<frontend-host>/shared-wishlists/<share-link-guid>#<secret>`, with a hyphenated GUID.
+Retrieving an existing link returns this new representation without rotating its identifier or secret. The old hash-router
+links and GET completion endpoint are not maintained: recopy previously distributed links and restart in-flight Google
+attempts after deployment. The frontend must consume share secrets from the fragment and submit them only through the
+existing share-token header.
+
+E-mail links remain `/confirm-email#userId=...&token=...`, `/confirm-email-change#requestId=...&token=...` and
+`/reset-password#userId=...&token=...`. The account-deletion confirmation link remains
+`/confirm-account-deletion#token=...`; its frontend confirmation page is a separate outstanding dependency.
+This backend change does not implement missing frontend pages or the additional Google verification flow.
 
 Before production launch, the privacy information must identify Google as an identity provider, explain why the
 initial e-mail and display name are read, state that the Google subject is retained until account deletion, state that

@@ -13,11 +13,9 @@ public class GoogleReturnPathServiceTests
         {
             Enabled = true,
             FrontendOrigin = "https://app.example.test",
-            DefaultReturnPath = "/my-lists",
+            DefaultReturnPath = "/login/google-return",
             AllowedReturnPaths =
-            [
-                "/my-lists"
-            ]
+            ["/login/google-return"]
         }),
         new GoogleReturnPathValidator());
 
@@ -31,7 +29,7 @@ public class GoogleReturnPathServiceTests
 
         // Assert
         Assert.Equal(
-            "/my-lists",
+            "/login/google-return",
             result);
     }
 
@@ -45,9 +43,7 @@ public class GoogleReturnPathServiceTests
                 Enabled = true,
                 FrontendOrigin = "https://app.example.test",
                 AllowedReturnPaths =
-                [
-                    "/my-lists"
-                ]
+                ["/login/google-return"]
             }),
             new GoogleReturnPathValidator());
 
@@ -68,12 +64,12 @@ public class GoogleReturnPathServiceTests
             {
                 Enabled = true,
                 FrontendOrigin = "https://app.example.test",
-                DefaultReturnPath = "/my-lists"
+                DefaultReturnPath = "/login/google-return"
             }),
             new GoogleReturnPathValidator());
 
         // Act
-        string action() => service.Resolve("/my-lists");
+        string action() => service.Resolve("/login/google-return");
 
         // Assert
         Assert.Throws<RequestValidationException>(
@@ -86,18 +82,18 @@ public class GoogleReturnPathServiceTests
         // Arrange
 
         // Act
-        var result = _service.Resolve("/my-lists");
+        var result = _service.Resolve("/login/google-return");
 
         // Assert
         Assert.Equal(
-            "/my-lists",
+            "/login/google-return",
             result);
     }
 
     [Theory]
     [InlineData("https://evil.example")]
     [InlineData("/unknown")]
-    [InlineData("/my-lists?next=/")]
+    [InlineData("/login/google-return?next=/")]
     public void Resolve_WhenPathIsNotAllowlisted_ThrowsRequestValidationException(string returnPath)
     {
         // Arrange
@@ -120,11 +116,11 @@ public class GoogleReturnPathServiceTests
         // Arrange
 
         // Act
-        var result = _service.BuildAbsoluteUri("/#/login?error=google_auth_failed");
+        var result = _service.BuildAbsoluteUri("/login/google-return#error=failed");
 
         // Assert
         Assert.Equal(
-            "https://app.example.test/#/login?error=google_auth_failed",
+            "https://app.example.test/login/google-return#error=failed",
             result);
     }
 }

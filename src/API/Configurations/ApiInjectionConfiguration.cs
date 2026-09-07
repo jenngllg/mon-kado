@@ -3,6 +3,7 @@ using JennGllg.Fr.MonKado.Back.Api.Authorization;
 using JennGllg.Fr.MonKado.Back.Api.Extensions;
 using JennGllg.Fr.MonKado.Back.Api.Options;
 using JennGllg.Fr.MonKado.Back.Api.Services;
+using JennGllg.Fr.MonKado.Back.Application.Abstractions;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Abstractions;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Configurations;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Contexts;
@@ -52,6 +53,7 @@ public static class ApiInjectionConfiguration
             .Bind(configuration.GetSection(WishlistSharingOptions.SectionName))
             .ValidateOnStart();
         services.AddHttpContextAccessor();
+        services.AddScoped<IGoogleAuthenticationContextProvider, GoogleAuthenticationContextProvider>();
         services.AddScoped<IAuthorizationHandler, WishlistOwnerAuthorizationHandler>();
         services.AddScoped<IAuthorizationHandler, AdministratorAuthorizationHandler>();
         services.ConfigureDataProtection(

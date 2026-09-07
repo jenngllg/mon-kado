@@ -114,10 +114,10 @@ public class GoogleAuthenticationApiFactory : WebApplicationFactory<Program>
             "https://app.example.test");
         builder.UseSetting(
             "GoogleAuthentication:DefaultReturnPath",
-            "/my-lists");
+            "/login/google-return");
         builder.UseSetting(
             "GoogleAuthentication:AllowedReturnPaths:0",
-            "/my-lists");
+            "/login/google-return");
 
         if (_dataProtectionKeysPath is not null)
             builder.UseSetting(

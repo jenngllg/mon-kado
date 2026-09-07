@@ -86,7 +86,7 @@ public class WishlistShareLinkTests
                 .EnumerateObject()
                 .Select(property => property.Name));
         Assert.Equal(
-            $"http://localhost:5173/#/shared-wishlists/{creation.Id:N}.AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+            $"http://localhost:5173/shared-wishlists/{creation.Id:D}#AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
             document.RootElement.GetProperty("shareUrl").GetString());
         Assert.Equal(
             $"/api/v1/wishlists/{wishlistId}/share-link",
@@ -134,11 +134,11 @@ public class WishlistShareLinkTests
             factory.WishlistShareService.Rotations);
         var content = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         Assert.Contains(
-            ".BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+            "#BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
             content,
             StringComparison.Ordinal);
         Assert.DoesNotContain(
-            ".AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+            "#AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
             content,
             StringComparison.Ordinal);
     }
@@ -184,7 +184,7 @@ public class WishlistShareLinkTests
             shareLinkId,
             document.RootElement.GetProperty("id").GetGuid());
         Assert.Contains(
-            ".AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+            "#AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
             document.RootElement.GetProperty("shareUrl").GetString(),
             StringComparison.Ordinal);
     }

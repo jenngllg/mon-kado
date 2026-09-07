@@ -113,6 +113,18 @@ public class GlobalExceptionHandler(
                 "The authentication session is invalid or expired.",
                 ErrorCodes.AccountAuthenticationSessionInvalid,
                 null),
+            GoogleAccountLinkRequiredException => new ErrorResponse(
+                StatusCodes.Status409Conflict,
+                "Account linking required",
+                "Confirm your current MonKado password to continue.",
+                ErrorCodes.GoogleAccountLinkRequired,
+                null),
+            GoogleAdditionalVerificationRequiredException => new ErrorResponse(
+                StatusCodes.Status409Conflict,
+                "Additional verification required",
+                "This Google identity requires additional verification before sign-in.",
+                ErrorCodes.GoogleAdditionalVerificationRequired,
+                null),
             GoogleAuthenticationFailedException => new ErrorResponse(
                 StatusCodes.Status401Unauthorized,
                 "Google authentication failed",
@@ -352,7 +364,9 @@ public class GlobalExceptionHandler(
         if (exception is GuestSessionInvalidException)
             guestSessionCookieService.Delete(httpContext);
 
-        if (exception is GoogleAuthenticationFailedException or GoogleAccountLinkConflictException)
+        if (exception is GoogleAuthenticationFailedException and not GoogleFlowBindingMismatchException or
+            GoogleAccountLinkConflictException or
+            GoogleAdditionalVerificationRequiredException)
             await googleExternalAuthenticationService.DeleteAsync(
                 httpContext,
                 cancellationToken);

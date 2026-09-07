@@ -1,4 +1,5 @@
 using JennGllg.Fr.MonKado.Back.Api.Abstractions;
+using JennGllg.Fr.MonKado.Back.Api.Constants;
 using JennGllg.Fr.MonKado.Back.Api.Options;
 using JennGllg.Fr.MonKado.Back.Application.Common.Exceptions;
 using JennGllg.Fr.MonKado.Back.Application.Common.Models;
@@ -21,8 +22,8 @@ public class GoogleReturnPathService(
     {
         var candidate = returnPath ?? _options.DefaultReturnPath;
 
-        if (candidate is null ||
-            !validator.IsCanonical(candidate) ||
+        if (!validator.IsCanonical(candidate) ||
+            candidate != GoogleAuthenticationConstants.FrontendReturnPath ||
             _options.AllowedReturnPaths?.Contains(
                 candidate,
                 StringComparer.Ordinal) != true)

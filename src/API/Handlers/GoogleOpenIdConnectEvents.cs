@@ -41,6 +41,9 @@ public class GoogleOpenIdConnectEvents(
     private const string EmailVerifiedClaim = "email_verified";
     private const string HostedDomainClaim = "hd";
     private const string NameClaim = "name";
+    private const string NoStoreDirective = "no-store";
+    private const string NoReferrerDirective = "no-referrer";
+    private const string ReferrerPolicyHeader = "Referrer-Policy";
     /// <summary>
     /// Rejects callback transports other than an exact form-urlencoded POST.
     /// </summary>
@@ -65,7 +68,8 @@ public class GoogleOpenIdConnectEvents(
             logger,
             "InvalidCallbackTransport");
         context.HandleResponse();
-        context.Response.Headers.CacheControl = "no-store";
+        context.Response.Headers.CacheControl = NoStoreDirective;
+        context.Response.Headers[ReferrerPolicyHeader] = NoReferrerDirective;
         context.Response.Redirect(returnPathService.BuildAbsoluteUri(
             GoogleAuthenticationConstants.AuthenticationFailurePath));
 
@@ -88,7 +92,8 @@ public class GoogleOpenIdConnectEvents(
             logger,
             "ExpiredRemoteFlow");
         context.HandleResponse();
-        context.Response.Headers.CacheControl = "no-store";
+        context.Response.Headers.CacheControl = NoStoreDirective;
+        context.Response.Headers[ReferrerPolicyHeader] = NoReferrerDirective;
         context.Response.Redirect(returnPathService.BuildAbsoluteUri(
             GoogleAuthenticationConstants.AuthenticationFailurePath));
 
@@ -108,6 +113,26 @@ public class GoogleOpenIdConnectEvents(
         return Task.CompletedTask;
     }
 
+    /// <summary>Handles a provider refusal only after state and browser correlation validation.</summary>
+    /// <param name="context">The validated access-denied context.</param>
+    /// <returns>A task representing the safe cancellation redirect.</returns>
+    public override Task AccessDenied(AccessDeniedContext context)
+    {
+        var path = context.Properties?.ExpiresUtc is { } expiresAt &&
+            expiresAt > timeProvider.GetUtcNow()
+            ? GoogleAuthenticationConstants.AuthenticationCancelledPath
+            : GoogleAuthenticationConstants.AuthenticationFailurePath;
+        GoogleAuthenticationLogMessages.ProtocolFailed(
+            logger,
+            "AuthorizationDeclined");
+        context.HandleResponse();
+        context.Response.Headers.CacheControl = NoStoreDirective;
+        context.Response.Headers[ReferrerPolicyHeader] = NoReferrerDirective;
+        context.Response.Redirect(returnPathService.BuildAbsoluteUri(path));
+
+        return Task.CompletedTask;
+    }
+
     /// <summary>
     /// Replaces the validated principal with the minimal claims required by MonKado.
     /// </summary>
@@ -116,7 +141,6 @@ public class GoogleOpenIdConnectEvents(
     public override Task TokenValidated(TokenValidatedContext context)
     {
         var source = context.Principal;
-        var properties = context.Properties;
 
         if (source is null)
         {
@@ -213,7 +237,8 @@ public class GoogleOpenIdConnectEvents(
             NameClaim,
             ClaimTypes.Role);
         context.Principal = new ClaimsPrincipal(identity);
-        context.Response.Headers.CacheControl = "no-store";
+        context.Response.Headers.CacheControl = NoStoreDirective;
+        context.Response.Headers[ReferrerPolicyHeader] = NoReferrerDirective;
 
         return Task.CompletedTask;
     }
@@ -231,6 +256,8 @@ public class GoogleOpenIdConnectEvents(
 
         if (principal is null ||
             properties is null ||
+            properties.ExpiresUtc is not { } expiresAt ||
+            expiresAt <= timeProvider.GetUtcNow() ||
             !TryCreateIdentity(
                 principal,
                 out var identity))
@@ -276,16 +303,27 @@ public class GoogleOpenIdConnectEvents(
             return;
         }
 
+        if (expiresAt <= timeProvider.GetUtcNow())
+        {
+            await RedirectTicketFailureAsync(
+                context,
+                GoogleAuthenticationConstants.AuthenticationFailurePath);
+
+            return;
+        }
+
         var flowBinding = externalAuthenticationService.CreateFlowBinding();
         MinimizeProtectedProperties(
             properties,
-            flowBinding);
+            flowBinding,
+            expiresAt);
         context.ReturnUri = properties.RedirectUri;
         properties.Items[GoogleAuthenticationConstants.ExpectedMemberIdProperty] =
             expectedMemberId.HasValue
                 ? expectedMemberId.Value.ToString("D")
                 : GoogleAuthenticationConstants.NoExpectedMemberValue;
-        context.Response.Headers.CacheControl = "no-store";
+        context.Response.Headers.CacheControl = NoStoreDirective;
+        context.Response.Headers[ReferrerPolicyHeader] = NoReferrerDirective;
         GoogleAuthenticationLogMessages.IdentityValidated(logger);
     }
 
@@ -300,7 +338,8 @@ public class GoogleOpenIdConnectEvents(
         string frontendPath)
     {
         context.HandleResponse();
-        context.Response.Headers.CacheControl = "no-store";
+        context.Response.Headers.CacheControl = NoStoreDirective;
+        context.Response.Headers[ReferrerPolicyHeader] = NoReferrerDirective;
         context.Response.Redirect(returnPathService.BuildAbsoluteUri(
             frontendPath));
 
@@ -365,7 +404,8 @@ public class GoogleOpenIdConnectEvents(
         string frontendPath)
     {
         context.HandleResponse();
-        context.Response.Headers.CacheControl = "no-store";
+        context.Response.Headers.CacheControl = NoStoreDirective;
+        context.Response.Headers[ReferrerPolicyHeader] = NoReferrerDirective;
         context.Response.Redirect(returnPathService.BuildAbsoluteUri(
             frontendPath));
 
@@ -532,16 +572,17 @@ public class GoogleOpenIdConnectEvents(
     }
 
     /// <summary>
-    /// Removes provider redemption artifacts and starts the independent external-ticket lifetime.
+    /// Removes provider artifacts without extending the original authentication deadline.
     /// </summary>
     /// <param name="properties">The protected authentication properties.</param>
     /// <param name="flowBinding">The validated opaque browser-flow binding.</param>
+    /// <param name="expiresAt">The original protected authentication deadline.</param>
     private void MinimizeProtectedProperties(
         AuthenticationProperties properties,
-        string flowBinding)
+        string flowBinding,
+        DateTimeOffset expiresAt)
     {
         var issuedAt = timeProvider.GetUtcNow();
-        var expiresAt = issuedAt.Add(GoogleAuthenticationConstants.TransientLifetime);
         var isPersistent = properties.IsPersistent;
         var allowRefresh = properties.AllowRefresh;
         var preservedItems = properties.Items
@@ -558,7 +599,7 @@ public class GoogleOpenIdConnectEvents(
 
         properties.Items[GoogleAuthenticationConstants.FlowBindingProperty] = flowBinding;
         properties.RedirectUri = externalAuthenticationService.BuildBoundPath(
-            GoogleAuthenticationConstants.CompletionPath,
+            returnPathService.BuildAbsoluteUri(GoogleAuthenticationConstants.FrontendReturnPath),
             flowBinding);
         properties.IssuedUtc = issuedAt;
         properties.ExpiresUtc = expiresAt;
