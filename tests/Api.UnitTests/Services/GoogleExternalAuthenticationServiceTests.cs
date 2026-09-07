@@ -37,11 +37,9 @@ public class GoogleExternalAuthenticationServiceTests
                 {
                     Enabled = true,
                     FrontendOrigin = "https://app.example.test",
-                    DefaultReturnPath = "/my-lists",
+                    DefaultReturnPath = "/login/google-return",
                     AllowedReturnPaths =
-                    [
-                        "/my-lists"
-                    ]
+                    ["/login/google-return"]
                 }),
                 new GoogleReturnPathValidator()));
     }
@@ -54,7 +52,7 @@ public class GoogleExternalAuthenticationServiceTests
 
         // Act
         var properties = _service.CreateChallengeProperties(
-            "/my-lists",
+            "/login/google-return",
             rememberMe: true,
             currentSessionId);
 
@@ -62,13 +60,13 @@ public class GoogleExternalAuthenticationServiceTests
         Assert.False(properties.IsPersistent);
         Assert.False(properties.AllowRefresh);
         Assert.Equal(
-            GoogleAuthenticationConstants.CompletionPath,
+            "https://app.example.test/login/google-return",
             properties.RedirectUri);
         Assert.Equal(
             _now.Add(GoogleAuthenticationConstants.TransientLifetime),
             properties.ExpiresUtc);
         Assert.Equal(
-            "/my-lists",
+            "/login/google-return",
             properties.Items[GoogleAuthenticationConstants.ReturnPathProperty]);
         Assert.Equal(
             "1",
@@ -101,7 +99,7 @@ public class GoogleExternalAuthenticationServiceTests
 
         // Act
         var properties = _service.CreateChallengeProperties(
-            "/my-lists",
+            "/login/google-return",
             rememberMe: false,
             currentSessionId: null);
 
@@ -220,19 +218,19 @@ public class GoogleExternalAuthenticationServiceTests
     }
 
     [Fact]
-    public void BuildBoundPath_WhenPathAlreadyHasQuery_AppendsBinding()
+    public void BuildBoundPath_WhenFrontendPathIsProvided_UsesFragment()
     {
         // Arrange
         const string FlowBinding = "opaque-flow-binding";
 
         // Act
         var path = _service.BuildBoundPath(
-            "/#/login?error=google_auth_failed",
+            "/login/google-return",
             FlowBinding);
 
         // Assert
         Assert.Equal(
-            "/#/login?error=google_auth_failed&flow=opaque-flow-binding",
+            "/login/google-return#flow=opaque-flow-binding",
             path);
         _authenticationServiceMock.VerifyNoOtherCalls();
     }
@@ -244,7 +242,7 @@ public class GoogleExternalAuthenticationServiceTests
         var currentSessionId = Guid.CreateVersion7();
         var expectedMemberId = Guid.CreateVersion7();
         var properties = CreateCompletedProperties(
-            "/my-lists",
+            "/login/google-return",
             rememberMe: true,
             currentSessionId);
         properties.Items[GoogleAuthenticationConstants.ExpectedMemberIdProperty] =
@@ -284,7 +282,7 @@ public class GoogleExternalAuthenticationServiceTests
             authentication.Identity.DisplayName);
         Assert.True(authentication.IsPersistent);
         Assert.Equal(
-            "/my-lists",
+            "/login/google-return",
             authentication.ReturnPath);
         Assert.Equal(
             expectedMemberId,
@@ -310,7 +308,7 @@ public class GoogleExternalAuthenticationServiceTests
     {
         // Arrange
         var properties = CreateCompletedProperties(
-            "/my-lists",
+            "/login/google-return",
             rememberMe: false,
             currentSessionId: null);
         properties.Items[GoogleAuthenticationConstants.ExpectedMemberIdProperty] =
@@ -352,7 +350,7 @@ public class GoogleExternalAuthenticationServiceTests
     {
         // Arrange
         var properties = CreateCompletedProperties(
-            "/my-lists",
+            "/login/google-return",
             rememberMe: false,
             currentSessionId: null);
 
@@ -402,7 +400,7 @@ public class GoogleExternalAuthenticationServiceTests
     {
         // Arrange
         var properties = CreateCompletedProperties(
-            "/my-lists",
+            "/login/google-return",
             rememberMe: false,
             currentSessionId: null);
         properties.Items[GoogleAuthenticationConstants.ExpectedMemberIdProperty] =
@@ -449,7 +447,7 @@ public class GoogleExternalAuthenticationServiceTests
     {
         // Arrange
         var properties = CreateCompletedProperties(
-            "/my-lists",
+            "/login/google-return",
             rememberMe: false,
             currentSessionId: null);
         properties.Items[GoogleAuthenticationConstants.ExpectedMemberIdProperty] =
@@ -488,7 +486,7 @@ public class GoogleExternalAuthenticationServiceTests
     {
         // Arrange
         var properties = CreateCompletedProperties(
-            "/my-lists",
+            "/login/google-return",
             rememberMe: false,
             currentSessionId: null);
         properties.Items[GoogleAuthenticationConstants.ExpectedMemberIdProperty] =
@@ -627,6 +625,44 @@ public class GoogleExternalAuthenticationServiceTests
         Assert.Equal(
             cancellationTokenSource.Token,
             exception.CancellationToken);
+        _authenticationServiceMock.VerifyNoOtherCalls();
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public async Task AuthenticateAsync_WhenDeadlineIsMissingOrExpired_ReturnsNull(int? remainingSeconds)
+    {
+        // Arrange
+        var properties = CreateCompletedProperties(
+            GoogleAuthenticationConstants.FrontendReturnPath,
+            false,
+            null);
+        properties.ExpiresUtc = remainingSeconds.HasValue ? _now.AddSeconds(remainingSeconds.Value) : null;
+        var ticket = new AuthenticationTicket(
+            CreatePrincipal(),
+            properties,
+            GoogleAuthenticationSchemes.ExternalCookie);
+        var context = CreateHttpContext();
+        _authenticationServiceMock
+            .Setup(service => service.AuthenticateAsync(
+                context,
+                GoogleAuthenticationSchemes.ExternalCookie))
+            .ReturnsAsync(AuthenticateResult.Success(ticket));
+
+        // Act
+        var result = await _service.AuthenticateAsync(
+            context,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Null(result);
+        _authenticationServiceMock.Verify(
+            service => service.AuthenticateAsync(
+                context,
+                GoogleAuthenticationSchemes.ExternalCookie),
+            Times.Once);
         _authenticationServiceMock.VerifyNoOtherCalls();
     }
 

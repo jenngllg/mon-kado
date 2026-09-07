@@ -5,7 +5,6 @@ using JennGllg.Fr.MonKado.Back.Api.Contracts.Requests;
 using JennGllg.Fr.MonKado.Back.Api.Contracts.Responses;
 using JennGllg.Fr.MonKado.Back.Api.Errors;
 using JennGllg.Fr.MonKado.Back.Api.Extensions;
-using JennGllg.Fr.MonKado.Back.Api.Logging;
 using JennGllg.Fr.MonKado.Back.Api.Options;
 using JennGllg.Fr.MonKado.Back.Application.Abstractions;
 using JennGllg.Fr.MonKado.Back.Application.Commands;
@@ -38,8 +37,7 @@ public class GoogleAuthenticationController(
     IGoogleReturnPathService returnPathService,
     IGoogleExternalAuthenticationService externalAuthenticationService,
     IRefreshSessionService refreshSessionService,
-    IRefreshTokenCookieService refreshTokenCookieService,
-    ILogger<GoogleAuthenticationController> logger) : ControllerBase
+    IRefreshTokenCookieService refreshTokenCookieService) : ControllerBase
 {
     private const int MaximumRequestBodySize = 4 * 1024;
     private readonly GoogleAuthenticationOptions _options = options.Value;
@@ -103,116 +101,59 @@ public class GoogleAuthenticationController(
     {
         _ = request;
         Response.Headers.CacheControl = "no-store";
+        Response.Headers["Referrer-Policy"] = "no-referrer";
 
         return Redirect(returnPathService.BuildAbsoluteUri(
             GoogleAuthenticationConstants.AuthenticationFailurePath));
     }
 
     /// <summary>
-    /// Completes a validated Google callback and creates a refresh-only MonKado session.
+    /// Finalizes a validated browser flow and creates a MonKado bearer session.
     /// </summary>
-    /// <param name="flow">The opaque binding returned by the validated callback.</param>
+    /// <param name="request">The browser-flow proof returned by the Google callback.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>A safe frontend redirect without any token or identity claim.</returns>
-    [HttpGet("completion")]
+    /// <returns>The bearer access token and a protected refresh cookie.</returns>
+    /// <exception cref="GoogleAccountLinkRequiredException">A local password proof is required.</exception>
+    /// <exception cref="GoogleAdditionalVerificationRequiredException">Additional identity verification is required.</exception>
+    /// <exception cref="GoogleAuthenticationFailedException">The flow cannot be completed safely.</exception>
+    [HttpPost("completions")]
     [GoogleExternalCookie]
+    [NoStoreResponse(StatusCodes.Status200OK)]
+    [ValidateAntiForgeryToken]
     [EnableRateLimiting(AuthenticationRateLimitingExtensions.GoogleCompletionPolicy)]
-    [ApiExplorerSettings(IgnoreApi = true)]
-    public async Task<IActionResult> CompleteAsync(
-        [FromQuery] string? flow,
+    [RequestSizeLimit(MaximumRequestBodySize)]
+    [Consumes("application/json")]
+    [ProducesResponseType(typeof(AccessTokenResponse), StatusCodes.Status200OK, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status409Conflict, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status413PayloadTooLarge, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status415UnsupportedMediaType, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status429TooManyRequests, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status503ServiceUnavailable, "application/json")]
+    public async Task<ActionResult<AccessTokenResponse>> CompleteAsync(
+        CompleteGoogleSessionRequest request,
         CancellationToken cancellationToken)
     {
-
-        // An insecure or disabled request is rejected before the protected external ticket is read or mutated.
-        // codeql[cs/user-controlled-bypass]
-        if (!_options.Enabled || !Request.IsHttps)
-            return RedirectFlowMismatch("DisabledOrInsecureRequest");
-
-        var authentication = await externalAuthenticationService.AuthenticateAsync(
-            HttpContext,
+        EnsureEnabled();
+        EnsureHttps();
+        var tokens = await sender.Send(
+            new CompleteGoogleSessionCommand(request.Flow),
             cancellationToken);
 
-        if (authentication is null)
-            return await RedirectAuthenticationFailureAsync(
-                "InvalidExternalTicket",
-                cancellationToken);
-
-        if (!externalAuthenticationService.MatchesFlowBinding(
-                authentication.FlowBinding,
-                flow))
-            return RedirectFlowMismatch("MismatchedFlowBinding");
-
-        var authenticationContext = authentication.Context;
-
-        GoogleAuthenticationResult result;
-
-        try
-        {
-            result = await sender.Send(
-                new CompleteGoogleAuthenticationCommand(
-                    authenticationContext.Identity,
-                    authenticationContext.IsPersistent,
-                    authenticationContext.ReturnPath,
-                    authenticationContext.FlowId,
-                    authenticationContext.ExpectedMemberId,
-                    authenticationContext.CurrentSessionId),
-                cancellationToken);
-        }
-        catch (GoogleAuthenticationFailedException)
-        {
-
-            return await RedirectAuthenticationFailureAsync(
-                "ApplicationRejected",
-                cancellationToken);
-        }
-
-        if (result.Outcome == GoogleAuthenticationOutcome.ExplicitLinkRequired)
-        {
-            Response.Headers.CacheControl = "no-store";
-
-            return Redirect(returnPathService.BuildAbsoluteUri(
-                externalAuthenticationService.BuildBoundPath(
-                    GoogleAuthenticationConstants.LinkPath,
-                    authentication.FlowBinding)));
-        }
-
-        if (result.Outcome == GoogleAuthenticationOutcome.AdditionalVerificationRequired)
-        {
-            Response.Headers.CacheControl = "no-store";
-
-            return Redirect(returnPathService.BuildAbsoluteUri(
-                externalAuthenticationService.BuildBoundPath(
-                    GoogleAuthenticationConstants.AdditionalVerificationPath,
-                    authentication.FlowBinding)));
-        }
-
-        if (result.Outcome != GoogleAuthenticationOutcome.SessionCreated ||
-            result.Session is null)
-            return await RedirectAuthenticationFailureAsync(
-                "InvalidCompletionOutcome",
-                cancellationToken);
-
-        refreshTokenCookieService.Append(
-            HttpContext,
-            result.Session);
-        await externalAuthenticationService.DeleteAsync(
-            HttpContext,
+        return await CreateSessionResponseAsync(
+            tokens,
             cancellationToken);
-        Response.Headers.CacheControl = "no-store";
-
-        return Redirect(returnPathService.BuildAbsoluteUri(authenticationContext.ReturnPath));
     }
 
     /// <summary>
     /// Proves the current MonKado password and explicitly links the validated Google identity.
     /// </summary>
-    /// <param name="request">The current password proof.</param>
-    /// <param name="flow">The opaque binding returned by the validated callback.</param>
+    /// <param name="request">The browser-flow and current password proofs.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>A bearer access token when the Google account is linked.</returns>
+    /// <returns>The bearer access token and a protected refresh cookie.</returns>
     [HttpPost("link")]
     [GoogleExternalCookie]
-    [GoogleFlowBinding]
     [NoStoreResponse(StatusCodes.Status200OK)]
     [ValidateAntiForgeryToken]
     [EnableRateLimiting(AuthenticationRateLimitingExtensions.GoogleLinkPolicy)]
@@ -228,32 +169,29 @@ public class GoogleAuthenticationController(
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status503ServiceUnavailable, "application/json")]
     public async Task<ActionResult<AccessTokenResponse>> LinkAsync(
         LinkGoogleAccountRequest request,
-        [FromQuery] string? flow,
         CancellationToken cancellationToken)
     {
         EnsureEnabled();
         EnsureHttps();
-        var authentication = await externalAuthenticationService.AuthenticateAsync(
-            HttpContext,
-            cancellationToken) ?? throw new GoogleAuthenticationFailedException();
-
-        if (!externalAuthenticationService.MatchesFlowBinding(
-                authentication.FlowBinding,
-                flow))
-            throw new GoogleAccountLinkFailedException();
-
-        var authenticationContext = authentication.Context;
-
         var tokens = await sender.Send(
-            new LinkGoogleAccountCommand(
-                authenticationContext.Identity,
-                authenticationContext.IsPersistent,
-                authenticationContext.ReturnPath,
-                authenticationContext.FlowId,
-                authenticationContext.ExpectedMemberId,
-                authenticationContext.CurrentSessionId,
+            new LinkGoogleSessionCommand(
+                request.Flow,
                 request.CurrentPassword),
             cancellationToken);
+
+        return await CreateSessionResponseAsync(
+            tokens,
+            cancellationToken);
+    }
+
+    /// <summary>Publishes only a committed session and clears the completed external cookie.</summary>
+    /// <param name="tokens">The confirmed MonKado session tokens.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The access-token response.</returns>
+    private async Task<ActionResult<AccessTokenResponse>> CreateSessionResponseAsync(
+        AccountSessionTokens tokens,
+        CancellationToken cancellationToken)
+    {
         refreshTokenCookieService.Append(
             HttpContext,
             tokens);
@@ -295,44 +233,4 @@ public class GoogleAuthenticationController(
                 "Google authentication requires HTTPS.")
         ]);
     }
-
-    /// <summary>
-    /// Clears terminal external authentication state and redirects to the generic failure route.
-    /// </summary>
-    /// <param name="classification">The bounded failure classification used for logging.</param>
-    /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>The generic authentication failure redirect.</returns>
-    /// <exception cref="OperationCanceledException">The operation is canceled.</exception>
-    private async Task<IActionResult> RedirectAuthenticationFailureAsync(
-        string classification,
-        CancellationToken cancellationToken)
-    {
-        GoogleAuthenticationLogMessages.CompletionFailed(
-            logger,
-            classification);
-        await externalAuthenticationService.DeleteAsync(
-            HttpContext,
-            cancellationToken);
-        Response.Headers.CacheControl = "no-store";
-
-        return Redirect(returnPathService.BuildAbsoluteUri(
-            GoogleAuthenticationConstants.AuthenticationFailurePath));
-    }
-
-    /// <summary>
-    /// Redirects an unbound completion without deleting another concurrent flow's cookie.
-    /// </summary>
-    /// <param name="classification">The bounded failure classification used for logging.</param>
-    /// <returns>The generic authentication failure redirect.</returns>
-    private RedirectResult RedirectFlowMismatch(string classification)
-    {
-        GoogleAuthenticationLogMessages.CompletionFailed(
-            logger,
-            classification);
-        Response.Headers.CacheControl = "no-store";
-
-        return Redirect(returnPathService.BuildAbsoluteUri(
-            GoogleAuthenticationConstants.AuthenticationFailurePath));
-    }
-
 }

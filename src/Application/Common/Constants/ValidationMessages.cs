@@ -8,6 +8,8 @@ namespace JennGllg.Fr.MonKado.Back.Application.Common.Constants;
 [ExcludeFromCodeCoverage]
 public static class ValidationMessages
 {
+    /// <summary>Gets the validation message for malformed Google browser proofs.</summary>
+    public const string InvalidGoogleFlow = "The property {PropertyName} must be a canonical 256-bit Base64URL binding.";
     /// <summary>Identifies an invalid optional private review note.</summary>
     public const string InvalidReportReviewNote = "The review note must contain valid text of at most 1000 characters.";
     /// <summary>Requires exactly one non-empty profile image.</summary>

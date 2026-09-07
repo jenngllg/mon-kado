@@ -843,7 +843,7 @@ public class WishImageIntegrationTests(PostgreSqlContainerFixture fixture) : IAs
             $"/api/v1/shared-wishlists/{link.GetProperty("id").GetGuid()}");
         publicRequest.Headers.TryAddWithoutValidation(
             "X-MonKado-Share-Token",
-            shareUrl[(shareUrl.LastIndexOf('.') + 1)..]);
+            new Uri(shareUrl).Fragment[1..]);
         using var publicResponse = await visitor.SendAsync(
             publicRequest,
             cancellationToken);

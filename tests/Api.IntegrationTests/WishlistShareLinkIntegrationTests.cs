@@ -934,7 +934,7 @@ public class WishlistShareLinkIntegrationTests(PostgreSqlContainerFixture fixtur
         var url = response.GetProperty("shareUrl").GetString()
             ?? throw new InvalidOperationException("The share URL is missing.");
 
-        return url[(url.LastIndexOf('.') + 1)..];
+        return new Uri(url).Fragment[1..];
     }
 
     private static string GetCookiePair(string setCookieHeader)

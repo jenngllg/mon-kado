@@ -19,7 +19,8 @@ public sealed class PostgreSqlApiFactory(
     TimeProvider? timeProvider = null,
     TimeSpan? emailConfirmationTokenLifespan = null,
     Action<IServiceCollection>? configureServices = null,
-    string? giftImageStoragePath = null) : WebApplicationFactory<Program>
+    string? giftImageStoragePath = null,
+    Action<IWebHostBuilder>? configureHost = null) : WebApplicationFactory<Program>
 {
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -44,7 +45,7 @@ public sealed class PostgreSqlApiFactory(
             builder.UseSetting(
                 "GiftImages:StoragePath",
                 giftImageStoragePath);
-
+        configureHost?.Invoke(builder);
         builder.ConfigureTestServices(services =>
         {
 

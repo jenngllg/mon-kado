@@ -32,7 +32,7 @@ public class LinkGoogleAccountCommandHandlerTests
         var command = new LinkGoogleAccountCommand(
             identity,
             false,
-            "/my-lists",
+            "/login/google-return",
             flowId,
             null,
             null,

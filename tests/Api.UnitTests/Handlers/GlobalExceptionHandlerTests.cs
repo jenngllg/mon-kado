@@ -71,6 +71,24 @@ public class GlobalExceptionHandlerTests
     public static TheoryData<Exception, int, string, bool> GoogleFailures => new()
     {
         {
+            new GoogleFlowBindingMismatchException(),
+            StatusCodes.Status401Unauthorized,
+            ErrorCodes.GoogleAuthenticationFailed,
+            false
+        },
+        {
+            new GoogleAccountLinkRequiredException(),
+            StatusCodes.Status409Conflict,
+            ErrorCodes.GoogleAccountLinkRequired,
+            false
+        },
+        {
+            new GoogleAdditionalVerificationRequiredException(),
+            StatusCodes.Status409Conflict,
+            ErrorCodes.GoogleAdditionalVerificationRequired,
+            true
+        },
+        {
             new GoogleAuthenticationFailedException(),
             StatusCodes.Status401Unauthorized,
             ErrorCodes.GoogleAuthenticationFailed,

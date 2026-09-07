@@ -21,7 +21,7 @@ public class CompleteGoogleAuthenticationCommandValidatorTests
         var command = new CompleteGoogleAuthenticationCommand(
             GoogleAuthenticationValidatorTestData.CreateValidIdentity(),
             false,
-            "/my-lists",
+            "/login/google-return",
             Guid.CreateVersion7(),
             expectedMemberId,
             currentSessionId);
@@ -72,7 +72,7 @@ public class CompleteGoogleAuthenticationCommandValidatorTests
     }
 
     [Theory]
-    [InlineData("/my-lists/")]
+    [InlineData("/login/google-return/")]
     [InlineData("/my//lists")]
     [InlineData("/my/./lists")]
     [InlineData("/my/../lists")]

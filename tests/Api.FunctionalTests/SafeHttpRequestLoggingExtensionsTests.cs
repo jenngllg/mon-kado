@@ -20,7 +20,7 @@ public class SafeHttpRequestLoggingExtensionsTests
             unmatchedRequest,
             TestContext.Current.CancellationToken);
         using var matchedResponse = await client.GetAsync(
-            $"/api/v1/auth/google?returnPath=%2Fmy-lists&canary={queryCanary}",
+            $"/api/v1/auth/google?returnPath=%2Flogin%2Fgoogle-return&canary={queryCanary}",
             TestContext.Current.CancellationToken);
 
         // Assert

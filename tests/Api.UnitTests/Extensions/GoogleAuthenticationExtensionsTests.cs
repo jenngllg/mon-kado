@@ -95,6 +95,48 @@ public class GoogleAuthenticationExtensionsTests
             accessDeniedContext.Response.Headers.CacheControl);
     }
 
+    [Theory]
+    [InlineData(null)]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public async Task SigningIn_WhenDeadlineIsMissingOrExpired_RejectsCookie(int? remainingSeconds)
+    {
+        // Arrange
+        var now = new DateTimeOffset(
+            2030,
+            1,
+            1,
+            0,
+            0,
+            0,
+            TimeSpan.Zero);
+        using var services = new ServiceCollection()
+            .AddSingleton<TimeProvider>(new FixedTimeProvider(now))
+            .BuildServiceProvider();
+        var options = new CookieAuthenticationOptions();
+        GoogleAuthenticationExtensions.ConfigureExternalCookie(
+            options,
+            new TestWebHostEnvironment("Local"));
+        var scheme = new AuthenticationScheme(
+            GoogleAuthenticationSchemes.ExternalCookie,
+            null,
+            typeof(CookieAuthenticationHandler));
+        var context = new CookieSigningInContext(
+            new DefaultHttpContext { RequestServices = services },
+            scheme,
+            options,
+            new System.Security.Claims.ClaimsPrincipal(),
+            new AuthenticationProperties { ExpiresUtc = remainingSeconds.HasValue ? now.AddSeconds(remainingSeconds.Value) : null },
+            new CookieOptions());
+
+        // Act
+        var exception = await Assert.ThrowsAsync<JennGllg.Fr.MonKado.Back.Application.Common.Exceptions.GoogleAuthenticationFailedException>(() => options.Events.SigningIn(context));
+
+        // Assert
+        Assert.NotNull(exception);
+        Assert.False(context.Response.Headers.ContainsKey("Set-Cookie"));
+    }
+
     [Fact]
     public void ConfigureOpenIdConnect_WhenConfigurationIsValid_UsesCodePkceAndMinimalScopes()
     {
@@ -318,11 +360,9 @@ public class GoogleAuthenticationExtensionsTests
             ClientId = "client.apps.googleusercontent.com",
             ClientSecret = "client-secret",
             FrontendOrigin = "https://app.example.test",
-            DefaultReturnPath = "/my-lists",
+            DefaultReturnPath = "/login/google-return",
             AllowedReturnPaths =
-            [
-                "/my-lists"
-            ]
+            ["/login/google-return"]
         };
     }
 
@@ -339,8 +379,10 @@ public class GoogleAuthenticationExtensionsTests
                 new("GoogleAuthentication:ClientId", "client.apps.googleusercontent.com"),
                 new("GoogleAuthentication:ClientSecret", "client-secret"),
                 new("GoogleAuthentication:FrontendOrigin", "https://app.example.test"),
-                new("GoogleAuthentication:DefaultReturnPath", "/my-lists"),
-                new("GoogleAuthentication:AllowedReturnPaths:0", "/my-lists")
+                new("GoogleAuthentication:DefaultReturnPath",
+                    "/login/google-return"),
+                new("GoogleAuthentication:AllowedReturnPaths:0",
+                    "/login/google-return")
             ])
             .Build();
     }

@@ -55,6 +55,10 @@ public static class ErrorCodes
     /// Identifies a concurrent or ambiguous Google account link.
     /// </summary>
     public const string GoogleAccountLinkConflict = "GOOGLE_ACCOUNT_LINK_CONFLICT";
+    /// <summary>Requires an explicit current-password proof before Google account linking.</summary>
+    public const string GoogleAccountLinkRequired = "GOOGLE_ACCOUNT_LINK_REQUIRED";
+    /// <summary>Requires an additional identity verification that this flow does not support.</summary>
+    public const string GoogleAdditionalVerificationRequired = "GOOGLE_ADDITIONAL_VERIFICATION_REQUIRED";
     #endregion
     #region Request
     /// <summary>

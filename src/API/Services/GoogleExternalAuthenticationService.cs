@@ -3,6 +3,7 @@ using JennGllg.Fr.MonKado.Back.Api.Constants;
 using JennGllg.Fr.MonKado.Back.Api.Models;
 using JennGllg.Fr.MonKado.Back.Application.Common.Exceptions;
 using JennGllg.Fr.MonKado.Back.Application.Models;
+using JennGllg.Fr.MonKado.Back.Application.Validators;
 
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.WebUtilities;
@@ -21,7 +22,6 @@ public class GoogleExternalAuthenticationService(
     IGoogleReturnPathService returnPathService) : IGoogleExternalAuthenticationService
 {
     private const int FlowBindingByteLength = 32;
-    private const int FlowBindingEncodedLength = 43;
     private const string EmailClaim = "email";
     private const string EmailVerifiedClaim = "email_verified";
     private const string HostedDomainClaim = "hd";
@@ -37,10 +37,11 @@ public class GoogleExternalAuthenticationService(
         var properties = new AuthenticationProperties
         {
             AllowRefresh = false,
+            IssuedUtc = now,
             ExpiresUtc = now.Add(
                 GoogleAuthenticationConstants.TransientLifetime),
             IsPersistent = false,
-            RedirectUri = GoogleAuthenticationConstants.CompletionPath
+            RedirectUri = returnPathService.BuildAbsoluteUri(returnPath)
         };
         properties.Items[GoogleAuthenticationConstants.ReturnPathProperty] = returnPath;
         properties.Items[GoogleAuthenticationConstants.RememberMeProperty] = rememberMe
@@ -79,6 +80,8 @@ public class GoogleExternalAuthenticationService(
         if (!result.Succeeded ||
             result.Principal is null ||
             result.Properties is null ||
+            result.Properties.ExpiresUtc is not { } expiresAt ||
+            expiresAt <= timeProvider.GetUtcNow() ||
             !TryReadProperties(
                 result.Properties,
                 out var returnPath,
@@ -175,13 +178,8 @@ public class GoogleExternalAuthenticationService(
         string path,
         string flowBinding)
     {
-        var separator = path.Contains(
-            '?',
-            StringComparison.Ordinal)
-            ? '&'
-            : '?';
 
-        return $"{path}{separator}{GoogleAuthenticationConstants.FlowBindingParameter}={flowBinding}";
+        return $"{path}#{GoogleAuthenticationConstants.FlowBindingParameter}={flowBinding}";
     }
 
     /// <inheritdoc />
@@ -308,20 +306,12 @@ public class GoogleExternalAuthenticationService(
     {
         bytes = [];
 
-        if (flowBinding?.Length != FlowBindingEncodedLength)
+        if (!GoogleFlowValidation.IsCanonical(flowBinding))
             return false;
 
-        try
-        {
-            bytes = WebEncoders.Base64UrlDecode(flowBinding);
+        bytes = WebEncoders.Base64UrlDecode(flowBinding);
 
-            return bytes.Length == FlowBindingByteLength;
-        }
-        catch (FormatException)
-        {
-
-            return false;
-        }
+        return true;
     }
 
     /// <summary>
@@ -330,7 +320,7 @@ public class GoogleExternalAuthenticationService(
     /// <param name="principal">The protected external principal.</param>
     /// <param name="claimType">The claim type.</param>
     /// <param name="value">The single claim value.</param>
-    /// <returns><see langword="true" /> when exactly one value is present.</returns>
+    /// <returns><see langword="true"/> when exactly one value is present.</returns>
     private static bool TryGetSingleClaim(
         ClaimsPrincipal principal,
         string claimType,

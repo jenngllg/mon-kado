@@ -1923,8 +1923,7 @@ public class GiftReservationIntegrationTests(PostgreSqlContainerFixture fixture)
             ?? throw new InvalidOperationException("The share URL is missing.");
 
         return (
-            body.GetProperty("id").GetGuid(),
-            shareUrl[(shareUrl.LastIndexOf('.') + 1)..],
+            body.GetProperty("id").GetGuid(), new Uri(shareUrl).Fragment[1..],
             response.Headers.ETag?.Tag);
     }
 
