@@ -37,6 +37,33 @@ public class AuthenticationEmailOutboxMessage
     {
         get; private set;
     }
+    /// <summary>Gets the export whose availability is rechecked before notification delivery.</summary>
+    public Guid? MemberDataExportId
+    {
+        get; private set;
+    }
+
+    /// <summary>Creates one notification without snapshotting an email address or including a download secret.</summary>
+    /// <param name="exportId">The published export identifier.</param>
+    /// <param name="memberId">The current export owner.</param>
+    /// <param name="readyAt">The UTC publication date.</param>
+    /// <returns>The unique export-ready notification.</returns>
+    public static AuthenticationEmailOutboxMessage CreatePersonalDataExportReady(
+        Guid exportId,
+        Guid memberId,
+        DateTime readyAt)
+    {
+
+        return new AuthenticationEmailOutboxMessage
+        {
+            Id = Guid.CreateVersion7(),
+            UserId = memberId,
+            MemberDataExportId = exportId,
+            Kind = AuthenticationEmailKind.PersonalDataExportReady,
+            CreatedAt = readyAt,
+            AvailableAt = readyAt
+        };
+    }
 
     /// <summary>Creates a confirmation message bound to a durable account deletion request.</summary>
     /// <param name="request">The request containing the immutable recipient security state.</param>

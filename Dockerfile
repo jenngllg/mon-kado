@@ -9,6 +9,7 @@ COPY src/Domain/Domain.csproj src/Domain/
 COPY src/Application/Application.csproj src/Application/
 COPY src/Infrastructure.Persistence.PostgreSql/Infrastructure.Persistence.PostgreSql.csproj src/Infrastructure.Persistence.PostgreSql/
 COPY src/Infrastructure.Images/Infrastructure.Images.csproj src/Infrastructure.Images/
+COPY src/Infrastructure.PersonalDataExports/Infrastructure.PersonalDataExports.csproj src/Infrastructure.PersonalDataExports/
 COPY src/Infrastructure.UrlImport/Infrastructure.UrlImport.csproj src/Infrastructure.UrlImport/
 COPY src/API/Api.csproj src/API/
 COPY src/Worker/Worker.csproj src/Worker/
@@ -34,7 +35,10 @@ RUN dotnet publish src/API/Api.csproj \
 RUN mkdir -p /out/data-protection-keys \
     && touch /out/data-protection-keys/.volume-init \
     && mkdir -p /out/gift-images \
-    && touch /out/gift-images/.volume-init
+    && touch /out/gift-images/.volume-init \
+    && mkdir -p /out/personal-data-exports \
+    && chmod 0700 /out/personal-data-exports \
+    && touch /out/personal-data-exports/.volume-init
 
 FROM build AS migrations-build
 
@@ -60,6 +64,7 @@ COPY --from=build /out/api/ ./
 COPY --from=migrations-build --chmod=0555 /out/migrations/efbundle ./efbundle
 COPY --from=build --chown=$APP_UID:$APP_UID /out/data-protection-keys/ /var/lib/mon-kado/data-protection-keys/
 COPY --from=build --chown=$APP_UID:$APP_UID /out/gift-images/ /var/lib/mon-kado/gift-images/
+COPY --from=build --chown=$APP_UID:$APP_UID --chmod=0700 /out/personal-data-exports/ /var/lib/mon-kado/personal-data-exports/
 USER $APP_UID
 ENTRYPOINT ["dotnet", "JennGllg.Fr.MonKado.Back.Api.dll"]
 
@@ -69,5 +74,6 @@ ENV DOTNET_EnableDiagnostics=0
 COPY --from=build /out/worker/ ./
 COPY --from=build --chown=$APP_UID:$APP_UID /out/data-protection-keys/ /var/lib/mon-kado/data-protection-keys/
 COPY --from=build --chown=$APP_UID:$APP_UID /out/gift-images/ /var/lib/mon-kado/gift-images/
+COPY --from=build --chown=$APP_UID:$APP_UID --chmod=0700 /out/personal-data-exports/ /var/lib/mon-kado/personal-data-exports/
 USER $APP_UID
 ENTRYPOINT ["dotnet", "JennGllg.Fr.MonKado.Back.Worker.dll"]

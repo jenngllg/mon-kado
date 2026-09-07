@@ -1,4 +1,5 @@
 using JennGllg.Fr.MonKado.Back.Api.Abstractions;
+using JennGllg.Fr.MonKado.Back.Api.Attributes;
 using JennGllg.Fr.MonKado.Back.Api.Errors;
 using JennGllg.Fr.MonKado.Back.Api.Logging;
 using JennGllg.Fr.MonKado.Back.Application.Common.Exceptions;
@@ -35,6 +36,24 @@ public class GlobalExceptionHandler(
     {
         var response = exception switch
         {
+            PersonalDataExportNotFoundException => new ErrorResponse(
+                StatusCodes.Status404NotFound,
+                "Export not found",
+                "The personal data export is unavailable.",
+                ErrorCodes.MemberDataExportNotFound,
+                null),
+            PersonalDataExportNotReadyException => new ErrorResponse(
+                StatusCodes.Status409Conflict,
+                "Export not ready",
+                "The personal data export is not ready to download.",
+                ErrorCodes.MemberDataExportNotReady,
+                null),
+            PersonalDataExportRateLimitException => new ErrorResponse(
+                StatusCodes.Status429TooManyRequests,
+                "Export request limit exceeded",
+                "Too many new personal data export requests. Try again later.",
+                ErrorCodes.MemberDataExportRateLimited,
+                null),
             WishlistReportNotFoundException => new ErrorResponse(
                 StatusCodes.Status404NotFound,
                 "Report not found",
@@ -357,8 +376,9 @@ public class GlobalExceptionHandler(
         LogException(
             response,
             exception);
+        var endpoint = httpContext.GetEndpoint() ?? httpContext.Features.Get<IExceptionHandlerFeature>()?.Endpoint;
 
-        if (exception is InvalidAuthenticationSessionException)
+        if (exception is InvalidAuthenticationSessionException && endpoint?.Metadata.GetMetadata<PreserveRefreshCookieAttribute>() is null)
             refreshTokenCookieService.Delete(httpContext);
 
         if (exception is GuestSessionInvalidException)
@@ -388,6 +408,16 @@ public class GlobalExceptionHandler(
         ErrorResponse response,
         Exception exception)
     {
+
+        if (exception is PersonalDataExportStorageUnavailableException)
+        {
+            ApiLogMessages.DependencyUnavailable(
+                logger,
+                nameof(PersonalDataExportStorageUnavailableException),
+                null);
+
+            return;
+        }
 
         if (exception is GiftImageStorageUnavailableException)
         {

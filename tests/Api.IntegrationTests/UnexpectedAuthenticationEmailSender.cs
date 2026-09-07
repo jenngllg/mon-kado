@@ -9,6 +9,16 @@ namespace JennGllg.Fr.MonKado.Back.Api.IntegrationTests;
 public class UnexpectedAuthenticationEmailSender : IAuthenticationEmailSender
 {
     /// <inheritdoc/>
+    public Task<AuthenticationEmailSendResult> SendPersonalDataExportReadyAsync(
+        PersonalDataExportNotification message,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        return CreateFailure();
+    }
+
+    /// <inheritdoc/>
     public Task<AuthenticationEmailSendResult> SendAccountDeletionConfirmationAsync(
         AuthenticationEmailMessage message,
         CancellationToken cancellationToken)

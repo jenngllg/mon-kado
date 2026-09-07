@@ -8,6 +8,18 @@ namespace JennGllg.Fr.MonKado.Back.Api.Errors;
 [ExcludeFromCodeCoverage]
 public static class ErrorCodes
 {
+    #region MemberDataExport
+    /// <summary>Identifies an unknown, foreign or expired archive.</summary>
+    public const string MemberDataExportNotFound = "MEMBER_DATA_EXPORT_NOT_FOUND";
+    /// <summary>Identifies an archive that is not ready to download.</summary>
+    public const string MemberDataExportNotReady = "MEMBER_DATA_EXPORT_NOT_READY";
+    /// <summary>Identifies an exhausted rolling export quota.</summary>
+    public const string MemberDataExportRateLimited = "MEMBER_DATA_EXPORT_RATE_LIMITED";
+    /// <summary>Identifies exhausted generation attempts.</summary>
+    public const string MemberDataExportGenerationFailed = "MEMBER_DATA_EXPORT_GENERATION_FAILED";
+    /// <summary>Identifies an export exceeding the complete archive size limit.</summary>
+    public const string MemberDataExportTooLarge = "MEMBER_DATA_EXPORT_TOO_LARGE";
+    #endregion
     #region WishImport
     /// <summary>Identifies an unsafe URL import destination.</summary>
     public const string WishImportUrlRejected = "WISH_IMPORT_URL_REJECTED";

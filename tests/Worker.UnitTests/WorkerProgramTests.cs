@@ -37,7 +37,8 @@ public class WorkerProgramTests
             "--environment=Staging",
             "--ConnectionStrings:PostgreSql=Host=127.0.0.1;Port=1;Database=mon_kado;Username=mon_kado;Password=test",
             $"--{AuthenticationEmailOptions.SectionName}:Provider={AuthenticationEmailOptions.DisabledProvider}",
-            "--GiftImages:StoragePath=.local/worker-program-tests"
+            "--GiftImages:StoragePath=.local/worker-program-tests",
+            "--PersonalDataExports:StoragePath=.local/worker-export-tests"
         };
 
         // Act
@@ -59,7 +60,8 @@ public class WorkerProgramTests
             "--environment=Staging",
             "--ConnectionStrings:PostgreSql=Host=127.0.0.1;Port=1;Database=mon_kado;Username=mon_kado;Password=test",
             $"--{AuthenticationEmailOptions.SectionName}:Provider={AuthenticationEmailOptions.DisabledProvider}",
-            "--GiftImages:StoragePath=.local/worker-program-tests"
+            "--GiftImages:StoragePath=.local/worker-program-tests",
+            "--PersonalDataExports:StoragePath=.local/worker-export-tests"
         };
 
         // Act

@@ -190,7 +190,9 @@ public static class WebSecurityExtensions
                     WebSecurityOptions.AntiforgeryHeaderName)
                 .WithExposedHeaders(
                     CorrelationIdMiddleware.HeaderName,
-                    HeaderNames.ETag,
+                    HeaderNames.Location,
+                HeaderNames.ContentDisposition,
+                HeaderNames.ETag,
                     HeaderNames.RetryAfter)
                 .AllowCredentials()
                 .SetPreflightMaxAge(TimeSpan.FromMinutes(10)));

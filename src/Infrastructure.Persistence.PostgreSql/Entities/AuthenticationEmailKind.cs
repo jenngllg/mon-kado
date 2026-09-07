@@ -26,5 +26,7 @@ public enum AuthenticationEmailKind
     /// </summary>
     PasswordChangedSecurityNotification,
     /// <summary>Indicates an account deletion confirmation sent to the current address.</summary>
-    AccountDeletionConfirmation
+    AccountDeletionConfirmation,
+    /// <summary>Indicates that a private personal-data archive is ready to download.</summary>
+    PersonalDataExportReady
 }

@@ -9,7 +9,24 @@ namespace JennGllg.Fr.MonKado.Back.Application.Common.Constants;
 public static class LogEventIds
 {
     #region Account
-
+    /// <summary>Identifies accepted or reused personal-data export requests.</summary>
+    public const int PersonalDataExportRequested = 1150;
+    /// <summary>Identifies personal-data export metadata reads.</summary>
+    public const int PersonalDataExportRead = 1151;
+    /// <summary>Identifies authorized personal-data archive downloads.</summary>
+    public const int PersonalDataExportDownload = 1152;
+    /// <summary>Identifies claimed personal-data export attempts.</summary>
+    public const int PersonalDataExportAttemptStarted = 1153;
+    /// <summary>Identifies published personal-data archives.</summary>
+    public const int PersonalDataExportReady = 1154;
+    /// <summary>Identifies sanitized personal-data export failures.</summary>
+    public const int PersonalDataExportAttemptFailed = 1155;
+    /// <summary>Identifies sanitized personal-data export cycle failures.</summary>
+    public const int PersonalDataExportCycleFailed = 1156;
+    /// <summary>Identifies delivered archive-ready notifications.</summary>
+    public const int PersonalDataExportNotificationSent = 1157;
+    /// <summary>Identifies an archive download aborted after its response started.</summary>
+    public const int PersonalDataExportDownloadFailed = 1158;
     /// <summary>Identifies profile-photo UpsertStarted events.</summary>
     public const int ProfileImageUpsertStarted = 1140;
     /// <summary>Identifies profile-photo Upserted events.</summary>

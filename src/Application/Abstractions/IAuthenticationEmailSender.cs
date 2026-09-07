@@ -8,6 +8,13 @@ namespace JennGllg.Fr.MonKado.Back.Application.Abstractions;
 /// </summary>
 public interface IAuthenticationEmailSender
 {
+    /// <summary>Notifies the member that an authenticated archive download is available.</summary>
+    /// <param name="message">The deadline and account-page notification.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The provider delivery result.</returns>
+    Task<AuthenticationEmailSendResult> SendPersonalDataExportReadyAsync(
+        PersonalDataExportNotification message,
+        CancellationToken cancellationToken);
     /// <summary>Sends an explicit, authenticated account deletion confirmation link.</summary>
     /// <param name="message">The confirmation message.</param>
     /// <param name="cancellationToken">The cancellation token.</param>

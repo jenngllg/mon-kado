@@ -1,5 +1,6 @@
 using JennGllg.Fr.MonKado.Back.Application.Abstractions;
 using JennGllg.Fr.MonKado.Back.Application.Common.Exceptions;
+using JennGllg.Fr.MonKado.Back.Application.Logging;
 using JennGllg.Fr.MonKado.Back.Application.Models;
 using JennGllg.Fr.MonKado.Back.Worker.Exceptions;
 using JennGllg.Fr.MonKado.Back.Worker.Logging;
@@ -28,6 +29,33 @@ public class GmailAuthenticationEmailSender(
     ILogger<GmailAuthenticationEmailSender> logger) : IAuthenticationEmailSender
 {
     private readonly GmailOptions _gmail = options.Value;
+    /// <inheritdoc/>
+    public async Task<AuthenticationEmailSendResult> SendPersonalDataExportReadyAsync(
+        PersonalDataExportNotification message,
+        CancellationToken cancellationToken)
+    {
+        var deadline = message.ExpiresAt.ToString(
+            "yyyy-MM-dd HH:mm 'UTC'",
+            CultureInfo.InvariantCulture);
+        var url = message.AccountUrl.AbsoluteUri;
+        var encodedUrl = HtmlEncoder.Default.Encode(url);
+        var result = await SendAsync(
+            message.OutboxMessageId,
+            token => CreateRawMessageAsync(
+                message.OutboxMessageId,
+                message.RecipientAddress,
+                "Votre export de données est prêt – MonKado",
+                $"Votre export de données personnelles est prêt et disponible jusqu'au {deadline}. " + $"Connectez-vous à votre compte pour le télécharger : {url}\n" + "Cet e-mail ne contient ni pièce jointe ni lien de téléchargement public.",
+                $"<p>Votre export de données personnelles est prêt et disponible jusqu'au {deadline}.</p>" + $"<p><a href=\"{encodedUrl}\">Connectez-vous à votre compte</a> pour le télécharger.</p>" + "<p>Cet e-mail ne contient ni pièce jointe ni lien de téléchargement public.</p>",
+                token),
+            cancellationToken);
+        PersonalDataExportLogMessages.NotificationSent(
+            logger,
+            message.OutboxMessageId);
+
+        return result;
+    }
+
     /// <inheritdoc/>
     public async Task<AuthenticationEmailSendResult> SendAccountDeletionConfirmationAsync(
         AuthenticationEmailMessage message,

@@ -22,6 +22,71 @@ namespace JennGllg.Fr.MonKado.Back.Worker.UnitTests;
 public class GmailAuthenticationEmailSenderTests
 {
     [Fact]
+    public async Task SendPersonalDataExportReadyAsync_WhenReady_SendsAuthenticatedAccountLinkWithoutAttachmentOrSecret()
+    {
+        // Arrange
+        var client = new CapturingGmailClient();
+        var logger = new RecordingLogger<GmailAuthenticationEmailSender>();
+        var sender = CreateSender(
+            client,
+            logger);
+        var message = new PersonalDataExportNotification
+        {
+            OutboxMessageId = Guid.CreateVersion7(),
+            RecipientAddress = "member@example.test",
+            AccountUrl = new Uri("https://mon-kado.fr/profile"),
+            ExpiresAt = new DateTime(
+                2026,
+                9,
+                8,
+                12,
+                30,
+                0,
+                DateTimeKind.Utc)
+        };
+
+        // Act
+        var result = await sender.SendPersonalDataExportReadyAsync(
+            message,
+            TestContext.Current.CancellationToken);
+        var mime = await DecodeAsync(client.RawMessage ?? string.Empty);
+
+        // Assert
+        Assert.Equal(
+            "gmail-message-id",
+            result.ProviderMessageId);
+        Assert.Equal(
+            message.RecipientAddress,
+            Assert
+                .Single(mime.To.Mailboxes)
+                .Address);
+        Assert.Contains(
+            "export",
+            mime.Subject);
+        Assert.Contains(
+            "2026-09-08 12:30 UTC",
+            mime.TextBody);
+        Assert.Contains(
+            message.AccountUrl.AbsoluteUri,
+            mime.TextBody);
+        Assert.Contains(
+            message.AccountUrl.AbsoluteUri,
+            mime.HtmlBody);
+        Assert.Empty(mime.Attachments);
+        var entry = Assert.Single(logger.Entries);
+        Assert.Equal(
+            LogEventIds.PersonalDataExportNotificationSent,
+            entry.EventId.Id);
+        Assert.DoesNotContain(
+            message.RecipientAddress,
+            entry.Message);
+        Assert.DoesNotContain(
+            message.AccountUrl.AbsoluteUri,
+            entry.Message);
+        Assert.Null(entry.Exception);
+    }
+
+    [Fact]
     public async Task SendAccountDeletionConfirmationAsync_WhenCalled_DescribesIrreversibleConfirmationWithoutLeakingToken()
     {
         // Arrange

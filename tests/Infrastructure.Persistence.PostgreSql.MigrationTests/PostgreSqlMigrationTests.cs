@@ -21,6 +21,67 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Migrati
 public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
 {
     [Fact]
+    public async Task MigrateAsync_WhenExportsContainNotifications_RollsBackWithoutDeletingOtherAccountData()
+    {
+        // Arrange
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var provider = CreateServiceProvider();
+        await using var scope = provider.CreateAsyncScope();
+        var context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
+        await context.Database.MigrateAsync(cancellationToken);
+        var migrations = (await context.Database.GetAppliedMigrationsAsync(cancellationToken)).ToArray();
+        var memberId = Guid.CreateVersion7();
+        var now = new DateTime(
+            2026,
+            9,
+            7,
+            12,
+            0,
+            0,
+            DateTimeKind.Utc);
+        context.Users.Add(CreateMigrationMember(
+                memberId,
+                $"{memberId:N}@example.test",
+                "Export owner"));
+        var export = new MemberDataExport(
+            memberId,
+            now);
+        context.MemberDataExports.Add(export);
+        var confirmation = AuthenticationEmailOutboxMessage.CreateEmailConfirmation(
+            memberId,
+            now);
+        context.AuthenticationEmailOutboxMessages.Add(confirmation);
+        context.AuthenticationEmailOutboxMessages.Add(AuthenticationEmailOutboxMessage.CreatePersonalDataExportReady(
+                export.Id,
+                memberId,
+                now));
+        await context.SaveChangesAsync(cancellationToken);
+
+        // Act
+        await context.Database.MigrateAsync(
+            migrations[^2],
+            cancellationToken);
+        var retainedConfirmation = await context.AuthenticationEmailOutboxMessages.AnyAsync(
+            message => message.Id == confirmation.Id,
+            cancellationToken);
+        await context.Database.MigrateAsync(cancellationToken);
+        context.ChangeTracker.Clear();
+
+        // Assert
+        Assert.True(retainedConfirmation);
+        Assert.True(await context.Users.AnyAsync(
+                member => member.Id == memberId,
+                cancellationToken));
+        Assert.False(await context.MemberDataExports.AnyAsync(
+                candidate => candidate.Id == export.Id,
+                cancellationToken));
+        Assert.False(await context.AuthenticationEmailOutboxMessages.AnyAsync(
+                message => message.Kind == AuthenticationEmailKind.PersonalDataExportReady,
+                cancellationToken));
+        Assert.False(context.Database.HasPendingModelChanges());
+    }
+
+    [Fact]
     public async Task MigrateAsync_WhenReportIndexIsReplaced_PreservesReportsAndSupportsRollback()
     {
         // Arrange
@@ -219,6 +280,10 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
             migration => Assert.EndsWith(
                 "_AddWishlistReportReviews",
                 migration,
+                StringComparison.Ordinal),
+            migration => Assert.EndsWith(
+                "_AddMemberPersonalDataExports",
+                migration,
                 StringComparison.Ordinal));
         Assert.False(context.Database.HasPendingModelChanges());
         var tables = await GetPublicTablesAsync(
@@ -234,6 +299,7 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
                 "gift_reservations",
                 "guest_sessions",
                 "member_account_deletion_requests",
+                "member_data_exports",
                 "member_email_change_requests",
                 "role_claims",
                 "roles",
@@ -1783,7 +1849,7 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
             INSERT INTO public.wishlists
                 (id, owner_id, name, normalized_name, occasion, event_date, message, created_at)
             VALUES ({wishlist.Id}, {wishlist.OwnerId}, {wishlist.Name}, {wishlist.NormalizedName},
-                {wishlist.Occasion.ToString()}, {wishlist.EventDate}, {wishlist.Message}, {DateTime.UnixEpoch})
+            {wishlist.Occasion.ToString()}, {wishlist.EventDate}, {wishlist.Message}, {DateTime.UnixEpoch})
             """,
             cancellationToken);
     }
@@ -1806,8 +1872,8 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
                  email_confirmed, security_stamp, created_at, phone_number_confirmed,
                  two_factor_enabled, lockout_enabled, access_failed_count)
             VALUES ({member.Id}, {member.DisplayName}, {member.Email}, {member.NormalizedEmail},
-                {member.UserName}, {member.NormalizedUserName}, {member.EmailConfirmed},
-                {member.SecurityStamp}, {DateTime.UnixEpoch}, FALSE, FALSE, FALSE, 0)
+            {member.UserName}, {member.NormalizedUserName}, {member.EmailConfirmed},
+            {member.SecurityStamp}, {DateTime.UnixEpoch}, FALSE, FALSE, FALSE, 0)
             """,
             cancellationToken);
     }
