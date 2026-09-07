@@ -73,7 +73,9 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
         Assert.Equal(wishlistId, report.WishlistId);
         Assert.Equal(WishlistReportReason.Other, report.Reason);
         Assert.Equal("Preserved anonymous report", report.Details);
-        Assert.Equal(WishlistReportStatus.Pending, report.Status);
+        Assert.Equal(
+            WishlistReportStatus.Pending,
+            report.Status);
         Assert.Null(report.ReviewNote);
         Assert.Null(report.ReviewedAt);
         Assert.Null(report.ReviewedByAdministratorId);

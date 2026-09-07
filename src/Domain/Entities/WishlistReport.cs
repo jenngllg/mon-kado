@@ -82,6 +82,10 @@ public class WishlistReport : IAuditableEntity
     }
 
     /// <summary>Gets the PostgreSQL optimistic concurrency version.</summary>
+    [SuppressMessage(
+        "CodeQuality",
+        "S1144:Unused private types or members should be removed",
+        Justification = "Entity Framework populates the PostgreSQL xmin concurrency token through this setter.")]
     public uint Version
     {
         get; private set;

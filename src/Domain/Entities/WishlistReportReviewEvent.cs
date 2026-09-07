@@ -11,31 +11,24 @@ public class WishlistReportReviewEvent
 
     /// <summary>Initializes a durable review event.</summary>
     /// <param name="id">The application-generated event identifier.</param>
-    /// <param name="reportId">The report identifier.</param>
+    /// <param name="report">The report after an effective review, copied without retaining a mutable reference.</param>
     /// <param name="sequence">The strictly increasing report review sequence.</param>
     /// <param name="previousStatus">The previous disposition.</param>
-    /// <param name="status">The new disposition.</param>
-    /// <param name="note">The normalized private review note.</param>
-    /// <param name="administratorId">The deciding administrator.</param>
-    /// <param name="occurredAt">The UTC review date.</param>
+    /// <exception cref="InvalidOperationException">The report has not been reviewed.</exception>
     public WishlistReportReviewEvent(
         Guid id,
-        Guid reportId,
+        WishlistReport report,
         long sequence,
-        WishlistReportStatus previousStatus,
-        WishlistReportStatus status,
-        string? note,
-        Guid administratorId,
-        DateTime occurredAt)
+        WishlistReportStatus previousStatus)
     {
         Id = id;
-        ReportId = reportId;
+        ReportId = report.Id;
         Sequence = sequence;
         PreviousStatus = previousStatus;
-        Status = status;
-        Note = note;
-        AdministratorId = administratorId;
-        OccurredAt = occurredAt;
+        Status = report.Status;
+        Note = report.ReviewNote;
+        AdministratorId = report.ReviewedByAdministratorId;
+        OccurredAt = report.ReviewedAt ?? throw new InvalidOperationException("A review event requires a reviewed report.");
     }
 
     /// <summary>Gets the event identifier.</summary>

@@ -105,13 +105,9 @@ public class WishlistReportReviewService(
                     cancellationToken);
                 var review = new WishlistReportReviewEvent(
                     Guid.CreateVersion7(),
-                    reportId,
+                    report,
                     sequence,
-                    previousStatus,
-                    status,
-                    report.ReviewNote,
-                    administratorId,
-                    occurredAt);
+                    previousStatus);
                 repository.AddEvent(review);
                 await unitOfWork.SaveChangesAsync(cancellationToken);
                 attempted = review;

@@ -12,17 +12,28 @@ public class WishlistReportReviewEventTests
         var id = Guid.CreateVersion7();
         var reportId = Guid.CreateVersion7();
         var administratorId = Guid.CreateVersion7();
-
-        // Act
-        var review = new WishlistReportReviewEvent(
-            id,
+        var report = new WishlistReport(
             reportId,
-            2,
-            WishlistReportStatus.Upheld,
+            Guid.CreateVersion7(),
+            WishlistReportReason.Other,
+            null);
+        report.Review(
             WishlistReportStatus.Dismissed,
             "Corrected decision",
             administratorId,
             DateTime.UnixEpoch);
+
+        // Act
+        var review = new WishlistReportReviewEvent(
+            id,
+            report,
+            2,
+            WishlistReportStatus.Upheld);
+        report.Review(
+            WishlistReportStatus.Pending,
+            null,
+            Guid.CreateVersion7(),
+            DateTime.UnixEpoch.AddDays(1));
 
         // Assert
         Assert.Equal(
@@ -49,5 +60,26 @@ public class WishlistReportReviewEventTests
         Assert.Equal(
             DateTime.UnixEpoch,
             review.OccurredAt);
+    }
+
+    [Fact]
+    public void Constructor_WhenReportWasNeverReviewed_RejectsFabricatedHistory()
+    {
+        // Arrange
+        var report = new WishlistReport(
+            Guid.CreateVersion7(),
+            Guid.CreateVersion7(),
+            WishlistReportReason.Other,
+            null);
+
+        // Act
+        var exception = Record.Exception(() => new WishlistReportReviewEvent(
+            Guid.CreateVersion7(),
+            report,
+            1,
+            WishlistReportStatus.Pending));
+
+        // Assert
+        Assert.IsType<InvalidOperationException>(exception);
     }
 }

@@ -329,13 +329,9 @@ public class WishlistReportReviewServiceTests
                 0 => null,
                 1 => new WishlistReportReviewEvent(
                     Guid.CreateVersion7(),
-                    _report.Id,
+                    _report,
                     2,
-                    WishlistReportStatus.Upheld,
-                    WishlistReportStatus.Dismissed,
-                    null,
-                    _administratorId,
-                    DateTime.UnixEpoch),
+                    WishlistReportStatus.Pending),
                 _ => Assert.IsType<WishlistReportReviewEvent>(_review)
             });
 
