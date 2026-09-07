@@ -1,5 +1,6 @@
 using JennGllg.Fr.MonKado.Back.Application.Abstractions;
 using JennGllg.Fr.MonKado.Back.Application.Common.Exceptions;
+using JennGllg.Fr.MonKado.Back.Application.Models;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Abstractions;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Contexts;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Services;
@@ -48,6 +49,7 @@ public class ReportedWishlistServiceTests : IDisposable
             0 => () => _service.GetPageAsync(
                 null,
                 null,
+                WishlistReportStatusFilter.Pending,
                 1,
                 20,
                 cancellationToken),
@@ -57,6 +59,7 @@ public class ReportedWishlistServiceTests : IDisposable
             2 => () => _service.GetReportsAsync(
                 Guid.CreateVersion7(),
                 null,
+                WishlistReportStatusFilter.Pending,
                 1,
                 20,
                 cancellationToken),
@@ -96,6 +99,7 @@ public class ReportedWishlistServiceTests : IDisposable
         var actual = await Assert.ThrowsAsync<OperationCanceledException>(() => _service.GetPageAsync(
                 null,
                 null,
+                WishlistReportStatusFilter.Pending,
                 1,
                 20,
                 cancellationToken));

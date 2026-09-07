@@ -437,6 +437,14 @@ public static class LogEventIds
     public const int WishlistReportsRetrieved = 2069;
     /// <summary>Identifies authenticated administrative image reads.</summary>
     public const int ReportedWishImageRetrieved = 2070;
+    /// <summary>Identifies the WishlistReportRetrieved event.</summary>
+    public const int WishlistReportRetrieved = 2071;
+    /// <summary>Identifies the WishlistReportReviewEventsRetrieved event.</summary>
+    public const int WishlistReportReviewEventsRetrieved = 2072;
+    /// <summary>Identifies the WishlistReportReviewed event.</summary>
+    public const int WishlistReportReviewed = 2073;
+    /// <summary>Identifies the WishlistReportReviewStarted event.</summary>
+    public const int WishlistReportReviewStarted = 2074;
     #endregion
     #region Technical
     /// <summary>

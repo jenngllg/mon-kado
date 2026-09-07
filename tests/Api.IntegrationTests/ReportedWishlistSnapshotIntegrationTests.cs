@@ -1,4 +1,5 @@
 using JennGllg.Fr.MonKado.Back.Application.Abstractions;
+using JennGllg.Fr.MonKado.Back.Application.Models;
 using JennGllg.Fr.MonKado.Back.Domain.Enums;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Contexts;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Services;
@@ -63,12 +64,14 @@ public class ReportedWishlistSnapshotIntegrationTests(PostgreSqlContainerFixture
         var page = reportsPage ? null : await service.GetPageAsync(
             null,
             null,
+            WishlistReportStatusFilter.Pending,
             1,
             20,
             ct);
         var reports = reportsPage ? await service.GetReportsAsync(
             wishlist.Id,
             null,
+            WishlistReportStatusFilter.Pending,
             1,
             20,
             ct) : null;

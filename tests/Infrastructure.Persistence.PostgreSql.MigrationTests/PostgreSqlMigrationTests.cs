@@ -73,6 +73,11 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
         Assert.Equal(wishlistId, report.WishlistId);
         Assert.Equal(WishlistReportReason.Other, report.Reason);
         Assert.Equal("Preserved anonymous report", report.Details);
+        Assert.Equal(WishlistReportStatus.Pending, report.Status);
+        Assert.Null(report.ReviewNote);
+        Assert.Null(report.ReviewedAt);
+        Assert.Null(report.ReviewedByAdministratorId);
+        Assert.Empty(await context.WishlistReportReviewEvents.ToArrayAsync(cancellationToken));
         Assert.False(context.Database.HasPendingModelChanges());
     }
 
@@ -208,6 +213,10 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
             migration => Assert.EndsWith(
                 "_AddWishlistReportReadIndex",
                 migration,
+                StringComparison.Ordinal),
+            migration => Assert.EndsWith(
+                "_AddWishlistReportReviews",
+                migration,
                 StringComparison.Ordinal));
         Assert.False(context.Database.HasPendingModelChanges());
         var tables = await GetPublicTablesAsync(
@@ -236,6 +245,7 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
                 "wishlist_moderation_email_outbox",
                 "wishlist_moderation_events",
                 "wishlist_participants",
+                "wishlist_report_review_events",
                 "wishlist_reports",
                 "wishlist_share_links",
                 "wishlists"

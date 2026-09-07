@@ -24,6 +24,7 @@ public class ReportedWishlistService(
     public Task<ReportedWishlistPage> GetPageAsync(
         WishlistReportReason? reason,
         bool? isSuspended,
+        WishlistReportStatusFilter status,
         int page,
         int pageSize,
         CancellationToken cancellationToken)
@@ -36,6 +37,13 @@ public class ReportedWishlistService(
 
                 if (reason.HasValue)
                     reports = reports.Where(report => report.Reason == reason.Value);
+
+                if (status is not WishlistReportStatusFilter.All)
+                {
+                    // Capture the domain enum so EF uses its string converter instead of casting the filter in SQL.
+                    var selectedStatus = (WishlistReportStatus)status;
+                    reports = reports.Where(report => report.Status == selectedStatus);
+                }
                 var groups = reports
                     .GroupBy(report => report.WishlistId)
                     .Select(group => new
@@ -162,6 +170,7 @@ public class ReportedWishlistService(
     public Task<WishlistReportPage> GetReportsAsync(
         Guid wishlistId,
         WishlistReportReason? reason,
+        WishlistReportStatusFilter status,
         int page,
         int pageSize,
         CancellationToken cancellationToken)
@@ -179,6 +188,12 @@ public class ReportedWishlistService(
 
                 if (reason.HasValue)
                     query = query.Where(report => report.Reason == reason.Value);
+
+                if (status is not WishlistReportStatusFilter.All)
+                {
+                    var selectedStatus = (WishlistReportStatus)status;
+                    query = query.Where(report => report.Status == selectedStatus);
+                }
                 var totalCount = await query.CountAsync(token);
                 var offset = (long)(page - 1) * pageSize;
                 var items = Array.Empty<WishlistReportDetails>();
@@ -194,7 +209,11 @@ public class ReportedWishlistService(
                             Id = report.Id,
                             Reason = report.Reason,
                             Details = report.Details,
-                            CreatedAt = report.CreatedAt
+                            CreatedAt = report.CreatedAt,
+                            Status = report.Status,
+                            ReviewNote = report.ReviewNote,
+                            ReviewedAt = report.ReviewedAt,
+                            ReviewedByAdministratorId = report.ReviewedByAdministratorId
                         })
                         .ToArrayAsync(token);
 

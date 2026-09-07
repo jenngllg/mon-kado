@@ -26,7 +26,8 @@ public class ReportedWishlistsController(
 {
     private const string NoStoreCacheControl = "no-store";
 
-    /// <summary>Lists reported wishlists, counting and ordering only reports matching the optional reason filter.</summary>
+    /// <summary>Lists reported wishlists, counting and ordering only reports matching the status and reason filters.</summary>
+    /// <param name="status">The disposition filter, defaulting to pending; all includes processed reports.</param>
     /// <param name="reason">The optional reason.</param>
     /// <param name="isSuspended">The optional isSuspended.</param>
     /// <param name="page">The optional page, defaulting to one.</param>
@@ -42,6 +43,7 @@ public class ReportedWishlistsController(
     public async Task<ActionResult<PaginatedResponse<ReportedWishlistSummary>>> GetPageAsync(
         [FromQuery] WishlistReportReason? reason,
         [FromQuery] bool? isSuspended,
+        [FromQuery] WishlistReportStatusFilter? status,
         [FromQuery] int? page,
         [FromQuery] int? pageSize,
         CancellationToken cancellationToken)
@@ -51,7 +53,8 @@ public class ReportedWishlistsController(
                 reason,
                 isSuspended,
                 page,
-                pageSize),
+                pageSize,
+                status),
             cancellationToken);
         Response.Headers.CacheControl = NoStoreCacheControl;
 
@@ -117,6 +120,7 @@ public class ReportedWishlistsController(
     }
 
     /// <summary>Lists anonymous reports in reverse chronological order.</summary>
+    /// <param name="status">The disposition filter, defaulting to pending; all includes processed reports.</param>
     /// <param name="wishlistId">The reported wishlist identifier.</param>
     /// <param name="reason">The optional reason.</param>
     /// <param name="page">The optional page, defaulting to one.</param>
@@ -133,6 +137,7 @@ public class ReportedWishlistsController(
     public async Task<ActionResult<PaginatedResponse<WishlistReportDetails>>> GetReportsAsync(
         Guid wishlistId,
         [FromQuery] WishlistReportReason? reason,
+        [FromQuery] WishlistReportStatusFilter? status,
         [FromQuery] int? page,
         [FromQuery] int? pageSize,
         CancellationToken cancellationToken)
@@ -142,7 +147,8 @@ public class ReportedWishlistsController(
                 wishlistId,
                 reason,
                 page,
-                pageSize),
+                pageSize,
+                status),
             cancellationToken);
         Response.Headers.CacheControl = NoStoreCacheControl;
 

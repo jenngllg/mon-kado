@@ -57,6 +57,63 @@ public class WishlistReport : IAuditableEntity
         get; private set;
     }
 
+    /// <summary>Gets the current administrative disposition.</summary>
+    public WishlistReportStatus Status
+    {
+        get; private set;
+    }
+
+    /// <summary>Gets the optional private note from the latest review.</summary>
+    public string? ReviewNote
+    {
+        get; private set;
+    }
+
+    /// <summary>Gets the UTC date of the latest review, including reopening.</summary>
+    public DateTime? ReviewedAt
+    {
+        get; private set;
+    }
+
+    /// <summary>Gets the deciding administrator, or null after account deletion.</summary>
+    public Guid? ReviewedByAdministratorId
+    {
+        get; private set;
+    }
+
+    /// <summary>Gets the PostgreSQL optimistic concurrency version.</summary>
+    public uint Version
+    {
+        get; private set;
+    }
+
+    /// <summary>Applies a validated review without changing the visitor's original report.</summary>
+    /// <param name="status">The requested disposition.</param>
+    /// <param name="note">The optional private note.</param>
+    /// <param name="administratorId">The deciding administrator.</param>
+    /// <param name="reviewedAt">The UTC review date.</param>
+    /// <returns>Whether the disposition or normalized note changed.</returns>
+    public bool Review(
+        WishlistReportStatus status,
+        string? note,
+        Guid administratorId,
+        DateTime reviewedAt)
+    {
+        var normalized = string.IsNullOrWhiteSpace(note) ? null : note.Trim();
+
+        if (Status == status && string.Equals(
+            ReviewNote,
+            normalized,
+            StringComparison.Ordinal))
+            return false;
+        Status = status;
+        ReviewNote = normalized;
+        ReviewedAt = reviewedAt;
+        ReviewedByAdministratorId = administratorId;
+
+        return true;
+    }
+
     /// <inheritdoc />
     [SuppressMessage(
         "CodeQuality",

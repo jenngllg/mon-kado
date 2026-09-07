@@ -9,6 +9,7 @@ public interface IReportedWishlistService
     /// <summary>Reads grouped reports using one repeatable-read snapshot.</summary>
     /// <param name="reason">The reason.</param>
     /// <param name="isSuspended">The isSuspended.</param>
+    /// <param name="status">The disposition filter.</param>
     /// <param name="page">The page.</param>
     /// <param name="pageSize">The pageSize.</param>
     /// <param name="cancellationToken">The cancellationToken.</param>
@@ -16,6 +17,7 @@ public interface IReportedWishlistService
     Task<ReportedWishlistPage> GetPageAsync(
         WishlistReportReason? reason,
         bool? isSuspended,
+        WishlistReportStatusFilter status,
         int page,
         int pageSize,
         CancellationToken cancellationToken);
@@ -29,6 +31,7 @@ public interface IReportedWishlistService
     /// <summary>Reads anonymous reports using one repeatable-read snapshot.</summary>
     /// <param name="wishlistId">The wishlistId.</param>
     /// <param name="reason">The reason.</param>
+    /// <param name="status">The disposition filter.</param>
     /// <param name="page">The page.</param>
     /// <param name="pageSize">The pageSize.</param>
     /// <param name="cancellationToken">The cancellationToken.</param>
@@ -36,6 +39,7 @@ public interface IReportedWishlistService
     Task<WishlistReportPage> GetReportsAsync(
         Guid wishlistId,
         WishlistReportReason? reason,
+        WishlistReportStatusFilter status,
         int page,
         int pageSize,
         CancellationToken cancellationToken);

@@ -8,6 +8,26 @@ namespace JennGllg.Fr.MonKado.Back.Application.Models;
 [ExcludeFromCodeCoverage]
 public class WishlistReportDetails
 {
+    /// <summary>Gets the current disposition.</summary>
+    public WishlistReportStatus Status
+    {
+        get; init;
+    }
+    /// <summary>Gets the latest private review note.</summary>
+    public string? ReviewNote
+    {
+        get; init;
+    }
+    /// <summary>Gets the latest UTC review date.</summary>
+    public DateTime? ReviewedAt
+    {
+        get; init;
+    }
+    /// <summary>Gets the latest deciding administrator, or null after account deletion.</summary>
+    public Guid? ReviewedByAdministratorId
+    {
+        get; init;
+    }
     /// <summary>The anonymous report identifier.</summary>
     public Guid Id
     {
