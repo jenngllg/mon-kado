@@ -41,6 +41,9 @@ public class GoogleOpenIdConnectEvents(
     private const string EmailVerifiedClaim = "email_verified";
     private const string HostedDomainClaim = "hd";
     private const string NameClaim = "name";
+    private const string NoStoreDirective = "no-store";
+    private const string NoReferrerDirective = "no-referrer";
+    private const string ReferrerPolicyHeader = "Referrer-Policy";
     /// <summary>
     /// Rejects callback transports other than an exact form-urlencoded POST.
     /// </summary>
@@ -65,8 +68,8 @@ public class GoogleOpenIdConnectEvents(
             logger,
             "InvalidCallbackTransport");
         context.HandleResponse();
-        context.Response.Headers.CacheControl = "no-store";
-        context.Response.Headers["Referrer-Policy"] = "no-referrer";
+        context.Response.Headers.CacheControl = NoStoreDirective;
+        context.Response.Headers[ReferrerPolicyHeader] = NoReferrerDirective;
         context.Response.Redirect(returnPathService.BuildAbsoluteUri(
             GoogleAuthenticationConstants.AuthenticationFailurePath));
 
@@ -89,8 +92,8 @@ public class GoogleOpenIdConnectEvents(
             logger,
             "ExpiredRemoteFlow");
         context.HandleResponse();
-        context.Response.Headers.CacheControl = "no-store";
-        context.Response.Headers["Referrer-Policy"] = "no-referrer";
+        context.Response.Headers.CacheControl = NoStoreDirective;
+        context.Response.Headers[ReferrerPolicyHeader] = NoReferrerDirective;
         context.Response.Redirect(returnPathService.BuildAbsoluteUri(
             GoogleAuthenticationConstants.AuthenticationFailurePath));
 
@@ -123,8 +126,8 @@ public class GoogleOpenIdConnectEvents(
             logger,
             "AuthorizationDeclined");
         context.HandleResponse();
-        context.Response.Headers.CacheControl = "no-store";
-        context.Response.Headers["Referrer-Policy"] = "no-referrer";
+        context.Response.Headers.CacheControl = NoStoreDirective;
+        context.Response.Headers[ReferrerPolicyHeader] = NoReferrerDirective;
         context.Response.Redirect(returnPathService.BuildAbsoluteUri(path));
 
         return Task.CompletedTask;
@@ -138,7 +141,6 @@ public class GoogleOpenIdConnectEvents(
     public override Task TokenValidated(TokenValidatedContext context)
     {
         var source = context.Principal;
-        var properties = context.Properties;
 
         if (source is null)
         {
@@ -235,8 +237,8 @@ public class GoogleOpenIdConnectEvents(
             NameClaim,
             ClaimTypes.Role);
         context.Principal = new ClaimsPrincipal(identity);
-        context.Response.Headers.CacheControl = "no-store";
-        context.Response.Headers["Referrer-Policy"] = "no-referrer";
+        context.Response.Headers.CacheControl = NoStoreDirective;
+        context.Response.Headers[ReferrerPolicyHeader] = NoReferrerDirective;
 
         return Task.CompletedTask;
     }
@@ -320,8 +322,8 @@ public class GoogleOpenIdConnectEvents(
             expectedMemberId.HasValue
                 ? expectedMemberId.Value.ToString("D")
                 : GoogleAuthenticationConstants.NoExpectedMemberValue;
-        context.Response.Headers.CacheControl = "no-store";
-        context.Response.Headers["Referrer-Policy"] = "no-referrer";
+        context.Response.Headers.CacheControl = NoStoreDirective;
+        context.Response.Headers[ReferrerPolicyHeader] = NoReferrerDirective;
         GoogleAuthenticationLogMessages.IdentityValidated(logger);
     }
 
@@ -336,8 +338,8 @@ public class GoogleOpenIdConnectEvents(
         string frontendPath)
     {
         context.HandleResponse();
-        context.Response.Headers.CacheControl = "no-store";
-        context.Response.Headers["Referrer-Policy"] = "no-referrer";
+        context.Response.Headers.CacheControl = NoStoreDirective;
+        context.Response.Headers[ReferrerPolicyHeader] = NoReferrerDirective;
         context.Response.Redirect(returnPathService.BuildAbsoluteUri(
             frontendPath));
 
@@ -402,8 +404,8 @@ public class GoogleOpenIdConnectEvents(
         string frontendPath)
     {
         context.HandleResponse();
-        context.Response.Headers.CacheControl = "no-store";
-        context.Response.Headers["Referrer-Policy"] = "no-referrer";
+        context.Response.Headers.CacheControl = NoStoreDirective;
+        context.Response.Headers[ReferrerPolicyHeader] = NoReferrerDirective;
         context.Response.Redirect(returnPathService.BuildAbsoluteUri(
             frontendPath));
 
