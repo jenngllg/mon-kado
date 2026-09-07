@@ -845,6 +845,9 @@ public class GiftReservationServiceTests
         // Arrange
         var request = CreateMemberRequest(1);
         var cancellationToken = TestContext.Current.CancellationToken;
+        SetupMemberLock(
+            request.MemberId,
+            cancellationToken);
         _transactionFactoryMock
             .Setup(factory => factory.BeginAsync(cancellationToken))
             .ReturnsAsync(_transactionMock.Object);
@@ -877,6 +880,9 @@ public class GiftReservationServiceTests
 
         // Assert
         await Assert.ThrowsAsync<SharedWishlistNotFoundException>(action);
+        VerifyMemberLock(
+            request.MemberId,
+            cancellationToken);
         _transactionFactoryMock.Verify(
             factory => factory.BeginAsync(cancellationToken),
             Times.Once);
@@ -2200,6 +2206,9 @@ public class GiftReservationServiceTests
         GiftReservationMutationRequest request,
         CancellationToken cancellationToken)
     {
+        SetupMemberLock(
+            request.MemberId,
+            cancellationToken);
         var shareLink = CreateShareLink(
             request,
             request.WishlistId);
@@ -2222,6 +2231,9 @@ public class GiftReservationServiceTests
         GiftReservationCancellationRequest request,
         CancellationToken cancellationToken)
     {
+        SetupMemberLock(
+            request.MemberId,
+            cancellationToken);
         var shareLink = CreateShareLink(
             request,
             request.WishlistId);
@@ -2344,6 +2356,9 @@ public class GiftReservationServiceTests
         GiftReservationMutationRequest request,
         CancellationToken cancellationToken)
     {
+        VerifyMemberLock(
+            request.MemberId,
+            cancellationToken);
         _transactionFactoryMock.Verify(
             factory => factory.BeginAsync(cancellationToken),
             Times.Once);
@@ -2366,6 +2381,9 @@ public class GiftReservationServiceTests
         GiftReservationCancellationRequest request,
         CancellationToken cancellationToken)
     {
+        VerifyMemberLock(
+            request.MemberId,
+            cancellationToken);
         _transactionFactoryMock.Verify(
             factory => factory.BeginAsync(cancellationToken),
             Times.Once);
@@ -2381,6 +2399,36 @@ public class GiftReservationServiceTests
             Times.Once);
         _transactionMock.Verify(
             transaction => transaction.DisposeAsync(),
+            Times.Once);
+    }
+
+    private void SetupMemberLock(
+        Guid? memberId,
+        CancellationToken cancellationToken)
+    {
+
+        if (memberId is not Guid authenticatedMemberId)
+            return;
+
+        _transactionFactoryMock
+            .Setup(factory => factory.LockMemberAsync(
+                authenticatedMemberId,
+                cancellationToken))
+            .Returns(Task.CompletedTask);
+    }
+
+    private void VerifyMemberLock(
+        Guid? memberId,
+        CancellationToken cancellationToken)
+    {
+
+        if (memberId is not Guid authenticatedMemberId)
+            return;
+
+        _transactionFactoryMock.Verify(
+            factory => factory.LockMemberAsync(
+                authenticatedMemberId,
+                cancellationToken),
             Times.Once);
     }
 

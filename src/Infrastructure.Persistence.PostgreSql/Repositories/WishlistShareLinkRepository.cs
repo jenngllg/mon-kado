@@ -14,6 +14,31 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Reposit
 public class WishlistShareLinkRepository(MonKadoDbContext context) : IWishlistShareLinkRepository
 {
     /// <inheritdoc />
+    public Task<WishlistShareLink?> LockActiveAsync(
+        Guid shareLinkId,
+        CancellationToken cancellationToken)
+    {
+        // The materialized dependency establishes parent-before-child locking across all shared mutations.
+
+        return context.WishlistShareLinks
+            .FromSqlInterpolated($"""
+                WITH locked_wishlist AS MATERIALIZED (
+                    SELECT wishlist.id, wishlist.is_suspended
+                    FROM public.wishlists AS wishlist
+                    WHERE wishlist.id = (
+                        SELECT wishlist_id FROM public.wishlist_share_links WHERE id = {shareLinkId})
+                    FOR UPDATE
+                )
+                SELECT link.*, link.xmin
+                FROM public.wishlist_share_links AS link
+                JOIN locked_wishlist AS wishlist ON wishlist.id = link.wishlist_id
+                WHERE link.id = {shareLinkId} AND NOT wishlist.is_suspended
+                FOR UPDATE OF link
+                """)
+            .SingleOrDefaultAsync(cancellationToken);
+    }
+
+    /// <inheritdoc />
     public void Add(WishlistShareLink shareLink)
     {
         context.WishlistShareLinks.Add(shareLink);
@@ -66,7 +91,7 @@ public class WishlistShareLinkRepository(MonKadoDbContext context) : IWishlistSh
     {
         return context.Wishlists
             .AsNoTracking()
-            .Where(wishlist => wishlist.Id == wishlistId)
+            .Where(wishlist => wishlist.Id == wishlistId && !wishlist.IsSuspended)
             .Select(wishlist => new SharedWishlistDetails(
                 wishlist.Id,
                 context.Users
@@ -108,7 +133,8 @@ public class WishlistShareLinkRepository(MonKadoDbContext context) : IWishlistSh
             .AsNoTracking()
             .Where(wish =>
                 wish.WishlistId == wishlistId &&
-                wish.Id == wishId)
+                wish.Id == wishId &&
+                context.Wishlists.Any(wishlist => wishlist.Id == wishlistId && !wishlist.IsSuspended))
             .Select(wish => new SharedWishDetail
             {
                 WishlistId = wish.WishlistId,

@@ -10,7 +10,10 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Service
 /// Creates EF Core transactions and locks for wishlist report creation.
 /// </summary>
 /// <param name="context">The database context.</param>
-public class WishlistReportTransactionFactory(MonKadoDbContext context)
+/// <param name="shareLinkRepository">The parent-first shared resource lock repository.</param>
+public class WishlistReportTransactionFactory(
+    MonKadoDbContext context,
+    IWishlistShareLinkRepository shareLinkRepository)
     : IWishlistReportTransactionFactory
 {
     /// <inheritdoc />
@@ -27,8 +30,8 @@ public class WishlistReportTransactionFactory(MonKadoDbContext context)
         CancellationToken cancellationToken)
     {
 
-        return context.WishlistShareLinks
-            .FromSqlInterpolated($"SELECT *, xmin FROM public.wishlist_share_links WHERE id = {shareLinkId} FOR UPDATE")
-            .SingleOrDefaultAsync(cancellationToken);
+        return shareLinkRepository.LockActiveAsync(
+            shareLinkId,
+            cancellationToken);
     }
 }

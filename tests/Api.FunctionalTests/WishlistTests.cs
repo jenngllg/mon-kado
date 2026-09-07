@@ -96,7 +96,10 @@ public class WishlistTests
                 "eventDate",
                 "message",
                 "createdAt",
-                "updatedAt"
+                "updatedAt",
+                "isSuspended",
+                "suspensionReason",
+                "suspendedAt"
             ],
             wishlists[0]
                 .EnumerateObject()
@@ -239,6 +242,7 @@ public class WishlistTests
         await using var factory = new RegistrationApiFactory();
         var ownerId = Guid.CreateVersion7();
         var wishlistId = Guid.CreateVersion7();
+        factory.WishlistService.SeedActiveWishlist(wishlistId);
         using var client = CreateAuthorizedClient(
             factory,
             ownerId);
@@ -286,7 +290,10 @@ public class WishlistTests
                 "eventDate",
                 "message",
                 "createdAt",
-                "updatedAt"
+                "updatedAt",
+                "isSuspended",
+                "suspensionReason",
+                "suspendedAt"
             ],
             document.RootElement
                 .EnumerateObject()
@@ -330,6 +337,7 @@ public class WishlistTests
         await using var factory = new RegistrationApiFactory();
         var ownerId = Guid.CreateVersion7();
         var wishlistId = Guid.CreateVersion7();
+        factory.WishlistService.SeedActiveWishlist(wishlistId);
         using var client = CreateAuthorizedClient(
             factory,
             ownerId);
@@ -367,6 +375,7 @@ public class WishlistTests
         // Arrange
         await using var factory = new RegistrationApiFactory();
         var wishlistId = Guid.CreateVersion7();
+        factory.WishlistService.SeedActiveWishlist(wishlistId);
         using var client = CreateAuthorizedClient(
             factory,
             Guid.CreateVersion7());
@@ -414,6 +423,7 @@ public class WishlistTests
         await using var factory = new RegistrationApiFactory();
         factory.WishlistService.Access = access;
         var wishlistId = Guid.CreateVersion7();
+        factory.WishlistService.SeedActiveWishlist(wishlistId);
         using var client = CreateAuthorizedClient(
             factory,
             Guid.CreateVersion7());
@@ -449,6 +459,7 @@ public class WishlistTests
         await using var factory = new RegistrationApiFactory();
         factory.WishlistService.WishlistExistsForUpdate = false;
         var wishlistId = Guid.CreateVersion7();
+        factory.WishlistService.SeedActiveWishlist(wishlistId);
         using var client = CreateAuthorizedClient(
             factory,
             Guid.CreateVersion7());
@@ -477,6 +488,7 @@ public class WishlistTests
         // Arrange
         await using var factory = new RegistrationApiFactory();
         var wishlistId = Guid.CreateVersion7();
+        factory.WishlistService.SeedActiveWishlist(wishlistId);
         using var client = CreateAuthorizedClient(
             factory,
             Guid.CreateVersion7());
@@ -663,6 +675,7 @@ public class WishlistTests
         await using var factory = new RegistrationApiFactory();
         var ownerId = Guid.CreateVersion7();
         var wishlistId = Guid.CreateVersion7();
+        factory.WishlistService.SeedActiveWishlist(wishlistId);
         using var client = CreateAuthorizedClient(
             factory,
             ownerId);
@@ -707,6 +720,7 @@ public class WishlistTests
         await using var factory = new RegistrationApiFactory();
         var ownerId = Guid.CreateVersion7();
         var wishlistId = Guid.CreateVersion7();
+        factory.WishlistService.SeedActiveWishlist(wishlistId);
         using var client = CreateAuthorizedClient(
             factory,
             ownerId);
@@ -741,6 +755,7 @@ public class WishlistTests
         // Arrange
         await using var factory = new RegistrationApiFactory();
         var wishlistId = Guid.CreateVersion7();
+        factory.WishlistService.SeedActiveWishlist(wishlistId);
         using var client = CreateAuthorizedClient(
             factory,
             Guid.CreateVersion7());
@@ -785,6 +800,7 @@ public class WishlistTests
         await using var factory = new RegistrationApiFactory();
         factory.WishlistService.Access = access;
         var wishlistId = Guid.CreateVersion7();
+        factory.WishlistService.SeedActiveWishlist(wishlistId);
         using var client = CreateAuthorizedClient(
             factory,
             Guid.CreateVersion7());
@@ -977,7 +993,10 @@ public class WishlistTests
                 "eventDate",
                 "message",
                 "createdAt",
-                "updatedAt"
+                "updatedAt",
+                "isSuspended",
+                "suspensionReason",
+                "suspendedAt"
             ],
             properties.Select(property => property.Name));
         Assert.Equal(

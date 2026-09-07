@@ -35,6 +35,18 @@ public class GlobalExceptionHandler(
     {
         var response = exception switch
         {
+            AdministratorAccessDeniedException => new ErrorResponse(
+                StatusCodes.Status403Forbidden,
+                "Administrator access required",
+                "Only administrators may moderate wishlists.",
+                ErrorCodes.WishlistModerationForbidden,
+                null),
+            WishlistSuspendedException => new ErrorResponse(
+                StatusCodes.Status409Conflict,
+                "Wishlist suspended",
+                "The wishlist is read-only until an administrator reactivates it.",
+                ErrorCodes.WishlistSuspended,
+                null),
             ProfileImageUnsupportedFormatException => new ErrorResponse(
                 StatusCodes.Status415UnsupportedMediaType,
                 "Unsupported profile image",

@@ -414,6 +414,20 @@ public static class LogEventIds
     public const int WishImportPreviewStarted = 2058;
     /// <summary>Identifies a completed merchant preview.</summary>
     public const int WishImportPreviewCreated = 2059;
+    /// <summary>Identifies the beginning of a moderation decision.</summary>
+    public const int WishlistModerationUpdateStarted = 2060;
+    /// <summary>Identifies a completed moderation decision.</summary>
+    public const int WishlistModerationUpdated = 2061;
+    /// <summary>Identifies a retrieved moderation state.</summary>
+    public const int WishlistModerationRetrieved = 2062;
+    /// <summary>Identifies retrieved moderation history.</summary>
+    public const int WishlistModerationEventsRetrieved = 2063;
+    /// <summary>Identifies a provider-acknowledged moderation notification.</summary>
+    public const int WishlistModerationEmailSent = 2064;
+    /// <summary>Identifies a sanitized moderation delivery failure.</summary>
+    public const int WishlistModerationEmailFailed = 2065;
+    /// <summary>Identifies a moderation delivery or retention cycle failure.</summary>
+    public const int WishlistModerationEmailCycleFailed = 2066;
     #endregion
     #region Technical
     /// <summary>

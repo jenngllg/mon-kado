@@ -12,6 +12,8 @@ using Moq;
 
 using Npgsql;
 
+using System.Data;
+
 namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.UnitTests.Services;
 
 public class WishlistShareServiceTests
@@ -23,10 +25,24 @@ public class WishlistShareServiceTests
     private readonly Mock<IWishlistRepository> _wishlistRepositoryMock;
     private readonly Mock<IWishlistShareTokenService> _tokenServiceMock;
     private readonly Mock<IUnitOfWork> _unitOfWorkMock;
+    private readonly Mock<IWishlistMutationGuard> _mutationGuardMock;
+    private readonly Mock<IWishTransactionFactory> _transactionFactoryMock;
     private readonly WishlistShareService _shareService;
+    private readonly Mock<IWishTransaction> _transactionMock;
+    private (Guid OwnerId, Guid WishlistId, CancellationToken CancellationToken)? _expectedMutation;
+    private bool _expectsCommit;
 
     public WishlistShareServiceTests()
     {
+        _mutationGuardMock = new Mock<IWishlistMutationGuard>(MockBehavior.Strict);
+        _transactionMock = new Mock<IWishTransaction>(MockBehavior.Strict);
+        _transactionMock
+            .Setup(transaction => transaction.DisposeAsync())
+            .Returns(ValueTask.CompletedTask);
+        _transactionMock
+            .Setup(transaction => transaction.CommitAsync(TestContext.Current.CancellationToken))
+            .Returns(Task.CompletedTask);
+        _transactionFactoryMock = new Mock<IWishTransactionFactory>(MockBehavior.Strict);
         _shareLinkRepositoryMock = new Mock<IWishlistShareLinkRepository>(MockBehavior.Strict);
         _wishlistRepositoryMock = new Mock<IWishlistRepository>(MockBehavior.Strict);
         _tokenServiceMock = new Mock<IWishlistShareTokenService>(MockBehavior.Strict);
@@ -35,7 +51,9 @@ public class WishlistShareServiceTests
             _shareLinkRepositoryMock.Object,
             _wishlistRepositoryMock.Object,
             _tokenServiceMock.Object,
-            _unitOfWorkMock.Object);
+            _unitOfWorkMock.Object,
+            _transactionFactoryMock.Object,
+            _mutationGuardMock.Object);
     }
 
     [Fact]
@@ -46,6 +64,11 @@ public class WishlistShareServiceTests
         var ownerId = Guid.CreateVersion7();
         var wishlistId = Guid.CreateVersion7();
         var cancellationToken = TestContext.Current.CancellationToken;
+        SetupTransaction(
+            ownerId,
+            wishlistId,
+            true,
+            cancellationToken);
         var token = CreateToken();
         WishlistShareLink? addedShareLink = null;
         SetupOwner(
@@ -102,6 +125,56 @@ public class WishlistShareServiceTests
             Times.Once);
         _unitOfWorkMock.Verify(
             unitOfWork => unitOfWork.SaveChangesAsync(cancellationToken),
+            Times.Once);
+        VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task CreateAsync_WhenSaveFailsBeforeCommit_DoesNotReconcileUncommittedShareLink()
+    {
+        // Arrange
+        var ownerId = Guid.CreateVersion7();
+        var wishlistId = Guid.CreateVersion7();
+        var cancellationToken = TestContext.Current.CancellationToken;
+        SetupTransaction(
+            ownerId,
+            wishlistId,
+            false,
+            cancellationToken);
+        SetupOwner(
+            ownerId,
+            wishlistId,
+            cancellationToken);
+        _tokenServiceMock
+            .Setup(service => service.Create())
+            .Returns(CreateToken());
+        _shareLinkRepositoryMock
+            .Setup(repository => repository.Add(It.IsAny<WishlistShareLink>()));
+        _unitOfWorkMock
+            .Setup(unit => unit.SaveChangesAsync(cancellationToken))
+            .ThrowsAsync(new TimeoutException());
+
+        // Act
+        var action = () => _shareService.CreateAsync(
+            Guid.CreateVersion7(),
+            ownerId,
+            wishlistId,
+            cancellationToken);
+
+        // Assert
+        await Assert.ThrowsAsync<DependencyUnavailableException>(action);
+        VerifyOwner(
+            ownerId,
+            wishlistId,
+            cancellationToken);
+        _tokenServiceMock.Verify(
+            service => service.Create(),
+            Times.Once);
+        _shareLinkRepositoryMock.Verify(
+            repository => repository.Add(It.IsAny<WishlistShareLink>()),
+            Times.Once);
+        _unitOfWorkMock.Verify(
+            unit => unit.SaveChangesAsync(cancellationToken),
             Times.Once);
         VerifyNoOtherCalls();
     }
@@ -181,6 +254,11 @@ public class WishlistShareServiceTests
         var ownerId = Guid.CreateVersion7();
         var wishlistId = Guid.CreateVersion7();
         var cancellationToken = TestContext.Current.CancellationToken;
+        SetupTransaction(
+            ownerId,
+            wishlistId,
+            false,
+            cancellationToken);
         SetupCreate(
             ownerId,
             wishlistId,
@@ -213,6 +291,11 @@ public class WishlistShareServiceTests
         var ownerId = Guid.CreateVersion7();
         var wishlistId = Guid.CreateVersion7();
         var cancellationToken = TestContext.Current.CancellationToken;
+        SetupTransaction(
+            ownerId,
+            wishlistId,
+            false,
+            cancellationToken);
         SetupCreate(
             ownerId,
             wishlistId,
@@ -245,6 +328,11 @@ public class WishlistShareServiceTests
         var ownerId = Guid.CreateVersion7();
         var wishlistId = Guid.CreateVersion7();
         var cancellationToken = TestContext.Current.CancellationToken;
+        SetupTransaction(
+            ownerId,
+            wishlistId,
+            false,
+            cancellationToken);
         var expected = CreatePostgreSqlException(
             PostgresErrorCodes.UniqueViolation,
             "another_constraint");
@@ -281,6 +369,11 @@ public class WishlistShareServiceTests
         var ownerId = Guid.CreateVersion7();
         var wishlistId = Guid.CreateVersion7();
         var cancellationToken = TestContext.Current.CancellationToken;
+        SetupTransaction(
+            ownerId,
+            wishlistId,
+            true,
+            cancellationToken);
         var token = CreateToken();
         WishlistShareLink? attemptedShareLink = null;
         SetupOwner(
@@ -295,6 +388,9 @@ public class WishlistShareServiceTests
             .Callback<WishlistShareLink>(shareLink => attemptedShareLink = shareLink);
         _unitOfWorkMock
             .Setup(unitOfWork => unitOfWork.SaveChangesAsync(cancellationToken))
+            .ReturnsAsync(1);
+        _transactionMock
+            .Setup(transaction => transaction.CommitAsync(cancellationToken))
             .ThrowsAsync(new TimeoutException());
         _shareLinkRepositoryMock
             .Setup(repository => repository.GetByIdAsync(
@@ -333,12 +429,20 @@ public class WishlistShareServiceTests
         var ownerId = Guid.CreateVersion7();
         var wishlistId = Guid.CreateVersion7();
         var cancellationToken = TestContext.Current.CancellationToken;
+        SetupTransaction(
+            ownerId,
+            wishlistId,
+            true,
+            cancellationToken);
         SetupCreate(
             ownerId,
             wishlistId,
             cancellationToken);
         _unitOfWorkMock
             .Setup(unitOfWork => unitOfWork.SaveChangesAsync(cancellationToken))
+            .ReturnsAsync(1);
+        _transactionMock
+            .Setup(transaction => transaction.CommitAsync(cancellationToken))
             .ThrowsAsync(new TimeoutException());
         _shareLinkRepositoryMock
             .Setup(repository => repository.GetByIdAsync(
@@ -387,12 +491,20 @@ public class WishlistShareServiceTests
         var ownerId = Guid.CreateVersion7();
         var wishlistId = Guid.CreateVersion7();
         var cancellationToken = TestContext.Current.CancellationToken;
+        SetupTransaction(
+            ownerId,
+            wishlistId,
+            true,
+            cancellationToken);
         SetupCreate(
             ownerId,
             wishlistId,
             cancellationToken);
         _unitOfWorkMock
             .Setup(unitOfWork => unitOfWork.SaveChangesAsync(cancellationToken))
+            .ReturnsAsync(1);
+        _transactionMock
+            .Setup(transaction => transaction.CommitAsync(cancellationToken))
             .ThrowsAsync(new TimeoutException());
         _shareLinkRepositoryMock
             .Setup(repository => repository.GetByIdAsync(
@@ -438,12 +550,20 @@ public class WishlistShareServiceTests
         var ownerId = Guid.CreateVersion7();
         var wishlistId = Guid.CreateVersion7();
         var cancellationToken = TestContext.Current.CancellationToken;
+        SetupTransaction(
+            ownerId,
+            wishlistId,
+            true,
+            cancellationToken);
         SetupCreate(
             ownerId,
             wishlistId,
             cancellationToken);
         _unitOfWorkMock
             .Setup(unitOfWork => unitOfWork.SaveChangesAsync(cancellationToken))
+            .ReturnsAsync(1);
+        _transactionMock
+            .Setup(transaction => transaction.CommitAsync(cancellationToken))
             .ThrowsAsync(new TimeoutException());
         _shareLinkRepositoryMock
             .Setup(repository => repository.GetByIdAsync(
@@ -474,6 +594,11 @@ public class WishlistShareServiceTests
         var ownerId = Guid.CreateVersion7();
         var wishlistId = Guid.CreateVersion7();
         var cancellationToken = TestContext.Current.CancellationToken;
+        SetupTransaction(
+            ownerId,
+            wishlistId,
+            false,
+            cancellationToken);
         var shareLink = CreateShareLink(wishlistId);
         SetupOwner(
             ownerId,
@@ -521,6 +646,11 @@ public class WishlistShareServiceTests
         var ownerId = Guid.CreateVersion7();
         var wishlistId = Guid.CreateVersion7();
         var cancellationToken = TestContext.Current.CancellationToken;
+        SetupTransaction(
+            ownerId,
+            wishlistId,
+            false,
+            cancellationToken);
         SetupOwner(
             ownerId,
             wishlistId,
@@ -558,6 +688,11 @@ public class WishlistShareServiceTests
         var ownerId = Guid.CreateVersion7();
         var wishlistId = Guid.CreateVersion7();
         var cancellationToken = TestContext.Current.CancellationToken;
+        SetupTransaction(
+            ownerId,
+            wishlistId,
+            false,
+            cancellationToken);
         SetupOwner(
             ownerId,
             wishlistId,
@@ -1007,6 +1142,11 @@ public class WishlistShareServiceTests
         var ownerId = Guid.CreateVersion7();
         var wishlistId = Guid.CreateVersion7();
         var cancellationToken = TestContext.Current.CancellationToken;
+        SetupTransaction(
+            ownerId,
+            wishlistId,
+            true,
+            cancellationToken);
         var shareLink = CreateShareLink(wishlistId);
         var token = CreateToken(
             "new-secret",
@@ -1068,6 +1208,11 @@ public class WishlistShareServiceTests
         var ownerId = Guid.CreateVersion7();
         var wishlistId = Guid.CreateVersion7();
         var cancellationToken = TestContext.Current.CancellationToken;
+        SetupTransaction(
+            ownerId,
+            wishlistId,
+            false,
+            cancellationToken);
         SetupOwner(
             ownerId,
             wishlistId,
@@ -1100,6 +1245,11 @@ public class WishlistShareServiceTests
         var ownerId = Guid.CreateVersion7();
         var wishlistId = Guid.CreateVersion7();
         var cancellationToken = TestContext.Current.CancellationToken;
+        SetupTransaction(
+            ownerId,
+            wishlistId,
+            false,
+            cancellationToken);
         SetupOwner(
             ownerId,
             wishlistId,
@@ -1132,6 +1282,11 @@ public class WishlistShareServiceTests
         var ownerId = Guid.CreateVersion7();
         var wishlistId = Guid.CreateVersion7();
         var cancellationToken = TestContext.Current.CancellationToken;
+        SetupTransaction(
+            ownerId,
+            wishlistId,
+            false,
+            cancellationToken);
         SetupOwner(
             ownerId,
             wishlistId,
@@ -1164,6 +1319,11 @@ public class WishlistShareServiceTests
         var ownerId = Guid.CreateVersion7();
         var wishlistId = Guid.CreateVersion7();
         var cancellationToken = TestContext.Current.CancellationToken;
+        SetupTransaction(
+            ownerId,
+            wishlistId,
+            false,
+            cancellationToken);
         var expected = new InvalidOperationException();
         SetupOwner(
             ownerId,
@@ -1206,6 +1366,11 @@ public class WishlistShareServiceTests
         var ownerId = Guid.CreateVersion7();
         var wishlistId = Guid.CreateVersion7();
         var cancellationToken = TestContext.Current.CancellationToken;
+        SetupTransaction(
+            ownerId,
+            wishlistId,
+            false,
+            cancellationToken);
         var shareLink = CreateShareLink(wishlistId);
         SetupAmbiguousRotation(
             ownerId,
@@ -1272,6 +1437,11 @@ public class WishlistShareServiceTests
         var ownerId = Guid.CreateVersion7();
         var wishlistId = Guid.CreateVersion7();
         var cancellationToken = TestContext.Current.CancellationToken;
+        SetupTransaction(
+            ownerId,
+            wishlistId,
+            true,
+            cancellationToken);
         var shareLink = CreateShareLink(wishlistId);
         SetupAmbiguousRotation(
             ownerId,
@@ -1312,6 +1482,11 @@ public class WishlistShareServiceTests
         var ownerId = Guid.CreateVersion7();
         var wishlistId = Guid.CreateVersion7();
         var cancellationToken = TestContext.Current.CancellationToken;
+        SetupTransaction(
+            ownerId,
+            wishlistId,
+            true,
+            cancellationToken);
         var shareLink = CreateShareLink(wishlistId);
         var original = CreateShareLink(
             wishlistId,
@@ -1359,6 +1534,11 @@ public class WishlistShareServiceTests
         var ownerId = Guid.CreateVersion7();
         var wishlistId = Guid.CreateVersion7();
         var cancellationToken = TestContext.Current.CancellationToken;
+        SetupTransaction(
+            ownerId,
+            wishlistId,
+            true,
+            cancellationToken);
         var shareLink = CreateShareLink(wishlistId);
         var currentShareLink = currentLinkExists
             ? CreateShareLink(
@@ -1430,6 +1610,11 @@ public class WishlistShareServiceTests
         var ownerId = Guid.CreateVersion7();
         var wishlistId = Guid.CreateVersion7();
         var cancellationToken = TestContext.Current.CancellationToken;
+        SetupTransaction(
+            ownerId,
+            wishlistId,
+            true,
+            cancellationToken);
         var shareLink = CreateShareLink(wishlistId);
         SetupOwner(
             ownerId,
@@ -1470,6 +1655,11 @@ public class WishlistShareServiceTests
         var ownerId = Guid.CreateVersion7();
         var wishlistId = Guid.CreateVersion7();
         var cancellationToken = TestContext.Current.CancellationToken;
+        SetupTransaction(
+            ownerId,
+            wishlistId,
+            false,
+            cancellationToken);
         SetupOwner(
             ownerId,
             wishlistId,
@@ -1502,6 +1692,11 @@ public class WishlistShareServiceTests
         var ownerId = Guid.CreateVersion7();
         var wishlistId = Guid.CreateVersion7();
         var cancellationToken = TestContext.Current.CancellationToken;
+        SetupTransaction(
+            ownerId,
+            wishlistId,
+            false,
+            cancellationToken);
         SetupOwner(
             ownerId,
             wishlistId,
@@ -1534,6 +1729,11 @@ public class WishlistShareServiceTests
         var ownerId = Guid.CreateVersion7();
         var wishlistId = Guid.CreateVersion7();
         var cancellationToken = TestContext.Current.CancellationToken;
+        SetupTransaction(
+            ownerId,
+            wishlistId,
+            false,
+            cancellationToken);
         SetupOwner(
             ownerId,
             wishlistId,
@@ -1566,6 +1766,11 @@ public class WishlistShareServiceTests
         var ownerId = Guid.CreateVersion7();
         var wishlistId = Guid.CreateVersion7();
         var cancellationToken = TestContext.Current.CancellationToken;
+        SetupTransaction(
+            ownerId,
+            wishlistId,
+            false,
+            cancellationToken);
         var expected = new InvalidOperationException();
         SetupOwner(
             ownerId,
@@ -1608,6 +1813,11 @@ public class WishlistShareServiceTests
         var ownerId = Guid.CreateVersion7();
         var wishlistId = Guid.CreateVersion7();
         var cancellationToken = TestContext.Current.CancellationToken;
+        SetupTransaction(
+            ownerId,
+            wishlistId,
+            false,
+            cancellationToken);
         var shareLink = CreateShareLink(wishlistId);
         SetupAmbiguousDeletion(
             ownerId,
@@ -1683,6 +1893,11 @@ public class WishlistShareServiceTests
         var ownerId = Guid.CreateVersion7();
         var wishlistId = Guid.CreateVersion7();
         var cancellationToken = TestContext.Current.CancellationToken;
+        SetupTransaction(
+            ownerId,
+            wishlistId,
+            true,
+            cancellationToken);
         var shareLink = CreateShareLink(wishlistId);
         SetupAmbiguousDeletion(
             ownerId,
@@ -1752,6 +1967,11 @@ public class WishlistShareServiceTests
         var ownerId = Guid.CreateVersion7();
         var wishlistId = Guid.CreateVersion7();
         var cancellationToken = TestContext.Current.CancellationToken;
+        SetupTransaction(
+            ownerId,
+            wishlistId,
+            true,
+            cancellationToken);
         var shareLink = CreateShareLink(wishlistId);
         SetupAmbiguousDeletion(
             ownerId,
@@ -1795,6 +2015,11 @@ public class WishlistShareServiceTests
         var ownerId = Guid.CreateVersion7();
         var wishlistId = Guid.CreateVersion7();
         var cancellationToken = TestContext.Current.CancellationToken;
+        SetupTransaction(
+            ownerId,
+            wishlistId,
+            true,
+            cancellationToken);
         var shareLink = CreateShareLink(wishlistId);
         SetupAmbiguousDeletion(
             ownerId,
@@ -1906,6 +2131,27 @@ public class WishlistShareServiceTests
                 constraintName: constraintName));
     }
 
+    private void SetupTransaction(
+        Guid ownerId,
+        Guid wishlistId,
+        bool expectsCommit,
+        CancellationToken cancellationToken)
+    {
+        _expectedMutation = (ownerId, wishlistId, cancellationToken);
+        _expectsCommit = expectsCommit;
+        _transactionFactoryMock
+            .Setup(factory => factory.BeginAsync(
+                IsolationLevel.ReadCommitted,
+                cancellationToken))
+            .ReturnsAsync(_transactionMock.Object);
+        _mutationGuardMock
+            .Setup(guard => guard.LockAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken))
+            .Returns(Task.CompletedTask);
+    }
+
     private void SetupOwner(
         Guid ownerId,
         Guid wishlistId,
@@ -1961,8 +2207,20 @@ public class WishlistShareServiceTests
                     6
                 ],
                 "new-protected-secret"));
+        if (exception is DbUpdateConcurrencyException)
+        {
+            _unitOfWorkMock
+                .Setup(unitOfWork => unitOfWork.SaveChangesAsync(cancellationToken))
+                .ThrowsAsync(exception);
+
+            return;
+        }
+
         _unitOfWorkMock
             .Setup(unitOfWork => unitOfWork.SaveChangesAsync(cancellationToken))
+            .ReturnsAsync(1);
+        _transactionMock
+            .Setup(transaction => transaction.CommitAsync(cancellationToken))
             .ThrowsAsync(exception);
     }
 
@@ -1984,8 +2242,20 @@ public class WishlistShareServiceTests
             .ReturnsAsync(shareLink);
         _shareLinkRepositoryMock
             .Setup(repository => repository.Remove(shareLink));
+        if (exception is DbUpdateConcurrencyException)
+        {
+            _unitOfWorkMock
+                .Setup(unitOfWork => unitOfWork.SaveChangesAsync(cancellationToken))
+                .ThrowsAsync(exception);
+
+            return;
+        }
+
         _unitOfWorkMock
             .Setup(unitOfWork => unitOfWork.SaveChangesAsync(cancellationToken))
+            .ReturnsAsync(1);
+        _transactionMock
+            .Setup(transaction => transaction.CommitAsync(cancellationToken))
             .ThrowsAsync(exception);
     }
 
@@ -2265,6 +2535,31 @@ public class WishlistShareServiceTests
 
     private void VerifyNoOtherCalls()
     {
+
+        if (_expectedMutation is { } expected)
+        {
+            _transactionFactoryMock.Verify(
+                factory => factory.BeginAsync(
+                    IsolationLevel.ReadCommitted,
+                    expected.CancellationToken),
+                Times.Once);
+            _mutationGuardMock.Verify(
+                guard => guard.LockAsync(
+                    expected.OwnerId,
+                    expected.WishlistId,
+                    expected.CancellationToken),
+                Times.Once);
+            _transactionMock.Verify(
+                transaction => transaction.CommitAsync(expected.CancellationToken),
+                _expectsCommit ? Times.Once() : Times.Never());
+            _transactionMock.Verify(
+                transaction => transaction.DisposeAsync(),
+                Times.Once);
+        }
+
+        _mutationGuardMock.VerifyNoOtherCalls();
+        _transactionFactoryMock.VerifyNoOtherCalls();
+        _transactionMock.VerifyNoOtherCalls();
         _shareLinkRepositoryMock.VerifyNoOtherCalls();
         _wishlistRepositoryMock.VerifyNoOtherCalls();
         _tokenServiceMock.VerifyNoOtherCalls();

@@ -135,6 +135,10 @@ public static class InfrastructureInjectionConfiguration
         services.AddScoped<IExpiredAuthenticationSessionCleanup, ExpiredAuthenticationSessionCleanup>();
         services.AddScoped<IProcessedAuthenticationEmailCleanup, ProcessedAuthenticationEmailCleanup>();
         services.AddScoped<IWishlistService, WishlistService>();
+        services.AddScoped<IWishlistMutationGuard, WishlistMutationGuard>();
+        services.AddScoped<IWishlistModerationRepository, WishlistModerationRepository>();
+        services.AddScoped<IWishlistModerationService, WishlistModerationService>();
+        services.AddScoped<IAdministratorAccessService, AdministratorAccessService>();
         services.AddScoped<IWishService, WishService>();
         services.AddScoped<IWishImageAccessService, WishImageAccessService>();
         services.AddScoped<IGiftImageCleanupService, GiftImageCleanupService>();
@@ -159,6 +163,17 @@ public static class InfrastructureInjectionConfiguration
     public static IServiceCollection ConfigureAuthenticationEmailDelivery(this IServiceCollection services)
     {
         services.AddScoped<IAuthenticationEmailDispatcher, AuthenticationEmailDispatcher>();
+
+        return services;
+    }
+
+    /// <summary>Registers the moderation outbox for hosts that supply a notification sender.</summary>
+    /// <param name="services">The service collection.</param>
+    /// <returns>The service collection.</returns>
+    public static IServiceCollection ConfigureWishlistModerationEmailDelivery(this IServiceCollection services)
+    {
+        services.AddScoped<IWishlistModerationEmailRepository, WishlistModerationEmailRepository>();
+        services.AddScoped<IWishlistModerationEmailDispatcher, WishlistModerationEmailDispatcher>();
 
         return services;
     }

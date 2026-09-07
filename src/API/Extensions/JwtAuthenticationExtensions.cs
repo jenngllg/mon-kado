@@ -60,6 +60,25 @@ public static class JwtAuthenticationExtensions
                     policy.AddRequirements(new WishlistOwnerRequirement());
                 }));
 
+        services
+            .AddAuthorizationBuilder()
+            .AddPolicy(
+                AuthorizationPolicies.ModerateWishlist,
+                policy =>
+                {
+                    policy.AddAuthenticationSchemes(JwtBearerDefaults.AuthenticationScheme);
+                    policy.RequireAuthenticatedUser();
+                    policy.AddRequirements(new AdministratorRequirement());
+                })
+            .AddPolicy(
+                AuthorizationPolicies.ModifyWishlist,
+                policy =>
+                {
+                    policy.AddAuthenticationSchemes(JwtBearerDefaults.AuthenticationScheme);
+                    policy.RequireAuthenticatedUser();
+                    policy.AddRequirements(new WishlistOwnerRequirement { RequiresWritable = true });
+                });
+
         return services;
     }
 

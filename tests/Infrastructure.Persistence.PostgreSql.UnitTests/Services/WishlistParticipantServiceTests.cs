@@ -309,6 +309,10 @@ public class WishlistParticipantServiceTests
             cancellationToken);
         SetupCommit(cancellationToken);
 
+        SetupMemberLock(
+            memberId,
+            cancellationToken);
+
         // Act
         var result = await _service.JoinAsync(
             new WishlistParticipantJoinRequest
@@ -338,6 +342,11 @@ public class WishlistParticipantServiceTests
             wishlistId,
             memberId,
             cancellationToken);
+        _transactionFactoryMock.Verify(
+            factory => factory.LockMemberAsync(
+                memberId,
+                cancellationToken),
+            Times.Once);
         VerifyNoOtherCalls();
     }
 
@@ -379,6 +388,10 @@ public class WishlistParticipantServiceTests
                 cancellationToken))
             .ReturnsAsync([]);
         SetupSaveAndCommit(cancellationToken);
+
+        SetupMemberLock(
+            memberId,
+            cancellationToken);
 
         // Act
         var result = await _service.JoinAsync(
@@ -426,6 +439,11 @@ public class WishlistParticipantServiceTests
                 cancellationToken),
             Times.Once);
         VerifySave(cancellationToken);
+        _transactionFactoryMock.Verify(
+            factory => factory.LockMemberAsync(
+                memberId,
+                cancellationToken),
+            Times.Once);
         VerifyNoOtherCalls();
     }
 
@@ -534,6 +552,10 @@ public class WishlistParticipantServiceTests
             .Callback<GiftReservationHistory>(history => addedHistory = history);
         SetupSaveAndCommit(cancellationToken);
 
+        SetupMemberLock(
+            memberId,
+            cancellationToken);
+
         // Act
         var result = await _service.JoinAsync(
             new WishlistParticipantJoinRequest
@@ -620,6 +642,11 @@ public class WishlistParticipantServiceTests
             repository => repository.AddHistory(addedHistory),
             Times.Once);
         VerifySave(cancellationToken);
+        _transactionFactoryMock.Verify(
+            factory => factory.LockMemberAsync(
+                memberId,
+                cancellationToken),
+            Times.Once);
         VerifyNoOtherCalls();
     }
 
@@ -711,6 +738,10 @@ public class WishlistParticipantServiceTests
             .Setup(repository => repository.Remove(guestReservation));
         SetupSaveAndCommit(cancellationToken);
 
+        SetupMemberLock(
+            memberId,
+            cancellationToken);
+
         // Act
         var result = await _service.JoinAsync(
             new WishlistParticipantJoinRequest
@@ -788,6 +819,11 @@ public class WishlistParticipantServiceTests
             repository => repository.Remove(guestReservation),
             Times.Once);
         VerifySave(cancellationToken);
+        _transactionFactoryMock.Verify(
+            factory => factory.LockMemberAsync(
+                memberId,
+                cancellationToken),
+            Times.Once);
         VerifyNoOtherCalls();
     }
 
@@ -844,6 +880,10 @@ public class WishlistParticipantServiceTests
                 cancellationToken))
             .ReturnsAsync((GiftReservationHistorySource?)null);
 
+        SetupMemberLock(
+            memberId,
+            cancellationToken);
+
         // Act
         var action = () => _service.JoinAsync(
             new WishlistParticipantJoinRequest
@@ -888,6 +928,11 @@ public class WishlistParticipantServiceTests
                 reservation.WishId,
                 cancellationToken),
             Times.Once);
+        _transactionFactoryMock.Verify(
+            factory => factory.LockMemberAsync(
+                memberId,
+                cancellationToken),
+            Times.Once);
         VerifyNoOtherCalls();
     }
 
@@ -918,6 +963,10 @@ public class WishlistParticipantServiceTests
                 participant.Id == participantId &&
                 participant.MemberId == memberId)));
         SetupSaveAndCommit(cancellationToken);
+
+        SetupMemberLock(
+            memberId,
+            cancellationToken);
 
         // Act
         var result = await _service.JoinAsync(
@@ -955,6 +1004,11 @@ public class WishlistParticipantServiceTests
             repository => repository.Add(It.IsAny<WishlistParticipant>()),
             Times.Once);
         VerifySave(cancellationToken);
+        _transactionFactoryMock.Verify(
+            factory => factory.LockMemberAsync(
+                memberId,
+                cancellationToken),
+            Times.Once);
         VerifyNoOtherCalls();
     }
 
@@ -974,6 +1028,10 @@ public class WishlistParticipantServiceTests
                 memberId,
                 cancellationToken))
             .ReturnsAsync((string?)null);
+
+        SetupMemberLock(
+            memberId,
+            cancellationToken);
 
         // Act
         var action = () => _service.JoinAsync(
@@ -999,6 +1057,11 @@ public class WishlistParticipantServiceTests
                 memberId,
                 cancellationToken),
             Times.Once);
+        _transactionFactoryMock.Verify(
+            factory => factory.LockMemberAsync(
+                memberId,
+                cancellationToken),
+            Times.Once);
         VerifyNoOtherCalls();
     }
 
@@ -1018,6 +1081,10 @@ public class WishlistParticipantServiceTests
                 memberId,
                 cancellationToken))
             .ReturnsAsync("Owner");
+
+        SetupMemberLock(
+            memberId,
+            cancellationToken);
 
         // Act
         var action = () => _service.JoinAsync(
@@ -1040,6 +1107,11 @@ public class WishlistParticipantServiceTests
             cancellationToken: cancellationToken);
         _participantRepositoryMock.Verify(
             repository => repository.GetMemberDisplayNameAsync(
+                memberId,
+                cancellationToken),
+            Times.Once);
+        _transactionFactoryMock.Verify(
+            factory => factory.LockMemberAsync(
                 memberId,
                 cancellationToken),
             Times.Once);
@@ -1320,6 +1392,10 @@ public class WishlistParticipantServiceTests
                 cancellationToken))
             .ReturnsAsync((WishlistParticipant?)null);
 
+        SetupMemberLock(
+            memberId,
+            cancellationToken);
+
         // Act
         var result = await _service.JoinAsync(
             new WishlistParticipantJoinRequest
@@ -1372,6 +1448,11 @@ public class WishlistParticipantServiceTests
             repository => repository.GetByGuestSessionAsync(
                 wishlistId,
                 guestSessionId,
+                cancellationToken),
+            Times.Once);
+        _transactionFactoryMock.Verify(
+            factory => factory.LockMemberAsync(
+                memberId,
                 cancellationToken),
             Times.Once);
         VerifyNoOtherCalls();
@@ -1609,6 +1690,10 @@ public class WishlistParticipantServiceTests
                     "Guest"));
         }
 
+        SetupMemberLock(
+            memberId,
+            cancellationToken);
+
         // Act
         var action = () => _service.JoinAsync(
             new WishlistParticipantJoinRequest
@@ -1656,6 +1741,11 @@ public class WishlistParticipantServiceTests
             scenario == 2
                 ? Times.Once()
                 : Times.Never());
+        _transactionFactoryMock.Verify(
+            factory => factory.LockMemberAsync(
+                memberId,
+                cancellationToken),
+            Times.Once);
         VerifyNoOtherCalls();
     }
 
@@ -2146,6 +2236,17 @@ public class WishlistParticipantServiceTests
                 wishlistId,
                 cancellationToken))
             .ReturnsAsync(ownerId);
+    }
+
+    private void SetupMemberLock(
+        Guid memberId,
+        CancellationToken cancellationToken)
+    {
+        _transactionFactoryMock
+            .Setup(factory => factory.LockMemberAsync(
+                memberId,
+                cancellationToken))
+            .Returns(Task.CompletedTask);
     }
 
     private void SetupMember(

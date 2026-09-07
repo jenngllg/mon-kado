@@ -81,6 +81,13 @@ public class WishlistServiceTests
             .Setup(unitOfWork => unitOfWork.SaveChangesAsync(cancellationToken))
             .ReturnsAsync(1);
 
+        _mutationGuardMock
+            .Setup(guard => guard.LockAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken))
+            .Returns(Task.CompletedTask);
+
         // Act
         var result = await _wishlistService.DeleteAsync(
             ownerId,
@@ -89,6 +96,12 @@ public class WishlistServiceTests
             cancellationToken);
 
         // Assert
+        _mutationGuardMock.Verify(
+            guard => guard.LockAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken),
+            Times.Once);
         Assert.True(result);
         _imageDeletionRepositoryMock.Verify(
             repository => repository.Add(It.Is<GiftImageDeletionOutboxMessage>(
@@ -125,6 +138,7 @@ public class WishlistServiceTests
     private const string OwnerNormalizedNameIndexName = "ux_wishlists_owner_normalized_name";
 
     private readonly Mock<IUnitOfWork> _unitOfWorkMock;
+    private readonly Mock<IWishlistMutationGuard> _mutationGuardMock;
     private readonly Mock<IWishlistRepository> _wishlistRepositoryMock;
     private readonly WishlistService _wishlistService;
     private readonly Mock<IWishRepository> _wishRepositoryMock;
@@ -134,6 +148,7 @@ public class WishlistServiceTests
 
     public WishlistServiceTests()
     {
+        _mutationGuardMock = new Mock<IWishlistMutationGuard>(MockBehavior.Strict);
         _wishlistRepositoryMock = new Mock<IWishlistRepository>(MockBehavior.Strict);
         _unitOfWorkMock = new Mock<IUnitOfWork>(MockBehavior.Strict);
         _wishRepositoryMock = new Mock<IWishRepository>(MockBehavior.Strict);
@@ -169,7 +184,8 @@ public class WishlistServiceTests
                 TimeSpan.Zero)),
             _wishRepositoryMock.Object,
             _transactionFactoryMock.Object,
-            _imageDeletionRepositoryMock.Object);
+            _imageDeletionRepositoryMock.Object,
+            _mutationGuardMock.Object);
     }
 
     [Fact]
@@ -736,6 +752,13 @@ public class WishlistServiceTests
             .Setup(unitOfWork => unitOfWork.SaveChangesAsync(cancellationToken))
             .ReturnsAsync(1);
 
+        _mutationGuardMock
+            .Setup(guard => guard.LockAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken))
+            .Returns(Task.CompletedTask);
+
         // Act
         var result = await _wishlistService.UpdateAsync(
             ownerId,
@@ -749,6 +772,12 @@ public class WishlistServiceTests
             cancellationToken);
 
         // Assert
+        _mutationGuardMock.Verify(
+            guard => guard.LockAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken),
+            Times.Once);
         Assert.NotNull(result);
         Assert.Equal(
             "Nouvelle liste",
@@ -809,12 +838,22 @@ public class WishlistServiceTests
             .ReturnsAsync(attemptedWishlist);
         _unitOfWorkMock
             .Setup(unitOfWork => unitOfWork.SaveChangesAsync(cancellationToken))
+            .ReturnsAsync(1);
+        _transactionMock
+            .Setup(transaction => transaction.CommitAsync(cancellationToken))
             .ThrowsAsync(new TimeoutException());
         _wishlistRepositoryMock
             .Setup(repository => repository.GetByIdAsync(
                 wishlistId,
                 cancellationToken))
             .ReturnsAsync(persistedWishlist);
+
+        _mutationGuardMock
+            .Setup(guard => guard.LockAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken))
+            .Returns(Task.CompletedTask);
 
         // Act
         var result = await _wishlistService.UpdateAsync(
@@ -829,6 +868,12 @@ public class WishlistServiceTests
             cancellationToken);
 
         // Assert
+        _mutationGuardMock.Verify(
+            guard => guard.LockAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken),
+            Times.Once);
         Assert.NotNull(result);
         Assert.Equal(
             "Nouvelle liste",
@@ -872,6 +917,13 @@ public class WishlistServiceTests
                 cancellationToken))
             .ReturnsAsync(WishlistAccess.MemberNotFound);
 
+        _mutationGuardMock
+            .Setup(guard => guard.LockAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken))
+            .Returns(Task.CompletedTask);
+
         // Act
         var action = () => UpdateAsync(
             ownerId,
@@ -880,6 +932,12 @@ public class WishlistServiceTests
 
         // Assert
         await Assert.ThrowsAsync<InvalidAuthenticationSessionException>(action);
+        _mutationGuardMock.Verify(
+            guard => guard.LockAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken),
+            Times.Once);
         VerifyAmbiguousUpdate(
             ownerId,
             wishlistId,
@@ -912,6 +970,13 @@ public class WishlistServiceTests
                 cancellationToken))
             .ReturnsAsync(originalWishlist);
 
+        _mutationGuardMock
+            .Setup(guard => guard.LockAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken))
+            .Returns(Task.CompletedTask);
+
         // Act
         var action = () => UpdateAsync(
             ownerId,
@@ -920,6 +985,12 @@ public class WishlistServiceTests
 
         // Assert
         var exception = await Assert.ThrowsAsync<DependencyUnavailableException>(action);
+        _mutationGuardMock.Verify(
+            guard => guard.LockAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken),
+            Times.Once);
         Assert.IsType<TimeoutException>(exception.InnerException);
         VerifyAmbiguousUpdate(
             ownerId,
@@ -962,6 +1033,13 @@ public class WishlistServiceTests
                 cancellationToken))
             .ReturnsAsync(WishlistAccess.Owner);
 
+        _mutationGuardMock
+            .Setup(guard => guard.LockAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken))
+            .Returns(Task.CompletedTask);
+
         // Act
         var action = () => UpdateAsync(
             ownerId,
@@ -970,6 +1048,12 @@ public class WishlistServiceTests
 
         // Assert
         await Assert.ThrowsAsync<WishlistVersionConflictException>(action);
+        _mutationGuardMock.Verify(
+            guard => guard.LockAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken),
+            Times.Once);
         VerifyAmbiguousUpdate(
             ownerId,
             wishlistId,
@@ -1000,6 +1084,13 @@ public class WishlistServiceTests
                 cancellationToken))
             .ReturnsAsync(WishlistAccess.NotOwned);
 
+        _mutationGuardMock
+            .Setup(guard => guard.LockAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken))
+            .Returns(Task.CompletedTask);
+
         // Act
         var result = await UpdateAsync(
             ownerId,
@@ -1007,6 +1098,12 @@ public class WishlistServiceTests
             cancellationToken);
 
         // Assert
+        _mutationGuardMock.Verify(
+            guard => guard.LockAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken),
+            Times.Once);
         Assert.Null(result);
         VerifyAmbiguousUpdate(
             ownerId,
@@ -1032,6 +1129,13 @@ public class WishlistServiceTests
                 cancellationToken))
             .ThrowsAsync(new TimeoutException());
 
+        _mutationGuardMock
+            .Setup(guard => guard.LockAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken))
+            .Returns(Task.CompletedTask);
+
         // Act
         var action = () => UpdateAsync(
             ownerId,
@@ -1040,6 +1144,12 @@ public class WishlistServiceTests
 
         // Assert
         await Assert.ThrowsAsync<DependencyUnavailableException>(action);
+        _mutationGuardMock.Verify(
+            guard => guard.LockAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken),
+            Times.Once);
         VerifyAmbiguousUpdate(
             ownerId,
             wishlistId,
@@ -1062,6 +1172,13 @@ public class WishlistServiceTests
                 cancellationToken))
             .ReturnsAsync(wishlist);
 
+        _mutationGuardMock
+            .Setup(guard => guard.LockAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken))
+            .Returns(Task.CompletedTask);
+
         // Act
         var result = await _wishlistService.UpdateAsync(
             ownerId,
@@ -1075,6 +1192,12 @@ public class WishlistServiceTests
             cancellationToken);
 
         // Assert
+        _mutationGuardMock.Verify(
+            guard => guard.LockAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken),
+            Times.Once);
         Assert.NotNull(result);
         Assert.Equal(
             0u,
@@ -1114,6 +1237,13 @@ public class WishlistServiceTests
                 cancellationToken))
             .ReturnsAsync(wishlist);
 
+        _mutationGuardMock
+            .Setup(guard => guard.LockAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken))
+            .Returns(Task.CompletedTask);
+
         // Act
         var result = await _wishlistService.UpdateAsync(
             ownerId,
@@ -1127,6 +1257,12 @@ public class WishlistServiceTests
             cancellationToken);
 
         // Assert
+        _mutationGuardMock.Verify(
+            guard => guard.LockAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken),
+            Times.Once);
         Assert.NotNull(result);
         Assert.Equal(
             pastDate,
@@ -1165,6 +1301,13 @@ public class WishlistServiceTests
                 cancellationToken))
             .ReturnsAsync(wishlist);
 
+        _mutationGuardMock
+            .Setup(guard => guard.LockAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken))
+            .Returns(Task.CompletedTask);
+
         // Act
         var action = () => _wishlistService.UpdateAsync(
             ownerId,
@@ -1182,6 +1325,12 @@ public class WishlistServiceTests
 
         // Assert
         var exception = await Assert.ThrowsAsync<RequestValidationException>(action);
+        _mutationGuardMock.Verify(
+            guard => guard.LockAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken),
+            Times.Once);
         var error = Assert.Single(exception.ValidationErrors);
         Assert.Equal(
             "eventDate",
@@ -1209,6 +1358,13 @@ public class WishlistServiceTests
                 cancellationToken))
             .ReturnsAsync((Wishlist?)null);
 
+        _mutationGuardMock
+            .Setup(guard => guard.LockAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken))
+            .Returns(Task.CompletedTask);
+
         // Act
         var result = await UpdateAsync(
             ownerId,
@@ -1216,6 +1372,12 @@ public class WishlistServiceTests
             cancellationToken);
 
         // Assert
+        _mutationGuardMock.Verify(
+            guard => guard.LockAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken),
+            Times.Once);
         Assert.Null(result);
         _wishlistRepositoryMock.Verify(
             repository => repository.GetByIdForUpdateAsync(
@@ -1241,6 +1403,13 @@ public class WishlistServiceTests
                 cancellationToken))
             .ReturnsAsync(wishlist);
 
+        _mutationGuardMock
+            .Setup(guard => guard.LockAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken))
+            .Returns(Task.CompletedTask);
+
         // Act
         var action = () => _wishlistService.UpdateAsync(
             ownerId,
@@ -1255,6 +1424,12 @@ public class WishlistServiceTests
 
         // Assert
         await Assert.ThrowsAsync<WishlistVersionConflictException>(action);
+        _mutationGuardMock.Verify(
+            guard => guard.LockAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken),
+            Times.Once);
         _wishlistRepositoryMock.Verify(
             repository => repository.GetByIdForUpdateAsync(
                 ownerId,
@@ -1283,6 +1458,13 @@ public class WishlistServiceTests
                 PostgresErrorCodes.UniqueViolation,
                 OwnerNormalizedNameIndexName));
 
+        _mutationGuardMock
+            .Setup(guard => guard.LockAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken))
+            .Returns(Task.CompletedTask);
+
         // Act
         var action = () => _wishlistService.UpdateAsync(
             ownerId,
@@ -1297,6 +1479,12 @@ public class WishlistServiceTests
 
         // Assert
         await Assert.ThrowsAsync<WishlistNameAlreadyExistsException>(action);
+        _mutationGuardMock.Verify(
+            guard => guard.LockAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken),
+            Times.Once);
         _wishlistRepositoryMock.Verify(
             repository => repository.GetByIdForUpdateAsync(
                 ownerId,
@@ -1336,6 +1524,13 @@ public class WishlistServiceTests
                 cancellationToken))
             .ReturnsAsync(access);
 
+        _mutationGuardMock
+            .Setup(guard => guard.LockAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken))
+            .Returns(Task.CompletedTask);
+
         // Act
         var action = () => _wishlistService.UpdateAsync(
             ownerId,
@@ -1350,6 +1545,12 @@ public class WishlistServiceTests
 
         // Assert
         var exception = await Assert.ThrowsAnyAsync<Exception>(action);
+        _mutationGuardMock.Verify(
+            guard => guard.LockAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken),
+            Times.Once);
         Assert.IsType(
             expectedExceptionType,
             exception);
@@ -1382,6 +1583,13 @@ public class WishlistServiceTests
                 cancellationToken))
             .ReturnsAsync(WishlistAccess.NotOwned);
 
+        _mutationGuardMock
+            .Setup(guard => guard.LockAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken))
+            .Returns(Task.CompletedTask);
+
         // Act
         var result = await _wishlistService.UpdateAsync(
             ownerId,
@@ -1395,6 +1603,12 @@ public class WishlistServiceTests
             cancellationToken);
 
         // Assert
+        _mutationGuardMock.Verify(
+            guard => guard.LockAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken),
+            Times.Once);
         Assert.Null(result);
         VerifyConcurrentUpdate(
             ownerId,
@@ -1425,6 +1639,13 @@ public class WishlistServiceTests
                 cancellationToken))
             .ThrowsAsync(new TimeoutException());
 
+        _mutationGuardMock
+            .Setup(guard => guard.LockAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken))
+            .Returns(Task.CompletedTask);
+
         // Act
         var action = () => UpdateAsync(
             ownerId,
@@ -1433,6 +1654,12 @@ public class WishlistServiceTests
 
         // Assert
         await Assert.ThrowsAsync<DependencyUnavailableException>(action);
+        _mutationGuardMock.Verify(
+            guard => guard.LockAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken),
+            Times.Once);
         VerifyConcurrentUpdate(
             ownerId,
             wishlistId,
@@ -1453,6 +1680,13 @@ public class WishlistServiceTests
                 cancellationToken))
             .ThrowsAsync(new TimeoutException());
 
+        _mutationGuardMock
+            .Setup(guard => guard.LockAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken))
+            .Returns(Task.CompletedTask);
+
         // Act
         var action = () => UpdateAsync(
             ownerId,
@@ -1461,6 +1695,12 @@ public class WishlistServiceTests
 
         // Assert
         await Assert.ThrowsAsync<DependencyUnavailableException>(action);
+        _mutationGuardMock.Verify(
+            guard => guard.LockAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken),
+            Times.Once);
         _wishlistRepositoryMock.Verify(
             repository => repository.GetByIdForUpdateAsync(
                 ownerId,
@@ -1490,6 +1730,13 @@ public class WishlistServiceTests
             .Setup(unitOfWork => unitOfWork.SaveChangesAsync(cancellationToken))
             .ReturnsAsync(1);
 
+        _mutationGuardMock
+            .Setup(guard => guard.LockAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken))
+            .Returns(Task.CompletedTask);
+
         // Act
         var result = await _wishlistService.DeleteAsync(
             ownerId,
@@ -1498,6 +1745,12 @@ public class WishlistServiceTests
             cancellationToken);
 
         // Assert
+        _mutationGuardMock.Verify(
+            guard => guard.LockAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken),
+            Times.Once);
         Assert.True(result);
         VerifyDeletion(
             ownerId,
@@ -1526,6 +1779,13 @@ public class WishlistServiceTests
                 cancellationToken))
             .ReturnsAsync(WishlistAccess.NotOwned);
 
+        _mutationGuardMock
+            .Setup(guard => guard.LockAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken))
+            .Returns(Task.CompletedTask);
+
         // Act
         var result = await _wishlistService.DeleteAsync(
             ownerId,
@@ -1534,6 +1794,12 @@ public class WishlistServiceTests
             cancellationToken);
 
         // Assert
+        _mutationGuardMock.Verify(
+            guard => guard.LockAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken),
+            Times.Once);
         Assert.True(result);
         VerifyConcurrentDeletion(
             ownerId,
@@ -1566,6 +1832,13 @@ public class WishlistServiceTests
                 cancellationToken))
             .ReturnsAsync(access);
 
+        _mutationGuardMock
+            .Setup(guard => guard.LockAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken))
+            .Returns(Task.CompletedTask);
+
         // Act
         var action = () => _wishlistService.DeleteAsync(
             ownerId,
@@ -1575,6 +1848,12 @@ public class WishlistServiceTests
 
         // Assert
         var exception = await Assert.ThrowsAnyAsync<Exception>(action);
+        _mutationGuardMock.Verify(
+            guard => guard.LockAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken),
+            Times.Once);
         Assert.IsType(
             expectedExceptionType,
             exception);
@@ -1605,6 +1884,13 @@ public class WishlistServiceTests
                 cancellationToken))
             .ReturnsAsync(WishlistAccess.NotOwned);
 
+        _mutationGuardMock
+            .Setup(guard => guard.LockAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken))
+            .Returns(Task.CompletedTask);
+
         // Act
         var result = await _wishlistService.DeleteAsync(
             ownerId,
@@ -1613,6 +1899,12 @@ public class WishlistServiceTests
             cancellationToken);
 
         // Assert
+        _mutationGuardMock.Verify(
+            guard => guard.LockAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken),
+            Times.Once);
         Assert.False(result);
         _wishlistRepositoryMock.Verify(
             repository => repository.GetByIdForDeletionAsync(
@@ -1649,6 +1941,13 @@ public class WishlistServiceTests
                 cancellationToken))
             .ReturnsAsync(WishlistAccess.MemberNotFound);
 
+        _mutationGuardMock
+            .Setup(guard => guard.LockAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken))
+            .Returns(Task.CompletedTask);
+
         // Act
         var action = () => _wishlistService.DeleteAsync(
             ownerId,
@@ -1658,6 +1957,12 @@ public class WishlistServiceTests
 
         // Assert
         await Assert.ThrowsAsync<InvalidAuthenticationSessionException>(action);
+        _mutationGuardMock.Verify(
+            guard => guard.LockAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken),
+            Times.Once);
         _wishlistRepositoryMock.Verify(
             repository => repository.GetByIdForDeletionAsync(
                 ownerId,
@@ -1687,6 +1992,13 @@ public class WishlistServiceTests
                 cancellationToken))
             .ReturnsAsync(CreateWishlist(wishlistId));
 
+        _mutationGuardMock
+            .Setup(guard => guard.LockAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken))
+            .Returns(Task.CompletedTask);
+
         // Act
         var action = () => _wishlistService.DeleteAsync(
             ownerId,
@@ -1696,6 +2008,12 @@ public class WishlistServiceTests
 
         // Assert
         await Assert.ThrowsAsync<WishlistVersionConflictException>(action);
+        _mutationGuardMock.Verify(
+            guard => guard.LockAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken),
+            Times.Once);
         _wishlistRepositoryMock.Verify(
             repository => repository.GetByIdForDeletionAsync(
                 ownerId,
@@ -1729,6 +2047,13 @@ public class WishlistServiceTests
                 cancellationToken))
             .ReturnsAsync(access);
 
+        _mutationGuardMock
+            .Setup(guard => guard.LockAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken))
+            .Returns(Task.CompletedTask);
+
         // Act
         var action = () => _wishlistService.DeleteAsync(
             ownerId,
@@ -1738,6 +2063,12 @@ public class WishlistServiceTests
 
         // Assert
         var exception = await Assert.ThrowsAnyAsync<Exception>(action);
+        _mutationGuardMock.Verify(
+            guard => guard.LockAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken),
+            Times.Once);
         Assert.IsType(
             expectedExceptionType,
             exception);
@@ -1768,6 +2099,13 @@ public class WishlistServiceTests
                 cancellationToken))
             .ReturnsAsync(WishlistAccess.NotOwned);
 
+        _mutationGuardMock
+            .Setup(guard => guard.LockAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken))
+            .Returns(Task.CompletedTask);
+
         // Act
         var result = await _wishlistService.DeleteAsync(
             ownerId,
@@ -1776,6 +2114,12 @@ public class WishlistServiceTests
             cancellationToken);
 
         // Assert
+        _mutationGuardMock.Verify(
+            guard => guard.LockAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken),
+            Times.Once);
         Assert.False(result);
         VerifyConcurrentDeletion(
             ownerId,
@@ -1804,6 +2148,13 @@ public class WishlistServiceTests
                 cancellationToken))
             .ThrowsAsync(new TimeoutException());
 
+        _mutationGuardMock
+            .Setup(guard => guard.LockAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken))
+            .Returns(Task.CompletedTask);
+
         // Act
         var action = () => _wishlistService.DeleteAsync(
             ownerId,
@@ -1813,6 +2164,12 @@ public class WishlistServiceTests
 
         // Assert
         await Assert.ThrowsAsync<DependencyUnavailableException>(action);
+        _mutationGuardMock.Verify(
+            guard => guard.LockAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken),
+            Times.Once);
         VerifyConcurrentDeletion(
             ownerId,
             wishlistId,
@@ -1834,6 +2191,13 @@ public class WishlistServiceTests
                 cancellationToken))
             .ThrowsAsync(new TimeoutException());
 
+        _mutationGuardMock
+            .Setup(guard => guard.LockAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken))
+            .Returns(Task.CompletedTask);
+
         // Act
         var action = () => _wishlistService.DeleteAsync(
             ownerId,
@@ -1843,6 +2207,12 @@ public class WishlistServiceTests
 
         // Assert
         await Assert.ThrowsAsync<DependencyUnavailableException>(action);
+        _mutationGuardMock.Verify(
+            guard => guard.LockAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken),
+            Times.Once);
         _wishlistRepositoryMock.Verify(
             repository => repository.GetByIdForDeletionAsync(
                 ownerId,
@@ -1873,6 +2243,13 @@ public class WishlistServiceTests
             .Setup(unitOfWork => unitOfWork.SaveChangesAsync(cancellationToken))
             .ThrowsAsync(expected);
 
+        _mutationGuardMock
+            .Setup(guard => guard.LockAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken))
+            .Returns(Task.CompletedTask);
+
         // Act
         var action = () => _wishlistService.DeleteAsync(
             ownerId,
@@ -1882,6 +2259,12 @@ public class WishlistServiceTests
 
         // Assert
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(action);
+        _mutationGuardMock.Verify(
+            guard => guard.LockAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken),
+            Times.Once);
         Assert.Same(
             expected,
             exception);
@@ -2130,6 +2513,9 @@ public class WishlistServiceTests
             .ReturnsAsync(wishlist);
         _unitOfWorkMock
             .Setup(unitOfWork => unitOfWork.SaveChangesAsync(cancellationToken))
+            .ReturnsAsync(1);
+        _transactionMock
+            .Setup(transaction => transaction.CommitAsync(cancellationToken))
             .ThrowsAsync(new TimeoutException());
     }
 
@@ -2273,6 +2659,7 @@ public class WishlistServiceTests
 
     private void VerifyNoOtherCalls()
     {
+        _mutationGuardMock.VerifyNoOtherCalls();
         _transactionFactoryMock.Verify(
             factory => factory.BeginAsync(
                 IsolationLevel.ReadCommitted,

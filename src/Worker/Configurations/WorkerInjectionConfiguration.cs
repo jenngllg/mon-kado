@@ -28,6 +28,7 @@ public static class WorkerInjectionConfiguration
         services.ConfigureAuthenticationEmailDelivery(
             configuration,
             environment);
+        services.ConfigureWishlistModerationEmail(configuration);
         services.AddHostedService<UnconfirmedAccountCleanupWorker>();
         services.AddHostedService<ExpiredAuthenticationSessionCleanupWorker>();
         services.AddHostedService<ExpiredMemberEmailChangeRequestCleanupWorker>();

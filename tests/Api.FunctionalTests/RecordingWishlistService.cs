@@ -125,6 +125,21 @@ public class RecordingWishlistService : IWishlistService
         get; set;
     } = 43;
 
+    /// <summary>Seeds an active parent wishlist for an owner operation.</summary>
+    /// <param name="wishlistId">The existing parent identifier.</param>
+    public void SeedActiveWishlist(Guid wishlistId)
+    {
+        Wishlists[wishlistId] = new WishlistDetails(
+            wishlistId,
+            "Active wishlist",
+            WishlistOccasion.Other,
+            null,
+            null,
+            _createdAt,
+            null,
+            42);
+    }
+
     /// <summary>
     /// Gets or sets a value indicating whether wishlist deletion finds the resource.
     /// </summary>

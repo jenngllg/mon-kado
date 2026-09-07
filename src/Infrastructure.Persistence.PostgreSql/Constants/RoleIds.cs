@@ -8,6 +8,9 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Constan
 [ExcludeFromCodeCoverage]
 public static class RoleIds
 {
+    /// <summary>Identifies the built-in Admin role without assigning it to any account.</summary>
+    public static readonly Guid Admin = new("019ec170-1570-7000-8000-000000000001");
+
     /// <summary>
     /// Identifies the built-in Member role.
     /// </summary>

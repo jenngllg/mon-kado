@@ -144,6 +144,10 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
             migration => Assert.EndsWith(
                 "_AddProfileImages",
                 migration,
+                StringComparison.Ordinal),
+            migration => Assert.EndsWith(
+                "_AddWishlistModeration",
+                migration,
                 StringComparison.Ordinal));
         Assert.False(context.Database.HasPendingModelChanges());
         var tables = await GetPublicTablesAsync(
@@ -169,6 +173,8 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
                 "users",
                 "wish_position_sequences",
                 "wishes",
+                "wishlist_moderation_email_outbox",
+                "wishlist_moderation_events",
                 "wishlist_participants",
                 "wishlist_reports",
                 "wishlist_share_links",
@@ -659,15 +665,17 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
                 "gift-reservation-migration@example.test",
                 "Gift reservation migration"),
             cancellationToken);
-        context.Wishlists.Add(new Wishlist(
+        await InsertHistoricalWishlistAsync(
+            context,
+            new Wishlist(
                 wishlistId,
                 ownerId,
                 "Migration wishlist",
                 "MIGRATION WISHLIST",
                 WishlistOccasion.Other,
                 null,
-                null));
-        await context.SaveChangesAsync(cancellationToken);
+                null),
+            cancellationToken);
         var createdAt = new DateTime(
             2026,
             8,
@@ -774,15 +782,17 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
                 "quantity-member@example.test",
                 "Quantity member"),
             cancellationToken);
-        context.Wishlists.Add(new Wishlist(
+        await InsertHistoricalWishlistAsync(
+            context,
+            new Wishlist(
                 wishlistId,
                 ownerId,
                 "Quantity migration",
                 "QUANTITY MIGRATION",
                 WishlistOccasion.Other,
                 null,
-                null));
-        await context.SaveChangesAsync(cancellationToken);
+                null),
+            cancellationToken);
         await context.Database.ExecuteSqlInterpolatedAsync(
             $"""
             INSERT INTO public.wishes
@@ -1607,15 +1617,17 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
                 "history-member@example.test",
                 "History member"),
             cancellationToken);
-        context.Wishlists.Add(new Wishlist(
+        await InsertHistoricalWishlistAsync(
+            context,
+            new Wishlist(
                 wishlistId,
                 ownerId,
                 "Birthday",
                 "BIRTHDAY",
                 WishlistOccasion.Birthday,
                 null,
-                null));
-        await context.SaveChangesAsync(cancellationToken);
+                null),
+            cancellationToken);
         await context.Database.ExecuteSqlInterpolatedAsync(
             $"""
             INSERT INTO public.wishes
@@ -1682,6 +1694,26 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
         await context.Users
             .Where(user => user.Id == ownerId || user.Id == memberId)
             .ExecuteDeleteAsync(cancellationToken);
+    }
+
+    /// <summary>Seeds wishlist fields without referencing columns introduced by later moderation migrations.</summary>
+    /// <param name="context">The historical database context.</param>
+    /// <param name="wishlist">The historical wishlist.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A task representing the historical insert.</returns>
+    private static async Task InsertHistoricalWishlistAsync(
+        MonKadoDbContext context,
+        Wishlist wishlist,
+        CancellationToken cancellationToken)
+    {
+        await context.Database.ExecuteSqlInterpolatedAsync(
+            $"""
+            INSERT INTO public.wishlists
+                (id, owner_id, name, normalized_name, occasion, event_date, message, created_at)
+            VALUES ({wishlist.Id}, {wishlist.OwnerId}, {wishlist.Name}, {wishlist.NormalizedName},
+                {wishlist.Occasion.ToString()}, {wishlist.EventDate}, {wishlist.Message}, {DateTime.UnixEpoch})
+            """,
+            cancellationToken);
     }
 
     /// <summary>Seeds account fields that exist in the historical schemas under test.</summary>

@@ -31,6 +31,9 @@ public class WishServiceTests
     {
         // Arrange
         var data = CreateData();
+        SetupMutationTransaction(
+            data,
+            false);
         var wish = CreateWish(data);
         var imageId = Guid.CreateVersion7();
         wish.ReplaceImage(
@@ -123,6 +126,9 @@ public class WishServiceTests
     {
         // Arrange
         var data = CreateData();
+        SetupMutationTransaction(
+            data,
+            outcome is "success" or "commit-lost" or "commit-unknown" or "wish-deleted");
         var wish = CreateWish(data);
         var imageId = Guid.CreateVersion7();
         wish.ReplaceImage(
@@ -146,7 +152,12 @@ public class WishServiceTests
         else if (outcome == "concurrent")
             save.ThrowsAsync(new DbUpdateConcurrencyException());
         else
-            save.ThrowsAsync(new TimeoutException());
+        {
+            save.ReturnsAsync(1);
+            _mutationTransactionMock
+                .Setup(transaction => transaction.CommitAsync(data.CancellationToken))
+                .ThrowsAsync(new TimeoutException());
+        }
 
         var readsCurrent = outcome is "commit-lost" or "commit-unknown" or "wish-deleted" or "concurrent";
 
@@ -237,6 +248,9 @@ public class WishServiceTests
     {
         // Arrange
         var data = CreateData();
+        SetupMutationTransaction(
+            data,
+            false);
         var wish = CreateWish(data);
         var retrieval = _wishRepositoryMock
             .Setup(repository => repository.GetByIdForUpdateAsync(
@@ -293,14 +307,27 @@ public class WishServiceTests
     private const string PositionWishlistForeignKeyName = "fk_wish_position_sequences_wishlists_wishlist_id";
 
     private readonly Mock<IUnitOfWork> _unitOfWorkMock;
+    private readonly Mock<IWishlistMutationGuard> _mutationGuardMock;
     private readonly Mock<IWishTransactionFactory> _wishTransactionFactoryMock;
     private readonly Mock<IWishlistRepository> _wishlistRepositoryMock;
     private readonly Mock<IWishRepository> _wishRepositoryMock;
     private readonly Mock<IGiftImageDeletionOutboxRepository> _giftImageDeletionOutboxRepositoryMock;
     private readonly WishService _wishService;
+    private readonly Mock<IWishTransaction> _mutationTransactionMock;
+    private WishServiceTestData? _expectedWritableParent;
+    private bool _expectsMutationTransaction;
+    private bool _expectsMutationCommit;
 
     public WishServiceTests()
     {
+        _mutationGuardMock = new Mock<IWishlistMutationGuard>(MockBehavior.Strict);
+        _mutationTransactionMock = new Mock<IWishTransaction>(MockBehavior.Strict);
+        _mutationTransactionMock
+            .Setup(transaction => transaction.DisposeAsync())
+            .Returns(ValueTask.CompletedTask);
+        _mutationTransactionMock
+            .Setup(transaction => transaction.CommitAsync(TestContext.Current.CancellationToken))
+            .Returns(Task.CompletedTask);
         _wishRepositoryMock = new Mock<IWishRepository>(MockBehavior.Strict);
         _wishlistRepositoryMock = new Mock<IWishlistRepository>(MockBehavior.Strict);
         _unitOfWorkMock = new Mock<IUnitOfWork>(MockBehavior.Strict);
@@ -313,7 +340,8 @@ public class WishServiceTests
             _unitOfWorkMock.Object,
             _wishTransactionFactoryMock.Object,
             _giftImageDeletionOutboxRepositoryMock.Object,
-            TimeProvider.System);
+            TimeProvider.System,
+            _mutationGuardMock.Object);
     }
 
     [Fact]
@@ -502,6 +530,7 @@ public class WishServiceTests
     {
         // Arrange
         var data = CreateData();
+        SetupWritableParent(data);
         var transactionMock = CreateTransactionMock();
         var firstWish = CreateWish(data);
         var secondWish = new Wish(
@@ -590,6 +619,7 @@ public class WishServiceTests
     {
         // Arrange
         var data = CreateData();
+        SetupWritableParent(data);
         var transactionMock = CreateTransactionMock();
         var wish = CreateWish(data);
         SetupReorder(
@@ -623,6 +653,7 @@ public class WishServiceTests
     {
         // Arrange
         var data = CreateData();
+        SetupWritableParent(data);
         var transactionMock = CreateTransactionMock();
         SetupOwnedAccess(data);
         _wishTransactionFactoryMock
@@ -679,6 +710,7 @@ public class WishServiceTests
     {
         // Arrange
         var data = CreateData();
+        SetupWritableParent(data);
         var transactionMock = CreateTransactionMock();
         SetupOwnedAccess(data);
         _wishTransactionFactoryMock
@@ -738,6 +770,7 @@ public class WishServiceTests
     {
         // Arrange
         var data = CreateData();
+        SetupWritableParent(data);
         var transactionMock = CreateTransactionMock();
         var wish = CreateWish(data);
         SetupReorder(
@@ -812,6 +845,7 @@ public class WishServiceTests
     {
         // Arrange
         var data = CreateData();
+        SetupWritableParent(data);
         var reorderTransactionMock = CreateTransactionMock();
         var verificationTransactionMock = CreateTransactionMock();
         var firstWish = CreateWish(
@@ -1004,6 +1038,9 @@ public class WishServiceTests
     {
         // Arrange
         var data = CreateData();
+        SetupMutationTransaction(
+            data,
+            false);
         _wishRepositoryMock
             .Setup(repository => repository.AllocatePositionAsync(
                 data.WishlistId,
@@ -1039,6 +1076,9 @@ public class WishServiceTests
     {
         // Arrange
         var data = CreateData();
+        SetupMutationTransaction(
+            data,
+            true);
         Wish? addedWish = null;
         _wishRepositoryMock
             .Setup(repository => repository.AllocatePositionAsync(
@@ -1093,6 +1133,9 @@ public class WishServiceTests
     {
         // Arrange
         var data = CreateData();
+        SetupMutationTransaction(
+            data,
+            false);
         var exception = CreateForeignKeyException(
             constraintName,
             directException);
@@ -1121,6 +1164,9 @@ public class WishServiceTests
     {
         // Arrange
         var data = CreateData();
+        SetupMutationTransaction(
+            data,
+            false);
         _wishRepositoryMock
             .Setup(repository => repository.AllocatePositionAsync(
                 data.WishlistId,
@@ -1148,6 +1194,9 @@ public class WishServiceTests
     {
         // Arrange
         var data = CreateData();
+        SetupMutationTransaction(
+            data,
+            false);
         _wishRepositoryMock
             .Setup(repository => repository.AllocatePositionAsync(
                 data.WishlistId,
@@ -1172,6 +1221,9 @@ public class WishServiceTests
     {
         // Arrange
         var data = CreateData();
+        SetupMutationTransaction(
+            data,
+            true);
         var committedWish = ConfigureAmbiguousCreation(data);
         _wishRepositoryMock
             .Setup(repository => repository.GetByIdAsync(
@@ -1204,6 +1256,9 @@ public class WishServiceTests
     {
         // Arrange
         var data = CreateData();
+        SetupMutationTransaction(
+            data,
+            true);
         var attemptedWish = ConfigureAmbiguousCreation(data);
         var conflictingWish = new Wish(
             Guid.CreateVersion7(),
@@ -1254,6 +1309,9 @@ public class WishServiceTests
     {
         // Arrange
         var data = CreateData();
+        SetupMutationTransaction(
+            data,
+            true);
         var attemptedWish = ConfigureAmbiguousCreation(data);
         _wishRepositoryMock
             .Setup(repository => repository.GetByIdAsync(
@@ -1278,6 +1336,9 @@ public class WishServiceTests
     {
         // Arrange
         var data = CreateData();
+        SetupMutationTransaction(
+            data,
+            false);
         _wishRepositoryMock
             .Setup(repository => repository.AllocatePositionAsync(
                 data.WishlistId,
@@ -1305,6 +1366,9 @@ public class WishServiceTests
     {
         // Arrange
         var data = CreateData();
+        SetupMutationTransaction(
+            data,
+            false);
         var expected = new InvalidOperationException();
         _wishRepositoryMock
             .Setup(repository => repository.AllocatePositionAsync(
@@ -1333,6 +1397,9 @@ public class WishServiceTests
     {
         // Arrange
         var data = CreateData();
+        SetupMutationTransaction(
+            data,
+            false);
         var expected = CreateForeignKeyException(
             "fk_unrelated_constraint",
             directException: false);
@@ -1436,6 +1503,9 @@ public class WishServiceTests
     {
         // Arrange
         var data = CreateData();
+        SetupMutationTransaction(
+            data,
+            true);
         var wish = CreateWish(data);
         _wishRepositoryMock
             .Setup(repository => repository.GetByIdForUpdateAsync(
@@ -1482,6 +1552,9 @@ public class WishServiceTests
     {
         // Arrange
         var data = CreateData();
+        SetupMutationTransaction(
+            data,
+            false);
         var wish = CreateWish(data);
         _wishRepositoryMock
             .Setup(repository => repository.GetByIdForUpdateAsync(
@@ -1512,6 +1585,9 @@ public class WishServiceTests
     {
         // Arrange
         var data = CreateData();
+        SetupMutationTransaction(
+            data,
+            false);
         _wishRepositoryMock
             .Setup(repository => repository.GetByIdForUpdateAsync(
                 data.WishlistId,
@@ -1544,6 +1620,9 @@ public class WishServiceTests
     {
         // Arrange
         var data = CreateData();
+        SetupMutationTransaction(
+            data,
+            false);
         ConfigureMissingTrackedWish(
             data,
             access);
@@ -1579,6 +1658,9 @@ public class WishServiceTests
     {
         // Arrange
         var data = CreateData();
+        SetupMutationTransaction(
+            data,
+            false);
         _wishRepositoryMock
             .Setup(repository => repository.GetByIdForUpdateAsync(
                 data.WishlistId,
@@ -1612,6 +1694,9 @@ public class WishServiceTests
     {
         // Arrange
         var data = CreateData();
+        SetupMutationTransaction(
+            data,
+            false);
         _wishRepositoryMock
             .Setup(repository => repository.GetByIdForUpdateAsync(
                 data.WishlistId,
@@ -1638,6 +1723,9 @@ public class WishServiceTests
     {
         // Arrange
         var data = CreateData();
+        SetupMutationTransaction(
+            data,
+            false);
         var expected = new InvalidOperationException();
         _wishRepositoryMock
             .Setup(repository => repository.GetByIdForUpdateAsync(
@@ -1671,6 +1759,9 @@ public class WishServiceTests
     {
         // Arrange
         var data = CreateData();
+        SetupMutationTransaction(
+            data,
+            false);
         var attemptedWish = ConfigureFailedSave(
             data,
             CreateWishQuantityBelowReservedException(directException));
@@ -1703,6 +1794,9 @@ public class WishServiceTests
     {
         // Arrange
         var data = CreateData();
+        SetupMutationTransaction(
+            data,
+            false);
         ConfigureConcurrencyFailure(
             data,
             access,
@@ -1740,6 +1834,9 @@ public class WishServiceTests
     {
         // Arrange
         var data = CreateData();
+        SetupMutationTransaction(
+            data,
+            false);
         var wish = ConfigureFailedSave(
             data,
             new DbUpdateConcurrencyException());
@@ -1789,7 +1886,10 @@ public class WishServiceTests
     {
         // Arrange
         var data = CreateData();
-        var attemptedWish = ConfigureFailedSave(
+        SetupMutationTransaction(
+            data,
+            true);
+        var attemptedWish = ConfigureFailedCommit(
             data,
             new TimeoutException());
         var imageId = Guid.CreateVersion7();
@@ -1845,7 +1945,10 @@ public class WishServiceTests
     {
         // Arrange
         var data = CreateData();
-        var attemptedWish = ConfigureFailedSave(
+        SetupMutationTransaction(
+            data,
+            true);
+        var attemptedWish = ConfigureFailedCommit(
             data,
             new TimeoutException());
         _wishRepositoryMock
@@ -1889,7 +1992,10 @@ public class WishServiceTests
     {
         // Arrange
         var data = CreateData();
-        var attemptedWish = ConfigureFailedSave(
+        SetupMutationTransaction(
+            data,
+            true);
+        var attemptedWish = ConfigureFailedCommit(
             data,
             new TimeoutException());
         var currentWish = wishStillExists
@@ -1960,7 +2066,10 @@ public class WishServiceTests
     {
         // Arrange
         var data = CreateData();
-        var attemptedWish = ConfigureFailedSave(
+        SetupMutationTransaction(
+            data,
+            true);
+        var attemptedWish = ConfigureFailedCommit(
             data,
             new TimeoutException());
         _wishRepositoryMock
@@ -1997,7 +2106,10 @@ public class WishServiceTests
     {
         // Arrange
         var data = CreateData();
-        var attemptedWish = ConfigureFailedSave(
+        SetupMutationTransaction(
+            data,
+            true);
+        var attemptedWish = ConfigureFailedCommit(
             data,
             new TimeoutException());
         var currentWish = new Wish(
@@ -2054,6 +2166,9 @@ public class WishServiceTests
     {
         // Arrange
         var data = CreateData();
+        SetupMutationTransaction(
+            data,
+            false);
         var expected = new InvalidOperationException();
         var attemptedWish = ConfigureFailedSave(
             data,
@@ -2083,6 +2198,9 @@ public class WishServiceTests
     {
         // Arrange
         var data = CreateData();
+        SetupMutationTransaction(
+            data,
+            true);
         var wish = ConfigureDeletion(
             data,
             1);
@@ -2102,6 +2220,9 @@ public class WishServiceTests
     {
         // Arrange
         var data = CreateData();
+        SetupMutationTransaction(
+            data,
+            false);
         _wishRepositoryMock
             .Setup(repository => repository.GetByIdForUpdateAsync(
                 data.WishlistId,
@@ -2130,6 +2251,9 @@ public class WishServiceTests
     {
         // Arrange
         var data = CreateData();
+        SetupMutationTransaction(
+            data,
+            false);
         ConfigureMissingTrackedWish(
             data,
             access);
@@ -2160,6 +2284,9 @@ public class WishServiceTests
     {
         // Arrange
         var data = CreateData();
+        SetupMutationTransaction(
+            data,
+            false);
         _wishRepositoryMock
             .Setup(repository => repository.GetByIdForUpdateAsync(
                 data.WishlistId,
@@ -2188,6 +2315,9 @@ public class WishServiceTests
     {
         // Arrange
         var data = CreateData();
+        SetupMutationTransaction(
+            data,
+            false);
         var wish = ConfigureFailedDeletion(
             data,
             new DbUpdateConcurrencyException());
@@ -2245,7 +2375,10 @@ public class WishServiceTests
     {
         // Arrange
         var data = CreateData();
-        var wish = ConfigureFailedDeletion(
+        SetupMutationTransaction(
+            data,
+            true);
+        var wish = ConfigureFailedDeletionCommit(
             data,
             new TimeoutException());
         _wishlistRepositoryMock
@@ -2295,6 +2428,9 @@ public class WishServiceTests
     {
         // Arrange
         var data = CreateData();
+        SetupMutationTransaction(
+            data,
+            false);
         var expected = new InvalidOperationException();
         var wish = ConfigureFailedDeletion(
             data,
@@ -2402,6 +2538,29 @@ public class WishServiceTests
         return wish;
     }
 
+    private Wish ConfigureFailedDeletionCommit(
+        WishServiceTestData data,
+        Exception exception)
+    {
+        var wish = CreateWish(data);
+        _wishRepositoryMock
+            .Setup(repository => repository.GetByIdForUpdateAsync(
+                data.WishlistId,
+                data.Id,
+                data.CancellationToken))
+            .ReturnsAsync(wish);
+        _wishRepositoryMock
+            .Setup(repository => repository.Remove(wish));
+        _unitOfWorkMock
+            .Setup(unitOfWork => unitOfWork.SaveChangesAsync(data.CancellationToken))
+            .ReturnsAsync(1);
+        _mutationTransactionMock
+            .Setup(transaction => transaction.CommitAsync(data.CancellationToken))
+            .ThrowsAsync(exception);
+
+        return wish;
+    }
+
     private void VerifyDeletion(
         WishServiceTestData data,
         Wish wish)
@@ -2458,6 +2617,9 @@ public class WishServiceTests
     {
         // Arrange
         var data = CreateData();
+        SetupMutationTransaction(
+            data,
+            true);
         var wish = CreateWish(data);
         var imageId = Guid.CreateVersion7();
         var contentHash = CreateImageHash(1);
@@ -2495,6 +2657,9 @@ public class WishServiceTests
     {
         // Arrange
         var data = CreateData();
+        SetupMutationTransaction(
+            data,
+            false);
         var wish = CreateWish(data);
         var currentImageId = Guid.CreateVersion7();
         var contentHash = CreateImageHash(1);
@@ -2528,6 +2693,9 @@ public class WishServiceTests
     {
         // Arrange
         var data = CreateData();
+        SetupMutationTransaction(
+            data,
+            true);
         var wish = CreateWish(data);
         var oldImageId = Guid.CreateVersion7();
         var newImageId = Guid.CreateVersion7();
@@ -2581,6 +2749,9 @@ public class WishServiceTests
     {
         // Arrange
         var data = CreateData();
+        SetupMutationTransaction(
+            data,
+            false);
         _wishRepositoryMock
             .Setup(repository => repository.GetByIdForUpdateAsync(
                 data.WishlistId,
@@ -2611,6 +2782,9 @@ public class WishServiceTests
     {
         // Arrange
         var data = CreateData();
+        SetupMutationTransaction(
+            data,
+            false);
         ConfigureMissingTrackedWish(
             data,
             access);
@@ -2647,6 +2821,9 @@ public class WishServiceTests
     {
         // Arrange
         var data = CreateData();
+        SetupMutationTransaction(
+            data,
+            false);
         var expected = isUnavailable
             ? (Exception)new TimeoutException()
             : new InvalidOperationException();
@@ -2686,6 +2863,9 @@ public class WishServiceTests
     {
         // Arrange
         var data = CreateData();
+        SetupMutationTransaction(
+            data,
+            false);
         ConfigureConcurrencyFailure(
             data,
             access,
@@ -2721,8 +2901,11 @@ public class WishServiceTests
     {
         // Arrange
         var data = CreateData();
+        SetupMutationTransaction(
+            data,
+            true);
         var attemptedImageId = Guid.CreateVersion7();
-        var attemptedWish = ConfigureFailedSave(
+        var attemptedWish = ConfigureFailedCommit(
             data,
             new TimeoutException());
         var committedWish = CreateWish(data);
@@ -2764,7 +2947,10 @@ public class WishServiceTests
     {
         // Arrange
         var data = CreateData();
-        var attemptedWish = ConfigureFailedSave(
+        SetupMutationTransaction(
+            data,
+            true);
+        var attemptedWish = ConfigureFailedCommit(
             data,
             new TimeoutException());
         _wishRepositoryMock
@@ -2806,7 +2992,10 @@ public class WishServiceTests
     {
         // Arrange
         var data = CreateData();
-        var attemptedWish = ConfigureFailedSave(
+        SetupMutationTransaction(
+            data,
+            true);
+        var attemptedWish = ConfigureFailedCommit(
             data,
             new TimeoutException());
         Wish? currentWish = null;
@@ -2901,6 +3090,27 @@ public class WishServiceTests
             .ReturnsAsync(wish);
         _unitOfWorkMock
             .Setup(unitOfWork => unitOfWork.SaveChangesAsync(data.CancellationToken))
+            .ThrowsAsync(exception);
+
+        return wish;
+    }
+
+    private Wish ConfigureFailedCommit(
+        WishServiceTestData data,
+        Exception exception)
+    {
+        var wish = CreateWish(data);
+        _wishRepositoryMock
+            .Setup(repository => repository.GetByIdForUpdateAsync(
+                data.WishlistId,
+                data.Id,
+                data.CancellationToken))
+            .ReturnsAsync(wish);
+        _unitOfWorkMock
+            .Setup(unitOfWork => unitOfWork.SaveChangesAsync(data.CancellationToken))
+            .ReturnsAsync(1);
+        _mutationTransactionMock
+            .Setup(transaction => transaction.CommitAsync(data.CancellationToken))
             .ThrowsAsync(exception);
 
         return wish;
@@ -3024,6 +3234,9 @@ public class WishServiceTests
             .Setup(repository => repository.Add(It.IsAny<Wish>()));
         _unitOfWorkMock
             .Setup(unitOfWork => unitOfWork.SaveChangesAsync(data.CancellationToken))
+            .ReturnsAsync(1);
+        _mutationTransactionMock
+            .Setup(transaction => transaction.CommitAsync(data.CancellationToken))
             .ThrowsAsync(new TimeoutException());
 
         return attemptedWish;
@@ -3130,6 +3343,31 @@ public class WishServiceTests
             42);
     }
 
+    private void SetupWritableParent(WishServiceTestData data)
+    {
+        _expectedWritableParent = data;
+        _mutationGuardMock
+            .Setup(guard => guard.LockAsync(
+                data.OwnerId,
+                data.WishlistId,
+                data.CancellationToken))
+            .Returns(Task.CompletedTask);
+    }
+
+    private void SetupMutationTransaction(
+        WishServiceTestData data,
+        bool expectsCommit)
+    {
+        SetupWritableParent(data);
+        _expectsMutationTransaction = true;
+        _expectsMutationCommit = expectsCommit;
+        _wishTransactionFactoryMock
+            .Setup(factory => factory.BeginAsync(
+                IsolationLevel.ReadCommitted,
+                data.CancellationToken))
+            .ReturnsAsync(_mutationTransactionMock.Object);
+    }
+
     private void SetupOwnedAccess(WishServiceTestData data)
     {
         _wishlistRepositoryMock
@@ -3203,6 +3441,34 @@ public class WishServiceTests
 
     private void VerifyNoOtherCalls()
     {
+
+        if (_expectedWritableParent is { } expected)
+        {
+            _mutationGuardMock.Verify(
+                guard => guard.LockAsync(
+                    expected.OwnerId,
+                    expected.WishlistId,
+                    expected.CancellationToken),
+                Times.Once);
+
+            if (_expectsMutationTransaction)
+            {
+                _wishTransactionFactoryMock.Verify(
+                    factory => factory.BeginAsync(
+                        IsolationLevel.ReadCommitted,
+                        expected.CancellationToken),
+                    Times.Once);
+                _mutationTransactionMock.Verify(
+                    transaction => transaction.CommitAsync(expected.CancellationToken),
+                    _expectsMutationCommit ? Times.Once() : Times.Never());
+                _mutationTransactionMock.Verify(
+                    transaction => transaction.DisposeAsync(),
+                    Times.Once);
+            }
+        }
+
+        _mutationGuardMock.VerifyNoOtherCalls();
+        _mutationTransactionMock.VerifyNoOtherCalls();
         _wishRepositoryMock.VerifyNoOtherCalls();
         _wishlistRepositoryMock.VerifyNoOtherCalls();
         _unitOfWorkMock.VerifyNoOtherCalls();

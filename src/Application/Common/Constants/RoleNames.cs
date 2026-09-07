@@ -8,6 +8,9 @@ namespace JennGllg.Fr.MonKado.Back.Application.Common.Constants;
 [ExcludeFromCodeCoverage]
 public static class RoleNames
 {
+    /// <summary>Identifies an administrator with explicit moderation privileges.</summary>
+    public const string Admin = "Admin";
+
     /// <summary>
     /// Identifies a standard MonKado member.
     /// </summary>

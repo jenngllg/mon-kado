@@ -40,6 +40,7 @@ public class WishImageTests
         await using var factory = new GiftImageApiFactory();
         var ownerId = Guid.CreateVersion7();
         var wishlistId = Guid.CreateVersion7();
+        factory.WishlistService.SeedActiveWishlist(wishlistId);
         var wishId = Guid.CreateVersion7();
         factory.WishService.Wishes[(wishlistId, wishId)] = CreateWish(
             wishlistId,
@@ -98,6 +99,7 @@ public class WishImageTests
         // Arrange
         await using var factory = new GiftImageApiFactory();
         var wishlistId = Guid.CreateVersion7();
+        factory.WishlistService.SeedActiveWishlist(wishlistId);
         var wishId = Guid.CreateVersion7();
         factory.WishService.Wishes[(wishlistId, wishId)] = CreateWish(
             wishlistId,
@@ -132,6 +134,7 @@ public class WishImageTests
         await using var factory = new GiftImageApiFactory();
         var ownerId = Guid.CreateVersion7();
         var wishlistId = Guid.CreateVersion7();
+        factory.WishlistService.SeedActiveWishlist(wishlistId);
         var wishId = Guid.CreateVersion7();
         factory.WishService.Wishes[(wishlistId, wishId)] = CreateWish(
             wishlistId,
@@ -236,6 +239,7 @@ public class WishImageTests
         await using var factory = new GiftImageApiFactory();
         var ownerId = Guid.CreateVersion7();
         var wishlistId = Guid.CreateVersion7();
+        factory.WishlistService.SeedActiveWishlist(wishlistId);
         var wishId = Guid.CreateVersion7();
         var shareLinkId = Guid.CreateVersion7();
         factory.WishService.Wishes[(wishlistId, wishId)] = CreateWish(
@@ -315,6 +319,7 @@ public class WishImageTests
         await using var factory = new GiftImageApiFactory();
         var ownerId = Guid.CreateVersion7();
         var wishlistId = Guid.CreateVersion7();
+        factory.WishlistService.SeedActiveWishlist(wishlistId);
         var wishId = Guid.CreateVersion7();
         factory.WishService.Wishes[(wishlistId, wishId)] = CreateWish(
             wishlistId,
@@ -365,6 +370,7 @@ public class WishImageTests
         // Arrange
         await using var factory = new GiftImageApiFactory();
         var wishlistId = Guid.CreateVersion7();
+        factory.WishlistService.SeedActiveWishlist(wishlistId);
         var wishId = Guid.CreateVersion7();
         factory.WishService.Wishes[(wishlistId, wishId)] = CreateWish(
             wishlistId,
@@ -399,6 +405,7 @@ public class WishImageTests
         // Arrange
         await using var factory = new GiftImageApiFactory();
         var wishlistId = Guid.CreateVersion7();
+        factory.WishlistService.SeedActiveWishlist(wishlistId);
         var wishId = Guid.CreateVersion7();
         factory.WishService.Wishes[(wishlistId, wishId)] = CreateWish(
             wishlistId,
@@ -436,6 +443,7 @@ public class WishImageTests
         // Arrange
         await using var factory = new GiftImageApiFactory();
         var wishlistId = Guid.CreateVersion7();
+        factory.WishlistService.SeedActiveWishlist(wishlistId);
         var wishId = Guid.CreateVersion7();
         factory.WishService.Wishes[(wishlistId, wishId)] = CreateWish(
             wishlistId,
@@ -478,6 +486,7 @@ public class WishImageTests
         // Arrange
         await using var factory = new GiftImageApiFactory();
         var wishlistId = Guid.CreateVersion7();
+        factory.WishlistService.SeedActiveWishlist(wishlistId);
         var wishId = Guid.CreateVersion7();
         factory.WishService.Wishes[(wishlistId, wishId)] = CreateWish(
             wishlistId,
@@ -515,6 +524,7 @@ public class WishImageTests
         // Arrange
         await using var factory = new GiftImageApiFactory();
         var wishlistId = Guid.CreateVersion7();
+        factory.WishlistService.SeedActiveWishlist(wishlistId);
         var wishId = Guid.CreateVersion7();
         using var client = CreateAuthorizedClient(
             factory,
@@ -555,6 +565,7 @@ public class WishImageTests
             ? IPAddress.Loopback
             : null);
         var wishlistId = Guid.CreateVersion7();
+        factory.WishlistService.SeedActiveWishlist(wishlistId);
         var wishId = Guid.CreateVersion7();
         using var client = factory.CreateClient();
 
@@ -589,6 +600,7 @@ public class WishImageTests
         // Arrange
         await using var factory = new GiftImageApiFactory();
         var wishlistId = Guid.CreateVersion7();
+        factory.WishlistService.SeedActiveWishlist(wishlistId);
         var wishId = Guid.CreateVersion7();
         using var client = CreateAuthorizedClient(
             factory,
@@ -622,6 +634,7 @@ public class WishImageTests
         await using var factory = new GiftImageApiFactory();
         var ownerId = Guid.CreateVersion7();
         var wishlistId = Guid.CreateVersion7();
+        factory.WishlistService.SeedActiveWishlist(wishlistId);
         var wishId = Guid.CreateVersion7();
         factory.WishService.Wishes[(wishlistId, wishId)] = CreateWish(
             wishlistId,
@@ -677,6 +690,7 @@ public class WishImageTests
         var ownerId = Guid.CreateVersion7();
         var shareLinkId = Guid.CreateVersion7();
         var wishlistId = Guid.CreateVersion7();
+        factory.WishlistService.SeedActiveWishlist(wishlistId);
         var wishId = Guid.CreateVersion7();
         var grant = new WishImageGrant
         {
@@ -729,6 +743,7 @@ public class WishImageTests
         // Arrange
         await using var factory = new GiftImageApiFactory();
         var wishlistId = Guid.CreateVersion7();
+        factory.WishlistService.SeedActiveWishlist(wishlistId);
         var wishId = Guid.CreateVersion7();
         factory.WishService.Wishes[(wishlistId, wishId)] = CreateWish(
             wishlistId,
@@ -761,6 +776,7 @@ public class WishImageTests
         // Arrange
         await using var factory = new GiftImageApiFactory();
         var wishlistId = Guid.CreateVersion7();
+        factory.WishlistService.SeedActiveWishlist(wishlistId);
         var wishId = Guid.CreateVersion7();
         using var client = CreateAuthorizedClient(
             factory,
@@ -790,6 +806,7 @@ public class WishImageTests
         // Arrange
         await using var factory = new GiftImageApiFactory();
         var wishlistId = Guid.CreateVersion7();
+        factory.WishlistService.SeedActiveWishlist(wishlistId);
         var wishId = Guid.CreateVersion7();
         factory.WishService.Wishes[(wishlistId, wishId)] = CreateWish(
             wishlistId,
@@ -821,6 +838,7 @@ public class WishImageTests
         // Arrange
         await using var factory = new GiftImageApiFactory();
         var wishlistId = Guid.CreateVersion7();
+        factory.WishlistService.SeedActiveWishlist(wishlistId);
         var wishId = Guid.CreateVersion7();
         factory.WishService.Wishes[(wishlistId, wishId)] = CreateWish(
             wishlistId,
@@ -873,6 +891,7 @@ public class WishImageTests
         // Arrange
         await using var factory = new GiftImageApiFactory();
         var wishlistId = Guid.CreateVersion7();
+        factory.WishlistService.SeedActiveWishlist(wishlistId);
         var wishId = Guid.CreateVersion7();
         factory.WishService.Wishes[(wishlistId, wishId)] = CreateWish(
             wishlistId,

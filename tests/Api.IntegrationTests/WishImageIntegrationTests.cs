@@ -778,6 +778,127 @@ public class WishImageIntegrationTests(PostgreSqlContainerFixture fixture) : IAs
         }
     }
 
+    [Fact]
+    public async Task GetImageAsync_WhenWishlistIsModerated_RevokesSharedGrantButPreservesOwnerImage()
+    {
+        // Arrange
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var factory = await CreateFactoryAsync();
+        var owner = await CreateMemberAsync(factory);
+        var administratorId = Guid.CreateVersion7();
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
+            context.Users.Add(new MonKadoUser
+            {
+                Id = administratorId,
+                Email = "image-administrator@example.test",
+                UserName = "image-administrator@example.test",
+                NormalizedEmail = "IMAGE-ADMINISTRATOR@EXAMPLE.TEST",
+                NormalizedUserName = "IMAGE-ADMINISTRATOR@EXAMPLE.TEST",
+                DisplayName = "Administrator",
+                EmailConfirmed = true,
+                SecurityStamp = Guid.CreateVersion7().ToString()
+            });
+            await context.SaveChangesAsync(cancellationToken);
+        }
+
+        await WishlistModerationHttpTestHelper.GrantAdministratorAsync(
+            factory,
+            administratorId,
+            cancellationToken);
+        using var administrator = CreateAuthorizedClient(
+            factory,
+            administratorId);
+        var wishlist = await SeedWishlistAsync(
+            factory,
+            owner.Id,
+            "Moderated images");
+        using var client = CreateAuthorizedClient(
+            factory,
+            owner.Id);
+        using var creation = await CreateWishAsync(
+            client,
+            wishlist.Id);
+        var wishId = await ReadWishIdAsync(creation);
+        using var upload = CreateUpsertRequest(
+            wishlist.Id,
+            wishId,
+            CreatePng(SKColors.Purple),
+            creation.Headers.ETag?.Tag);
+        using var uploaded = await client.SendAsync(
+            upload,
+            cancellationToken);
+        var image = await uploaded.Content.ReadFromJsonAsync<JsonElement>(cancellationToken);
+        var privateUrl = Assert.IsType<string>(image.GetProperty("imageUrl").GetString());
+        using var shared = await client.PostAsync(
+            $"/api/v1/wishlists/{wishlist.Id}/share-link",
+            null,
+            cancellationToken);
+        var link = await shared.Content.ReadFromJsonAsync<JsonElement>(cancellationToken);
+        var shareUrl = Assert.IsType<string>(link.GetProperty("shareUrl").GetString());
+        using var visitor = factory.CreateClient();
+        using var publicRequest = new HttpRequestMessage(
+            HttpMethod.Get,
+            $"/api/v1/shared-wishlists/{link.GetProperty("id").GetGuid()}");
+        publicRequest.Headers.TryAddWithoutValidation(
+            "X-MonKado-Share-Token",
+            shareUrl[(shareUrl.LastIndexOf('.') + 1)..]);
+        using var publicResponse = await visitor.SendAsync(
+            publicRequest,
+            cancellationToken);
+        var publicList = await publicResponse.Content.ReadFromJsonAsync<JsonElement>(cancellationToken);
+        var publicWish = Assert.Single(publicList.GetProperty("wishes").EnumerateArray());
+        var publicUrl = Assert.IsType<string>(publicWish.GetProperty("imageUrl").GetString());
+        using var accessible = await visitor.GetAsync(
+            publicUrl,
+            cancellationToken);
+
+        // Act
+        await WishlistModerationHttpTestHelper.SetStateAsync(
+            administrator,
+            wishlist.Id,
+            true,
+            cancellationToken);
+        using var publicDenied = await visitor.GetAsync(
+            publicUrl,
+            cancellationToken);
+        using var ownerImage = await client.GetAsync(
+            privateUrl,
+            cancellationToken);
+        await WishlistModerationHttpTestHelper.SetStateAsync(
+            administrator,
+            wishlist.Id,
+            false,
+            cancellationToken);
+        using var restored = await visitor.GetAsync(
+            publicUrl,
+            cancellationToken);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.OK,
+            accessible.StatusCode);
+        Assert.Equal(
+            HttpStatusCode.NotFound,
+            publicDenied.StatusCode);
+        Assert.Equal(
+            HttpStatusCode.OK,
+            ownerImage.StatusCode);
+        Assert.Equal(
+            HttpStatusCode.OK,
+            restored.StatusCode);
+        Assert.Equal(
+            "image/webp",
+            restored.Content.Headers.ContentType?.MediaType);
+        Assert.Equal(
+            await accessible.Content.ReadAsByteArrayAsync(cancellationToken),
+            await restored.Content.ReadAsByteArrayAsync(cancellationToken));
+        Assert.False(publicList.TryGetProperty(
+            "suspensionReason",
+            out _));
+    }
+
     private async Task<PostgreSqlApiFactory> CreateFactoryAsync(
         AmbiguousCommitInterceptor? interceptor = null)
     {

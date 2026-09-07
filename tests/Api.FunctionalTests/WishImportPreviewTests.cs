@@ -20,6 +20,8 @@ public class WishImportPreviewTests
     {
         // Arrange
         await using var factory = new WishImportApiFactory();
+        var wishlistId = Guid.CreateVersion7();
+        factory.WishlistService.SeedActiveWishlist(wishlistId);
         using var client = factory.CreateClient();
         client.DefaultRequestHeaders.Add(
             "Cookie",
@@ -27,7 +29,7 @@ public class WishImportPreviewTests
 
         // Act
         using var response = await client.PostAsJsonAsync(
-            GetPath(Guid.CreateVersion7()),
+            GetPath(wishlistId),
             new
             {
                 url = "https://merchant.example"
@@ -49,6 +51,8 @@ public class WishImportPreviewTests
     {
         // Arrange
         await using var factory = new WishImportApiFactory();
+        var wishlistId = Guid.CreateVersion7();
+        factory.WishlistService.SeedActiveWishlist(wishlistId);
         using var client = CreateClient(
             factory,
             Guid.CreateVersion7());
@@ -57,7 +61,7 @@ public class WishImportPreviewTests
 
         // Act
         using var response = await client.PostAsync(
-            GetPath(Guid.CreateVersion7()),
+            GetPath(wishlistId),
             content,
             TestContext.Current.CancellationToken);
 
@@ -73,6 +77,8 @@ public class WishImportPreviewTests
     {
         // Arrange
         await using var factory = new WishImportApiFactory();
+        var wishlistId = Guid.CreateVersion7();
+        factory.WishlistService.SeedActiveWishlist(wishlistId);
         factory.WishlistService.Exception = new DependencyUnavailableException(
             "PostgreSQL",
             null);
@@ -82,7 +88,7 @@ public class WishImportPreviewTests
 
         // Act
         using var response = await client.PostAsJsonAsync(
-            GetPath(Guid.CreateVersion7()),
+            GetPath(wishlistId),
             new
             {
                 url = "https://merchant.example"
@@ -102,6 +108,7 @@ public class WishImportPreviewTests
         // Arrange
         await using var factory = new WishImportApiFactory();
         var wishlistId = Guid.CreateVersion7();
+        factory.WishlistService.SeedActiveWishlist(wishlistId);
         using var client = CreateClient(
             factory,
             Guid.CreateVersion7());
@@ -190,13 +197,15 @@ public class WishImportPreviewTests
     {
         // Arrange
         await using var factory = new WishImportApiFactory();
+        var wishlistId = Guid.CreateVersion7();
+        factory.WishlistService.SeedActiveWishlist(wishlistId);
         using var client = CreateClient(
             factory,
             Guid.CreateVersion7());
 
         // Act
         using var response = await client.PostAsJsonAsync(
-            GetPath(Guid.CreateVersion7()),
+            GetPath(wishlistId),
             new
             {
                 url
@@ -221,6 +230,8 @@ public class WishImportPreviewTests
     {
         // Arrange
         await using var factory = new WishImportApiFactory();
+        var wishlistId = Guid.CreateVersion7();
+        factory.WishlistService.SeedActiveWishlist(wishlistId);
         factory.ImportClient.Exception = new WishImportUrlRejectedException();
         using var client = CreateClient(
             factory,
@@ -228,7 +239,7 @@ public class WishImportPreviewTests
 
         // Act
         using var response = await client.PostAsJsonAsync(
-            GetPath(Guid.CreateVersion7()),
+            GetPath(wishlistId),
             new
             {
                 url = "https://merchant.example"
@@ -254,6 +265,8 @@ public class WishImportPreviewTests
     {
         // Arrange
         await using var factory = new WishImportApiFactory();
+        var wishlistId = Guid.CreateVersion7();
+        factory.WishlistService.SeedActiveWishlist(wishlistId);
         factory.WishlistService.Access = WishlistAccess.NotOwned;
         using var client = authenticated ? CreateClient(
             factory,
@@ -261,7 +274,7 @@ public class WishImportPreviewTests
 
         // Act
         using var response = await client.PostAsJsonAsync(
-            GetPath(Guid.CreateVersion7()),
+            GetPath(wishlistId),
             new
             {
                 url = "https://merchant.example"
@@ -280,6 +293,8 @@ public class WishImportPreviewTests
     {
         // Arrange
         await using var factory = new WishImportApiFactory();
+        var wishlistId = Guid.CreateVersion7();
+        factory.WishlistService.SeedActiveWishlist(wishlistId);
         factory.ImportClient.Exception = new HttpRequestException("remote failure");
         using var client = CreateClient(
             factory,
@@ -287,7 +302,7 @@ public class WishImportPreviewTests
 
         // Act
         using var response = await client.PostAsJsonAsync(
-            GetPath(Guid.CreateVersion7()),
+            GetPath(wishlistId),
             new
             {
                 url = "https://merchant.example"
@@ -314,13 +329,15 @@ public class WishImportPreviewTests
     {
         // Arrange
         await using var factory = new WishImportApiFactory();
+        var wishlistId = Guid.CreateVersion7();
+        factory.WishlistService.SeedActiveWishlist(wishlistId);
         using var first = CreateClient(
             factory,
             Guid.CreateVersion7());
         using var second = CreateClient(
             factory,
             Guid.CreateVersion7());
-        var path = GetPath(Guid.CreateVersion7());
+        var path = GetPath(wishlistId);
 
         // Act
         for (var index = 0; index < 10; index++)
@@ -385,6 +402,7 @@ public class WishImportPreviewTests
             100);
         factory.ImportClient.ImageContent = png.ToArray();
         var wishlistId = Guid.CreateVersion7();
+        factory.WishlistService.SeedActiveWishlist(wishlistId);
         using var client = CreateClient(
             factory,
             Guid.CreateVersion7());

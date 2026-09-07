@@ -8,6 +8,7 @@ on:
     paths:
       - .config/dotnet-tools.json
       - .dockerignore
+      - .editorconfig
       - .github/workflows/containers.yml
       - Directory.Build.props
       - Directory.Packages.props
@@ -24,6 +25,7 @@ on:
     paths:
       - .config/dotnet-tools.json
       - .dockerignore
+      - .editorconfig
       - .github/workflows/containers.yml
       - Directory.Build.props
       - Directory.Packages.props

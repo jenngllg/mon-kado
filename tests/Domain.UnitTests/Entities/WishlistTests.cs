@@ -162,6 +162,144 @@ public class WishlistTests
         Assert.True(hasChanged);
     }
 
+    [Fact]
+    public void Moderate_WhenSuspending_SetsPrivateReasonAndInitialDate()
+    {
+        // Arrange
+        var wishlist = CreateWishlist();
+        var occurredAt = new DateTime(
+            2026,
+            9,
+            6,
+            12,
+            0,
+            0,
+            DateTimeKind.Utc);
+
+        // Act
+        var changed = wishlist.Moderate(
+            true,
+            "Reported content",
+            occurredAt);
+
+        // Assert
+        Assert.True(changed);
+        Assert.True(wishlist.IsSuspended);
+        Assert.Equal(
+            "Reported content",
+            wishlist.SuspensionReason);
+        Assert.Equal(
+            occurredAt,
+            wishlist.SuspendedAt);
+        Assert.Null(wishlist.UpdatedAt);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Moderate_WhenStateIsIdentical_DoesNotChangeDates(bool suspended)
+    {
+        // Arrange
+        var wishlist = CreateWishlist();
+        var reason = suspended ? "Reported content" : null;
+        wishlist.Moderate(
+            suspended,
+            reason,
+            DateTime.UnixEpoch);
+
+        // Act
+        var changed = wishlist.Moderate(
+            suspended,
+            reason,
+            DateTime.UnixEpoch.AddHours(1));
+
+        // Assert
+        Assert.False(changed);
+        Assert.Equal(
+            suspended,
+            wishlist.IsSuspended);
+        Assert.Equal(
+            suspended ? DateTime.UnixEpoch : (DateTime?)null,
+            wishlist.SuspendedAt);
+    }
+
+    [Fact]
+    public void Moderate_WhenAmendingReason_PreservesInitialSuspensionDate()
+    {
+        // Arrange
+        var wishlist = CreateWishlist();
+        wishlist.Moderate(
+            true,
+            "Initial reason",
+            DateTime.UnixEpoch);
+
+        // Act
+        var changed = wishlist.Moderate(
+            true,
+            "Corrected reason",
+            DateTime.UnixEpoch.AddDays(1));
+
+        // Assert
+        Assert.True(changed);
+        Assert.True(wishlist.IsSuspended);
+        Assert.Equal(
+            "Corrected reason",
+            wishlist.SuspensionReason);
+        Assert.Equal(
+            DateTime.UnixEpoch,
+            wishlist.SuspendedAt);
+    }
+
+    [Fact]
+    public void Moderate_WhenReactivating_ClearsPrivateState()
+    {
+        // Arrange
+        var wishlist = CreateWishlist();
+        wishlist.Moderate(
+            true,
+            "Initial reason",
+            DateTime.UnixEpoch);
+
+        // Act
+        var changed = wishlist.Moderate(
+            false,
+            null,
+            DateTime.UnixEpoch.AddDays(1));
+
+        // Assert
+        Assert.True(changed);
+        Assert.False(wishlist.IsSuspended);
+        Assert.Null(wishlist.SuspensionReason);
+        Assert.Null(wishlist.SuspendedAt);
+    }
+
+    [Fact]
+    public void Moderate_WhenSuspendingAfterReactivation_UsesNewSuspensionDate()
+    {
+        // Arrange
+        var wishlist = CreateWishlist();
+        wishlist.Moderate(
+            true,
+            "Initial reason",
+            DateTime.UnixEpoch);
+        wishlist.Moderate(
+            false,
+            null,
+            DateTime.UnixEpoch.AddDays(1));
+        var newDate = DateTime.UnixEpoch.AddDays(2);
+
+        // Act
+        wishlist.Moderate(
+            true,
+            "Another reason",
+            newDate);
+
+        // Assert
+        Assert.Equal(
+            newDate,
+            wishlist.SuspendedAt);
+    }
+
     private static Wishlist CreateWishlist()
     {
         return new Wishlist(

@@ -24,6 +24,13 @@ internal static class IdentityModelConfiguration
                 .IsUnique();
             role.HasData(new IdentityRole<Guid>
             {
+                ConcurrencyStamp = "019ec170-1570-7000-8000-000000000002",
+                Id = RoleIds.Admin,
+                Name = RoleNames.Admin,
+                NormalizedName = RoleNames.Admin.ToUpperInvariant()
+            });
+            role.HasData(new IdentityRole<Guid>
+            {
                 ConcurrencyStamp = "0198d027-51c0-7000-8000-000000000003",
                 Id = RoleIds.Member,
                 Name = RoleNames.Member,

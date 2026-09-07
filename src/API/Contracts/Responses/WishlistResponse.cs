@@ -58,4 +58,22 @@ public class WishlistResponse(
     /// Gets the optional UTC update date and time.
     /// </summary>
     public DateTime? UpdatedAt { get; } = updatedAt;
+
+    /// <summary>Gets whether an administrator suspended this wishlist.</summary>
+    public bool IsSuspended
+    {
+        get; init;
+    }
+
+    /// <summary>Gets the private reason for the current suspension.</summary>
+    public string? SuspensionReason
+    {
+        get; init;
+    }
+
+    /// <summary>Gets the UTC start of the current suspension.</summary>
+    public DateTime? SuspendedAt
+    {
+        get; init;
+    }
 }

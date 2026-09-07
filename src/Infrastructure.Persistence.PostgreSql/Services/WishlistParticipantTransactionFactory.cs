@@ -1,3 +1,4 @@
+using JennGllg.Fr.MonKado.Back.Application.Common.Exceptions;
 using JennGllg.Fr.MonKado.Back.Domain.Entities;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Abstractions;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Contexts;
@@ -10,9 +11,26 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Service
 /// Creates EF Core transactions and locks for wishlist participant operations.
 /// </summary>
 /// <param name="context">The database context.</param>
-public class WishlistParticipantTransactionFactory(MonKadoDbContext context)
+/// <param name="shareLinkRepository">The parent-first shared resource lock repository.</param>
+public class WishlistParticipantTransactionFactory(
+    MonKadoDbContext context,
+    IWishlistShareLinkRepository shareLinkRepository)
     : IWishlistParticipantTransactionFactory
 {
+    /// <inheritdoc />
+    public async Task LockMemberAsync(
+        Guid memberId,
+        CancellationToken cancellationToken)
+    {
+        var members = await context.Database.SqlQuery<Guid>($"""
+            SELECT id AS "Value" FROM public.users WHERE id = {memberId} FOR KEY SHARE
+            """)
+            .ToArrayAsync(cancellationToken);
+
+        if (members.Length == 0)
+            throw new InvalidAuthenticationSessionException();
+    }
+
     /// <inheritdoc />
     public async Task<IWishlistParticipantTransaction> BeginAsync(CancellationToken cancellationToken)
     {
@@ -26,9 +44,9 @@ public class WishlistParticipantTransactionFactory(MonKadoDbContext context)
         Guid shareLinkId,
         CancellationToken cancellationToken)
     {
-        return context.WishlistShareLinks
-            .FromSqlInterpolated($"SELECT *, xmin FROM public.wishlist_share_links WHERE id = {shareLinkId} FOR UPDATE")
-            .SingleOrDefaultAsync(cancellationToken);
+        return shareLinkRepository.LockActiveAsync(
+            shareLinkId,
+            cancellationToken);
     }
 
     /// <inheritdoc />

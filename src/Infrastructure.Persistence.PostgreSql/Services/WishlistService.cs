@@ -6,6 +6,7 @@ using JennGllg.Fr.MonKado.Back.Application.Models;
 using JennGllg.Fr.MonKado.Back.Domain.Entities;
 using JennGllg.Fr.MonKado.Back.Domain.Enums;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Abstractions;
+using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Constants;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Entities;
 
 using Microsoft.EntityFrameworkCore;
@@ -25,18 +26,19 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Service
 /// <param name="wishRepository">The gift repository.</param>
 /// <param name="transactionFactory">The deletion transaction factory.</param>
 /// <param name="imageDeletionRepository">The image deletion outbox repository.</param>
+/// <param name="mutationGuard">The transaction-scoped writable parent guard.</param>
 public class WishlistService(
     IWishlistRepository wishlistRepository,
     IUnitOfWork unitOfWork,
     TimeProvider timeProvider,
     IWishRepository wishRepository,
     IWishTransactionFactory transactionFactory,
-    IGiftImageDeletionOutboxRepository imageDeletionRepository) : IWishlistService
+    IGiftImageDeletionOutboxRepository imageDeletionRepository,
+    IWishlistMutationGuard mutationGuard) : IWishlistService
 {
     private const string OwnerForeignKeyName = "fk_wishlists_users_owner_id";
     private const string OwnerNormalizedNameIndexName = "ux_wishlists_owner_normalized_name";
-
-    /// <inheritdoc />
+    /// <inheritdoc/>
     public async Task<WishlistDetails?> CreateAsync(
         Guid id,
         Guid ownerId,
@@ -56,7 +58,6 @@ public class WishlistService(
             eventDate,
             message);
         wishlistRepository.Add(wishlist);
-
         try
         {
             await unitOfWork.SaveChangesAsync(cancellationToken);
@@ -65,14 +66,17 @@ public class WishlistService(
         }
         catch (DbUpdateException exception) when (IsDuplicateName(exception))
         {
+
             throw new WishlistNameAlreadyExistsException();
         }
         catch (DbUpdateException exception) when (IsMissingOwner(exception))
         {
+
             return null;
         }
         catch (Exception exception) when (PostgreSqlFailureClassifier.IsUnavailable(exception))
         {
+
             return await ResolveAmbiguousCreationAsync(
                 wishlist,
                 exception,
@@ -80,7 +84,7 @@ public class WishlistService(
         }
     }
 
-    /// <inheritdoc />
+    /// <inheritdoc/>
     public async Task<WishlistDetails?> UpdateAsync(
         Guid ownerId,
         Guid wishlistId,
@@ -93,57 +97,63 @@ public class WishlistService(
         CancellationToken cancellationToken)
     {
         (Wishlist Attempted, Wishlist Original)? attemptedUpdate = null;
-
         try
         {
-            var wishlist = await wishlistRepository.GetByIdForUpdateAsync(
-                ownerId,
-                wishlistId,
-                cancellationToken);
-
-            if (wishlist is null)
-                return null;
-
-            if (wishlist.Version != expectedVersion)
-                throw new WishlistVersionConflictException();
-
-            var today = DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime);
-            var eventDateHasChanged = !Nullable.Equals(
-                eventDate,
-                wishlist.EventDate);
-
-            if (eventDate is { } requestedEventDate &&
-                eventDateHasChanged &&
-                requestedEventDate < today)
+            WishlistDetails? completedResult;
+            await using (var transaction = await transactionFactory.BeginAsync(
+                IsolationLevel.ReadCommitted,
+                cancellationToken))
             {
-                throw new RequestValidationException(
-                [
-                    new ValidationError(
-                        "eventDate",
-                        ValidationMessages.WishlistEventDateMustBeTodayOrLater)
-                ]);
+                await mutationGuard.LockAsync(
+                    ownerId,
+                    wishlistId,
+                    cancellationToken);
+                var wishlist = await wishlistRepository.GetByIdForUpdateAsync(
+                    ownerId,
+                    wishlistId,
+                    cancellationToken);
+
+                if (wishlist is null)
+                    return null;
+
+                if (wishlist.Version != expectedVersion)
+                    throw new WishlistVersionConflictException();
+                var today = DateOnly.FromDateTime(timeProvider
+                        .GetUtcNow()
+                        .UtcDateTime);
+                var eventDateHasChanged = !Nullable.Equals(
+                    eventDate,
+                    wishlist.EventDate);
+
+                if (eventDate is { } requestedEventDate && eventDateHasChanged && requestedEventDate < today)
+                {
+
+                    throw new RequestValidationException([new ValidationError(
+                                "eventDate",
+                                ValidationMessages.WishlistEventDateMustBeTodayOrLater)]);
+                }
+
+                var originalWishlist = CopyClientState(wishlist);
+                var hasChanged = wishlist.Update(
+                    name,
+                    normalizedName,
+                    occasion,
+                    eventDate,
+                    message);
+
+                if (!hasChanged)
+                    return CreateDetails(wishlist);
+                await unitOfWork.SaveChangesAsync(cancellationToken);
+                attemptedUpdate = (wishlist, originalWishlist);
+                await transaction.CommitAsync(cancellationToken);
+                completedResult = CreateDetails(wishlist);
             }
 
-            var originalWishlist = CopyClientState(wishlist);
-            var hasChanged = wishlist.Update(
-                name,
-                normalizedName,
-                occasion,
-                eventDate,
-                message);
-
-            if (!hasChanged)
-                return CreateDetails(wishlist);
-
-            attemptedUpdate = (
-                wishlist,
-                originalWishlist);
-            await unitOfWork.SaveChangesAsync(cancellationToken);
-
-            return CreateDetails(wishlist);
+            return completedResult;
         }
         catch (DbUpdateException exception) when (IsDuplicateName(exception))
         {
+
             throw new WishlistNameAlreadyExistsException();
         }
         catch (DbUpdateConcurrencyException)
@@ -163,10 +173,12 @@ public class WishlistService(
         }
         catch (Exception exception) when (PostgreSqlFailureClassifier.IsUnavailable(exception))
         {
+
             if (attemptedUpdate is null)
             {
+
                 throw new DependencyUnavailableException(
-                    "PostgreSQL",
+                    DependencyNames.PostgreSql,
                     exception);
             }
 
@@ -178,7 +190,7 @@ public class WishlistService(
         }
     }
 
-    /// <inheritdoc />
+    /// <inheritdoc/>
     public async Task<bool> DeleteAsync(
         Guid ownerId,
         Guid wishlistId,
@@ -186,11 +198,14 @@ public class WishlistService(
         CancellationToken cancellationToken)
     {
         var saveAttempted = false;
-
         try
         {
             await using var transaction = await transactionFactory.BeginAsync(
                 IsolationLevel.ReadCommitted,
+                cancellationToken);
+            await mutationGuard.LockAsync(
+                ownerId,
+                wishlistId,
                 cancellationToken);
             var wishlist = await wishlistRepository.GetByIdForDeletionAsync(
                 ownerId,
@@ -212,16 +227,16 @@ public class WishlistService(
 
             if (wishlist.Version != expectedVersion)
                 throw new WishlistVersionConflictException();
-
             var wishes = await wishRepository.GetByWishlistIdForUpdateAsync(
                 wishlistId,
                 cancellationToken);
             foreach (var wish in wishes.Where(wish => wish.ImageId.HasValue))
             {
-                imageDeletionRepository.Add(
-                    GiftImageDeletionOutboxMessage.Create(
+                imageDeletionRepository.Add(GiftImageDeletionOutboxMessage.Create(
                         wish.ImageId.GetValueOrDefault(),
-                        timeProvider.GetUtcNow().UtcDateTime));
+                        timeProvider
+                            .GetUtcNow()
+                            .UtcDateTime));
             }
 
             wishlistRepository.Remove(wishlist);
@@ -246,13 +261,15 @@ public class WishlistService(
         }
         catch (Exception exception)
         {
+
             if (!PostgreSqlFailureClassifier.IsUnavailable(exception))
                 throw;
 
             if (!saveAttempted)
             {
+
                 throw new DependencyUnavailableException(
-                    "PostgreSQL",
+                    DependencyNames.PostgreSql,
                     exception);
             }
 
@@ -266,7 +283,7 @@ public class WishlistService(
         return true;
     }
 
-    /// <inheritdoc />
+    /// <inheritdoc/>
     public async Task<WishlistDetails?> GetAsync(
         Guid wishlistId,
         CancellationToken cancellationToken)
@@ -277,19 +294,18 @@ public class WishlistService(
                 wishlistId,
                 cancellationToken);
 
-            return wishlist is null
-                ? null
-                : CreateDetails(wishlist);
+            return wishlist is null ? null : CreateDetails(wishlist);
         }
         catch (Exception exception) when (PostgreSqlFailureClassifier.IsUnavailable(exception))
         {
+
             throw new DependencyUnavailableException(
-                "PostgreSQL",
+                DependencyNames.PostgreSql,
                 exception);
         }
     }
 
-    /// <inheritdoc />
+    /// <inheritdoc/>
     public async Task<IReadOnlyCollection<WishlistDetails>?> GetByOwnerIdAsync(
         Guid ownerId,
         CancellationToken cancellationToken)
@@ -300,19 +316,19 @@ public class WishlistService(
                 ownerId,
                 cancellationToken);
 
-            return wishlists?
-                .Select(CreateDetails)
+            return wishlists?.Select(CreateDetails)
                 .ToArray();
         }
         catch (Exception exception) when (PostgreSqlFailureClassifier.IsUnavailable(exception))
         {
+
             throw new DependencyUnavailableException(
-                "PostgreSQL",
+                DependencyNames.PostgreSql,
                 exception);
         }
     }
 
-    /// <inheritdoc />
+    /// <inheritdoc/>
     public async Task<WishlistAccess> GetAccessAsync(
         Guid memberId,
         Guid wishlistId,
@@ -320,6 +336,7 @@ public class WishlistService(
     {
         try
         {
+
             return await wishlistRepository.GetAccessAsync(
                 memberId,
                 wishlistId,
@@ -327,8 +344,9 @@ public class WishlistService(
         }
         catch (Exception exception) when (PostgreSqlFailureClassifier.IsUnavailable(exception))
         {
+
             throw new DependencyUnavailableException(
-                "PostgreSQL",
+                DependencyNames.PostgreSql,
                 exception);
         }
     }
@@ -340,6 +358,7 @@ public class WishlistService(
     /// <returns>The application wishlist details.</returns>
     private static WishlistDetails CreateDetails(Wishlist wishlist)
     {
+
         return new WishlistDetails(
             wishlist.Id,
             wishlist.Name,
@@ -348,7 +367,12 @@ public class WishlistService(
             wishlist.Message,
             wishlist.CreatedAt,
             wishlist.UpdatedAt,
-            wishlist.Version);
+            wishlist.Version)
+        {
+            IsSuspended = wishlist.IsSuspended,
+            SuspensionReason = wishlist.SuspensionReason,
+            SuspendedAt = wishlist.SuspendedAt
+        };
     }
 
     /// <summary>
@@ -357,7 +381,7 @@ public class WishlistService(
     /// <param name="attemptedWishlist">The exact wishlist whose save was attempted.</param>
     /// <param name="originalException">The transient save exception.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>The committed wishlist, or <see langword="null" /> when its owner disappeared.</returns>
+    /// <returns>The committed wishlist, or <see langword="null"/> when its owner disappeared.</returns>
     /// <exception cref="DependencyUnavailableException">The attempted creation cannot be confirmed.</exception>
     private async Task<WishlistDetails?> ResolveAmbiguousCreationAsync(
         Wishlist attemptedWishlist,
@@ -368,11 +392,11 @@ public class WishlistService(
             attemptedWishlist.Id,
             cancellationToken);
 
-        if (currentWishlist is not null &&
-            HasSameValues(
-                currentWishlist,
-                attemptedWishlist))
+        if (currentWishlist is not null && HasSameValues(
+            currentWishlist,
+            attemptedWishlist))
         {
+
             return CreateDetails(currentWishlist);
         }
 
@@ -385,7 +409,7 @@ public class WishlistService(
             return null;
 
         throw new DependencyUnavailableException(
-            "PostgreSQL",
+            DependencyNames.PostgreSql,
             originalException);
     }
 
@@ -396,7 +420,7 @@ public class WishlistService(
     /// <param name="originalWishlist">The exact wishlist state read before the attempted update.</param>
     /// <param name="originalException">The transient save exception.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>The committed wishlist, or <see langword="null" /> when it disappeared.</returns>
+    /// <returns>The committed wishlist, or <see langword="null"/> when it disappeared.</returns>
     /// <exception cref="InvalidAuthenticationSessionException">The member disappeared.</exception>
     /// <exception cref="WishlistVersionConflictException">A different wishlist state was committed.</exception>
     /// <exception cref="DependencyUnavailableException">The attempted update cannot be verified.</exception>
@@ -410,21 +434,21 @@ public class WishlistService(
             attemptedWishlist.Id,
             cancellationToken);
 
-        if (currentWishlist is not null &&
-            HasSameValues(
-                currentWishlist,
-                attemptedWishlist))
+        if (currentWishlist is not null && HasSameValues(
+            currentWishlist,
+            attemptedWishlist))
         {
+
             return CreateDetails(currentWishlist);
         }
 
-        if (currentWishlist is not null &&
-            HasSameValues(
-                currentWishlist,
-                originalWishlist))
+        if (currentWishlist is not null && HasSameValues(
+            currentWishlist,
+            originalWishlist))
         {
+
             throw new DependencyUnavailableException(
-                "PostgreSQL",
+                DependencyNames.PostgreSql,
                 originalException);
         }
 
@@ -449,7 +473,7 @@ public class WishlistService(
     /// <param name="wishlistId">The wishlist identifier.</param>
     /// <param name="originalException">The transient save exception.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns><see langword="true" /> when the wishlist is no longer available.</returns>
+    /// <returns><see langword="true"/> when the wishlist is no longer available.</returns>
     /// <exception cref="InvalidAuthenticationSessionException">The member disappeared.</exception>
     /// <exception cref="DependencyUnavailableException">The attempted deletion cannot be confirmed.</exception>
     private async Task<bool> ResolveAmbiguousDeletionAsync(
@@ -470,7 +494,7 @@ public class WishlistService(
             return true;
 
         throw new DependencyUnavailableException(
-            "PostgreSQL",
+            DependencyNames.PostgreSql,
             originalException);
     }
 
@@ -481,6 +505,7 @@ public class WishlistService(
     /// <returns>A detached copy of the client-controlled state.</returns>
     private static Wishlist CopyClientState(Wishlist wishlist)
     {
+
         return new Wishlist(
             wishlist.Id,
             wishlist.OwnerId,
@@ -496,7 +521,7 @@ public class WishlistService(
     /// </summary>
     /// <param name="wishlistId">The wishlist identifier.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>The wishlist when found; otherwise, <see langword="null" />.</returns>
+    /// <returns>The wishlist when found; otherwise, <see langword="null"/>.</returns>
     /// <exception cref="DependencyUnavailableException">PostgreSQL is unavailable.</exception>
     private async Task<Wishlist?> GetByIdSafelyAsync(
         Guid wishlistId,
@@ -504,14 +529,16 @@ public class WishlistService(
     {
         try
         {
+
             return await wishlistRepository.GetByIdAsync(
                 wishlistId,
                 cancellationToken);
         }
         catch (Exception exception) when (PostgreSqlFailureClassifier.IsUnavailable(exception))
         {
+
             throw new DependencyUnavailableException(
-                "PostgreSQL",
+                DependencyNames.PostgreSql,
                 exception);
         }
     }
@@ -531,6 +558,7 @@ public class WishlistService(
     {
         try
         {
+
             return await wishlistRepository.GetAccessAsync(
                 ownerId,
                 wishlistId,
@@ -538,8 +566,9 @@ public class WishlistService(
         }
         catch (Exception exception) when (PostgreSqlFailureClassifier.IsUnavailable(exception))
         {
+
             throw new DependencyUnavailableException(
-                "PostgreSQL",
+                DependencyNames.PostgreSql,
                 exception);
         }
     }
@@ -548,28 +577,22 @@ public class WishlistService(
     /// Determines whether an update violated the owner-scoped normalized-name index.
     /// </summary>
     /// <param name="exception">The database update exception.</param>
-    /// <returns><see langword="true" /> for the expected unique-index violation.</returns>
+    /// <returns><see langword="true"/> for the expected unique-index violation.</returns>
     private static bool IsDuplicateName(DbUpdateException exception)
     {
-        return exception.InnerException is PostgresException
-        {
-            SqlState: PostgresErrorCodes.UniqueViolation,
-            ConstraintName: OwnerNormalizedNameIndexName
-        };
+
+        return exception.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation, ConstraintName: OwnerNormalizedNameIndexName };
     }
 
     /// <summary>
     /// Determines whether an update violated the wishlist owner foreign key.
     /// </summary>
     /// <param name="exception">The database update exception.</param>
-    /// <returns><see langword="true" /> for the expected foreign-key violation.</returns>
+    /// <returns><see langword="true"/> for the expected foreign-key violation.</returns>
     private static bool IsMissingOwner(DbUpdateException exception)
     {
-        return exception.InnerException is PostgresException
-        {
-            SqlState: PostgresErrorCodes.ForeignKeyViolation,
-            ConstraintName: OwnerForeignKeyName
-        };
+
+        return exception.InnerException is PostgresException { SqlState: PostgresErrorCodes.ForeignKeyViolation, ConstraintName: OwnerForeignKeyName };
     }
 
     /// <summary>
@@ -577,27 +600,13 @@ public class WishlistService(
     /// </summary>
     /// <param name="first">The first wishlist.</param>
     /// <param name="second">The second wishlist.</param>
-    /// <returns><see langword="true" /> when their identifying and editable values match.</returns>
+    /// <returns><see langword="true"/> when their identifying and editable values match.</returns>
     private static bool HasSameValues(
         Wishlist first,
         Wishlist second)
     {
-        var firstValues = (
-            first.Id,
-            first.OwnerId,
-            first.Name,
-            first.NormalizedName,
-            first.Occasion,
-            first.EventDate,
-            first.Message);
-        var secondValues = (
-            second.Id,
-            second.OwnerId,
-            second.Name,
-            second.NormalizedName,
-            second.Occasion,
-            second.EventDate,
-            second.Message);
+        var firstValues = (first.Id, first.OwnerId, first.Name, first.NormalizedName, first.Occasion, first.EventDate, first.Message);
+        var secondValues = (second.Id, second.OwnerId, second.Name, second.NormalizedName, second.Occasion, second.EventDate, second.Message);
 
         return firstValues == secondValues;
     }

@@ -842,11 +842,11 @@ public class WishlistIntegrationTests(PostgreSqlContainerFixture fixture)
             null,
             null);
         await coordinator.WaitUntilFirstSaveStartsAsync(TestContext.Current.CancellationToken);
-        HttpResponseMessage secondResponse;
+        Task<HttpResponseMessage> secondUpdateTask;
 
         try
         {
-            secondResponse = await UpdateWishlistAsync(
+            secondUpdateTask = UpdateWishlistAsync(
                 client,
                 wishlist.Id,
                 entityTag,
@@ -860,28 +860,28 @@ public class WishlistIntegrationTests(PostgreSqlContainerFixture fixture)
             coordinator.ReleaseFirstSave();
         }
 
-        using (secondResponse)
+        using (var secondResponse = await secondUpdateTask)
         using (var firstResponse = await firstUpdateTask)
         {
             var stored = await GetWishlistAsync(
                 factory,
                 wishlist.Id);
-            var conflict = await firstResponse.Content.ReadFromJsonAsync<ErrorResponse>(
+            var conflict = await secondResponse.Content.ReadFromJsonAsync<ErrorResponse>(
                 TestContext.Current.CancellationToken);
 
             // Assert
             Assert.Equal(
                 HttpStatusCode.OK,
-                secondResponse.StatusCode);
+                firstResponse.StatusCode);
             Assert.Equal(
                 HttpStatusCode.PreconditionFailed,
-                firstResponse.StatusCode);
+                secondResponse.StatusCode);
             Assert.NotNull(conflict);
             Assert.Equal(
                 ErrorCodes.WishlistVersionConflict,
                 conflict.ErrorCode);
             Assert.Equal(
-                "Deuxième modification",
+                "Première modification",
                 stored.Name);
         }
     }

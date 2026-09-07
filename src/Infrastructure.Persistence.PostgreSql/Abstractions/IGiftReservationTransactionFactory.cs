@@ -7,6 +7,14 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Abstrac
 /// </summary>
 public interface IGiftReservationTransactionFactory
 {
+    /// <summary>Locks a member before acquiring wishlist and child locks.</summary>
+    /// <param name="memberId">The authenticated member identifier.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A task completed when the existing account is protected from deletion.</returns>
+    Task LockMemberAsync(
+        Guid memberId,
+        CancellationToken cancellationToken);
+
     /// <summary>Begins a reservation transaction.</summary>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>The created transaction.</returns>

@@ -86,6 +86,54 @@ public class Wishlist : IAuditableEntity
         return true;
     }
 
+    /// <summary>Changes moderation state without losing the original suspension date.</summary>
+    /// <param name="isSuspended">Whether the wishlist must be suspended.</param>
+    /// <param name="reason">The validated private suspension reason.</param>
+    /// <param name="occurredAt">The UTC decision date.</param>
+    /// <returns>Whether the moderation state changed.</returns>
+    public bool Moderate(
+        bool isSuspended,
+        string? reason,
+        DateTime occurredAt)
+    {
+        var suspensionReason = isSuspended ? reason : null;
+
+        if (IsSuspended == isSuspended && string.Equals(
+                SuspensionReason,
+                suspensionReason,
+                StringComparison.Ordinal))
+            return false;
+
+        if (isSuspended && !IsSuspended)
+            SuspendedAt = occurredAt;
+
+        if (!isSuspended)
+            SuspendedAt = null;
+
+        IsSuspended = isSuspended;
+        SuspensionReason = suspensionReason;
+
+        return true;
+    }
+
+    /// <summary>Gets whether an administrator has suspended this wishlist.</summary>
+    public bool IsSuspended
+    {
+        get; private set;
+    }
+
+    /// <summary>Gets the private reason for the current suspension.</summary>
+    public string? SuspensionReason
+    {
+        get; private set;
+    }
+
+    /// <summary>Gets the UTC start of the current suspension.</summary>
+    public DateTime? SuspendedAt
+    {
+        get; private set;
+    }
+
     /// <summary>
     /// Gets the wishlist identifier.
     /// </summary>

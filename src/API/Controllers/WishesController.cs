@@ -61,6 +61,7 @@ public class WishesController(
     {
         await AuthorizeWishlistAsync(
             wishlistId,
+            AuthorizationPolicies.ManageWishlist,
             cancellationToken);
         var memberId = GetMemberId();
         var collection = await sender.Send(
@@ -107,6 +108,7 @@ public class WishesController(
     {
         await AuthorizeWishlistAsync(
             wishlistId,
+            AuthorizationPolicies.ModifyWishlist,
             cancellationToken);
         var memberId = GetMemberId();
         var expectedVersion = entityTagService.Parse(Request.Headers.IfMatch);
@@ -155,6 +157,7 @@ public class WishesController(
     {
         await AuthorizeWishlistAsync(
             wishlistId,
+            AuthorizationPolicies.ModifyWishlist,
             cancellationToken);
         var memberId = GetMemberId();
         var wish = await sender.Send(
@@ -203,6 +206,7 @@ public class WishesController(
     {
         await AuthorizeWishlistAsync(
             wishlistId,
+            AuthorizationPolicies.ManageWishlist,
             cancellationToken);
         var memberId = GetMemberId();
         var wish = await sender.Send(
@@ -248,6 +252,7 @@ public class WishesController(
     {
         await AuthorizeWishlistAsync(
             wishlistId,
+            AuthorizationPolicies.ModifyWishlist,
             cancellationToken);
         var memberId = GetMemberId();
         var expectedVersion = entityTagService.Parse(Request.Headers.IfMatch);
@@ -293,6 +298,7 @@ public class WishesController(
     [ProducesResponseType(typeof(WishResponse), StatusCodes.Status200OK, "application/json")]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest, "application/json")]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status409Conflict, "application/json")]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status412PreconditionFailed, "application/json")]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status413PayloadTooLarge, "application/json")]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status415UnsupportedMediaType, "application/json")]
@@ -307,6 +313,7 @@ public class WishesController(
     {
         await AuthorizeWishlistAsync(
             wishlistId,
+            AuthorizationPolicies.ModifyWishlist,
             cancellationToken);
         var expectedVersion = entityTagService.Parse(Request.Headers.IfMatch);
         var imageContent = await ReadImageAsync(
@@ -347,6 +354,7 @@ public class WishesController(
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest, "application/json")]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status409Conflict, "application/json")]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status412PreconditionFailed, "application/json")]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status428PreconditionRequired, "application/json")]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status503ServiceUnavailable, "application/json")]
@@ -357,6 +365,7 @@ public class WishesController(
     {
         await AuthorizeWishlistAsync(
             wishlistId,
+            AuthorizationPolicies.ModifyWishlist,
             cancellationToken);
         var version = await sender.Send(
             new DeleteWishImageCommand(
@@ -384,6 +393,7 @@ public class WishesController(
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest, "application/json")]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status409Conflict, "application/json")]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status412PreconditionFailed, "application/json")]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status428PreconditionRequired, "application/json")]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status503ServiceUnavailable, "application/json")]
@@ -394,6 +404,7 @@ public class WishesController(
     {
         await AuthorizeWishlistAsync(
             wishlistId,
+            AuthorizationPolicies.ModifyWishlist,
             cancellationToken);
         var memberId = GetMemberId();
         var expectedVersion = entityTagService.Parse(Request.Headers.IfMatch);
@@ -413,17 +424,19 @@ public class WishesController(
     /// Authorizes owner access to a private parent wishlist.
     /// </summary>
     /// <param name="wishlistId">The parent wishlist identifier.</param>
+    /// <param name="policy">The named read or writable-owner policy.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>A task that represents the asynchronous authorization operation.</returns>
     /// <exception cref="WishlistNotFoundException">The private wishlist is unavailable to the current member.</exception>
     private async Task AuthorizeWishlistAsync(
         Guid wishlistId,
+        string policy,
         CancellationToken cancellationToken)
     {
         var authorization = await authorizationService.AuthorizeAsync(
             User,
             wishlistId,
-            AuthorizationPolicies.ManageWishlist);
+            policy);
         cancellationToken.ThrowIfCancellationRequested();
 
         if (!authorization.Succeeded)
