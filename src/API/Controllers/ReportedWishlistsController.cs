@@ -63,7 +63,7 @@ public class ReportedWishlistsController(
     }
 
     /// <summary>Reads current reported content, including suspended wishlists and revoked shares, without reservations.</summary>
-    /// <param name="wishlistId">The optional wishlistId.</param>
+    /// <param name="wishlistId">The reported wishlist identifier.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>The current read-only result.</returns>
     [HttpGet("{wishlistId:guid}")]
@@ -117,7 +117,7 @@ public class ReportedWishlistsController(
     }
 
     /// <summary>Lists anonymous reports in reverse chronological order.</summary>
-    /// <param name="wishlistId">The optional wishlistId.</param>
+    /// <param name="wishlistId">The reported wishlist identifier.</param>
     /// <param name="reason">The optional reason.</param>
     /// <param name="page">The optional page, defaulting to one.</param>
     /// <param name="pageSize">The optional pageSize, defaulting to twenty and limited to one hundred.</param>
@@ -154,13 +154,13 @@ public class ReportedWishlistsController(
     }
 
     /// <summary>Reads the current WebP image. Administrator Bearer authentication is required on every request.</summary>
-    /// <param name="wishlistId">The optional wishlistId.</param>
-    /// <param name="wishId">The optional wishId.</param>
+    /// <param name="wishlistId">The reported wishlist identifier.</param>
+    /// <param name="wishId">The gift identifier within the reported wishlist.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>The current read-only result.</returns>
     [HttpGet("{wishlistId:guid}/wishes/{wishId:guid}/image")]
     [NoStoreResponse(StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(FileStreamResult), StatusCodes.Status200OK, "image/webp")]
+    [ProducesResponseType(typeof(Stream), StatusCodes.Status200OK, "image/webp")]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest, "application/json")]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound, "application/json")]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status503ServiceUnavailable, "application/json")]

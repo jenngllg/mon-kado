@@ -73,6 +73,33 @@ public class ReportedWishlistsOpenApiTests
                 .TryGetProperty(
                 image ? "image/webp" : "application/json",
                 out _));
+
+        if (image)
+        {
+            var schemaReference = success
+                .GetProperty("content")
+                .GetProperty("image/webp")
+                .GetProperty("schema");
+            Assert.Equal(
+                "#/components/schemas/Stream",
+                schemaReference
+                    .GetProperty("$ref")
+                    .GetString());
+            var schema = document.RootElement
+                .GetProperty("components")
+                .GetProperty("schemas")
+                .GetProperty("Stream");
+            Assert.Equal(
+                "string",
+                schema
+                    .GetProperty("type")
+                    .GetString());
+            Assert.Equal(
+                "binary",
+                schema
+                    .GetProperty("format")
+                    .GetString());
+        }
         Assert.True(success
                 .GetProperty("headers")
                 .TryGetProperty(
