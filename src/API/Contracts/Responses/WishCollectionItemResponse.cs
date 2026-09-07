@@ -1,4 +1,4 @@
-using System.Diagnostics.CodeAnalysis;
+using System.Text.Json.Serialization;
 
 namespace JennGllg.Fr.MonKado.Back.Api.Contracts.Responses;
 
@@ -7,7 +7,6 @@ namespace JennGllg.Fr.MonKado.Back.Api.Contracts.Responses;
 /// </summary>
 /// <param name="wish">The private gift wish details.</param>
 /// <param name="entityTag">The individual strong entity tag.</param>
-[ExcludeFromCodeCoverage]
 public class WishCollectionItemResponse(
     WishResponse wish,
     string entityTag)
@@ -41,6 +40,17 @@ public class WishCollectionItemResponse(
     /// Gets the optional price in euros.
     /// </summary>
     public decimal? Price { get; } = wish.Price;
+
+    /// <summary>
+    /// Gets the total desired quantity, independently of reservations.
+    /// </summary>
+    [JsonNumberHandling(JsonNumberHandling.Strict)]
+    public int Quantity { get; } = wish.Quantity;
+
+    /// <summary>
+    /// Gets the short-lived signed absolute owner image URL, or null when no image exists.
+    /// </summary>
+    public string? ImageUrl { get; } = wish.ImageUrl;
 
     /// <summary>
     /// Gets the position inside the parent wishlist.

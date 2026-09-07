@@ -86,10 +86,24 @@ public class WishImageIntegrationTests(PostgreSqlContainerFixture fixture) : IAs
         using var firstResponse = await client.SendAsync(
             firstRequest,
             TestContext.Current.CancellationToken);
-        var firstBody = await firstResponse.Content.ReadFromJsonAsync<JsonElement>(
+        using var firstCollection = await client.GetAsync(
+            $"/api/v1/wishlists/{wishlist.Id}/wishes",
             TestContext.Current.CancellationToken);
+        var firstCollectionBody = await firstCollection.Content.ReadFromJsonAsync<JsonElement>(
+            TestContext.Current.CancellationToken);
+        var firstBody = Assert.Single(firstCollectionBody.GetProperty("wishes").EnumerateArray());
         var firstUrl = firstBody.GetProperty("imageUrl").GetString()
             ?? throw new InvalidOperationException("The first signed image URL is missing.");
+        using var imageClient = factory.CreateClient();
+        using var firstImageResponse = await imageClient.GetAsync(
+            firstUrl,
+            TestContext.Current.CancellationToken);
+        using var secondCollection = await client.GetAsync(
+            $"/api/v1/wishlists/{wishlist.Id}/wishes",
+            TestContext.Current.CancellationToken);
+        var secondCollectionBody = await secondCollection.Content.ReadFromJsonAsync<JsonElement>(
+            TestContext.Current.CancellationToken);
+        var secondBody = Assert.Single(secondCollectionBody.GetProperty("wishes").EnumerateArray());
         var firstState = await GetPersistedStateAsync(
             factory,
             wishId);
@@ -112,8 +126,12 @@ public class WishImageIntegrationTests(PostgreSqlContainerFixture fixture) : IAs
         using var replacementResponse = await client.SendAsync(
             replacementRequest,
             TestContext.Current.CancellationToken);
-        var replacementBody = await replacementResponse.Content.ReadFromJsonAsync<JsonElement>(
+        using var replacementCollection = await client.GetAsync(
+            $"/api/v1/wishlists/{wishlist.Id}/wishes",
             TestContext.Current.CancellationToken);
+        var replacementCollectionBody = await replacementCollection.Content.ReadFromJsonAsync<JsonElement>(
+            TestContext.Current.CancellationToken);
+        var replacementBody = Assert.Single(replacementCollectionBody.GetProperty("wishes").EnumerateArray());
         var replacementUrl = replacementBody.GetProperty("imageUrl").GetString()
             ?? throw new InvalidOperationException("The replacement signed image URL is missing.");
         var replacementState = await GetPersistedStateAsync(
@@ -142,6 +160,29 @@ public class WishImageIntegrationTests(PostgreSqlContainerFixture fixture) : IAs
             TestContext.Current.CancellationToken);
 
         // Assert
+        Assert.Equal(
+            HttpStatusCode.OK,
+            firstImageResponse.StatusCode);
+        Assert.Equal(
+            "image/webp",
+            firstImageResponse.Content.Headers.ContentType?.MediaType);
+        Assert.True(firstImageResponse.Headers.CacheControl?.NoStore);
+        Assert.True(firstCollection.Headers.CacheControl?.NoStore);
+        Assert.Equal(
+            firstCollection.Headers.ETag?.Tag,
+            secondCollection.Headers.ETag?.Tag);
+        Assert.Equal(
+            firstResponse.Headers.ETag?.Tag,
+            firstBody.GetProperty("entityTag").GetString());
+        Assert.Equal(
+            firstBody.GetProperty("entityTag").GetString(),
+            secondBody.GetProperty("entityTag").GetString());
+        Assert.NotEqual(
+            firstUrl,
+            secondBody.GetProperty("imageUrl").GetString());
+        Assert.Equal(
+            replacementResponse.Headers.ETag?.Tag,
+            replacementBody.GetProperty("entityTag").GetString());
         Assert.Equal(
             HttpStatusCode.OK,
             firstResponse.StatusCode);

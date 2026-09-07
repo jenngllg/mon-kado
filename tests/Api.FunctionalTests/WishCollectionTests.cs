@@ -74,11 +74,124 @@ public class WishCollectionTests
         Assert.Equal(
             "\"0000002b\"",
             wishes[1].GetProperty("entityTag").GetString());
+        Assert.All(
+            wishes,
+            wish =>
+            {
+                Assert.Equal(
+                    [
+                        "createdAt",
+                        "entityTag",
+                        "id",
+                        "imageUrl",
+                        "name",
+                        "note",
+                        "position",
+                        "price",
+                        "quantity",
+                        "updatedAt",
+                        "url",
+                        "wishlistId"
+                    ],
+                    wish.EnumerateObject()
+                        .Select(property => property.Name)
+                        .Order());
+                Assert.Equal(
+                    7,
+                    wish.GetProperty("quantity").GetInt32());
+                Assert.Equal(
+                    JsonValueKind.Null,
+                    wish.GetProperty("imageUrl").ValueKind);
+            });
         Assert.Contains(
             factory.LogMessages,
             message => message.Contains(
                 $"Wishes retrieved from wishlist {wishlistId} for member {ownerId}",
                 StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task GetCollectionAsync_WhenBearerTokenIsMissing_ReturnsUnauthorizedWithoutReadingWishes()
+    {
+        // Arrange
+        await using var factory = new RegistrationApiFactory();
+        using var client = factory.CreateClient();
+
+        // Act
+        using var response = await client.GetAsync(
+            $"/api/v1/wishlists/{Guid.CreateVersion7()}/wishes",
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.Unauthorized,
+            response.StatusCode);
+        Assert.Empty(factory.WishService.CollectionRetrievals);
+    }
+
+    [Fact]
+    public async Task GetCollectionAsync_WhenWishlistIsNotOwned_ReturnsNotFoundWithoutReadingWishes()
+    {
+        // Arrange
+        await using var factory = new RegistrationApiFactory();
+        factory.WishlistService.Access = WishlistAccess.NotOwned;
+        var wishlistId = Guid.CreateVersion7();
+        factory.WishlistService.SeedActiveWishlist(wishlistId);
+        using var client = CreateAuthorizedClient(
+            factory,
+            Guid.CreateVersion7());
+
+        // Act
+        using var response = await client.GetAsync(
+            $"/api/v1/wishlists/{wishlistId}/wishes",
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.NotFound,
+            response.StatusCode);
+        Assert.Empty(factory.WishService.CollectionRetrievals);
+    }
+
+    [Fact]
+    public async Task GetCollectionAsync_WhenMoreThanTwentyWishesExist_ReturnsCompleteOrderedCollection()
+    {
+        // Arrange
+        await using var factory = new RegistrationApiFactory();
+        var wishlistId = Guid.CreateVersion7();
+        factory.WishlistService.SeedActiveWishlist(wishlistId);
+        var expectedWishes = Enumerable.Range(
+                1,
+                21)
+            .Select(position => CreateDetails(
+                wishlistId,
+                position,
+                (uint)position))
+            .ToArray();
+
+        foreach (var wish in expectedWishes.Reverse())
+            factory.WishService.Wishes[(wishlistId, wish.Id)] = wish;
+
+        using var client = CreateAuthorizedClient(
+            factory,
+            Guid.CreateVersion7());
+
+        // Act
+        using var response = await client.GetAsync(
+            $"/api/v1/wishlists/{wishlistId}/wishes",
+            TestContext.Current.CancellationToken);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.OK,
+            response.StatusCode);
+        Assert.Equal(
+            expectedWishes.Select(wish => wish.Id),
+            body.GetProperty("wishes")
+                .EnumerateArray()
+                .Select(wish => wish.GetProperty("id").GetGuid()));
     }
 
     [Fact]
@@ -418,6 +531,7 @@ public class WishCollectionTests
                 0,
                 DateTimeKind.Utc),
             null,
-            version);
+            version,
+            quantity: 7);
     }
 }
