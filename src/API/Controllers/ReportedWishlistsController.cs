@@ -24,6 +24,8 @@ public class ReportedWishlistsController(
     ISender sender,
     IWishImageUrlService imageUrlService) : ControllerBase
 {
+    private const string NoStoreCacheControl = "no-store";
+
     /// <summary>Lists reported wishlists, counting and ordering only reports matching the optional reason filter.</summary>
     /// <param name="reason">The optional reason.</param>
     /// <param name="isSuspended">The optional isSuspended.</param>
@@ -51,7 +53,7 @@ public class ReportedWishlistsController(
                 page,
                 pageSize),
             cancellationToken);
-        Response.Headers.CacheControl = "no-store";
+        Response.Headers.CacheControl = NoStoreCacheControl;
 
         return Ok(new PaginatedResponse<ReportedWishlistSummary>(
                 result.Items,
@@ -78,22 +80,22 @@ public class ReportedWishlistsController(
         var result = await sender.Send(
             new GetReportedWishlistQuery(wishlistId),
             cancellationToken);
-        Response.Headers.CacheControl = "no-store";
+        Response.Headers.CacheControl = NoStoreCacheControl;
 
         return Ok(new ReportedWishlistResponse
         {
-            WishlistId = result.WishlistId,
-            Name = result.Name,
+            WishlistId = result.Wishlist.Id,
+            Name = result.Wishlist.Name,
             OwnerId = result.OwnerId,
             OwnerDisplayName = result.OwnerDisplayName,
-            Occasion = result.Occasion,
-            EventDate = result.EventDate,
-            Message = result.Message,
-            CreatedAt = result.CreatedAt,
-            UpdatedAt = result.UpdatedAt,
-            IsSuspended = result.IsSuspended,
-            SuspensionReason = result.SuspensionReason,
-            SuspendedAt = result.SuspendedAt,
+            Occasion = result.Wishlist.Occasion,
+            EventDate = result.Wishlist.EventDate,
+            Message = result.Wishlist.Message,
+            CreatedAt = result.Wishlist.CreatedAt,
+            UpdatedAt = result.Wishlist.UpdatedAt,
+            IsSuspended = result.Wishlist.IsSuspended,
+            SuspensionReason = result.Wishlist.SuspensionReason,
+            SuspendedAt = result.Wishlist.SuspendedAt,
             Wishes = result.Wishes
                     .Select(wish => new ReportedWishResponse
                     {
@@ -142,7 +144,7 @@ public class ReportedWishlistsController(
                 page,
                 pageSize),
             cancellationToken);
-        Response.Headers.CacheControl = "no-store";
+        Response.Headers.CacheControl = NoStoreCacheControl;
 
         return Ok(new PaginatedResponse<WishlistReportDetails>(
                 result.Items,
@@ -173,7 +175,7 @@ public class ReportedWishlistsController(
                 wishlistId,
                 wishId),
             cancellationToken);
-        Response.Headers.CacheControl = "no-store";
+        Response.Headers.CacheControl = NoStoreCacheControl;
         Response.Headers.XContentTypeOptions = "nosniff";
 
         return File(

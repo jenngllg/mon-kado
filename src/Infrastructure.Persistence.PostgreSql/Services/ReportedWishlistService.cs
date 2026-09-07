@@ -116,21 +116,24 @@ public class ReportedWishlistService(
                     owner => owner.Id,
                     (
                         wishlist,
-                        owner) => new ReportedWishlistDetails
-                        {
-                            WishlistId = wishlist.Id,
-                            Name = wishlist.Name,
-                            OwnerId = owner.Id,
-                            OwnerDisplayName = owner.DisplayName,
-                            Occasion = wishlist.Occasion,
-                            EventDate = wishlist.EventDate,
-                            Message = wishlist.Message,
-                            CreatedAt = wishlist.CreatedAt,
-                            UpdatedAt = wishlist.UpdatedAt,
-                            IsSuspended = wishlist.IsSuspended,
-                            SuspensionReason = wishlist.SuspensionReason,
-                            SuspendedAt = wishlist.SuspendedAt,
-                            Wishes = context.Wishes
+                        owner) => new ReportedWishlistDetails(
+                            new WishlistDetails(
+                                wishlist.Id,
+                                wishlist.Name,
+                                wishlist.Occasion,
+                                wishlist.EventDate,
+                                wishlist.Message,
+                                wishlist.CreatedAt,
+                                wishlist.UpdatedAt,
+                                wishlist.Version)
+                            {
+                                IsSuspended = wishlist.IsSuspended,
+                                SuspensionReason = wishlist.SuspensionReason,
+                                SuspendedAt = wishlist.SuspendedAt
+                            },
+                            owner.Id,
+                            owner.DisplayName,
+                            context.Wishes
                             .Where(wish => wish.WishlistId == wishlist.Id)
                             .OrderBy(wish => wish.Position)
                             .ThenBy(wish => wish.Id)
@@ -147,8 +150,7 @@ public class ReportedWishlistService(
                                 UpdatedAt = wish.UpdatedAt,
                                 ImageId = wish.ImageId
                             })
-                            .ToArray()
-                        })
+                            .ToArray()))
                     .SingleOrDefaultAsync(token);
 
                 return details ?? throw new WishlistNotFoundException();
