@@ -183,6 +183,12 @@ public class AuthenticationEmailDispatcher(
         CancellationToken cancellationToken)
     {
 
+        if (message.Kind == AuthenticationEmailKind.PersonalDataExportReady)
+            return await SendPersonalDataExportReadyAsync(
+                message,
+                frontendOrigin,
+                cancellationToken);
+
         if (message.Kind == AuthenticationEmailKind.AccountDeletionConfirmation)
             return await SendAccountDeletionConfirmationAsync(
                 message,
@@ -219,6 +225,53 @@ public class AuthenticationEmailDispatcher(
 
         return await SendPasswordChangedSecurityNotificationAsync(
             message,
+            cancellationToken);
+    }
+
+    /// <summary>Notifies only the current confirmed account while its archive remains available.</summary>
+    /// <param name="message">The durable archive notification.</param>
+    /// <param name="frontendOrigin">The trusted frontend origin.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The provider result, or null when the archive is no longer eligible.</returns>
+    private async Task<AuthenticationEmailSendResult?> SendPersonalDataExportReadyAsync(
+        AuthenticationEmailOutboxMessage message,
+        Uri frontendOrigin,
+        CancellationToken cancellationToken)
+    {
+        var now = timeProvider
+            .GetUtcNow()
+            .UtcDateTime;
+        var delivery = await context.MemberDataExports
+            .AsNoTracking()
+            .Where(export => export.Id == message.MemberDataExportId && export.MemberId == message.UserId && export.Status == PersonalDataExportStatus.Ready && export.ExpiresAt > now)
+            .Join(
+            context.Users
+                .AsNoTracking()
+                .Where(member => member.EmailConfirmed),
+            export => export.MemberId,
+            member => member.Id,
+            (
+                export,
+                member) => new
+                {
+                    member.Email,
+                    export.ExpiresAt
+                })
+            .SingleOrDefaultAsync(cancellationToken);
+
+        if (delivery is not { Email: { } address, ExpiresAt: { } expiresAt })
+            return null;
+
+        return await sender.SendPersonalDataExportReadyAsync(
+            new PersonalDataExportNotification
+            {
+                OutboxMessageId = message.Id,
+                RecipientAddress = address,
+                AccountUrl = new Uri(
+                    frontendOrigin,
+                    "/profile"),
+                ExpiresAt = expiresAt
+            },
             cancellationToken);
     }
 

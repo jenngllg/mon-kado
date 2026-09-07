@@ -123,6 +123,9 @@ public static class InfrastructureInjectionConfiguration
         services.AddScoped<IGoogleAccountSessionService, GoogleAccountSessionService>();
         services.AddScoped<ICurrentSessionService, CurrentSessionService>();
         services.AddScoped<IMemberProfileService, MemberProfileService>();
+        services.AddScoped<IPersonalDataExportService, PersonalDataExportService>();
+        services.AddScoped<IPersonalDataExportSnapshotReader, PersonalDataExportSnapshotReader>();
+        services.AddScoped<IPersonalDataExportJobs, PersonalDataExportJobs>();
         services.AddScoped<IProfileImageService, ProfileImageService>();
         services.AddScoped<IMemberEmailChangeService, MemberEmailChangeService>();
         services.AddScoped<IMemberPasswordService, MemberPasswordService>();

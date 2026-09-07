@@ -1,4 +1,5 @@
 using JennGllg.Fr.MonKado.Back.Api.Abstractions;
+using JennGllg.Fr.MonKado.Back.Api.Attributes;
 using JennGllg.Fr.MonKado.Back.Api.Errors;
 using JennGllg.Fr.MonKado.Back.Api.Handlers;
 using JennGllg.Fr.MonKado.Back.Application.Common.Exceptions;
@@ -15,6 +16,48 @@ namespace JennGllg.Fr.MonKado.Back.Api.UnitTests.Handlers;
 
 public class GlobalExceptionHandlerTests
 {
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task TryHandleAsync_WhenEndpointMetadataIsAvailableOrMissing_AppliesItsRefreshCookiePolicy(
+        bool hasEndpoint,
+        bool preserve)
+    {
+        // Arrange
+        var context = new DefaultHttpContext();
+        using var body = new MemoryStream();
+        context.Response.Body = body;
+
+        if (hasEndpoint)
+            context.SetEndpoint(new Endpoint(
+                    null,
+                    preserve ? new EndpointMetadataCollection(new PreserveRefreshCookieAttribute()) : EndpointMetadataCollection.Empty,
+                    "export"));
+
+        if (!preserve)
+            _refreshTokenCookieServiceMock.Setup(service => service.Delete(context));
+
+        // Act
+        await _handler.TryHandleAsync(
+            context,
+            new InvalidAuthenticationSessionException(),
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(
+            StatusCodes.Status401Unauthorized,
+            context.Response.StatusCode);
+
+        if (!preserve)
+            _refreshTokenCookieServiceMock.Verify(
+                service => service.Delete(context),
+                Times.Once);
+        _refreshTokenCookieServiceMock.VerifyNoOtherCalls();
+        _guestSessionCookieServiceMock.VerifyNoOtherCalls();
+        _googleExternalAuthenticationServiceMock.VerifyNoOtherCalls();
+    }
+
     [Fact]
     public async Task TryHandleAsync_WhenImageStorageFails_DoesNotLogExceptionPaths()
     {

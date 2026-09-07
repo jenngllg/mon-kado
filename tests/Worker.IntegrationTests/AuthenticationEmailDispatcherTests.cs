@@ -35,6 +35,102 @@ public class AuthenticationEmailDispatcherTests(PostgreSqlWorkerFixture fixture)
             .NewGuid()
             .ToString("N"));
     [Theory]
+    [InlineData("ready", true)]
+    [InlineData("changed-address", true)]
+    [InlineData("expired", false)]
+    [InlineData("unconfirmed", false)]
+    public async Task DispatchAsync_WhenPersonalDataExportIsReady_UsesOnlyCurrentConfirmedAddressAndLiveArchive(
+        string scenario,
+        bool expectedDelivery)
+    {
+        // Arrange
+        var sender = new FakeEmailSender();
+        var now = new DateTimeOffset(
+            2026,
+            9,
+            7,
+            12,
+            0,
+            0,
+            TimeSpan.Zero);
+        await using var provider = await CreateProviderAsync(
+            sender,
+            now);
+        await using var scope = provider.CreateAsyncScope();
+        var context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
+        var member = new MonKadoUser
+        {
+            Id = Guid.CreateVersion7(),
+            UserName = "export@example.test",
+            Email = "export@example.test",
+            EmailConfirmed = true,
+            DisplayName = "Export owner"
+        };
+        Assert.True((await scope.ServiceProvider
+                .GetRequiredService<UserManager<MonKadoUser>>()
+                .CreateAsync(member)).Succeeded);
+        var preparedAt = scenario == "expired" ? now.UtcDateTime.AddHours(-25) : now.UtcDateTime.AddMinutes(-1);
+        var export = new MemberDataExport(
+            member.Id,
+            preparedAt);
+        Assert.True(export.TryClaim(
+                preparedAt,
+                TimeSpan.FromMinutes(2),
+                5));
+        Assert.True(export.Complete(
+                export.LeaseId.GetValueOrDefault(),
+                preparedAt,
+                preparedAt,
+                1024,
+                TimeSpan.FromHours(24)));
+        context.MemberDataExports.Add(export);
+        var notification = AuthenticationEmailOutboxMessage.CreatePersonalDataExportReady(
+            export.Id,
+            member.Id,
+            now.UtcDateTime);
+        context.AuthenticationEmailOutboxMessages.Add(notification);
+        await context.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        if (scenario == "changed-address")
+            member.Email = "current@example.test";
+
+        if (scenario == "unconfirmed")
+            member.EmailConfirmed = false;
+        await context.SaveChangesAsync(TestContext.Current.CancellationToken);
+
+        // Act
+        await DispatchAsync(provider);
+        await DispatchAsync(provider);
+
+        // Assert
+        context.ChangeTracker.Clear();
+        var stored = await context.AuthenticationEmailOutboxMessages.SingleAsync(TestContext.Current.CancellationToken);
+        Assert.NotNull(stored.ProcessedAt);
+        Assert.Null(stored.RecipientEmail);
+
+        if (expectedDelivery)
+        {
+            var message = Assert.Single(sender.PersonalDataExportNotifications);
+            Assert.Equal(
+                member.Email,
+                message.RecipientAddress);
+            Assert.Equal(
+                notification.Id,
+                message.OutboxMessageId);
+            Assert.Equal(
+                export.ExpiresAt,
+                message.ExpiresAt);
+            Assert.Equal(
+                "https://mon-kado.fr/profile",
+                message.AccountUrl.AbsoluteUri);
+            Assert.Empty(message.AccountUrl.Query);
+            Assert.Empty(message.AccountUrl.Fragment);
+        }
+        else
+            Assert.Empty(sender.PersonalDataExportNotifications);
+    }
+
+    [Theory]
     [InlineData("valid", true)]
     [InlineData("expired", false)]
     [InlineData("removed", false)]

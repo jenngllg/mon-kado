@@ -13,6 +13,17 @@ internal class FakeEmailSender(
     AuthenticationEmailFailureCategory failureCategory = AuthenticationEmailFailureCategory.Transient) : IAuthenticationEmailSender
 {
     public ConcurrentQueue<AuthenticationEmailMessage> Messages { get; } = new();
+    public ConcurrentQueue<PersonalDataExportNotification> PersonalDataExportNotifications { get; } = new();
+
+    public async Task<AuthenticationEmailSendResult> SendPersonalDataExportReadyAsync(
+        PersonalDataExportNotification message,
+        CancellationToken cancellationToken)
+    {
+        PersonalDataExportNotifications.Enqueue(message);
+
+        return await CompleteAsync(cancellationToken);
+    }
+
     public ConcurrentQueue<AuthenticationEmailMessage> AccountDeletionConfirmations { get; } = new();
 
     public Task<AuthenticationEmailSendResult> SendAccountDeletionConfirmationAsync(

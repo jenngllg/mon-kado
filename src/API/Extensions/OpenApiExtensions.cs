@@ -133,6 +133,7 @@ public static class OpenApiExtensions
                 return Task.CompletedTask;
             });
             options.AddOperationTransformer<CommonErrorResponsesOperationTransformer>();
+            options.AddOperationTransformer<PersonalDataExportOperationTransformer>();
             options.AddOperationTransformer((
                 operation,
                 context,

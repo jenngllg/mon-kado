@@ -20,6 +20,8 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Context
 /// <param name="options">The options.</param>
 public class MonKadoDbContext(DbContextOptions<MonKadoDbContext> options) : IdentityDbContext<MonKadoUser, IdentityRole<Guid>, Guid>(options), IUnitOfWork
 {
+    /// <summary>Gets durable personal-data export requests and cleanup identities.</summary>
+    public DbSet<MemberDataExport> MemberDataExports => Set<MemberDataExport>();
     /// <summary>
     /// Gets authentication sessions.
     /// </summary>
