@@ -54,6 +54,54 @@ public class WishOpenApiTests
             document.RootElement,
             getCollectionResponses.GetProperty("200"),
             "wishes");
+        var collectionSchema = ResolveSchema(
+            document.RootElement,
+            getCollectionResponses.GetProperty("200")
+                .GetProperty("content")
+                .GetProperty("application/json")
+                .GetProperty("schema"));
+        var collectionItemSchema = ResolveSchema(
+            document.RootElement,
+            collectionSchema.GetProperty("properties")
+                .GetProperty("wishes")
+                .GetProperty("items"));
+        var collectionItemProperties = collectionItemSchema.GetProperty("properties");
+        Assert.Equal(
+            [
+                "createdAt",
+                "entityTag",
+                "id",
+                "imageUrl",
+                "name",
+                "note",
+                "position",
+                "price",
+                "quantity",
+                "updatedAt",
+                "url",
+                "wishlistId"
+            ],
+            collectionItemProperties.EnumerateObject()
+                .Select(property => property.Name)
+                .Order());
+        Assert.Equal(
+            "integer",
+            collectionItemProperties.GetProperty("quantity")
+                .GetProperty("type")
+                .GetString());
+        Assert.Equal(
+            [
+                "null",
+                "string"
+            ],
+            collectionItemProperties.GetProperty("imageUrl")
+                .GetProperty("type")
+                .EnumerateArray()
+                .Select(type => type.GetString())
+                .Order());
+        Assert.DoesNotContain(
+            getCollection.GetProperty("parameters").EnumerateArray(),
+            parameter => parameter.GetProperty("name").GetString() is "page" or "pageSize");
 
         Assert.Equal(
             "Replaces the complete order of gift wishes in an owned private wishlist.",

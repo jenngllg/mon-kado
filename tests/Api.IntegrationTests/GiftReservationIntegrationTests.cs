@@ -126,6 +126,10 @@ public class GiftReservationIntegrationTests(PostgreSqlContainerFixture fixture)
         using var historyWithShareLink = await GetHistoryAsync(
             participantClient,
             cancellationToken);
+        using var ownerCollection = await ownerClient.GetAsync(
+            $"/api/v1/wishlists/{wishlistId}/wishes",
+            cancellationToken);
+        var ownerCollectionBody = await ownerCollection.Content.ReadFromJsonAsync<JsonElement>(cancellationToken);
         using var rotation = await RotateShareLinkAsync(
             ownerClient,
             wishlistId,
@@ -248,6 +252,34 @@ public class GiftReservationIntegrationTests(PostgreSqlContainerFixture fixture)
         Assert.Equal(
             2,
             sharedWish.GetProperty("currentParticipantReservedQuantity").GetInt32());
+        Assert.Equal(
+            HttpStatusCode.OK,
+            ownerCollection.StatusCode);
+        var ownerWish = Assert.Single(ownerCollectionBody.GetProperty("wishes").EnumerateArray());
+        Assert.Equal(
+            3,
+            ownerWish.GetProperty("quantity").GetInt32());
+        Assert.Equal(
+            JsonValueKind.Null,
+            ownerWish.GetProperty("imageUrl").ValueKind);
+        Assert.Equal(
+            [
+                "createdAt",
+                "entityTag",
+                "id",
+                "imageUrl",
+                "name",
+                "note",
+                "position",
+                "price",
+                "quantity",
+                "updatedAt",
+                "url",
+                "wishlistId"
+            ],
+            ownerWish.EnumerateObject()
+                .Select(property => property.Name)
+                .Order());
         Assert.Equal(
             HttpStatusCode.OK,
             historyWithShareLink.StatusCode);
