@@ -26,6 +26,7 @@ public class PersonalDataExportJobs(
     TimeProvider timeProvider,
     IServiceScopeFactory scopeFactory) : IPersonalDataExportJobs
 {
+    private const string DependencyName = "PostgreSQL";
     /// <inheritdoc/>
     public async Task<PersonalDataExportWorkItem?> ClaimAsync(CancellationToken cancellationToken)
     {
@@ -38,7 +39,7 @@ public class PersonalDataExportJobs(
         {
 
             throw new DependencyUnavailableException(
-                "PostgreSQL",
+                DependencyName,
                 exception);
         }
     }
@@ -108,7 +109,7 @@ public class PersonalDataExportJobs(
         {
 
             throw new DependencyUnavailableException(
-                "PostgreSQL",
+                DependencyName,
                 exception);
         }
     }
@@ -138,7 +139,7 @@ public class PersonalDataExportJobs(
                 return true;
 
             throw new DependencyUnavailableException(
-                "PostgreSQL",
+                DependencyName,
                 exception);
         }
     }
@@ -220,7 +221,7 @@ public class PersonalDataExportJobs(
         {
 
             throw new DependencyUnavailableException(
-                "PostgreSQL",
+                DependencyName,
                 exception);
         }
     }
@@ -296,7 +297,7 @@ public class PersonalDataExportJobs(
         {
 
             throw new DependencyUnavailableException(
-                "PostgreSQL",
+                DependencyName,
                 exception);
         }
     }

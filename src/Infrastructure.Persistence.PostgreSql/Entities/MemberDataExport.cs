@@ -1,5 +1,7 @@
 using JennGllg.Fr.MonKado.Back.Application.Models;
 
+using System.Diagnostics.CodeAnalysis;
+
 namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Entities;
 
 /// <summary>Tracks one export and preserves its cleanup identity after account deletion.</summary>
@@ -86,6 +88,7 @@ public class MemberDataExport
         get; private set;
     }
     /// <summary>Gets the last confirmed physical cleanup date for a terminal request.</summary>
+    [SuppressMessage("CodeQuality", "S1144:Unused private types or members should be removed", Justification = "Entity Framework materializes this private setter; cleanup updates the persisted value with ExecuteUpdateAsync.")]
     public DateTime? FilesCleanedAt
     {
         get; private set;

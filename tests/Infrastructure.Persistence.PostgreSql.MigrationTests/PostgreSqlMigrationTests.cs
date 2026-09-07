@@ -55,30 +55,48 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
                 export.Id,
                 memberId,
                 now));
-        await context.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await context.SaveChangesAsync(cancellationToken);
 
-        // Act
-        await context.Database.MigrateAsync(
-            migrations[^2],
-            cancellationToken);
-        var retainedConfirmation = await context.AuthenticationEmailOutboxMessages.AnyAsync(
-            message => message.Id == confirmation.Id,
-            cancellationToken);
-        await context.Database.MigrateAsync(cancellationToken);
-        context.ChangeTracker.Clear();
+            // Act
+            await context.Database.MigrateAsync(
+                migrations[^2],
+                cancellationToken);
+            var retainedConfirmation = await context.AuthenticationEmailOutboxMessages.AnyAsync(
+                message => message.Id == confirmation.Id,
+                cancellationToken);
+            await context.Database.MigrateAsync(cancellationToken);
+            context.ChangeTracker.Clear();
 
-        // Assert
-        Assert.True(retainedConfirmation);
-        Assert.True(await context.Users.AnyAsync(
+            // Assert
+            Assert.True(retainedConfirmation);
+            Assert.True(await context.Users.AnyAsync(
                 member => member.Id == memberId,
                 cancellationToken));
-        Assert.False(await context.MemberDataExports.AnyAsync(
+            Assert.False(await context.MemberDataExports.AnyAsync(
                 candidate => candidate.Id == export.Id,
                 cancellationToken));
-        Assert.False(await context.AuthenticationEmailOutboxMessages.AnyAsync(
-                message => message.Kind == AuthenticationEmailKind.PersonalDataExportReady,
+            Assert.False(await context.AuthenticationEmailOutboxMessages.AnyAsync(
+                message => message.UserId == memberId && message.Kind == AuthenticationEmailKind.PersonalDataExportReady,
                 cancellationToken));
-        Assert.False(context.Database.HasPendingModelChanges());
+            Assert.False(context.Database.HasPendingModelChanges());
+        }
+        finally
+        {
+            // The shared migration database must not retain this test's notification, regardless of test order.
+            context.ChangeTracker.Clear();
+            await context.Database.MigrateAsync(cancellationToken);
+            await context.AuthenticationEmailOutboxMessages
+                .Where(message => message.UserId == memberId)
+                .ExecuteDeleteAsync(cancellationToken);
+            await context.MemberDataExports
+                .Where(candidate => candidate.Id == export.Id)
+                .ExecuteDeleteAsync(cancellationToken);
+            await context.Users
+                .Where(member => member.Id == memberId)
+                .ExecuteDeleteAsync(cancellationToken);
+        }
     }
 
     [Fact]

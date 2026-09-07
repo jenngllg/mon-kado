@@ -25,6 +25,7 @@ namespace JennGllg.Fr.MonKado.Back.Api.Controllers;
 [Route("api/v1/members/current/data-exports")]
 public class PersonalDataExportsController(ISender sender) : ControllerBase
 {
+    private const string NoStore = "no-store";
     /// <summary>Requests a ZIP containing retained personal data and current owned images.</summary>
     /// <remarks>
     /// No request body, extra password proof, antiforgery token or If-Match is required.
@@ -43,12 +44,14 @@ public class PersonalDataExportsController(ISender sender) : ControllerBase
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest, "application/json")]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status429TooManyRequests, "application/json")]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status503ServiceUnavailable, "application/json")]
+    // CurrentSession accepts only an explicit JWT Bearer header, never ambient authentication cookies.
+    // codeql[cs/web/missing-token-validation]
     public async Task<ActionResult<PersonalDataExportResponse>> RequestAsync(CancellationToken cancellationToken)
     {
         var result = await sender.Send(
             new RequestPersonalDataExportCommand(GetMemberId()),
             cancellationToken);
-        Response.Headers.CacheControl = "no-store";
+        Response.Headers.CacheControl = NoStore;
         Response.Headers.Location = $"/api/v1/members/current/data-exports/{result.Id:D}";
 
         return StatusCode(
@@ -72,7 +75,7 @@ public class PersonalDataExportsController(ISender sender) : ControllerBase
                 GetMemberId(),
                 null),
             cancellationToken);
-        Response.Headers.CacheControl = "no-store";
+        Response.Headers.CacheControl = NoStore;
 
         return Ok(MapResponse(result));
     }
@@ -98,7 +101,7 @@ public class PersonalDataExportsController(ISender sender) : ControllerBase
                 GetMemberId(),
                 exportId),
             cancellationToken);
-        Response.Headers.CacheControl = "no-store";
+        Response.Headers.CacheControl = NoStore;
 
         return Ok(MapResponse(result));
     }
@@ -130,7 +133,7 @@ public class PersonalDataExportsController(ISender sender) : ControllerBase
                 GetMemberId(),
                 exportId),
             cancellationToken);
-        Response.Headers.CacheControl = "no-store";
+        Response.Headers.CacheControl = NoStore;
         Response.Headers.XContentTypeOptions = "nosniff";
 
         return new PersonalDataExportFileResult(result);

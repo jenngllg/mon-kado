@@ -61,45 +61,49 @@ public class PersonalDataExportArchiveBuilder(
                     context,
                     token) =>
                 {
-                    using var archive = new ZipArchive(
+                    await using (var archive = await ZipArchive.CreateAsync(
                         context.Archive,
                         ZipArchiveMode.Create,
-                        leaveOpen: true);
-                    var data = archive.CreateEntry(
-                        PersonalDataExportArchiveNames.Data,
-                        CompressionLevel.Fastest);
-                    await using (var destination = data.Open())
-                    {
-                        snapshotAt = await snapshotReader.WriteAsync(
-                            workItem.MemberId,
-                            destination,
-                            context.ImageManifest,
-                            token);
-                    }
-
-                    context.ImageManifest.Position = 0;
-                    await foreach (var image in JsonSerializer.DeserializeAsyncEnumerable<PersonalDataExportImage>(
-                        context.ImageManifest,
-                        _jsonOptions,
+                        leaveOpen: true,
+                        entryNameEncoding: null,
                         token))
                     {
+                        var data = archive.CreateEntry(
+                            PersonalDataExportArchiveNames.Data,
+                            CompressionLevel.Fastest);
+                        await using (var destination = await data.OpenAsync(token))
+                        {
+                            snapshotAt = await snapshotReader.WriteAsync(
+                                workItem.MemberId,
+                                destination,
+                                context.ImageManifest,
+                                token);
+                        }
 
-                        if (image is null)
-                            throw new PersonalDataExportStorageUnavailableException();
-                        await WriteImageAsync(
-                            archive,
-                            image,
-                            token);
-                    }
+                        context.ImageManifest.Position = 0;
+                        await foreach (var image in JsonSerializer.DeserializeAsyncEnumerable<PersonalDataExportImage>(
+                            context.ImageManifest,
+                            _jsonOptions,
+                            token))
+                        {
 
-                    var readme = archive.CreateEntry(
-                        PersonalDataExportArchiveNames.Readme,
-                        CompressionLevel.Fastest);
-                    await using (var readmeStream = readme.Open())
-                    {
-                        await readmeStream.WriteAsync(
-                            Encoding.UTF8.GetBytes(Readme),
-                            token);
+                            if (image is null)
+                                throw new PersonalDataExportStorageUnavailableException();
+                            await WriteImageAsync(
+                                archive,
+                                image,
+                                token);
+                        }
+
+                        var readme = archive.CreateEntry(
+                            PersonalDataExportArchiveNames.Readme,
+                            CompressionLevel.Fastest);
+                        await using (var readmeStream = await readme.OpenAsync(token))
+                        {
+                            await readmeStream.WriteAsync(
+                                Encoding.UTF8.GetBytes(Readme),
+                                token);
+                        }
                     }
 
                     token.ThrowIfCancellationRequested();
@@ -139,7 +143,7 @@ public class PersonalDataExportArchiveBuilder(
         var entry = archive.CreateEntry(
             PersonalDataExportArchiveNames.GetImagePath(image.WishId),
             CompressionLevel.NoCompression);
-        await using var destination = entry.Open();
+        await using var destination = await entry.OpenAsync(cancellationToken);
         using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
         var buffer = new byte[BufferSize];
         int bytesRead;

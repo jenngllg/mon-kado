@@ -65,6 +65,56 @@ public class PersonalDataExportIntegrationTests(PostgreSqlContainerFixture fixtu
     }
 
     [Fact]
+    public async Task RequestAsync_WhenOnlyRefreshCookieIsPresent_RejectsRequestWithoutCreatingExport()
+    {
+        // Arrange
+        await using var factory = await CreateFactoryAsync();
+        var member = await CreateMemberAsync(factory);
+        await using var scope = factory.Services.CreateAsyncScope();
+        var sessions = scope.ServiceProvider.GetRequiredService<IRefreshSessionService>();
+        var refreshSession = await sessions.CreateAsync(
+            member.Id,
+            isPersistent: false,
+            requestedSessionId: null,
+            currentSessionId: null,
+            TestContext.Current.CancellationToken);
+        await scope.ServiceProvider
+            .GetRequiredService<IUnitOfWork>()
+            .SaveChangesAsync(TestContext.Current.CancellationToken);
+        using var cookieClient = factory.CreateClient();
+        cookieClient.DefaultRequestHeaders.Add(
+            "Cookie",
+            $"MonKado.Refresh={refreshSession.RefreshToken}");
+        cookieClient.DefaultRequestHeaders.Add(
+            "Origin",
+            "https://foreign.example.test");
+        using var bearerClient = CreateClient(
+            factory,
+            member.Id);
+
+        // Act
+        using var response = await cookieClient.PostAsync(
+            Route,
+            null,
+            TestContext.Current.CancellationToken);
+        using var latest = await bearerClient.GetAsync(
+            $"{Route}/latest",
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.Unauthorized,
+            response.StatusCode);
+        Assert.Equal(
+            HttpStatusCode.NotFound,
+            latest.StatusCode);
+        Assert.False(response.Headers.Contains("Set-Cookie"));
+        Assert.NotNull(await sessions.ProveCurrentSessionAsync(
+            refreshSession.RefreshToken,
+            TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
     public async Task RequestAsync_WhenGenerated_ExportsOwnedDataAndImagesWithoutCredentialsOrOtherMembersData()
     {
         // Arrange

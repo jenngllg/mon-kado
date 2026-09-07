@@ -21,6 +21,40 @@ public class PersonalDataExportOptionsValidatorTests
         Assert.True(result.Succeeded);
     }
 
+    [Fact]
+    public void Validate_WhenIndependentLimitsAreInvalid_AggregatesAllConfigurationGroups()
+    {
+        // Arrange
+        var options = new PersonalDataExportOptions
+        {
+            MaximumRequests = 0,
+            MaximumArchiveBytes = 0,
+            PollInterval = TimeSpan.Zero
+        };
+
+        // Act
+        var result = _validator.Validate(
+            null,
+            options);
+
+        // Assert
+        Assert.True(result.Failed);
+        Assert.Collection(
+            result.Failures,
+            failure => Assert.Contains(
+                "MaximumRequests",
+                failure,
+                StringComparison.Ordinal),
+            failure => Assert.Contains(
+                "MaximumArchiveBytes",
+                failure,
+                StringComparison.Ordinal),
+            failure => Assert.Contains(
+                "worker intervals",
+                failure,
+                StringComparison.Ordinal));
+    }
+
     [Theory]
     [MemberData(nameof(InvalidConfigurations))]
     public void Validate_WhenLimitIsInvalid_ReportsItsConfigurationKey(

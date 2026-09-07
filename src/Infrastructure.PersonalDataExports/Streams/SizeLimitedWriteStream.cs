@@ -1,5 +1,7 @@
 using JennGllg.Fr.MonKado.Back.Application.Common.Exceptions;
 
+using System.Diagnostics.CodeAnalysis;
+
 namespace JennGllg.Fr.MonKado.Back.Infrastructure.PersonalDataExports.Streams;
 
 /// <summary>Bounds every archive byte, including its final ZIP directory, while leaving the caller-owned destination open.</summary>
@@ -70,6 +72,7 @@ public class SizeLimitedWriteStream(
     }
 
     /// <inheritdoc/>
+    [SuppressMessage("CodeQuality", "S1006:Method overrides should not change parameter defaults", Justification = "MonKado requires an explicit CancellationToken for asynchronous I/O; calls through Stream retain the framework default.")]
     public override async ValueTask WriteAsync(
         ReadOnlyMemory<byte> buffer,
         CancellationToken cancellationToken)

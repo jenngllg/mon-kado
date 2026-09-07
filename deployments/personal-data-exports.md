@@ -130,3 +130,12 @@ Rollback removes this feature's jobs and ready notifications, not source persona
 data. Drain export requests and stop generation before rolling back; the Worker
 must clean the private volume before removing the feature if its files are to be
 removed automatically.
+
+## Cross-platform quality gate
+
+The main quality job runs the complete suite on Linux. A separate Windows job runs
+only the export storage unit suite, covering Windows directory creation and file
+deletion semantics. Its OpenCover report is downloaded into the same workflow run
+and source paths are normalized to the Linux checkout before coverage verification
+and Sonar analysis. Visit counts and executable branches are not filtered; the
+combined gate still requires 100% of lines and branches.
