@@ -428,6 +428,15 @@ public static class LogEventIds
     public const int WishlistModerationEmailFailed = 2065;
     /// <summary>Identifies a moderation delivery or retention cycle failure.</summary>
     public const int WishlistModerationEmailCycleFailed = 2066;
+
+    /// <summary>Identifies grouped reported-wishlist reads.</summary>
+    public const int ReportedWishlistsRetrieved = 2067;
+    /// <summary>Identifies reported-wishlist content reads.</summary>
+    public const int ReportedWishlistRetrieved = 2068;
+    /// <summary>Identifies anonymous report page reads.</summary>
+    public const int WishlistReportsRetrieved = 2069;
+    /// <summary>Identifies authenticated administrative image reads.</summary>
+    public const int ReportedWishImageRetrieved = 2070;
     #endregion
     #region Technical
     /// <summary>

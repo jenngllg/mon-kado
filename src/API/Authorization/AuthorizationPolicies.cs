@@ -30,5 +30,8 @@ public static class AuthorizationPolicies
     /// <summary>Identifies the database-backed administrator moderation policy.</summary>
     public const string ModerateWishlist = "ModerateWishlist";
 
+    /// <summary>Identifies database-backed administrator access to reported wishlists.</summary>
+    public const string ViewWishlistReports = "ViewWishlistReports";
+
     #endregion
 }

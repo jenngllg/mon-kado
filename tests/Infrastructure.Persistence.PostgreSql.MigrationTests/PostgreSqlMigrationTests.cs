@@ -21,6 +21,62 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Migrati
 public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
 {
     [Fact]
+    public async Task MigrateAsync_WhenReportIndexIsReplaced_PreservesReportsAndSupportsRollback()
+    {
+        // Arrange
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var provider = CreateServiceProvider();
+        await using var scope = provider.CreateAsyncScope();
+        var context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
+        await context.Database.MigrateAsync(cancellationToken);
+        var ownerId = Guid.CreateVersion7();
+        var wishlistId = Guid.CreateVersion7();
+        var reportId = Guid.CreateVersion7();
+        context.Users.Add(CreateMigrationMember(
+            ownerId,
+            $"{ownerId:N}@example.test",
+            "Report owner"));
+        context.Wishlists.Add(new Wishlist(
+            wishlistId,
+            ownerId,
+            "Reported wishlist",
+            "REPORTED WISHLIST",
+            WishlistOccasion.Other,
+            null,
+            null));
+        context.WishlistReports.Add(new WishlistReport(
+            reportId,
+            wishlistId,
+            WishlistReportReason.Other,
+            "Preserved anonymous report"));
+        await context.SaveChangesAsync(cancellationToken);
+
+        // Act
+        var indexDefinition = await context.Database
+            .SqlQuery<string>($"SELECT indexdef AS \"Value\" FROM pg_indexes WHERE schemaname = 'public' AND indexname = 'ix_wishlist_reports_wishlist_id_created_at_id'")
+            .SingleAsync(cancellationToken);
+        await context.Database.MigrateAsync(
+            "20260906192541_AddWishlistModeration",
+            cancellationToken);
+        var previousIndex = await context.Database
+            .SqlQuery<string>($"SELECT indexdef AS \"Value\" FROM pg_indexes WHERE schemaname = 'public' AND indexname = 'ix_wishlist_reports_wishlist_id'")
+            .SingleAsync(cancellationToken);
+        await context.Database.MigrateAsync(cancellationToken);
+        var report = await context.WishlistReports
+            .AsNoTracking()
+            .SingleAsync(item => item.Id == reportId,
+                cancellationToken);
+
+        // Assert
+        Assert.Contains("(wishlist_id, created_at DESC, id DESC)", indexDefinition, StringComparison.Ordinal);
+        Assert.Contains("(wishlist_id)", previousIndex, StringComparison.Ordinal);
+        Assert.Equal(wishlistId, report.WishlistId);
+        Assert.Equal(WishlistReportReason.Other, report.Reason);
+        Assert.Equal("Preserved anonymous report", report.Details);
+        Assert.False(context.Database.HasPendingModelChanges());
+    }
+
+    [Fact]
     public async Task MigrateAsync_WhenMigrations_AreIdempotentAndMatchTheCurrentModel()
     {
         // Arrange
@@ -147,6 +203,10 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
                 StringComparison.Ordinal),
             migration => Assert.EndsWith(
                 "_AddWishlistModeration",
+                migration,
+                StringComparison.Ordinal),
+            migration => Assert.EndsWith(
+                "_AddWishlistReportReadIndex",
                 migration,
                 StringComparison.Ordinal));
         Assert.False(context.Database.HasPendingModelChanges());
@@ -416,7 +476,7 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
             "ux_wishlist_participants_wishlist_member",
             indexes);
         Assert.Contains(
-            "ix_wishlist_reports_wishlist_id",
+            "ix_wishlist_reports_wishlist_id_created_at_id",
             indexes);
         var columns = await GetAuthenticationEmailOutboxColumnsAsync(
             context,

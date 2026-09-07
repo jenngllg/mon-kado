@@ -24,6 +24,26 @@ public class WishImageUrlServiceTests
     private readonly EphemeralDataProtectionProvider _dataProtectionProvider = new();
 
     [Fact]
+    public void CreateReportedUrl_WhenRequestIsActive_ReturnsAuthenticatedRouteWithoutToken()
+    {
+        // Arrange
+        var wishlistId = Guid.CreateVersion7();
+        var wishId = Guid.CreateVersion7();
+        var service = CreateService(_now);
+
+        // Act
+        var result = service.CreateReportedUrl(
+            wishlistId,
+            wishId);
+
+        // Assert
+        Assert.Equal(
+            $"https://api.monkado.test/base/api/v1/admin/reported-wishlists/{wishlistId:D}/wishes/{wishId:D}/image",
+            result);
+        Assert.Empty(new Uri(result).Query);
+    }
+
+    [Fact]
     public void CreateOwnedUrl_WhenRequestIsActive_ReturnsAbsoluteFiveMinuteGrant()
     {
         // Arrange

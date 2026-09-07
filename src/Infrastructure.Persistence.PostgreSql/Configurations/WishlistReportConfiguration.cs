@@ -35,8 +35,17 @@ public class WishlistReportConfiguration : IEntityTypeConfiguration<WishlistRepo
             .HasForeignKey(report => report.WishlistId)
             .OnDelete(DeleteBehavior.Cascade)
             .HasConstraintName("fk_wishlist_reports_wishlists_wishlist_id");
-        builder.HasIndex(report => report.WishlistId)
-            .HasDatabaseName("ix_wishlist_reports_wishlist_id");
+        builder.HasIndex(report => new
+        {
+            report.WishlistId,
+            report.CreatedAt,
+            report.Id
+        })
+            .IsDescending(
+                false,
+                true,
+                true)
+            .HasDatabaseName("ix_wishlist_reports_wishlist_id_created_at_id");
 
         builder.ToTable(table =>
         {
