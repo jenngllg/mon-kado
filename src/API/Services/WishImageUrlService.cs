@@ -43,6 +43,15 @@ public class WishImageUrlService : IWishImageUrlService
     }
 
     /// <inheritdoc />
+    public string CreateReportedUrl(
+        Guid wishlistId,
+        Guid wishId)
+    {
+
+        return GetOrigin() + $"/api/v1/admin/reported-wishlists/{wishlistId:D}/wishes/{wishId:D}/image";
+    }
+
+    /// <inheritdoc />
     public string CreateOwnedUrl(
         Guid ownerId,
         Guid wishlistId,
@@ -169,19 +178,28 @@ public class WishImageUrlService : IWishImageUrlService
         string path,
         WishImageGrant grant)
     {
-        var request = _httpContextAccessor.HttpContext?.Request ??
-            throw new InvalidOperationException("An active HTTP request is required.");
-        var origin = string.Concat(
-            request.Scheme,
-            "://",
-            request.Host.ToUriComponent(),
-            request.PathBase.ToUriComponent());
+        var origin = GetOrigin();
         var token = _protector.Protect(JsonSerializer.Serialize(grant));
 
         return QueryHelpers.AddQueryString(
             origin + path,
             "token",
             token);
+    }
+
+    /// <summary>Builds the current request origin including any reverse-proxy path base.</summary>
+    /// <returns>The absolute API origin.</returns>
+    /// <exception cref="InvalidOperationException">No active HTTP request is available.</exception>
+    private string GetOrigin()
+    {
+        var request = _httpContextAccessor.HttpContext?.Request ??
+            throw new InvalidOperationException("An active HTTP request is required.");
+
+        return string.Concat(
+            request.Scheme,
+            "://",
+            request.Host.ToUriComponent(),
+            request.PathBase.ToUriComponent());
     }
 
     /// <summary>

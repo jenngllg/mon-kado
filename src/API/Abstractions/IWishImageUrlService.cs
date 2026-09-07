@@ -7,6 +7,14 @@ namespace JennGllg.Fr.MonKado.Back.Api.Abstractions;
 /// </summary>
 public interface IWishImageUrlService
 {
+    /// <summary>Creates an unsigned administrator image URL requiring Bearer authentication on every read.</summary>
+    /// <param name="wishlistId">The parent wishlist identifier.</param>
+    /// <param name="wishId">The wish identifier.</param>
+    /// <returns>The absolute authenticated route, without a grant or token.</returns>
+    string CreateReportedUrl(
+        Guid wishlistId,
+        Guid wishId);
+
     /// <summary>
     /// Creates an absolute private image URL for an authenticated owner response.
     /// </summary>
