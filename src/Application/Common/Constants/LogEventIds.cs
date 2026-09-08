@@ -12,6 +12,8 @@ public static class LogEventIds
 
     /// <summary>Identifies successful administrative audit reads.</summary>
     public const int AdministrativeAuditRetrieved = 1180;
+    /// <summary>Identifies committed administrative session revocation.</summary>
+    public const int AdministrativeSessionsRevoked = 1181;
 
     #endregion
     #region AdministrativeAccountErasure

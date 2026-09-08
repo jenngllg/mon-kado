@@ -14,5 +14,7 @@ public enum AdministrativeAuditAction
     /// <summary>Identifies MemberDataExportDownloadStarted.</summary>
     MemberDataExportDownloadStarted,
     /// <summary>Identifies MemberErased.</summary>
-    MemberErased
+    MemberErased,
+    /// <summary>Identifies administrative revocation of all member sessions.</summary>
+    MemberSessionsRevoked
 }

@@ -33,6 +33,10 @@ public class MonKadoDbContext(DbContextOptions<MonKadoDbContext> options) : Iden
     /// Gets authentication sessions.
     /// </summary>
     public DbSet<AuthenticationSession> AuthenticationSessions => Set<AuthenticationSession>();
+    /// <summary>Gets the identifiers of access tokens issued by committed sessions.</summary>
+    public DbSet<AuthenticationAccessToken> AuthenticationAccessTokens => Set<AuthenticationAccessToken>();
+    /// <summary>Gets retained administrative session-revocation events.</summary>
+    public DbSet<AdministrativeSessionRevocationEvent> AdministrativeSessionRevocationEvents => Set<AdministrativeSessionRevocationEvent>();
     /// <summary>
     /// Gets authentication email outbox messages.
     /// </summary>

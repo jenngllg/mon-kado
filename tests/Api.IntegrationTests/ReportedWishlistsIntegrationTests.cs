@@ -94,9 +94,10 @@ public class ReportedWishlistsIntegrationTests(PostgreSqlContainerFixture fixtur
             await db.SaveChangesAsync(ct);
         }
 
-        using var client = ReportedWishlistTestData.CreateClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            adminId);
+            adminId,
+            TestContext.Current.CancellationToken);
 
         // Act
         using var unfiltered = await ReadAsync(
@@ -277,9 +278,10 @@ public class ReportedWishlistsIntegrationTests(PostgreSqlContainerFixture fixtur
             secondWishlist.Id,
             WishlistReportReason.SpamOrScam,
             ct);
-        using var client = ReportedWishlistTestData.CreateClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            adminId);
+            adminId,
+            TestContext.Current.CancellationToken);
 
         // Act
         using var groups = await ReadAsync(
@@ -398,9 +400,10 @@ public class ReportedWishlistsIntegrationTests(PostgreSqlContainerFixture fixtur
             factory,
             adminId,
             ct);
-        using var client = ReportedWishlistTestData.CreateClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            adminId);
+            adminId,
+            TestContext.Current.CancellationToken);
 
         // Act
         using var missing = await client.GetAsync(
@@ -437,9 +440,10 @@ public class ReportedWishlistsIntegrationTests(PostgreSqlContainerFixture fixtur
         var adminId = await ReportedWishlistTestData.CreateAdministratorAsync(
             factory,
             ct);
-        using var client = ReportedWishlistTestData.CreateClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            adminId);
+            adminId,
+            TestContext.Current.CancellationToken);
 
         // Act
         using var groups = await client.GetAsync(
@@ -477,12 +481,14 @@ public class ReportedWishlistsIntegrationTests(PostgreSqlContainerFixture fixtur
         var adminId = await ReportedWishlistTestData.CreateAdministratorAsync(
             factory,
             ct);
-        using var owner = ReportedWishlistTestData.CreateClient(
+        using var owner = await AuthenticationTestData.CreateClientAsync(
             factory,
-            ownerId);
-        using var admin = ReportedWishlistTestData.CreateClient(
+            ownerId,
+            TestContext.Current.CancellationToken);
+        using var admin = await AuthenticationTestData.CreateClientAsync(
             factory,
-            adminId);
+            adminId,
+            TestContext.Current.CancellationToken);
         using var anonymous = factory.CreateClient();
         await using (var scope = factory.Services.CreateAsyncScope())
         {

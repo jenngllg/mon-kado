@@ -32,7 +32,8 @@ public class JwtAccessTokenService(
     /// <returns>The signed access token.</returns>
     public AccessToken Create(Guid userId)
     {
-        var now = timeProvider.GetUtcNow();
+        var now = DateTimeOffset.FromUnixTimeSeconds(timeProvider.GetUtcNow().ToUnixTimeSeconds());
+        var tokenId = Guid.CreateVersion7(now.UtcDateTime);
         var claims = new[]
         {
             new Claim(
@@ -40,7 +41,7 @@ public class JwtAccessTokenService(
                 userId.ToString("D")),
             new Claim(
                 JwtRegisteredClaimNames.Jti,
-                Guid.CreateVersion7(now.UtcDateTime).ToString("N")),
+                tokenId.ToString("N")),
             new Claim(
                 JwtRegisteredClaimNames.Iat,
                 now.ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture),
@@ -60,6 +61,11 @@ public class JwtAccessTokenService(
 
         return new AccessToken(
             value,
-            LifetimeSeconds);
+            LifetimeSeconds)
+        {
+            Id = tokenId,
+            IssuedAt = now.UtcDateTime,
+            ExpiresAt = now.AddSeconds(LifetimeSeconds).UtcDateTime
+        };
     }
 }

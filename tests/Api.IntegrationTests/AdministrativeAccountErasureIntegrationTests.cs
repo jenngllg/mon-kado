@@ -84,12 +84,14 @@ public class AdministrativeAccountErasureIntegrationTests(PostgreSqlContainerFix
                     member => member.EmailConfirmed,
                     confirmed),
                 cancellationToken);
-        using var administrator = ReportedWishlistTestData.CreateClient(
+        using var administrator = await AuthenticationTestData.CreateClientAsync(
             factory,
-            administratorId);
-        using var member = ReportedWishlistTestData.CreateClient(
+            administratorId,
+            TestContext.Current.CancellationToken);
+        using var member = await AuthenticationTestData.CreateClientAsync(
             factory,
-            memberId);
+            memberId,
+            TestContext.Current.CancellationToken);
 
         // Act
         using var response = await administrator.PostAsJsonAsync(
@@ -183,9 +185,10 @@ public class AdministrativeAccountErasureIntegrationTests(PostgreSqlContainerFix
         var administratorId = await ReportedWishlistTestData.CreateAdministratorAsync(
             factory,
             cancellationToken);
-        using var client = ReportedWishlistTestData.CreateClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            administratorId);
+            administratorId,
+            TestContext.Current.CancellationToken);
 
         // Act
         using var response = await client.PostAsJsonAsync(
@@ -412,9 +415,10 @@ public class AdministrativeAccountErasureIntegrationTests(PostgreSqlContainerFix
             .Select(candidate => candidate.ArchiveId)
             .SingleAsync(cancellationToken);
         Assert.NotNull(storedArchiveId);
-        using var owner = ReportedWishlistTestData.CreateClient(
+        using var owner = await AuthenticationTestData.CreateClientAsync(
             factory,
-            memberId);
+            memberId,
+            TestContext.Current.CancellationToken);
         var wishBody = await owner.GetFromJsonAsync<JsonElement>(
             $"/api/v1/wishlists/{wishlist.Id:D}/wishes/{wish.Id:D}",
             cancellationToken);
@@ -426,9 +430,10 @@ public class AdministrativeAccountErasureIntegrationTests(PostgreSqlContainerFix
         Assert.Equal(
             HttpStatusCode.OK,
             beforeImage.StatusCode);
-        using var administrator = ReportedWishlistTestData.CreateClient(
+        using var administrator = await AuthenticationTestData.CreateClientAsync(
             factory,
-            administratorId);
+            administratorId,
+            TestContext.Current.CancellationToken);
 
         // Act
         using var response = await administrator.PostAsJsonAsync(
@@ -494,9 +499,10 @@ public class AdministrativeAccountErasureIntegrationTests(PostgreSqlContainerFix
         var memberId = await ReportedWishlistTestData.CreateOwnerAsync(
             factory,
             cancellationToken);
-        using var client = ReportedWishlistTestData.CreateClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            administratorId);
+            administratorId,
+            TestContext.Current.CancellationToken);
 
         if (committed)
             interceptor.Arm();
@@ -548,9 +554,10 @@ public class AdministrativeAccountErasureIntegrationTests(PostgreSqlContainerFix
         var memberId = await ReportedWishlistTestData.CreateOwnerAsync(
             factory,
             cancellationToken);
-        using var client = ReportedWishlistTestData.CreateClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            administratorId);
+            administratorId,
+            TestContext.Current.CancellationToken);
         interceptor.Armed = true;
 
         // Act
@@ -847,12 +854,14 @@ public class AdministrativeAccountErasureIntegrationTests(PostgreSqlContainerFix
         var memberId = await ReportedWishlistTestData.CreateOwnerAsync(
             factory,
             cancellationToken);
-        using var administrator = ReportedWishlistTestData.CreateClient(
+        using var administrator = await AuthenticationTestData.CreateClientAsync(
             factory,
-            administratorId);
-        using var concurrentClient = ReportedWishlistTestData.CreateClient(
+            administratorId,
+            TestContext.Current.CancellationToken);
+        using var concurrentClient = await AuthenticationTestData.CreateClientAsync(
             factory,
-            createWishlist ? memberId : administratorId);
+            createWishlist ? memberId : administratorId,
+            TestContext.Current.CancellationToken);
         var request = new
         {
             requestReference = "SUPPORT-808",
@@ -920,9 +929,10 @@ public class AdministrativeAccountErasureIntegrationTests(PostgreSqlContainerFix
         var memberId = await ReportedWishlistTestData.CreateOwnerAsync(
             factory,
             cancellationToken);
-        using var client = ReportedWishlistTestData.CreateClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            revoked ? actorId : memberId);
+            revoked ? actorId : memberId,
+            TestContext.Current.CancellationToken);
         await using var scope = factory.Services.CreateAsyncScope();
         var context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
         await context.UserRoles.Where(role => role.UserId == actorId)

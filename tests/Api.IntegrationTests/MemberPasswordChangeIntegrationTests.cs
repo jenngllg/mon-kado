@@ -54,9 +54,10 @@ public class MemberPasswordChangeIntegrationTests(PostgreSqlContainerFixture fix
                 member.Id)
             : (Guid?)null;
         timeProvider.Advance(TimeSpan.FromHours(1));
-        using var client = CreateAuthorizedClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            member.Id);
+            member.Id,
+            TestContext.Current.CancellationToken);
 
         // Act
         using var response = await UpdatePasswordAsync(
@@ -96,7 +97,7 @@ public class MemberPasswordChangeIntegrationTests(PostgreSqlContainerFixture fix
                 "MonKado.Refresh=;",
                 StringComparison.Ordinal));
         Assert.Equal(
-            HttpStatusCode.OK,
+            HttpStatusCode.Unauthorized,
             currentSessionResponse.StatusCode);
         Assert.NotEqual(
             baseline.PasswordHash,
@@ -264,9 +265,10 @@ public class MemberPasswordChangeIntegrationTests(PostgreSqlContainerFixture fix
         await CreateSessionsAsync(
             factory,
             member.Id);
-        using var client = CreateAuthorizedClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            member.Id);
+            member.Id,
+            TestContext.Current.CancellationToken);
 
         // Act
         using var response = await UpdatePasswordAsync(
@@ -374,9 +376,10 @@ public class MemberPasswordChangeIntegrationTests(PostgreSqlContainerFixture fix
         await CreateSessionsAsync(
             factory,
             member.Id);
-        using var client = CreateAuthorizedClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            member.Id);
+            member.Id,
+            TestContext.Current.CancellationToken);
 
         // Act
         using var response = await UpdatePasswordAsync(
@@ -451,9 +454,10 @@ public class MemberPasswordChangeIntegrationTests(PostgreSqlContainerFixture fix
         HttpResponseMessage response;
         try
         {
-            using var client = CreateAuthorizedClient(
+            using var client = await AuthenticationTestData.CreateClientAsync(
                 factory,
-                member.Id);
+                member.Id,
+            TestContext.Current.CancellationToken);
             response = await UpdatePasswordAsync(
                 client,
                 CurrentPassword,
@@ -526,9 +530,10 @@ public class MemberPasswordChangeIntegrationTests(PostgreSqlContainerFixture fix
     {
         // Arrange
         await using var factory = await CreateMigratedFactoryAsync();
-        using var client = CreateAuthorizedClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            Guid.CreateVersion7());
+            Guid.CreateVersion7(),
+            TestContext.Current.CancellationToken);
 
         // Act
         using var response = await UpdatePasswordAsync(
@@ -548,17 +553,22 @@ public class MemberPasswordChangeIntegrationTests(PostgreSqlContainerFixture fix
         // Arrange
         await using var factory = await CreateMigratedFactoryAsync();
         var member = await CreateMemberAsync(factory);
-        using var client = CreateAuthorizedClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            member.Id);
+            member.Id,
+            TestContext.Current.CancellationToken);
 
         // Act
         using var firstResponse = await UpdatePasswordAsync(
             client,
             CurrentPassword,
             NewPassword);
+        using var reconnectedClient = await AuthenticationTestData.CreateClientAsync(
+            factory,
+            member.Id,
+            TestContext.Current.CancellationToken);
         using var secondResponse = await UpdatePasswordAsync(
-            client,
+            reconnectedClient,
             NewPassword,
             "a third secure password");
         await using var scope = factory.Services.CreateAsyncScope();
@@ -585,12 +595,14 @@ public class MemberPasswordChangeIntegrationTests(PostgreSqlContainerFixture fix
         // Arrange
         await using var factory = await CreateMigratedFactoryAsync();
         var member = await CreateMemberAsync(factory);
-        using var firstClient = CreateAuthorizedClient(
+        using var firstClient = await AuthenticationTestData.CreateClientAsync(
             factory,
-            member.Id);
-        using var secondClient = CreateAuthorizedClient(
+            member.Id,
+            TestContext.Current.CancellationToken);
+        using var secondClient = await AuthenticationTestData.CreateClientAsync(
             factory,
-            member.Id);
+            member.Id,
+            TestContext.Current.CancellationToken);
 
         // Act
         var responses = await Task.WhenAll(
@@ -626,9 +638,10 @@ public class MemberPasswordChangeIntegrationTests(PostgreSqlContainerFixture fix
                 coordinator));
         var member = await CreateMemberAsync(factory);
         using var loginClient = factory.CreateClient();
-        using var passwordClient = CreateAuthorizedClient(
+        using var passwordClient = await AuthenticationTestData.CreateClientAsync(
             factory,
-            member.Id);
+            member.Id,
+            TestContext.Current.CancellationToken);
         using var refreshClient = factory.CreateClient(new WebApplicationFactoryClientOptions
         {
             HandleCookies = false
@@ -1167,19 +1180,7 @@ public class MemberPasswordChangeIntegrationTests(PostgreSqlContainerFixture fix
         return value.Split(';')[0];
     }
 
-    private static HttpClient CreateAuthorizedClient(
-        PostgreSqlApiFactory factory,
-        Guid memberId)
-    {
-        var client = factory.CreateClient();
-        var accessTokenService = factory.Services.GetRequiredService<IAccessTokenService>();
-        var accessToken = accessTokenService.Create(memberId);
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
-            JwtBearerDefaults.AuthenticationScheme,
-            accessToken.Value);
 
-        return client;
-    }
 
     private static async Task<HttpResponseMessage> UpdatePasswordAsync(
         HttpClient client,

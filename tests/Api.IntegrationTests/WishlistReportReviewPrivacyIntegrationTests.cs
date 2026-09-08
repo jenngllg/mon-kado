@@ -27,9 +27,10 @@ public class WishlistReportReviewPrivacyIntegrationTests(PostgreSqlContainerFixt
         var (adminId, _, wishlist, report) = await PrepareAsync(
             factory,
             ct);
-        using var client = ReportedWishlistTestData.CreateClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            adminId);
+            adminId,
+            TestContext.Current.CancellationToken);
         var route = Route(
             wishlist.Id,
             report.Id);
@@ -129,9 +130,10 @@ public class WishlistReportReviewPrivacyIntegrationTests(PostgreSqlContainerFixt
         var (adminId, _, wishlist, _) = await PrepareAsync(
             factory,
             ct);
-        using var client = ReportedWishlistTestData.CreateClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            adminId);
+            adminId,
+            TestContext.Current.CancellationToken);
         var route = "/api/v1/admin/reported-wishlists";
 
         if (suffix.Length != 0)

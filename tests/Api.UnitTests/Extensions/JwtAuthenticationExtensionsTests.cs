@@ -84,7 +84,7 @@ public class JwtAuthenticationExtensionsTests
     }
 
     [Fact]
-    public async Task OnTokenValidated_WhenPrincipalIsMissing_ThrowsInvalidAuthenticationSessionException()
+    public async Task OnTokenValidated_WhenPrincipalIsMissing_ThrowsInvalidAccessTokenException()
     {
         // Arrange
         var services = new ServiceCollection();
@@ -116,12 +116,12 @@ public class JwtAuthenticationExtensionsTests
         }
 
         // Act
-        var exception = await Assert.ThrowsAsync<InvalidAuthenticationSessionException>(
+        var exception = await Assert.ThrowsAsync<InvalidAccessTokenException>(
             (Func<Task>)action);
 
         // Assert
         Assert.Equal(
-            "The authentication session is invalid or expired.",
+            "The access token is invalid or revoked.",
             exception.Message);
     }
 }

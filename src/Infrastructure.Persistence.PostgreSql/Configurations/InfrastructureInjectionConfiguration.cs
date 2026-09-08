@@ -128,6 +128,7 @@ public static class InfrastructureInjectionConfiguration
         services.AddScoped<IPersonalDataExportService, PersonalDataExportService>();
         services.AddScoped<IAdministrativeDataExportService, AdministrativeDataExportService>();
         services.AddScoped<IAdministrativeAccountErasureService, AdministrativeAccountErasureService>();
+        services.AddScoped<IAdministrativeSessionRevocationService, AdministrativeSessionRevocationService>();
         services.AddScoped<IAdministrativeAuditService, AdministrativeAuditService>();
         services.AddScoped<IAccountErasureRecipientProtector, AccountErasureRecipientProtector>();
         services.AddScoped<IAccountErasureMaintenance, AccountErasureMaintenance>();

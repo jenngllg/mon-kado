@@ -46,9 +46,10 @@ public class WishlistIntegrationTests(PostgreSqlContainerFixture fixture)
         var otherOwner = await CreateMemberAsync(
             factory,
             "other@example.fr");
-        using var ownerClient = CreateAuthorizedClient(
+        using var ownerClient = await AuthenticationTestData.CreateClientAsync(
             factory,
-            owner.Id);
+            owner.Id,
+            TestContext.Current.CancellationToken);
         var pastWishlist = await SeedWishlistAsync(
             factory,
             Guid.CreateVersion7(),
@@ -127,9 +128,10 @@ public class WishlistIntegrationTests(PostgreSqlContainerFixture fixture)
             owner.Id,
             "Deuxième liste",
             null);
-        using var client = CreateAuthorizedClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            owner.Id);
+            owner.Id,
+            TestContext.Current.CancellationToken);
 
         // Act
         using var response = await client.GetAsync(
@@ -162,9 +164,10 @@ public class WishlistIntegrationTests(PostgreSqlContainerFixture fixture)
         var owner = await CreateMemberAsync(
             factory,
             "owner@example.fr");
-        using var client = CreateAuthorizedClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            owner.Id);
+            owner.Id,
+            TestContext.Current.CancellationToken);
 
         // Act
         using var response = await client.GetAsync(
@@ -188,9 +191,10 @@ public class WishlistIntegrationTests(PostgreSqlContainerFixture fixture)
         var owner = await CreateMemberAsync(
             factory,
             "owner@example.fr");
-        using var client = CreateAuthorizedClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            owner.Id);
+            owner.Id,
+            TestContext.Current.CancellationToken);
         await DeleteMemberAsync(
             factory,
             owner.Id);
@@ -220,9 +224,10 @@ public class WishlistIntegrationTests(PostgreSqlContainerFixture fixture)
         var owner = await CreateMemberAsync(
             factory,
             "owner@example.fr");
-        using var client = CreateAuthorizedClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            owner.Id);
+            owner.Id,
+            TestContext.Current.CancellationToken);
 
         // Act
         using var creationResponse = await CreateWishlistAsync(
@@ -303,9 +308,10 @@ public class WishlistIntegrationTests(PostgreSqlContainerFixture fixture)
         var owner = await CreateMemberAsync(
             factory,
             "owner@example.fr");
-        using var client = CreateAuthorizedClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            owner.Id);
+            owner.Id,
+            TestContext.Current.CancellationToken);
         interceptor.Arm();
 
         // Act
@@ -340,12 +346,14 @@ public class WishlistIntegrationTests(PostgreSqlContainerFixture fixture)
         var otherOwner = await CreateMemberAsync(
             factory,
             "other@example.fr");
-        using var ownerClient = CreateAuthorizedClient(
+        using var ownerClient = await AuthenticationTestData.CreateClientAsync(
             factory,
-            owner.Id);
-        using var otherOwnerClient = CreateAuthorizedClient(
+            owner.Id,
+            TestContext.Current.CancellationToken);
+        using var otherOwnerClient = await AuthenticationTestData.CreateClientAsync(
             factory,
-            otherOwner.Id);
+            otherOwner.Id,
+            TestContext.Current.CancellationToken);
         using var firstResponse = await CreateWishlistAsync(
             ownerClient,
             "Liste de Le\u0301a");
@@ -390,12 +398,14 @@ public class WishlistIntegrationTests(PostgreSqlContainerFixture fixture)
         var otherMember = await CreateMemberAsync(
             factory,
             "other@example.fr");
-        using var ownerClient = CreateAuthorizedClient(
+        using var ownerClient = await AuthenticationTestData.CreateClientAsync(
             factory,
-            owner.Id);
-        using var otherClient = CreateAuthorizedClient(
+            owner.Id,
+            TestContext.Current.CancellationToken);
+        using var otherClient = await AuthenticationTestData.CreateClientAsync(
             factory,
-            otherMember.Id);
+            otherMember.Id,
+            TestContext.Current.CancellationToken);
         using var creationResponse = await CreateWishlistAsync(
             ownerClient,
             "Liste privée");
@@ -426,9 +436,10 @@ public class WishlistIntegrationTests(PostgreSqlContainerFixture fixture)
         var owner = await CreateMemberAsync(
             factory,
             "owner@example.fr");
-        using var client = CreateAuthorizedClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            owner.Id);
+            owner.Id,
+            TestContext.Current.CancellationToken);
         using var creationResponse = await CreateWishlistAsync(
             client,
             "Liste initiale");
@@ -573,9 +584,10 @@ public class WishlistIntegrationTests(PostgreSqlContainerFixture fixture)
         var owner = await CreateMemberAsync(
             factory,
             "owner@example.fr");
-        using var client = CreateAuthorizedClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            owner.Id);
+            owner.Id,
+            TestContext.Current.CancellationToken);
         using var creationResponse = await CreateWishlistAsync(
             client,
             "Liste initiale");
@@ -630,9 +642,10 @@ public class WishlistIntegrationTests(PostgreSqlContainerFixture fixture)
                 2020,
                 1,
                 1));
-        using var client = CreateAuthorizedClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            owner.Id);
+            owner.Id,
+            TestContext.Current.CancellationToken);
         using var retrievalResponse = await client.GetAsync(
             $"/api/v1/wishlists/{wishlist.Id}",
             TestContext.Current.CancellationToken);
@@ -719,9 +732,10 @@ public class WishlistIntegrationTests(PostgreSqlContainerFixture fixture)
         var owner = await CreateMemberAsync(
             factory,
             "owner@example.fr");
-        using var client = CreateAuthorizedClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            owner.Id);
+            owner.Id,
+            TestContext.Current.CancellationToken);
         using var firstResponse = await CreateWishlistAsync(
             client,
             "Liste de Léa");
@@ -771,12 +785,14 @@ public class WishlistIntegrationTests(PostgreSqlContainerFixture fixture)
         var otherMember = await CreateMemberAsync(
             factory,
             "other@example.fr");
-        using var ownerClient = CreateAuthorizedClient(
+        using var ownerClient = await AuthenticationTestData.CreateClientAsync(
             factory,
-            owner.Id);
-        using var otherClient = CreateAuthorizedClient(
+            owner.Id,
+            TestContext.Current.CancellationToken);
+        using var otherClient = await AuthenticationTestData.CreateClientAsync(
             factory,
-            otherMember.Id);
+            otherMember.Id,
+            TestContext.Current.CancellationToken);
         using var creationResponse = await CreateWishlistAsync(
             ownerClient,
             "Liste privée");
@@ -823,9 +839,10 @@ public class WishlistIntegrationTests(PostgreSqlContainerFixture fixture)
             owner.Id,
             "Liste initiale",
             null);
-        using var client = CreateAuthorizedClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            owner.Id);
+            owner.Id,
+            TestContext.Current.CancellationToken);
         using var retrievalResponse = await client.GetAsync(
             $"/api/v1/wishlists/{wishlist.Id}",
             TestContext.Current.CancellationToken);
@@ -894,9 +911,10 @@ public class WishlistIntegrationTests(PostgreSqlContainerFixture fixture)
         var owner = await CreateMemberAsync(
             factory,
             "owner@example.fr");
-        using var client = CreateAuthorizedClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            owner.Id);
+            owner.Id,
+            TestContext.Current.CancellationToken);
         using var creationResponse = await CreateWishlistAsync(
             client,
             "Liste à supprimer");
@@ -965,9 +983,10 @@ public class WishlistIntegrationTests(PostgreSqlContainerFixture fixture)
         var owner = await CreateMemberAsync(
             factory,
             "owner@example.fr");
-        using var client = CreateAuthorizedClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            owner.Id);
+            owner.Id,
+            TestContext.Current.CancellationToken);
         using var creationResponse = await CreateWishlistAsync(
             client,
             "Liste à supprimer");
@@ -999,9 +1018,10 @@ public class WishlistIntegrationTests(PostgreSqlContainerFixture fixture)
         var owner = await CreateMemberAsync(
             factory,
             "owner@example.fr");
-        using var client = CreateAuthorizedClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            owner.Id);
+            owner.Id,
+            TestContext.Current.CancellationToken);
         using var creationResponse = await CreateWishlistAsync(
             client,
             "Liste initiale");
@@ -1058,12 +1078,14 @@ public class WishlistIntegrationTests(PostgreSqlContainerFixture fixture)
         var otherMember = await CreateMemberAsync(
             factory,
             "other@example.fr");
-        using var ownerClient = CreateAuthorizedClient(
+        using var ownerClient = await AuthenticationTestData.CreateClientAsync(
             factory,
-            owner.Id);
-        using var otherClient = CreateAuthorizedClient(
+            owner.Id,
+            TestContext.Current.CancellationToken);
+        using var otherClient = await AuthenticationTestData.CreateClientAsync(
             factory,
-            otherMember.Id);
+            otherMember.Id,
+            TestContext.Current.CancellationToken);
         using var creationResponse = await CreateWishlistAsync(
             ownerClient,
             "Liste privée");
@@ -1106,9 +1128,10 @@ public class WishlistIntegrationTests(PostgreSqlContainerFixture fixture)
             owner.Id,
             "Liste initiale",
             null);
-        using var client = CreateAuthorizedClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            owner.Id);
+            owner.Id,
+            TestContext.Current.CancellationToken);
         using var retrievalResponse = await client.GetAsync(
             $"/api/v1/wishlists/{wishlist.Id}",
             TestContext.Current.CancellationToken);
@@ -1168,9 +1191,10 @@ public class WishlistIntegrationTests(PostgreSqlContainerFixture fixture)
             owner.Id,
             "Liste initiale",
             null);
-        using var client = CreateAuthorizedClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            owner.Id);
+            owner.Id,
+            TestContext.Current.CancellationToken);
         using var retrievalResponse = await client.GetAsync(
             $"/api/v1/wishlists/{wishlist.Id}",
             TestContext.Current.CancellationToken);
@@ -1225,9 +1249,10 @@ public class WishlistIntegrationTests(PostgreSqlContainerFixture fixture)
         var owner = await CreateMemberAsync(
             factory,
             "owner@example.fr");
-        using var client = CreateAuthorizedClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            owner.Id);
+            owner.Id,
+            TestContext.Current.CancellationToken);
         using var creationResponse = await CreateWishlistAsync(
             client,
             "Liste privée");
@@ -1251,9 +1276,10 @@ public class WishlistIntegrationTests(PostgreSqlContainerFixture fixture)
     {
         // Arrange
         await using var factory = await CreateMigratedFactoryAsync();
-        using var client = CreateAuthorizedClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            Guid.CreateVersion7());
+            Guid.CreateVersion7(),
+            TestContext.Current.CancellationToken);
 
         // Act
         using var response = await CreateWishlistAsync(
@@ -1283,9 +1309,10 @@ public class WishlistIntegrationTests(PostgreSqlContainerFixture fixture)
         var owner = await CreateMemberAsync(
             factory,
             "owner@example.fr");
-        using var client = CreateAuthorizedClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            owner.Id);
+            owner.Id,
+            TestContext.Current.CancellationToken);
         using var creationResponse = await CreateWishlistAsync(
             client,
             "Liste privée");
@@ -1387,22 +1414,7 @@ public class WishlistIntegrationTests(PostgreSqlContainerFixture fixture)
         return member;
     }
 
-    private static HttpClient CreateAuthorizedClient(
-        PostgreSqlApiFactory factory,
-        Guid memberId)
-    {
-        var client = factory.CreateClient();
-        var jwtOptions = factory.Services.GetRequiredService<IOptions<JwtOptions>>();
-        var accessTokenService = new JwtAccessTokenService(
-            jwtOptions,
-            TimeProvider.System);
-        var accessToken = accessTokenService.Create(memberId);
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
-            JwtBearerDefaults.AuthenticationScheme,
-            accessToken.Value);
 
-        return client;
-    }
 
     private static async Task<HttpResponseMessage> CreateWishlistAsync(
         HttpClient client,

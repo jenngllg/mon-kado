@@ -3,6 +3,7 @@ using JennGllg.Fr.MonKado.Back.Api.Errors;
 using JennGllg.Fr.MonKado.Back.Api.Options;
 using JennGllg.Fr.MonKado.Back.Application.Abstractions;
 using JennGllg.Fr.MonKado.Back.Application.Common.Constants;
+using JennGllg.Fr.MonKado.Back.Application.Common.Exceptions;
 using JennGllg.Fr.MonKado.Back.Application.Models;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Abstractions;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Contexts;
@@ -332,7 +333,7 @@ public class LoginIntegrationTests(PostgreSqlContainerFixture fixture)
     }
 
     [Fact]
-    public async Task LoginAsync_WhenCommittedSessionIsRevokedBeforeVerification_CreatesUsableReplacementSession()
+    public async Task LoginAsync_WhenCommittedSessionIsRevokedBeforeVerification_DoesNotRecreateCredentials()
     {
         // Arrange
         var interceptor = new CoordinatedAmbiguousCommitInterceptor();
@@ -368,31 +369,17 @@ public class LoginIntegrationTests(PostgreSqlContainerFixture fixture)
 
         // Act
         interceptor.ReleaseFailure();
-        var result = await ambiguousAttempt;
+        var exception = await Record.ExceptionAsync(async () => await ambiguousAttempt);
 
         // Assert
-        Assert.Equal(
-            AccountLoginResult.Success,
-            result.Result);
-        Assert.NotNull(result.Tokens);
+        Assert.IsType<InvalidAuthenticationSessionException>(exception);
         await using var scope = factory.Services.CreateAsyncScope();
         var verificationContext = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
         var sessions = await verificationContext.AuthenticationSessions
             .AsNoTracking()
             .OrderBy(session => session.CreatedAt)
             .ToArrayAsync(TestContext.Current.CancellationToken);
-        Assert.Equal(
-            2,
-            sessions.Length);
-        Assert.Single(
-            sessions,
-            session => session.RevokedAt is not null);
-        var activeSession = Assert.Single(
-            sessions,
-            session => session.RevokedAt is null);
-        Assert.Equal(
-            SHA256.HashData(Encoding.UTF8.GetBytes(result.Tokens.RefreshToken)),
-            activeSession.RefreshTokenHash);
+        Assert.NotNull(Assert.Single(sessions).RevokedAt);
     }
 
     [Fact]
@@ -1402,7 +1389,7 @@ public class LoginIntegrationTests(PostgreSqlContainerFixture fixture)
     }
 
     [Fact]
-    public async Task GetCurrentAsync_WhenMemberWasDeleted_ReturnsUnauthorizedAndDeletesRefreshCookie()
+    public async Task GetCurrentAsync_WhenMemberWasDeleted_ReturnsUnauthorizedWithoutChangingIndependentCookies()
     {
         // Arrange
         await using var factory = await CreateMigratedFactoryAsync(new FixedTimeProvider(_now));
@@ -1440,11 +1427,7 @@ public class LoginIntegrationTests(PostgreSqlContainerFixture fixture)
         Assert.Equal(
             ErrorCodes.AccountAuthenticationSessionInvalid,
             await GetErrorCodeAsync(response));
-        Assert.Contains(
-            response.Headers.GetValues("Set-Cookie"),
-            value => value.StartsWith(
-                "MonKado.Refresh=;",
-                StringComparison.Ordinal));
+        Assert.False(response.Headers.Contains("Set-Cookie"));
     }
 
     [Fact]
@@ -1745,6 +1728,62 @@ public class LoginIntegrationTests(PostgreSqlContainerFixture fixture)
         Assert.NotNull(persistedUser.LockoutEnd);
         Assert.Empty(await context.AuthenticationSessions.ToArrayAsync(
             TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task RefreshAsync_WhenLegacyJwtHasNoRegistration_PreservesCookieAndRestoresAuthenticatedAccess()
+    {
+        // Arrange
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var factory = await CreateMigratedFactoryAsync(new FixedTimeProvider(_now));
+        await CreateUserAsync(
+            factory,
+            "legacy-token@example.fr",
+            emailConfirmed: true);
+        using var client = factory.CreateClient();
+        using var login = await LoginAsync(
+            client,
+            "legacy-token@example.fr",
+            Password,
+            rememberMe: true);
+        var original = await ReadAccessTokenAsync(login);
+        await using var scope = factory.Services.CreateAsyncScope();
+        var database = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
+        await database.AuthenticationAccessTokens.ExecuteDeleteAsync(cancellationToken);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            "Bearer",
+            original.AccessToken);
+
+        // Act
+        using var rejected = await client.GetAsync(
+            "/api/v1/auth/sessions/current",
+            cancellationToken);
+        client.DefaultRequestHeaders.Authorization = null;
+        using var refreshed = await RefreshAsync(client);
+        var replacement = await ReadAccessTokenAsync(refreshed);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            "Bearer",
+            replacement.AccessToken);
+        using var current = await client.GetAsync(
+            "/api/v1/auth/sessions/current",
+            cancellationToken);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.Unauthorized,
+            rejected.StatusCode);
+        Assert.False(rejected.Headers.Contains("Set-Cookie"));
+        Assert.Equal(
+            HttpStatusCode.OK,
+            refreshed.StatusCode);
+        Assert.Equal(
+            HttpStatusCode.OK,
+            current.StatusCode);
+        Assert.Single(await database.AuthenticationSessions.ToArrayAsync(cancellationToken));
+        var metadata = Assert.Single(await database.AuthenticationAccessTokens.ToArrayAsync(cancellationToken));
+        Assert.Equal(
+            Guid.Parse(new JwtSecurityTokenHandler().ReadJwtToken(replacement.AccessToken).Id),
+            metadata.Id);
     }
 
     [Fact]

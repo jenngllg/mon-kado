@@ -50,9 +50,10 @@ public class MemberAccountDeletionIntegrationTests(PostgreSqlContainerFixture fi
             .Create(
             member.Id,
             request.Id);
-        using var client = CreateAuthorizedClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            member.Id);
+            member.Id,
+            TestContext.Current.CancellationToken);
         interceptor.Armed = true;
 
         // Act
@@ -230,12 +231,14 @@ public class MemberAccountDeletionIntegrationTests(PostgreSqlContainerFixture fi
             .Create(
             member.Id,
             request.Id);
-        using var firstClient = CreateAuthorizedClient(
+        using var firstClient = await AuthenticationTestData.CreateClientAsync(
             factory,
-            member.Id);
-        using var secondClient = CreateAuthorizedClient(
+            member.Id,
+            TestContext.Current.CancellationToken);
+        using var secondClient = await AuthenticationTestData.CreateClientAsync(
             factory,
-            member.Id);
+            member.Id,
+            TestContext.Current.CancellationToken);
         barrier.Arm();
 
         // Act
@@ -340,9 +343,10 @@ public class MemberAccountDeletionIntegrationTests(PostgreSqlContainerFixture fi
             .Create(
             member.Id,
             request.Id);
-        using var client = CreateAuthorizedClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            member.Id);
+            member.Id,
+            TestContext.Current.CancellationToken);
 
         if (committed)
             interceptor.Arm();
@@ -394,9 +398,10 @@ public class MemberAccountDeletionIntegrationTests(PostgreSqlContainerFixture fi
         var member = await CreateMemberAsync(
             scope.ServiceProvider,
             "quota@example.test");
-        using var client = CreateAuthorizedClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            member.Id);
+            member.Id,
+            TestContext.Current.CancellationToken);
         for (var index = 0; index < 3; index++)
         {
             using var accepted = await client.PostAsync(
@@ -547,9 +552,10 @@ public class MemberAccountDeletionIntegrationTests(PostgreSqlContainerFixture fi
             request.Id);
 
         // Act
-        using var client = CreateAuthorizedClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            owner.Id);
+            owner.Id,
+            TestContext.Current.CancellationToken);
         using var response = await client.PostAsJsonAsync(
             RequestPath + "/confirm",
             new
@@ -656,9 +662,10 @@ public class MemberAccountDeletionIntegrationTests(PostgreSqlContainerFixture fi
                 break;
         }
 
-        using var client = CreateAuthorizedClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            member.Id);
+            member.Id,
+            TestContext.Current.CancellationToken);
 
         // Act
         using var response = await client.PostAsJsonAsync(
@@ -698,20 +705,7 @@ public class MemberAccountDeletionIntegrationTests(PostgreSqlContainerFixture fi
         return member;
     }
 
-    private static HttpClient CreateAuthorizedClient(
-        PostgreSqlApiFactory factory,
-        Guid memberId)
-    {
-        var client = factory.CreateClient();
-        var accessToken = factory.Services
-            .GetRequiredService<IAccessTokenService>()
-            .Create(memberId);
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
-            "Bearer",
-            accessToken.Value);
 
-        return client;
-    }
 
     [Theory]
     [InlineData(false)]
@@ -755,13 +749,10 @@ public class MemberAccountDeletionIntegrationTests(PostgreSqlContainerFixture fi
                 now,
                 now.AddHours(8)));
         await sessionContext.SaveChangesAsync(TestContext.Current.CancellationToken);
-        using var client = factory.CreateClient();
-        var accessToken = factory.Services
-            .GetRequiredService<IAccessTokenService>()
-            .Create(member.Id);
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
-            "Bearer",
-            accessToken.Value);
+        using var client = await AuthenticationTestData.CreateClientAsync(
+            factory,
+            member.Id,
+            TestContext.Current.CancellationToken);
         using var requested = await client.PostAsync(
             RequestPath,
             null,

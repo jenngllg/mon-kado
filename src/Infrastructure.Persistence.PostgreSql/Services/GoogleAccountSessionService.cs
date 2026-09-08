@@ -274,9 +274,30 @@ public class GoogleAccountSessionService(
 
         if (result.MemberId is { } memberId &&
             result.Session is { } session)
+        {
+            var accessToken = accessTokenService.Create(memberId);
+            context.AuthenticationAccessTokens.Add(new AuthenticationAccessToken
+            {
+                Id = accessToken.Id,
+                SessionId = executionState.AuthenticationContext.FlowId,
+                IssuedAt = accessToken.IssuedAt,
+                ExpiresAt = accessToken.ExpiresAt
+            });
+            await unitOfWork.SaveChangesAsync(cancellationToken);
             executionState.RecordSession(
                 memberId,
-                session.RefreshToken);
+                session.RefreshToken,
+                accessToken.Id);
+
+            return new GoogleAuthenticationResult(
+                result.Outcome,
+                session,
+                memberId,
+                result.MemberResolution)
+            {
+                AccessToken = accessToken
+            };
+        }
 
         return result;
     }
@@ -417,7 +438,6 @@ public class GoogleAccountSessionService(
             authenticationContext.FlowId,
             authenticationContext.CurrentSessionId,
             cancellationToken);
-        await unitOfWork.SaveChangesAsync(cancellationToken);
 
         return new GoogleAuthenticationResult(
             GoogleAuthenticationOutcome.SessionCreated,
@@ -508,7 +528,6 @@ public class GoogleAccountSessionService(
             authenticationContext.FlowId,
             authenticationContext.CurrentSessionId,
             cancellationToken);
-        await unitOfWork.SaveChangesAsync(cancellationToken);
 
         return new GoogleAuthenticationResult(
             GoogleAuthenticationOutcome.SessionCreated,
@@ -550,7 +569,6 @@ public class GoogleAccountSessionService(
             authenticationContext.FlowId,
             authenticationContext.CurrentSessionId,
             cancellationToken);
-        await unitOfWork.SaveChangesAsync(cancellationToken);
 
         return new GoogleAuthenticationResult(
             GoogleAuthenticationOutcome.SessionCreated,
@@ -581,7 +599,8 @@ public class GoogleAccountSessionService(
             result.Tokens is { } tokens)
             executionState.RecordSession(
                 memberId,
-                tokens.RefreshToken);
+                tokens.RefreshToken,
+                tokens.AccessToken.Id);
 
         return result;
     }
@@ -706,8 +725,16 @@ public class GoogleAccountSessionService(
             authenticationContext.FlowId,
             authenticationContext.CurrentSessionId,
             cancellationToken);
+        var accessToken = accessTokenService.Create(user.Id);
+        context.AuthenticationAccessTokens.Add(new AuthenticationAccessToken
+        {
+            Id = accessToken.Id,
+            SessionId = authenticationContext.FlowId,
+            IssuedAt = accessToken.IssuedAt,
+            ExpiresAt = accessToken.ExpiresAt
+        });
         var tokens = new AccountSessionTokens(
-            accessTokenService.Create(user.Id),
+            accessToken,
             refreshSession.RefreshToken,
             refreshSession.RefreshTokenExpiresAt,
             refreshSession.IsPersistent);
@@ -741,7 +768,12 @@ public class GoogleAccountSessionService(
                         storedSession.UserId == memberId,
                     cancellationToken);
 
-            return session is not null &&
+            return session is { RevokedAt: null } &&
+                await context.AuthenticationAccessTokens
+                    .AsNoTracking()
+                    .AnyAsync(
+                    token => token.Id == executionState.AttemptedAccessTokenId && token.SessionId == session.Id,
+                    cancellationToken) &&
                 refreshTokenService.Verify(
                     refreshToken,
                     session.RefreshTokenHash);

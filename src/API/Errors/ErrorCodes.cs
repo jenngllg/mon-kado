@@ -27,6 +27,10 @@ public static class ErrorCodes
     #region Account
     /// <summary>Identifies attempts to erase the acting administrator through the administrative path.</summary>
     public const string AccountSelfErasureNotAllowed = "ACCOUNT_SELF_ERASURE_NOT_ALLOWED";
+    /// <summary>Identifies forbidden administrative self-session revocation.</summary>
+    public const string AccountSelfSessionRevocationNotAllowed = "ACCOUNT_SELF_SESSION_REVOCATION_NOT_ALLOWED";
+    /// <summary>Identifies a missing session revocation target.</summary>
+    public const string AccountSessionRevocationTargetNotFound = "ACCOUNT_SESSION_REVOCATION_TARGET_NOT_FOUND";
     /// <summary>Identifies a missing administrative erasure target.</summary>
     public const string AccountErasureTargetNotFound = "ACCOUNT_ERASURE_TARGET_NOT_FOUND";
     /// <summary>Identifies ProfileImageUnsupportedFormat errors.</summary>

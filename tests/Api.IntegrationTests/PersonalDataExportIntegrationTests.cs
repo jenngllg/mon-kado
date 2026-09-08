@@ -88,9 +88,10 @@ public class PersonalDataExportIntegrationTests(PostgreSqlContainerFixture fixtu
         cookieClient.DefaultRequestHeaders.Add(
             "Origin",
             "https://foreign.example.test");
-        using var bearerClient = CreateClient(
+        using var bearerClient = await AuthenticationTestData.CreateClientAsync(
             factory,
-            member.Id);
+            member.Id,
+            TestContext.Current.CancellationToken);
 
         // Act
         using var response = await cookieClient.PostAsync(
@@ -129,9 +130,10 @@ public class PersonalDataExportIntegrationTests(PostgreSqlContainerFixture fixtu
             other,
             profileBytes,
             wishBytes);
-        using var client = CreateClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            owner.Id);
+            owner.Id,
+            TestContext.Current.CancellationToken);
 
         // Act
         using var requested = await client.PostAsync(
@@ -243,10 +245,10 @@ public class PersonalDataExportIntegrationTests(PostgreSqlContainerFixture fixtu
         Assert.Empty(root
                 .GetProperty("reservations")
                 .EnumerateArray());
-        Assert.Single(root
+        Assert.Equal(2, root
                 .GetProperty("accountActivity")
                 .GetProperty("sessions")
-                .EnumerateArray());
+                .GetArrayLength());
         var text = root.GetRawText();
         Assert.NotNull(other.Email);
         Assert.DoesNotContain(
@@ -286,12 +288,14 @@ public class PersonalDataExportIntegrationTests(PostgreSqlContainerFixture fixtu
         await using var factory = await CreateFactoryAsync();
         var owner = await CreateMemberAsync(factory);
         var other = await CreateMemberAsync(factory);
-        using var ownerClient = CreateClient(
+        using var ownerClient = await AuthenticationTestData.CreateClientAsync(
             factory,
-            owner.Id);
-        using var otherClient = CreateClient(
+            owner.Id,
+            TestContext.Current.CancellationToken);
+        using var otherClient = await AuthenticationTestData.CreateClientAsync(
             factory,
-            other.Id);
+            other.Id,
+            TestContext.Current.CancellationToken);
         using var anonymous = factory.CreateClient();
         using var requested = await ownerClient.PostAsync(
             Route,
@@ -343,9 +347,10 @@ public class PersonalDataExportIntegrationTests(PostgreSqlContainerFixture fixtu
         // Arrange
         await using var factory = await CreateFactoryAsync();
         var owner = await CreateMemberAsync(factory);
-        using var client = CreateClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            owner.Id);
+            owner.Id,
+            TestContext.Current.CancellationToken);
         using var requested = await client.PostAsync(
             Route,
             null,
@@ -356,6 +361,11 @@ public class PersonalDataExportIntegrationTests(PostgreSqlContainerFixture fixtu
             .GetGuid();
         await GenerateAsync(factory);
         _clock.Advance(TimeSpan.FromHours(24));
+        using var reconnected = await AuthenticationTestData.CreateClientAsync(
+            factory,
+            owner.Id,
+            TestContext.Current.CancellationToken);
+        client.DefaultRequestHeaders.Authorization = reconnected.DefaultRequestHeaders.Authorization;
 
         // Act
         using var expired = await client.GetAsync(
@@ -394,9 +404,10 @@ public class PersonalDataExportIntegrationTests(PostgreSqlContainerFixture fixtu
         // Arrange
         await using var factory = await CreateFactoryAsync();
         var owner = await CreateMemberAsync(factory);
-        using var client = CreateClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            owner.Id);
+            owner.Id,
+            TestContext.Current.CancellationToken);
         using var requested = await client.PostAsync(
             Route,
             null,
@@ -457,9 +468,10 @@ public class PersonalDataExportIntegrationTests(PostgreSqlContainerFixture fixtu
         // Arrange
         await using var factory = await CreateFactoryAsync();
         var owner = await CreateMemberAsync(factory);
-        using var client = CreateClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            owner.Id);
+            owner.Id,
+            TestContext.Current.CancellationToken);
         using var requested = await client.PostAsync(
             Route,
             null,
@@ -510,9 +522,10 @@ public class PersonalDataExportIntegrationTests(PostgreSqlContainerFixture fixtu
         // Arrange
         await using var factory = await CreateFactoryAsync();
         var member = await CreateMemberAsync(factory);
-        using var client = CreateClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            member.Id);
+            member.Id,
+            TestContext.Current.CancellationToken);
 
         // Act
         var responses = await Task.WhenAll(Enumerable
@@ -558,9 +571,10 @@ public class PersonalDataExportIntegrationTests(PostgreSqlContainerFixture fixtu
         // Arrange
         await using var factory = await CreateFactoryAsync();
         var member = await CreateMemberAsync(factory);
-        using var client = CreateClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            member.Id);
+            member.Id,
+            TestContext.Current.CancellationToken);
         for (var index = 0; index < 3; index++)
         {
             using var requested = await client.PostAsync(
@@ -587,6 +601,11 @@ public class PersonalDataExportIntegrationTests(PostgreSqlContainerFixture fixtu
             null,
             TestContext.Current.CancellationToken);
         _clock.Advance(TimeSpan.FromHours(24));
+        using var reconnected = await AuthenticationTestData.CreateClientAsync(
+            factory,
+            member.Id,
+            TestContext.Current.CancellationToken);
+        client.DefaultRequestHeaders.Authorization = reconnected.DefaultRequestHeaders.Authorization;
         using var next = await client.PostAsync(
             Route,
             null,
@@ -629,9 +648,10 @@ public class PersonalDataExportIntegrationTests(PostgreSqlContainerFixture fixtu
             unavailableCommit,
             confirmedCommit);
         var member = await CreateMemberAsync(factory);
-        using var client = CreateClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            member.Id);
+            member.Id,
+            TestContext.Current.CancellationToken);
 
         if (verificationUnavailable)
             unavailableCommit.Armed = true;
@@ -674,9 +694,10 @@ public class PersonalDataExportIntegrationTests(PostgreSqlContainerFixture fixtu
         var interceptor = new ProfileImageCommitAccountChangeInterceptor();
         await using var factory = await CreateFactoryAsync(interceptor);
         var member = await CreateMemberAsync(factory);
-        using var client = CreateClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            member.Id);
+            member.Id,
+            TestContext.Current.CancellationToken);
         interceptor.AfterCommit = async token =>
         {
             await using var scope = factory.Services.CreateAsyncScope();
@@ -716,9 +737,10 @@ public class PersonalDataExportIntegrationTests(PostgreSqlContainerFixture fixtu
         var interceptor = new GiftImageCommitInterceptor();
         await using var factory = await CreateFactoryAsync(interceptor);
         var member = await CreateMemberAsync(factory);
-        using var client = CreateClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            member.Id);
+            member.Id,
+            TestContext.Current.CancellationToken);
         using var request = await client.PostAsync(
             Route,
             null,
@@ -774,9 +796,10 @@ public class PersonalDataExportIntegrationTests(PostgreSqlContainerFixture fixtu
         // Arrange
         await using var factory = await CreateFactoryAsync();
         var member = await CreateMemberAsync(factory);
-        using var client = CreateClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            member.Id);
+            member.Id,
+            TestContext.Current.CancellationToken);
         using var request = await client.PostAsync(
             Route,
             null,
@@ -811,7 +834,11 @@ public class PersonalDataExportIntegrationTests(PostgreSqlContainerFixture fixtu
                 _clock.Advance(delays[attempt - 1]);
         }
 
-        var json = await client.GetFromJsonAsync<JsonElement>(
+        using var reconnected = await AuthenticationTestData.CreateClientAsync(
+            factory,
+            member.Id,
+            TestContext.Current.CancellationToken);
+        var json = await reconnected.GetFromJsonAsync<JsonElement>(
             $"{Route}/latest",
             TestContext.Current.CancellationToken);
 
@@ -846,9 +873,10 @@ public class PersonalDataExportIntegrationTests(PostgreSqlContainerFixture fixtu
         // Arrange
         await using var factory = await CreateFactoryAsync();
         var member = await CreateMemberAsync(factory);
-        using var client = CreateClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            member.Id);
+            member.Id,
+            TestContext.Current.CancellationToken);
         using var request = await client.PostAsync(
             Route,
             null,
@@ -1090,9 +1118,10 @@ public class PersonalDataExportIntegrationTests(PostgreSqlContainerFixture fixtu
         // Arrange
         await using var factory = await CreateFactoryAsync();
         var member = await CreateMemberAsync(factory);
-        using var client = CreateClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            member.Id);
+            member.Id,
+            TestContext.Current.CancellationToken);
         using var request = await client.PostAsync(
             Route,
             null,
@@ -1218,9 +1247,10 @@ public class PersonalDataExportIntegrationTests(PostgreSqlContainerFixture fixtu
             outage,
             interceptor);
         var member = await CreateMemberAsync(factory);
-        using var client = CreateClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            member.Id);
+            member.Id,
+            TestContext.Current.CancellationToken);
         using var request = await client.PostAsync(
             Route,
             null,
@@ -1493,9 +1523,10 @@ public class PersonalDataExportIntegrationTests(PostgreSqlContainerFixture fixtu
                 second,
                 archive,
                 TestContext.Current.CancellationToken));
-        using var client = CreateClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            member.Id);
+            member.Id,
+            TestContext.Current.CancellationToken);
         var bytes = await client.GetByteArrayAsync(
             $"{Route}/{second.ExportId:D}/archive",
             TestContext.Current.CancellationToken);
@@ -1540,9 +1571,10 @@ public class PersonalDataExportIntegrationTests(PostgreSqlContainerFixture fixtu
         var interceptor = new GiftImageCommitInterceptor();
         await using var factory = await CreateFactoryAsync(interceptor);
         var member = await CreateMemberAsync(factory);
-        using var client = CreateClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            member.Id);
+            member.Id,
+            TestContext.Current.CancellationToken);
         interceptor.ArmBeforeCommit();
 
         // Act
@@ -1778,22 +1810,7 @@ public class PersonalDataExportIntegrationTests(PostgreSqlContainerFixture fixtu
         return member;
     }
 
-    private static HttpClient CreateClient(
-        PostgreSqlApiFactory factory,
-        Guid memberId)
-    {
-        var client = factory.CreateClient();
-        var tokenService = new JwtAccessTokenService(
-            factory.Services.GetRequiredService<IOptions<JwtOptions>>(),
-            TimeProvider.System);
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
-            "Bearer",
-            tokenService
-                .Create(memberId)
-                .Value);
 
-        return client;
-    }
 
     private static async Task GenerateAsync(PostgreSqlApiFactory factory)
     {

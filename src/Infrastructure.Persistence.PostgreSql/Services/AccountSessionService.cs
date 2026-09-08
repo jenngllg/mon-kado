@@ -212,7 +212,8 @@ public class AccountSessionService(
         if (result.Tokens is { } tokens)
             executionState.RecordSession(
                 userId,
-                tokens.RefreshToken);
+                tokens.RefreshToken,
+                tokens.AccessToken.Id);
 
         return result;
     }
@@ -326,6 +327,7 @@ public class AccountSessionService(
             cancellationToken);
         var tokens = CreateTokens(
             existingUser.Id,
+            executionState.SessionId,
             refreshSession);
         await unitOfWork.SaveChangesAsync(cancellationToken);
 
@@ -476,11 +478,13 @@ public class AccountSessionService(
             session.IsPersistent);
         var tokens = CreateTokens(
             user.Id,
+            session.Id,
             refreshSession);
         await unitOfWork.SaveChangesAsync(cancellationToken);
         executionState.RecordRotation(
             user.Id,
             tokens.RefreshToken,
+            tokens.AccessToken.Id,
             tokens.IsPersistent);
 
         return tokens;
@@ -510,7 +514,15 @@ public class AccountSessionService(
             if (session is null)
                 return false;
 
-            if (session.RevokedAt is null &&
+            // A committed revocation must not be undone by a transparent login retry.
+            if (session.RevokedAt is not null)
+                throw new InvalidAuthenticationSessionException();
+
+            if (await context.AuthenticationAccessTokens
+                .AsNoTracking()
+                .AnyAsync(
+                    token => token.Id == executionState.AttemptedAccessTokenId && token.SessionId == session.Id,
+                    cancellationToken) &&
                 refreshTokenService.Verify(
                     refreshToken,
                     session.RefreshTokenHash))
@@ -550,6 +562,11 @@ public class AccountSessionService(
             } &&
                 session.UserId == memberId &&
                 session.IsPersistent == isPersistent &&
+                await context.AuthenticationAccessTokens
+                    .AsNoTracking()
+                    .AnyAsync(
+                    token => token.Id == executionState.AttemptedAccessTokenId && token.SessionId == session.Id,
+                    cancellationToken) &&
                 refreshTokenService.Verify(
                     refreshToken,
                     session.RefreshTokenHash);
@@ -562,15 +579,25 @@ public class AccountSessionService(
     /// Creates the access and refresh token response for a session.
     /// </summary>
     /// <param name="userId">The member identifier.</param>
+    /// <param name="sessionId">The refresh session owning the issued JWT.</param>
     /// <param name="refreshSession">The refresh-only session material.</param>
     /// <returns>The session tokens.</returns>
     private AccountSessionTokens CreateTokens(
         Guid userId,
+        Guid sessionId,
         AccountRefreshSession refreshSession)
     {
+        var accessToken = accessTokenService.Create(userId);
+        context.AuthenticationAccessTokens.Add(new AuthenticationAccessToken
+        {
+            Id = accessToken.Id,
+            SessionId = sessionId,
+            IssuedAt = accessToken.IssuedAt,
+            ExpiresAt = accessToken.ExpiresAt
+        });
 
         return new AccountSessionTokens(
-            accessTokenService.Create(userId),
+            accessToken,
             refreshSession.RefreshToken,
             refreshSession.RefreshTokenExpiresAt,
             refreshSession.IsPersistent);

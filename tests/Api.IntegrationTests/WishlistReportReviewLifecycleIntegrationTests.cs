@@ -66,9 +66,10 @@ public class WishlistReportReviewLifecycleIntegrationTests(PostgreSqlContainerFi
                 .GetUtcNow()
                 .UtcDateTime);
         await context.SaveChangesAsync(ct);
-        using var client = ReportedWishlistTestData.CreateClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            adminId);
+            adminId,
+            TestContext.Current.CancellationToken);
         using var firstRead = await client.GetAsync(
             Route(
                 first.Id,
@@ -246,15 +247,18 @@ public class WishlistReportReviewLifecycleIntegrationTests(PostgreSqlContainerFi
         var otherAdminId = await ReportedWishlistTestData.CreateAdministratorAsync(
             factory,
             ct);
-        using var client = ReportedWishlistTestData.CreateClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            adminId);
-        using var remainingAdmin = ReportedWishlistTestData.CreateClient(
+            adminId,
+            TestContext.Current.CancellationToken);
+        using var remainingAdmin = await AuthenticationTestData.CreateClientAsync(
             factory,
-            otherAdminId);
-        using var owner = ReportedWishlistTestData.CreateClient(
+            otherAdminId,
+            TestContext.Current.CancellationToken);
+        using var owner = await AuthenticationTestData.CreateClientAsync(
             factory,
-            ownerId);
+            ownerId,
+            TestContext.Current.CancellationToken);
         var route = Route(
             wishlist.Id,
             report.Id);

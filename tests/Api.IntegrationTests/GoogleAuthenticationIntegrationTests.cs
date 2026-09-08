@@ -116,6 +116,24 @@ public class GoogleAuthenticationIntegrationTests(PostgreSqlContainerFixture fix
         Assert.Equal(
             SHA256.HashData(Encoding.UTF8.GetBytes(result.Session.RefreshToken)),
             session.RefreshTokenHash);
+        Assert.NotNull(result.AccessToken);
+        var registeredToken = await context.AuthenticationAccessTokens
+            .AsNoTracking()
+            .SingleAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(
+            result.AccessToken.Id,
+            registeredToken.Id);
+        Assert.Equal(
+            session.Id,
+            registeredToken.SessionId);
+        Assert.Equal(
+            result.AccessToken.ExpiresAt,
+            registeredToken.ExpiresAt);
+        await scope.ServiceProvider.GetRequiredService<IAuthenticatedMemberValidationService>()
+            .ValidateAsync(
+                user.Id,
+                registeredToken.Id,
+                TestContext.Current.CancellationToken);
         Assert.DoesNotContain(
             result.Session.RefreshToken,
             Convert.ToHexString(session.RefreshTokenHash),

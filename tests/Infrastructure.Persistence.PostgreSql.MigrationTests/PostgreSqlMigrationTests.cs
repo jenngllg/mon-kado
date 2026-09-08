@@ -410,6 +410,10 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
             migration => Assert.EndsWith(
                 "_AddAdministrativeAuditIndexes",
                 migration,
+                StringComparison.Ordinal),
+            migration => Assert.EndsWith(
+                "_AddImmediateSessionRevocation",
+                migration,
                 StringComparison.Ordinal));
         Assert.False(context.Database.HasPendingModelChanges());
         var tables = await GetPublicTablesAsync(
@@ -421,6 +425,8 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
                 "account_erasure_email_outbox",
                 "administrative_account_erasure_events",
                 "administrative_data_export_events",
+                "administrative_session_revocation_events",
+                "authentication_access_tokens",
                 "authentication_email_outbox",
                 "authentication_sessions",
                 "gift_image_deletion_outbox",

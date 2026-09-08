@@ -17,11 +17,9 @@ public class CompleteGoogleSessionCommand(string? flow) : IRequest<AccountSessio
 /// <summary>Resolves the browser proof before executing the existing protected Google command.</summary>
 /// <param name="contextProvider">The browser authentication context provider.</param>
 /// <param name="sender">The validated application request pipeline.</param>
-/// <param name="accessTokenService">The minimal MonKado JWT issuer.</param>
 public class CompleteGoogleSessionCommandHandler(
     IGoogleAuthenticationContextProvider contextProvider,
-    ISender sender,
-    IAccessTokenService accessTokenService) : IRequestHandler<CompleteGoogleSessionCommand, AccountSessionTokens>
+    ISender sender) : IRequestHandler<CompleteGoogleSessionCommand, AccountSessionTokens>
 {
     /// <summary>Completes a sign-in using only server-validated identity and session state.</summary>
     /// <param name="request">The validated browser submission.</param>
@@ -55,12 +53,13 @@ public class CompleteGoogleSessionCommandHandler(
 
         if (result.Outcome != GoogleAuthenticationOutcome.SessionCreated ||
             result.Session is null ||
+            result.AccessToken is null ||
             result.MemberId is not { } memberId ||
             memberId == Guid.Empty)
             throw new GoogleAuthenticationFailedException();
 
         return new AccountSessionTokens(
-            accessTokenService.Create(memberId),
+            result.AccessToken,
             result.Session.RefreshToken,
             result.Session.RefreshTokenExpiresAt,
             result.Session.IsPersistent);

@@ -30,9 +30,10 @@ public class AdministrativeAuditIntegrationTests(PostgreSqlContainerFixture fixt
         var scenario = await AdministrativeAuditTestData.CreateCompleteJournalAsync(
             factory,
             cancellationToken);
-        using var client = ReportedWishlistTestData.CreateClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            scenario.ReaderId);
+            scenario.ReaderId,
+            TestContext.Current.CancellationToken);
 
         // Act
         using var response = await client.GetAsync(
@@ -162,9 +163,10 @@ public class AdministrativeAuditIntegrationTests(PostgreSqlContainerFixture fixt
         var data = await AdministrativeAuditTestData.CreateCompleteJournalAsync(
             factory,
             cancellationToken);
-        using var client = ReportedWishlistTestData.CreateClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            data.ReaderId);
+            data.ReaderId,
+            TestContext.Current.CancellationToken);
         var query = kind switch
         {
             "action" => "action=memberErased",

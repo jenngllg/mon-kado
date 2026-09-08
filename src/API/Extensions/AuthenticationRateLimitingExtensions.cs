@@ -64,6 +64,10 @@ public static class AuthenticationRateLimitingExtensions
     public const string AdministrativeAccountErasurePolicy = "AdministrativeAccountErasure";
     /// <summary>Gets the maximum administrative erasure attempts per minute.</summary>
     public const int AdministrativeAccountErasurePermitLimit = 5;
+    /// <summary>Identifies the administrator-scoped session revocation quota.</summary>
+    public const string AdministrativeSessionRevocationPolicy = "AdministrativeSessionRevocation";
+    /// <summary>Gets the maximum administrative revocations per minute.</summary>
+    public const int AdministrativeSessionRevocationPermitLimit = 10;
     /// <summary>
     /// Identifies the Google authentication challenge policy.
     /// </summary>
@@ -197,6 +201,11 @@ public static class AuthenticationRateLimitingExtensions
                     context => CreateMemberLimiter(
                         context,
                         5));
+                options.AddPolicy(
+                    AdministrativeSessionRevocationPolicy,
+                    context => CreateMemberLimiter(
+                        context,
+                        AdministrativeSessionRevocationPermitLimit));
                 options.AddPolicy(
                     AdministrativeAccountErasurePolicy,
                     context => CreateMemberLimiter(
