@@ -29,6 +29,7 @@ namespace JennGllg.Fr.MonKado.Back.Api.Controllers;
 public class AdministrativeDataExportsController(ISender sender) : ControllerBase
 {
     private const int MaximumRequestBodySize = 4 * 1024;
+    private const string NoStoreCacheControl = "no-store";
     /// <summary>Requests or reuses a member's ZIP and durably records the administrative request.</summary>
     /// <remarks>
     /// Requires a technical requestReference of at most 128 characters without control characters or personal data.
@@ -67,7 +68,7 @@ public class AdministrativeDataExportsController(ISender sender) : ControllerBas
                 memberId,
                 request.RequestReference),
             cancellationToken);
-        Response.Headers.CacheControl = "no-store";
+        Response.Headers.CacheControl = NoStoreCacheControl;
         Response.Headers.Location = $"/api/v1/admin/members/{memberId:D}/data-exports/{result.Id:D}";
 
         return StatusCode(
@@ -96,7 +97,7 @@ public class AdministrativeDataExportsController(ISender sender) : ControllerBas
                 memberId,
                 null),
             cancellationToken);
-        Response.Headers.CacheControl = "no-store";
+        Response.Headers.CacheControl = NoStoreCacheControl;
 
         return Ok(PersonalDataExportResponseMapper.Map(result));
     }
@@ -124,7 +125,7 @@ public class AdministrativeDataExportsController(ISender sender) : ControllerBas
                 memberId,
                 exportId),
             cancellationToken);
-        Response.Headers.CacheControl = "no-store";
+        Response.Headers.CacheControl = NoStoreCacheControl;
 
         return Ok(PersonalDataExportResponseMapper.Map(result));
     }
@@ -159,7 +160,7 @@ public class AdministrativeDataExportsController(ISender sender) : ControllerBas
                 memberId,
                 exportId),
             cancellationToken);
-        Response.Headers.CacheControl = "no-store";
+        Response.Headers.CacheControl = NoStoreCacheControl;
         Response.Headers.XContentTypeOptions = "nosniff";
 
         return new PersonalDataExportFileResult(result);
