@@ -1,11 +1,10 @@
 using JennGllg.Fr.MonKado.Back.Application.Abstractions;
 using JennGllg.Fr.MonKado.Back.Application.Common.Exceptions;
 using JennGllg.Fr.MonKado.Back.Application.Models;
-using JennGllg.Fr.MonKado.Back.Application.Options;
+using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Abstractions;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Options;
 
 namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Services;
 
@@ -13,16 +12,16 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Service
 /// <param name="context">The scoped database context.</param>
 /// <param name="unitOfWork">The shared unit of work.</param>
 /// <param name="userRepository">The account locking repository.</param>
-/// <param name="store">The private archive storage.</param>
-/// <param name="options">The stable export limits.</param>
+/// <param name="archiveReader">The private archive reader.</param>
+/// <param name="requestRepository">The shared member quota and reuse coordinator.</param>
 /// <param name="timeProvider">The UTC clock.</param>
 /// <param name="scopeFactory">The independent commit verification scope factory.</param>
 public class PersonalDataExportService(
     MonKadoDbContext context,
     IUnitOfWork unitOfWork,
     IMonKadoUserRepository userRepository,
-    IPersonalDataExportStore store,
-    IOptions<PersonalDataExportOptions> options,
+    IPersonalDataExportArchiveReader archiveReader,
+    IPersonalDataExportRequestRepository requestRepository,
     TimeProvider timeProvider,
     IServiceScopeFactory scopeFactory) : IPersonalDataExportService
 {
@@ -80,40 +79,10 @@ public class PersonalDataExportService(
         var now = timeProvider
             .GetUtcNow()
             .UtcDateTime;
-        var active = await context.MemberDataExports.SingleOrDefaultAsync(
-            export => export.MemberId == memberId && (export.Status == PersonalDataExportStatus.Queued || export.Status == PersonalDataExportStatus.Processing || export.Status == PersonalDataExportStatus.Ready),
-            cancellationToken);
-        active?.Expire(now);
-
-        if (active is not null && active.Status is not PersonalDataExportStatus.Expired)
-            return active.GetDetails(now);
-        var cutoff = now - options.Value.RequestWindow;
-        var count = await context.MemberDataExports.CountAsync(
-            export => export.MemberId == memberId && export.CreatedAt > cutoff,
-            cancellationToken);
-
-        if (count >= options.Value.MaximumRequests)
-            throw new PersonalDataExportRateLimitException();
-
-        // Release the expired unique slot before inserting its successor in the same transaction.
-        if (active is not null)
-        {
-            await context.MemberDataExports
-                .Where(export => export.Id == active.Id)
-                .ExecuteUpdateAsync(
-                setters => setters.SetProperty(
-                    export => export.Status,
-                    PersonalDataExportStatus.Expired),
-                cancellationToken);
-            context
-                .Entry(active)
-                .State = EntityState.Unchanged;
-        }
-
-        var request = new MemberDataExport(
+        var request = await requestRepository.GetOrCreateAsync(
             memberId,
-            now);
-        context.MemberDataExports.Add(request);
+            now,
+            cancellationToken);
         await unitOfWork.SaveChangesAsync(cancellationToken);
         onCommitAttempt(request.Id);
         await transaction.CommitAsync(cancellationToken);
@@ -147,71 +116,13 @@ public class PersonalDataExportService(
             memberId,
             exportId,
             cancellationToken);
-        var details = export.GetDetails(timeProvider
-                .GetUtcNow()
-                .UtcDateTime);
 
-        if (details.Status is PersonalDataExportStatus.Expired)
-            throw new PersonalDataExportNotFoundException();
-
-        if (details.Status is not PersonalDataExportStatus.Ready || export.ArchiveId is not { } archiveId)
-            throw new PersonalDataExportNotReadyException();
-        var stream = await store.OpenReadAsync(
-            export.Id,
-            archiveId,
-            cancellationToken);
-
-        if (stream is null)
-            throw new PersonalDataExportStorageUnavailableException();
-        PersonalDataExportDownload? download = null;
-        try
-        {
-
-            if (stream.Length != export.SizeInBytes)
-                throw new PersonalDataExportStorageUnavailableException();
-            await EnsureMemberAsync(
+        return await archiveReader.OpenAsync(
+            export,
+            token => EnsureMemberAsync(
                 memberId,
-                cancellationToken);
-
-            if (export.ExpiresAt.GetValueOrDefault() <= timeProvider
-                .GetUtcNow()
-                .UtcDateTime)
-                throw new PersonalDataExportNotFoundException();
-            download = new PersonalDataExportDownload
-            {
-                ExportId = export.Id,
-                Content = stream
-            };
-        }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-        {
-
-            throw new PersonalDataExportStorageUnavailableException();
-        }
-        finally
-        {
-
-            if (download is null)
-                await DisposeFailedDownloadAsync(stream);
-        }
-
-        return download;
-    }
-
-    /// <summary>Closes an untransferred download stream without exposing storage paths in cleanup failures.</summary>
-    /// <param name="stream">The stream still owned by the service.</param>
-    /// <returns>A task representing cleanup.</returns>
-    private static async Task DisposeFailedDownloadAsync(Stream stream)
-    {
-        try
-        {
-            await stream.DisposeAsync();
-        }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-        {
-
-            throw new PersonalDataExportStorageUnavailableException();
-        }
+                token),
+            cancellationToken);
     }
 
     /// <summary>Reads a request through an owner predicate, never an administrator override.</summary>

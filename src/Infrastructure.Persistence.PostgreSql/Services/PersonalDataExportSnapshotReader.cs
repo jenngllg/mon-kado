@@ -125,7 +125,7 @@ public class PersonalDataExportSnapshotReader(
     {
         var member = await context.Users
             .AsNoTracking()
-            .Where(member => member.Id == memberId && member.EmailConfirmed)
+            .Where(member => member.Id == memberId)
             .Select(member => new
             {
                 member.Id,

@@ -35,6 +35,46 @@ Responses are `Cache-Control: no-store`; ZIP responses additionally set
 The configured frontend CORS policy exposes `Location`, `Content-Disposition`
 and `Retry-After`. The OpenAPI document describes the binary ZIP contract.
 
+## Administrative contract
+
+The separate `ExportMemberData` policy checks the actor's current administrator
+role in PostgreSQL. These routes accept any existing target account, including an
+unconfirmed account; they do not relax confirmation or ownership on member routes.
+
+| Route | Result |
+| --- | --- |
+| `POST /api/v1/admin/members/{memberId}/data-exports` | `202` pending or `200` ready; creates a durable administrative request |
+| `GET /api/v1/admin/members/{memberId}/data-exports/latest` | Latest retained administratively requested export |
+| `GET /api/v1/admin/members/{memberId}/data-exports/{exportId}` | Metadata for that target and administrative request |
+| `GET /api/v1/admin/members/{memberId}/data-exports/{exportId}/archive` | Authenticated ZIP, with durable download-start audit |
+
+The POST requires `{ "requestReference": "SUPPORT-807" }`: a nonblank technical
+ticket reference, trimmed, at most 128 characters, without control characters.
+Never put a name, email, identity-document number or other personal information in
+this reference. It is stored in the audit, not returned in metadata or logged.
+`Location` points to the administrative status route. The exact metadata and ZIP
+format remain the same as for member exports. Both callers share one active export
+and the same target-account quota; reuse does not extend archive availability.
+
+An administrator must first POST even when the member already generated an archive.
+This records why administrative access was requested before any administrative GET
+or download is allowed. Current administrator access and target existence are
+checked again before release. Audit failure blocks release unless an independent
+read confirms the exact commit. No new download URL, authentication cookie,
+antiforgery requirement, password check or creator-only restriction is introduced.
+
+Audit rows record actor, target, export identifier, request reference, UTC time and
+`Requested` or `DownloadStarted`. A download-start event is **not proof of receipt**
+or a completed transfer. They are retained for six calendar months independently
+of ZIP expiry, then purged in bounded Worker batches. Deleting an account nulls its
+audit foreign keys; removing an export does not remove these audit events.
+
+No identity document is collected by this feature. A civil identity document alone
+does not establish ownership of a pseudonymous account. Prefer delivery through the
+authenticated member flow; any handover outside that flow needs a separate support
+verification linking the requester to the account. This tool does not establish
+that link or replace that procedure.
+
 ## Archive contents and boundaries
 
 The ZIP contains `data.json`, `README.txt` and the current stored WebP images under
@@ -102,7 +142,9 @@ snapshot or extends its lifetime. The size limit fails the request explicitly wi
 
 Generation uses PostgreSQL leases and an immutable filename per attempt. A late
 worker cannot publish a superseded attempt. Publication and one email outbox entry
-commit atomically; an ambiguous commit is verified independently without blind
+commit atomically when the target email is confirmed at publication. Unconfirmed
+targets receive no notification, and later confirmation does not create one
+retroactively. An ambiguous commit is verified independently without blind
 replay. The email dispatcher checks the current confirmed address and archive
 availability again, includes the fixed expiration, and never sends the ZIP itself.
 Its existing explicit Gmail retry policy applies; delivery failure does not block
@@ -115,7 +157,8 @@ the rolling request quota no longer need it; this is not a permanent export hist
 
 ## Deployment and smoke checks
 
-1. Apply `AddMemberPersonalDataExports` before starting the updated API and Worker.
+1. Apply `AddMemberPersonalDataExports` and `AddAdministrativeDataExportEvents`
+   before starting the updated API and Worker.
 2. Mount the private volume with the shared application UID and verify startup
    permission checks on both containers. Keep Gmail credentials in secrets.
 3. Request an export as a confirmed test member; follow `Location` until ready.

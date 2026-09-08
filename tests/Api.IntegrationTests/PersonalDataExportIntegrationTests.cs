@@ -978,7 +978,7 @@ public class PersonalDataExportIntegrationTests(PostgreSqlContainerFixture fixtu
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task Services_WhenMemberIsMissingOrUnconfirmed_RejectRequestsAndSnapshotPublication(bool removed)
+    public async Task Services_WhenMemberIsMissingOrUnconfirmed_KeepPersonalAccessRestricted(bool removed)
     {
         // Arrange
         await using var factory = await CreateFactoryAsync();
@@ -1019,7 +1019,7 @@ public class PersonalDataExportIntegrationTests(PostgreSqlContainerFixture fixtu
                 member.Id,
                 null,
                 TestContext.Current.CancellationToken));
-        await Assert.ThrowsAsync<InvalidAuthenticationSessionException>(() => reader.WriteAsync(
+        var snapshotException = await Record.ExceptionAsync(() => reader.WriteAsync(
                 member.Id,
                 data,
                 manifest,
@@ -1034,6 +1034,10 @@ public class PersonalDataExportIntegrationTests(PostgreSqlContainerFixture fixtu
             TestContext.Current.CancellationToken);
 
         // Assert
+        if (removed)
+            Assert.IsType<InvalidAuthenticationSessionException>(snapshotException);
+        else
+            Assert.Null(snapshotException);
         Assert.False(published);
         Assert.False(await context.AuthenticationEmailOutboxMessages.AnyAsync(TestContext.Current.CancellationToken));
     }
@@ -1162,8 +1166,10 @@ public class PersonalDataExportIntegrationTests(PostgreSqlContainerFixture fixtu
             context,
             context,
             scope.ServiceProvider.GetRequiredService<IMonKadoUserRepository>(),
-            storeMock.Object,
-            scope.ServiceProvider.GetRequiredService<IOptions<Application.Options.PersonalDataExportOptions>>(),
+            new PersonalDataExportArchiveReader(
+                storeMock.Object,
+                _clock),
+            scope.ServiceProvider.GetRequiredService<Infrastructure.Persistence.PostgreSql.Abstractions.IPersonalDataExportRequestRepository>(),
             _clock,
             factory.Services.GetRequiredService<IServiceScopeFactory>());
 

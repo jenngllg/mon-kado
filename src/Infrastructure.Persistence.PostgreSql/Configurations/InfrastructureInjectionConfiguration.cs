@@ -124,6 +124,9 @@ public static class InfrastructureInjectionConfiguration
         services.AddScoped<ICurrentSessionService, CurrentSessionService>();
         services.AddScoped<IMemberProfileService, MemberProfileService>();
         services.AddScoped<IPersonalDataExportService, PersonalDataExportService>();
+        services.AddScoped<IAdministrativeDataExportService, AdministrativeDataExportService>();
+        services.AddScoped<IPersonalDataExportRequestRepository, PersonalDataExportRequestRepository>();
+        services.AddScoped<IPersonalDataExportArchiveReader, PersonalDataExportArchiveReader>();
         services.AddScoped<IPersonalDataExportSnapshotReader, PersonalDataExportSnapshotReader>();
         services.AddScoped<IPersonalDataExportJobs, PersonalDataExportJobs>();
         services.AddScoped<IProfileImageService, ProfileImageService>();

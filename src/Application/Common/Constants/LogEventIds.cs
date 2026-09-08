@@ -8,6 +8,14 @@ namespace JennGllg.Fr.MonKado.Back.Application.Common.Constants;
 [ExcludeFromCodeCoverage]
 public static class LogEventIds
 {
+    #region AdministrativeDataExport
+    /// <summary>Identifies an accepted administrative export request.</summary>
+    public const int AdministrativeDataExportRequested = 1160;
+    /// <summary>Identifies an administrative export metadata read.</summary>
+    public const int AdministrativeDataExportRead = 1161;
+    /// <summary>Identifies an administrative archive download start.</summary>
+    public const int AdministrativeDataExportDownload = 1162;
+    #endregion
     #region Account
     /// <summary>Identifies accepted or reused personal-data export requests.</summary>
     public const int PersonalDataExportRequested = 1150;

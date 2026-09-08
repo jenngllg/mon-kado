@@ -15,6 +15,9 @@ public static class AuthorizationPolicies
     /// </summary>
     public const string CurrentSession = "CurrentSession";
 
+    /// <summary>Allows database-authorized administrators to request and download member data exports.</summary>
+    public const string ExportMemberData = "ExportMemberData";
+
     #endregion
 
     #region Wishlist

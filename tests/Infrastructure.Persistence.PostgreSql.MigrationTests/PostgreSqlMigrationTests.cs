@@ -29,7 +29,6 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
         await using var scope = provider.CreateAsyncScope();
         var context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
         await context.Database.MigrateAsync(cancellationToken);
-        var migrations = (await context.Database.GetAppliedMigrationsAsync(cancellationToken)).ToArray();
         var memberId = Guid.CreateVersion7();
         var now = new DateTime(
             2026,
@@ -61,7 +60,7 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
 
             // Act
             await context.Database.MigrateAsync(
-                migrations[^2],
+                "20260907093510_AddWishlistReportReviews",
                 cancellationToken);
             var retainedConfirmation = await context.AuthenticationEmailOutboxMessages.AnyAsync(
                 message => message.Id == confirmation.Id,
@@ -302,6 +301,10 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
             migration => Assert.EndsWith(
                 "_AddMemberPersonalDataExports",
                 migration,
+                StringComparison.Ordinal),
+            migration => Assert.EndsWith(
+                "_AddAdministrativeDataExportEvents",
+                migration,
                 StringComparison.Ordinal));
         Assert.False(context.Database.HasPendingModelChanges());
         var tables = await GetPublicTablesAsync(
@@ -310,6 +313,7 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
         Assert.Equal(
             [
                 "__EFMigrationsHistory",
+                "administrative_data_export_events",
                 "authentication_email_outbox",
                 "authentication_sessions",
                 "gift_image_deletion_outbox",

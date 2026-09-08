@@ -22,6 +22,9 @@ public class MonKadoDbContext(DbContextOptions<MonKadoDbContext> options) : Iden
 {
     /// <summary>Gets durable personal-data export requests and cleanup identities.</summary>
     public DbSet<MemberDataExport> MemberDataExports => Set<MemberDataExport>();
+
+    /// <summary>Gets retained administrative export accountability events.</summary>
+    public DbSet<AdministrativeDataExportEvent> AdministrativeDataExportEvents => Set<AdministrativeDataExportEvent>();
     /// <summary>
     /// Gets authentication sessions.
     /// </summary>

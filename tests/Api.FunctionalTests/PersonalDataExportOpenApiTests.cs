@@ -16,8 +16,12 @@ public class PersonalDataExportOpenApiTests
         "snapshotAt",
         "status"
     ];
-    [Fact]
-    public async Task GetAsync_WhenExportsAreDocumented_ExposesBearerBinaryArchiveAndExactMetadata()
+    [Theory]
+    [InlineData("/api/v1/members/current/data-exports", false)]
+    [InlineData("/api/v1/admin/members/{memberId}/data-exports", true)]
+    public async Task GetAsync_WhenExportsAreDocumented_ExposesBearerBinaryArchiveAndExactMetadata(
+        string route,
+        bool administrative)
     {
         // Arrange
         await using var factory = new RegistrationApiFactory();
@@ -29,16 +33,16 @@ public class PersonalDataExportOpenApiTests
             TestContext.Current.CancellationToken);
         var paths = document.GetProperty("paths");
         var post = paths
-            .GetProperty("/api/v1/members/current/data-exports")
+            .GetProperty(route)
             .GetProperty("post");
         var latest = paths
-            .GetProperty("/api/v1/members/current/data-exports/latest")
+            .GetProperty($"{route}/latest")
             .GetProperty("get");
         var details = paths
-            .GetProperty("/api/v1/members/current/data-exports/{exportId}")
+            .GetProperty($"{route}/{{exportId}}")
             .GetProperty("get");
         var archive = paths
-            .GetProperty("/api/v1/members/current/data-exports/{exportId}/archive")
+            .GetProperty($"{route}/{{exportId}}/archive")
             .GetProperty("get");
 
         // Assert
@@ -58,7 +62,9 @@ public class PersonalDataExportOpenApiTests
                     .TryGetProperty(
                     "Bearer",
                     out _));
-            Assert.False(operation.TryGetProperty(
+            Assert.Equal(
+                administrative && operation.Equals(post),
+                operation.TryGetProperty(
                     "requestBody",
                     out _));
             Assert.True(operation
@@ -92,6 +98,25 @@ public class PersonalDataExportOpenApiTests
                         .GetString() is "If-Match" or "X-CSRF-TOKEN" || parameter
                         .GetProperty("in")
                         .GetString() == "cookie");
+        }
+
+        if (administrative)
+        {
+            var request = document
+                .GetProperty("components")
+                .GetProperty("schemas")
+                .GetProperty("RequestAdministrativeDataExportRequest")
+                .GetProperty("properties");
+            Assert.Equal(
+                "requestReference",
+                Assert.Single(request.EnumerateObject()).Name);
+            Assert.All(
+                operations,
+                operation => Assert.True(operation
+                    .GetProperty("responses")
+                    .TryGetProperty(
+                        "403",
+                        out _)));
         }
 
         Assert.True(post
