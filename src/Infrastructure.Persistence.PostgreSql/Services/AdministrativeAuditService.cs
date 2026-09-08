@@ -178,10 +178,23 @@ public class AdministrativeAuditService(
                 "C") == filter.RequestReference);
 
         if (filter.From.HasValue)
-            query = query.Where(item => item.CreatedAt >= filter.From.Value);
+        {
+            var from = filter.From.Value;
+            var floor = from.AddTicks(-(from.Ticks % TimeSpan.TicksPerMicrosecond));
+            // PostgreSQL stores microseconds; retain the boundary semantics instead of silently truncating a finer input.
+            query = from == floor
+                ? query.Where(item => item.CreatedAt >= floor)
+                : query.Where(item => item.CreatedAt > floor);
+        }
 
         if (filter.To.HasValue)
-            query = query.Where(item => item.CreatedAt < filter.To.Value);
+        {
+            var to = filter.To.Value;
+            var floor = to.AddTicks(-(to.Ticks % TimeSpan.TicksPerMicrosecond));
+            query = to == floor
+                ? query.Where(item => item.CreatedAt < floor)
+                : query.Where(item => item.CreatedAt <= floor);
+        }
 
         return query;
     }

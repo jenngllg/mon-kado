@@ -140,6 +140,10 @@ public class AdministrativeAuditIntegrationTests(PostgreSqlContainerFixture fixt
     [InlineData("reference", 3)]
     [InlineData("case", 0)]
     [InlineData("from", 6)]
+    [InlineData("fromFraction", 0)]
+    [InlineData("toFraction", 6)]
+    [InlineData("fromMaximum", 0)]
+    [InlineData("toMaximum", 6)]
     [InlineData("to", 0)]
     [InlineData("range", 6)]
     [InlineData("combined", 1)]
@@ -171,6 +175,10 @@ public class AdministrativeAuditIntegrationTests(PostgreSqlContainerFixture fixt
             "reference" => "requestReference=%20SUPPORT-806%20",
             "case" => "requestReference=support-806",
             "from" => "from=2026-09-01T14:00:00%2B02:00",
+            "fromFraction" => "from=2026-09-01T12:00:00.0000001Z",
+            "toFraction" => "to=2026-09-01T12:00:00.0000001Z",
+            "fromMaximum" => "from=9999-12-31T23:59:59.9999999Z",
+            "toMaximum" => "to=9999-12-31T23:59:59.9999999Z",
             "to" => "to=2026-09-01T12:00:00Z",
             "range" => "from=2026-09-01T12:00:00Z&to=2026-09-01T12:00:01Z",
             "combined" => $"action=memberDataExportRequested&administratorId={data.ActorId}&memberId={data.MemberId}&exportId={data.ExportId}&requestReference=SUPPORT-806",

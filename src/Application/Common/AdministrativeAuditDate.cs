@@ -8,9 +8,21 @@ public static class AdministrativeAuditDate
     private static readonly string[] _formats =
     [
         "yyyy-MM-dd'T'HH:mm:ss'Z'",
-        "yyyy-MM-dd'T'HH:mm:ss.FFFFFFF'Z'",
+        "yyyy-MM-dd'T'HH:mm:ss.f'Z'",
+        "yyyy-MM-dd'T'HH:mm:ss.ff'Z'",
+        "yyyy-MM-dd'T'HH:mm:ss.fff'Z'",
+        "yyyy-MM-dd'T'HH:mm:ss.ffff'Z'",
+        "yyyy-MM-dd'T'HH:mm:ss.fffff'Z'",
+        "yyyy-MM-dd'T'HH:mm:ss.ffffff'Z'",
+        "yyyy-MM-dd'T'HH:mm:ss.fffffff'Z'",
         "yyyy-MM-dd'T'HH:mm:sszzz",
-        "yyyy-MM-dd'T'HH:mm:ss.FFFFFFFzzz"
+        "yyyy-MM-dd'T'HH:mm:ss.fzzz",
+        "yyyy-MM-dd'T'HH:mm:ss.ffzzz",
+        "yyyy-MM-dd'T'HH:mm:ss.fffzzz",
+        "yyyy-MM-dd'T'HH:mm:ss.ffffzzz",
+        "yyyy-MM-dd'T'HH:mm:ss.fffffzzz",
+        "yyyy-MM-dd'T'HH:mm:ss.ffffffzzz",
+        "yyyy-MM-dd'T'HH:mm:ss.fffffffzzz"
     ];
 
     /// <summary>Checks that a boundary includes a time and an explicit timezone.</summary>

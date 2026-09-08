@@ -1,3 +1,4 @@
+using JennGllg.Fr.MonKado.Back.Api.ModelBinding;
 using JennGllg.Fr.MonKado.Back.Application.Models;
 
 using Microsoft.AspNetCore.Mvc;
@@ -13,30 +14,35 @@ public class AdministrativeAuditRequest
 {
     /// <summary>Gets the optional Action filter.</summary>
     [FromQuery(Name = "action")]
+    [ModelBinder(typeof(NonBlankOptionalQueryModelBinder<AdministrativeAuditAction?>))]
     public AdministrativeAuditAction? Action
     {
         get; init;
     }
     /// <summary>Gets the optional AdministratorId filter.</summary>
     [FromQuery(Name = "administratorId")]
+    [ModelBinder(typeof(NonBlankOptionalQueryModelBinder<Guid?>))]
     public Guid? AdministratorId
     {
         get; init;
     }
     /// <summary>Gets the optional MemberId filter.</summary>
     [FromQuery(Name = "memberId")]
+    [ModelBinder(typeof(NonBlankOptionalQueryModelBinder<Guid?>))]
     public Guid? MemberId
     {
         get; init;
     }
     /// <summary>Gets the optional WishlistId filter.</summary>
     [FromQuery(Name = "wishlistId")]
+    [ModelBinder(typeof(NonBlankOptionalQueryModelBinder<Guid?>))]
     public Guid? WishlistId
     {
         get; init;
     }
     /// <summary>Gets the optional ExportId filter.</summary>
     [FromQuery(Name = "exportId")]
+    [ModelBinder(typeof(NonBlankOptionalQueryModelBinder<Guid?>))]
     public Guid? ExportId
     {
         get; init;
@@ -64,12 +70,14 @@ public class AdministrativeAuditRequest
     }
     /// <summary>Gets the optional Page filter.</summary>
     [FromQuery(Name = "page")]
+    [ModelBinder(typeof(NonBlankOptionalQueryModelBinder<int?>))]
     public int? Page
     {
         get; init;
     }
     /// <summary>Gets the optional PageSize filter.</summary>
     [FromQuery(Name = "pageSize")]
+    [ModelBinder(typeof(NonBlankOptionalQueryModelBinder<int?>))]
     public int? PageSize
     {
         get; init;

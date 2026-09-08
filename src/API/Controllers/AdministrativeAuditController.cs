@@ -29,6 +29,7 @@ public class AdministrativeAuditController(ISender sender) : ControllerBase
     /// All filters are combined with AND. From is inclusive and to exclusive; both require ISO 8601 timestamps with an explicit timezone.
     /// RequestReference matches exactly, case-sensitively, after trimming. MemberId targets GDPR events, not moderated list owners.
     /// Defaults: page=1, pageSize=20, maximum=100. Missing targets and out-of-range pages return empty collections.
+    /// Defaults apply only to absent parameters; supplied blank scalar filters return 400.
     /// Administrator display names are current, not historical. Deleted actors remain null and do not hide events.
     /// DownloadStarted records stream release, not successful archive receipt. Existing deletion and retention rules remain unchanged.
     /// No email, archive content, reservation data, or secrets are returned. No If-Match or antiforgery token is required.
