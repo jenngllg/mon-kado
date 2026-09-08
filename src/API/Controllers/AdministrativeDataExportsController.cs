@@ -1,5 +1,6 @@
 using JennGllg.Fr.MonKado.Back.Api.Attributes;
 using JennGllg.Fr.MonKado.Back.Api.Authorization;
+using JennGllg.Fr.MonKado.Back.Api.Contracts.Requests;
 using JennGllg.Fr.MonKado.Back.Api.Contracts.Responses;
 using JennGllg.Fr.MonKado.Back.Api.Errors;
 using JennGllg.Fr.MonKado.Back.Api.Mappers;
@@ -18,74 +19,94 @@ using System.Security.Claims;
 
 namespace JennGllg.Fr.MonKado.Back.Api.Controllers;
 
-/// <summary>Requests and downloads private exports belonging exclusively to the authenticated member.</summary>
+/// <summary>Produces audited administrative exports without changing the member's private access policy.</summary>
 /// <param name="sender">The mediator sender.</param>
 [ApiController]
 [PreserveRefreshCookie]
 [Authorize(Policy = AuthorizationPolicies.CurrentSession)]
-[Route("api/v1/members/current/data-exports")]
-public class PersonalDataExportsController(ISender sender) : ControllerBase
+[Authorize(Policy = AuthorizationPolicies.ExportMemberData)]
+[Route("api/v1/admin/members/{memberId:guid}/data-exports")]
+public class AdministrativeDataExportsController(ISender sender) : ControllerBase
 {
-    private const string NoStore = "no-store";
-    /// <summary>Requests a ZIP containing retained personal data and current owned images.</summary>
+    private const int MaximumRequestBodySize = 4 * 1024;
+    private const string NoStoreCacheControl = "no-store";
+    /// <summary>Requests or reuses a member's ZIP and durably records the administrative request.</summary>
     /// <remarks>
-    /// No request body, extra password proof, antiforgery token or If-Match is required.
-    /// Reuses a queued, processing or unexpired ready export without extending its lifetime.
-    /// A new generation returns 202; reuse of a ready archive returns 200.
-    /// Location identifies the owned status endpoint. At most three new requests are allowed per rolling 24 hours.
-    /// An email notification is queued when the archive becomes ready; it remains available for 24 hours from publication.
+    /// Requires a technical requestReference of at most 128 characters without control characters or personal data.
+    /// Every existing account is eligible, including unconfirmed accounts; only confirmed email addresses are notified.
+    /// Reuses active exports and shares the member's three-generation rolling 24-hour quota.
+    /// Archives expire 24 hours after publication. Audit events are retained for six calendar months.
+    /// No additional password, antiforgery token or If-Match is required for these Bearer-only routes.
     /// </remarks>
+    /// <param name="memberId">The target member identifier.</param>
+    /// <param name="request">The external request reference.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>The created or reused export metadata.</returns>
+    /// <returns>The created or reused export metadata and its administrative Location.</returns>
     [HttpPost]
+    [Consumes("application/json")]
+    [RequestSizeLimit(MaximumRequestBodySize)]
     [NoStoreResponse(StatusCodes.Status200OK)]
     [NoStoreResponse(StatusCodes.Status202Accepted)]
     [ProducesResponseType(typeof(PersonalDataExportResponse), StatusCodes.Status200OK, "application/json")]
     [ProducesResponseType(typeof(PersonalDataExportResponse), StatusCodes.Status202Accepted, "application/json")]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status413PayloadTooLarge, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status415UnsupportedMediaType, "application/json")]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status429TooManyRequests, "application/json")]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status503ServiceUnavailable, "application/json")]
-    // CurrentSession accepts only an explicit JWT Bearer header, never ambient authentication cookies.
+    // Both policies accept explicit JWT Bearer authentication, never ambient cookies.
     // codeql[cs/web/missing-token-validation]
-    public async Task<ActionResult<PersonalDataExportResponse>> RequestAsync(CancellationToken cancellationToken)
+    public async Task<ActionResult<PersonalDataExportResponse>> RequestAsync(
+        Guid memberId,
+        RequestAdministrativeDataExportRequest request,
+        CancellationToken cancellationToken)
     {
         var result = await sender.Send(
-            new RequestPersonalDataExportCommand(GetMemberId()),
+            new RequestAdministrativeDataExportCommand(
+                GetAdministratorId(),
+                memberId,
+                request.RequestReference),
             cancellationToken);
-        Response.Headers.CacheControl = NoStore;
-        Response.Headers.Location = $"/api/v1/members/current/data-exports/{result.Id:D}";
+        Response.Headers.CacheControl = NoStoreCacheControl;
+        Response.Headers.Location = $"/api/v1/admin/members/{memberId:D}/data-exports/{result.Id:D}";
 
         return StatusCode(
             result.Status is PersonalDataExportStatus.Ready ? StatusCodes.Status200OK : StatusCodes.Status202Accepted,
             PersonalDataExportResponseMapper.Map(result));
     }
 
-    /// <summary>Gets the current member's latest retained export request.</summary>
+    /// <summary>Gets the latest retained export requested administratively for the member.</summary>
+    /// <param name="memberId">The target member identifier.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>The latest export metadata, or 404 when no request is retained.</returns>
+    /// <returns>The latest administratively requested export metadata.</returns>
     [HttpGet("latest")]
     [NoStoreResponse(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(PersonalDataExportResponse), StatusCodes.Status200OK, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest, "application/json")]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound, "application/json")]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status429TooManyRequests, "application/json")]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status503ServiceUnavailable, "application/json")]
-    public async Task<ActionResult<PersonalDataExportResponse>> GetLatestAsync(CancellationToken cancellationToken)
+    public async Task<ActionResult<PersonalDataExportResponse>> GetLatestAsync(
+        Guid memberId,
+        CancellationToken cancellationToken)
     {
         var result = await sender.Send(
-            new GetPersonalDataExportQuery(
-                GetMemberId(),
+            new GetAdministrativeDataExportQuery(
+                GetAdministratorId(),
+                memberId,
                 null),
             cancellationToken);
-        Response.Headers.CacheControl = NoStore;
+        Response.Headers.CacheControl = NoStoreCacheControl;
 
         return Ok(PersonalDataExportResponseMapper.Map(result));
     }
 
-    /// <summary>Gets an owned export's lifecycle without exposing another member's requests.</summary>
-    /// <remarks>A failed generation still returns 200 with status failed and its stable errorCode.</remarks>
+    /// <summary>Gets one retained export with an existing administrative request.</summary>
+    /// <param name="memberId">The target member identifier.</param>
     /// <param name="exportId">The export identifier.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>The owned request metadata.</returns>
+    /// <returns>The administratively requested export metadata.</returns>
     [HttpGet("{exportId:guid}")]
     [NoStoreResponse(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(PersonalDataExportResponse), StatusCodes.Status200OK, "application/json")]
@@ -94,29 +115,32 @@ public class PersonalDataExportsController(ISender sender) : ControllerBase
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status429TooManyRequests, "application/json")]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status503ServiceUnavailable, "application/json")]
     public async Task<ActionResult<PersonalDataExportResponse>> GetAsync(
+        Guid memberId,
         Guid exportId,
         CancellationToken cancellationToken)
     {
         var result = await sender.Send(
-            new GetPersonalDataExportQuery(
-                GetMemberId(),
+            new GetAdministrativeDataExportQuery(
+                GetAdministratorId(),
+                memberId,
                 exportId),
             cancellationToken);
-        Response.Headers.CacheControl = NoStore;
+        Response.Headers.CacheControl = NoStoreCacheControl;
 
         return Ok(PersonalDataExportResponseMapper.Map(result));
     }
 
-    /// <summary>Downloads a complete private ZIP using Bearer authentication on every request.</summary>
+    /// <summary>Downloads an administratively requested archive after durable release auditing.</summary>
     /// <remarks>
-    /// Returns an attachment with Cache-Control: no-store and X-Content-Type-Options: nosniff.
-    /// Unknown, foreign and expired archives return 404; unfinished or failed generations return 409.
-    /// Storage failure returns 503 only before the response starts; a later read failure aborts the download.
-    /// A download already started may finish after expiration. No signed or anonymous download URL is created.
+    /// Requires a live database-backed administrator role on every request. No public or signed download URL exists.
+    /// Missing or expired archives return 404; unfinished or failed exports return 409.
+    /// Audit or storage unavailability prevents release and returns 503 before headers; subsequent storage errors abort the stream.
+    /// The audit records download initiation, not delivery to the member. Identity verification and secure handover remain separate.
     /// </remarks>
-    /// <param name="exportId">The owned export identifier.</param>
+    /// <param name="memberId">The target member identifier.</param>
+    /// <param name="exportId">The export identifier.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>The complete archive as an attachment.</returns>
+    /// <returns>The private ZIP as an attachment.</returns>
     [HttpGet("{exportId:guid}/archive")]
     [NoStoreResponse(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(FileStreamResult), StatusCodes.Status200OK, "application/zip")]
@@ -126,29 +150,30 @@ public class PersonalDataExportsController(ISender sender) : ControllerBase
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status429TooManyRequests, "application/json")]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status503ServiceUnavailable, "application/json")]
     public async Task<IActionResult> DownloadAsync(
+        Guid memberId,
         Guid exportId,
         CancellationToken cancellationToken)
     {
         var result = await sender.Send(
-            new DownloadPersonalDataExportQuery(
-                GetMemberId(),
+            new DownloadAdministrativeDataExportQuery(
+                GetAdministratorId(),
+                memberId,
                 exportId),
             cancellationToken);
-        Response.Headers.CacheControl = NoStore;
+        Response.Headers.CacheControl = NoStoreCacheControl;
         Response.Headers.XContentTypeOptions = "nosniff";
 
         return new PersonalDataExportFileResult(result);
     }
 
     /// <summary>Reads only the middleware-validated JWT subject.</summary>
-    /// <returns>The authenticated account identifier.</returns>
-    private Guid GetMemberId()
+    /// <returns>The authenticated administrator identifier.</returns>
+    private Guid GetAdministratorId()
     {
         _ = Guid.TryParse(
             User.FindFirstValue(JwtRegisteredClaimNames.Sub),
-            out var memberId);
+            out var administratorId);
 
-        return memberId;
+        return administratorId;
     }
-
 }

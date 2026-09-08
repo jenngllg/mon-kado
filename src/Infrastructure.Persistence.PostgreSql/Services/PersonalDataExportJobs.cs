@@ -1,4 +1,5 @@
 using JennGllg.Fr.MonKado.Back.Application.Abstractions;
+using JennGllg.Fr.MonKado.Back.Application.Common.Constants;
 using JennGllg.Fr.MonKado.Back.Application.Common.Exceptions;
 using JennGllg.Fr.MonKado.Back.Application.Models;
 using JennGllg.Fr.MonKado.Back.Application.Options;
@@ -163,7 +164,7 @@ public class PersonalDataExportJobs(
             workItem.MemberId,
             cancellationToken);
 
-        if (member is not { EmailConfirmed: true })
+        if (member is null)
             return false;
         var export = await ReadForUpdateAsync(
             workItem,
@@ -179,7 +180,9 @@ public class PersonalDataExportJobs(
             archive.SizeInBytes,
             options.Value.ArchiveLifetime))
             return false;
-        context.AuthenticationEmailOutboxMessages.Add(AuthenticationEmailOutboxMessage.CreatePersonalDataExportReady(
+
+        if (member.EmailConfirmed)
+            context.AuthenticationEmailOutboxMessages.Add(AuthenticationEmailOutboxMessage.CreatePersonalDataExportReady(
                 export.Id,
                 workItem.MemberId,
                 now));
@@ -235,6 +238,15 @@ public class PersonalDataExportJobs(
                 .GetUtcNow()
                 .UtcDateTime;
             var quotaCutoff = now - options.Value.RequestWindow;
+            var expiredAuditIds = context.AdministrativeDataExportEvents
+                .Where(audit => audit.CreatedAt.AddMonths(AdministrativeDataExportConstraints.AuditRetentionMonths) <= now)
+                .OrderBy(audit => audit.CreatedAt)
+                .ThenBy(audit => audit.Id)
+                .Take(options.Value.CleanupBatchSize)
+                .Select(audit => audit.Id);
+            await context.AdministrativeDataExportEvents
+                .Where(audit => expiredAuditIds.Contains(audit.Id))
+                .ExecuteDeleteAsync(cancellationToken);
             var candidates = await context.MemberDataExports
                 .AsNoTracking()
                 .Where(export => export.MemberId == null || export.Status == PersonalDataExportStatus.Failed || export.Status == PersonalDataExportStatus.Expired || export.Status == PersonalDataExportStatus.Ready && export.ExpiresAt <= now)
@@ -336,7 +348,7 @@ public class PersonalDataExportJobs(
             return await verification.MemberDataExports
                 .AsNoTracking()
                 .AnyAsync(
-                export => export.Id == workItem.ExportId && export.MemberId == workItem.MemberId && export.Status == PersonalDataExportStatus.Ready && export.ArchiveId == workItem.LeaseId && verification.Users.Any(member => member.Id == workItem.MemberId && member.EmailConfirmed) && verification.AuthenticationEmailOutboxMessages.Any(message => message.MemberDataExportId == export.Id),
+                export => export.Id == workItem.ExportId && export.MemberId == workItem.MemberId && export.Status == PersonalDataExportStatus.Ready && export.ArchiveId == workItem.LeaseId && verification.Users.Any(member => member.Id == workItem.MemberId),
                 cancellationToken);
         }
         catch (Exception exception) when (PostgreSqlFailureClassifier.IsUnavailable(exception))

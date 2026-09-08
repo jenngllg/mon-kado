@@ -8,6 +8,8 @@ namespace JennGllg.Fr.MonKado.Back.Application.Common.Constants;
 [ExcludeFromCodeCoverage]
 public static class ValidationMessages
 {
+    /// <summary>Describes an invalid administrative export reference.</summary>
+    public const string InvalidAdministrativeExportReference = "The property {PropertyName} must contain at most 128 characters and no control characters.";
     /// <summary>Gets the validation message for malformed Google browser proofs.</summary>
     public const string InvalidGoogleFlow = "The property {PropertyName} must be a canonical 256-bit Base64URL binding.";
     /// <summary>Identifies an invalid optional private review note.</summary>

@@ -16,9 +16,11 @@ public class PersonalDataExportOperationTransformer : IOpenApiOperationTransform
     {
         var path = context.Description.RelativePath;
 
-        if (path is null || !path.StartsWith(
+        if (path is null || !(path.StartsWith(
             ExportPath,
-            StringComparison.Ordinal) || operation.Responses is null)
+            StringComparison.Ordinal) || path.StartsWith(
+            "api/v1/admin/members/{memberId}/data-exports",
+            StringComparison.Ordinal)) || operation.Responses is null)
             return Task.CompletedTask;
 
         if (context.Description.HttpMethod == HttpMethods.Post)
