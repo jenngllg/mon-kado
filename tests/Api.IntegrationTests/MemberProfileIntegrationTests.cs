@@ -28,9 +28,10 @@ public class MemberProfileIntegrationTests(PostgreSqlContainerFixture fixture)
         var timeProvider = new MutableTimeProvider(_referenceTime);
         await using var factory = await CreateMigratedFactoryAsync(timeProvider);
         var member = await CreateMemberAsync(factory);
-        using var client = CreateAuthorizedClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            member.Id);
+            member.Id,
+            TestContext.Current.CancellationToken);
         using var currentResponse = await client.GetAsync(
             "/api/v1/auth/sessions/current",
             TestContext.Current.CancellationToken);
@@ -107,9 +108,10 @@ public class MemberProfileIntegrationTests(PostgreSqlContainerFixture fixture)
             new MutableTimeProvider(_referenceTime),
             coordinator);
         var member = await CreateMemberAsync(factory);
-        using var client = CreateAuthorizedClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            member.Id);
+            member.Id,
+            TestContext.Current.CancellationToken);
         using var currentResponse = await client.GetAsync(
             "/api/v1/auth/sessions/current",
             TestContext.Current.CancellationToken);
@@ -169,9 +171,10 @@ public class MemberProfileIntegrationTests(PostgreSqlContainerFixture fixture)
         await using var factory = await CreateMigratedFactoryAsync(
             new MutableTimeProvider(_referenceTime));
         var member = await CreateMemberAsync(factory);
-        using var client = CreateAuthorizedClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            member.Id);
+            member.Id,
+            TestContext.Current.CancellationToken);
         using var currentResponse = await client.GetAsync(
             "/api/v1/auth/sessions/current",
             TestContext.Current.CancellationToken);
@@ -214,9 +217,10 @@ public class MemberProfileIntegrationTests(PostgreSqlContainerFixture fixture)
             new MutableTimeProvider(_referenceTime),
             coordinator);
         var member = await CreateMemberAsync(factory);
-        using var client = CreateAuthorizedClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            member.Id);
+            member.Id,
+            TestContext.Current.CancellationToken);
         using var currentResponse = await client.GetAsync(
             "/api/v1/auth/sessions/current",
             TestContext.Current.CancellationToken);
@@ -327,19 +331,7 @@ public class MemberProfileIntegrationTests(PostgreSqlContainerFixture fixture)
         return member;
     }
 
-    private static HttpClient CreateAuthorizedClient(
-        PostgreSqlApiFactory factory,
-        Guid memberId)
-    {
-        var client = factory.CreateClient();
-        var accessTokenService = factory.Services.GetRequiredService<IAccessTokenService>();
-        var accessToken = accessTokenService.Create(memberId);
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
-            JwtBearerDefaults.AuthenticationScheme,
-            accessToken.Value);
 
-        return client;
-    }
 
     private static async Task<HttpResponseMessage> UpdateAsync(
         HttpClient client,

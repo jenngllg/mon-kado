@@ -137,12 +137,14 @@ public class ReportedWishlistImageIntegrationTests(PostgreSqlContainerFixture fi
                 ct);
         }
 
-        using var admin = ReportedWishlistTestData.CreateClient(
+        using var admin = await AuthenticationTestData.CreateClientAsync(
             factory,
-            adminId);
-        using var owner = ReportedWishlistTestData.CreateClient(
+            adminId,
+            TestContext.Current.CancellationToken);
+        using var owner = await AuthenticationTestData.CreateClientAsync(
             factory,
-            ownerId);
+            ownerId,
+            TestContext.Current.CancellationToken);
         using var anonymous = factory.CreateClient();
         anonymous.DefaultRequestHeaders.Add(
             "X-MonKado-Share-Token",
@@ -350,9 +352,10 @@ public class ReportedWishlistImageIntegrationTests(PostgreSqlContainerFixture fi
             firstId,
             firstBytes,
             ct);
-        using var client = ReportedWishlistTestData.CreateClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            adminId);
+            adminId,
+            TestContext.Current.CancellationToken);
         var route = $"/api/v1/admin/reported-wishlists/{wishlist.Id}/wishes/{wish.Id}/image";
         var nextId = Guid.CreateVersion7();
         var nextBytes = CreateWebP(SKColors.Blue);

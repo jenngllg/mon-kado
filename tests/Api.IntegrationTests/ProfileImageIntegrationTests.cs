@@ -57,9 +57,10 @@ public class ProfileImageIntegrationTests(PostgreSqlContainerFixture fixture) : 
         // Arrange
         await using var factory = await CreateFactoryAsync();
         var member = await CreateMemberAsync(factory);
-        using var client = CreateClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            member.Id);
+            member.Id,
+            TestContext.Current.CancellationToken);
         var initialTag = await GetEntityTagAsync(client);
         var source = CreatePng(SKColors.Purple);
 
@@ -149,9 +150,10 @@ public class ProfileImageIntegrationTests(PostgreSqlContainerFixture fixture) : 
         // Arrange
         await using var factory = await CreateFactoryAsync();
         var member = await CreateMemberAsync(factory);
-        using var client = CreateClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            member.Id);
+            member.Id,
+            TestContext.Current.CancellationToken);
         using var upload = await UploadAsync(
             client,
             CreatePng(SKColors.Blue),
@@ -271,9 +273,10 @@ public class ProfileImageIntegrationTests(PostgreSqlContainerFixture fixture) : 
         var interceptor = new GiftImageCommitInterceptor();
         await using var factory = await CreateFactoryAsync(interceptor);
         var member = await CreateMemberAsync(factory);
-        using var client = CreateClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            member.Id);
+            member.Id,
+            TestContext.Current.CancellationToken);
         var entityTag = await GetEntityTagAsync(client);
 
         if (commitSucceeds)
@@ -307,9 +310,10 @@ public class ProfileImageIntegrationTests(PostgreSqlContainerFixture fixture) : 
         // Arrange
         await using var factory = await CreateFactoryAsync();
         var member = await CreateMemberAsync(factory);
-        using var client = CreateClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            member.Id);
+            member.Id,
+            TestContext.Current.CancellationToken);
         var entityTag = await GetEntityTagAsync(client);
 
         // Act
@@ -346,9 +350,10 @@ public class ProfileImageIntegrationTests(PostgreSqlContainerFixture fixture) : 
         // Arrange
         await using var factory = await CreateFactoryAsync();
         var member = await CreateMemberAsync(factory);
-        using var client = CreateClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            member.Id);
+            member.Id,
+            TestContext.Current.CancellationToken);
         using var original = await UploadAsync(
             client,
             CreatePng(SKColors.Blue),
@@ -407,9 +412,10 @@ public class ProfileImageIntegrationTests(PostgreSqlContainerFixture fixture) : 
         // Arrange
         await using var factory = await CreateFactoryAsync();
         var member = await CreateMemberAsync(factory);
-        using var client = CreateClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            member.Id);
+            member.Id,
+            TestContext.Current.CancellationToken);
         using var upload = await UploadAsync(
             client,
             CreatePng(SKColors.Blue),
@@ -468,9 +474,10 @@ public class ProfileImageIntegrationTests(PostgreSqlContainerFixture fixture) : 
         var interceptor = new GiftImageCommitInterceptor();
         await using var factory = await CreateFactoryAsync(interceptor);
         var member = await CreateMemberAsync(factory);
-        using var client = CreateClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            member.Id);
+            member.Id,
+            TestContext.Current.CancellationToken);
         using var upload = await UploadAsync(
             client,
             CreatePng(SKColors.Blue),
@@ -516,9 +523,10 @@ public class ProfileImageIntegrationTests(PostgreSqlContainerFixture fixture) : 
         var interceptor = new ProfileImageSaveFailureInterceptor();
         await using var factory = await CreateFactoryAsync(interceptor);
         var member = await CreateMemberAsync(factory);
-        using var client = CreateClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            member.Id);
+            member.Id,
+            TestContext.Current.CancellationToken);
         using var original = await UploadAsync(
             client,
             CreatePng(SKColors.Red),
@@ -599,9 +607,10 @@ public class ProfileImageIntegrationTests(PostgreSqlContainerFixture fixture) : 
         var failure = new AccountDeletionVerificationFailure();
         await using var factory = await CreateFactoryAsync(failure);
         var member = await CreateMemberAsync(factory);
-        using var client = CreateClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            member.Id);
+            member.Id,
+            TestContext.Current.CancellationToken);
         using var upload = await UploadAsync(
             client,
             CreatePng(SKColors.Blue),
@@ -637,9 +646,10 @@ public class ProfileImageIntegrationTests(PostgreSqlContainerFixture fixture) : 
             interceptor,
             failure);
         var member = await CreateMemberAsync(factory);
-        using var client = CreateClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            member.Id);
+            member.Id,
+            TestContext.Current.CancellationToken);
         var entityTag = await GetEntityTagAsync(client);
         interceptor.Armed = true;
 
@@ -673,9 +683,10 @@ public class ProfileImageIntegrationTests(PostgreSqlContainerFixture fixture) : 
         var interceptor = new ProfileImageCommitAccountChangeInterceptor();
         await using var factory = await CreateFactoryAsync(interceptor);
         var member = await CreateMemberAsync(factory);
-        using var client = CreateClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            member.Id);
+            member.Id,
+            TestContext.Current.CancellationToken);
         var entityTag = await GetEntityTagAsync(client);
         interceptor.AfterCommit = async cancellationToken =>
         {
@@ -752,22 +763,7 @@ public class ProfileImageIntegrationTests(PostgreSqlContainerFixture fixture) : 
         return member;
     }
 
-    private static HttpClient CreateClient(
-        PostgreSqlApiFactory factory,
-        Guid memberId)
-    {
-        var client = factory.CreateClient();
-        var tokenService = new JwtAccessTokenService(
-            factory.Services.GetRequiredService<IOptions<JwtOptions>>(),
-            TimeProvider.System);
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
-            "Bearer",
-            tokenService
-                .Create(memberId)
-                .Value);
 
-        return client;
-    }
 
     private static async Task<string> GetEntityTagAsync(HttpClient client)
     {

@@ -36,7 +36,7 @@ public class WishlistShareLinkIntegrationTests(PostgreSqlContainerFixture fixtur
             ownerId,
             wishlistId,
             cancellationToken);
-        using var ownerClient = CreateAuthorizedClient(
+        using var ownerClient = await CreateAuthorizedClientAsync(
             factory,
             ownerId);
 
@@ -174,7 +174,7 @@ public class WishlistShareLinkIntegrationTests(PostgreSqlContainerFixture fixtur
             Guid.CreateVersion7(),
             Guid.CreateVersion7(),
             cancellationToken);
-        using var ownerClient = CreateAuthorizedClient(
+        using var ownerClient = await CreateAuthorizedClientAsync(
             factory,
             ownerId);
         using var creation = await ownerClient.PostAsync(
@@ -270,7 +270,7 @@ public class WishlistShareLinkIntegrationTests(PostgreSqlContainerFixture fixtur
             ownerId,
             wishlistId,
             cancellationToken);
-        using var ownerClient = CreateAuthorizedClient(
+        using var ownerClient = await CreateAuthorizedClientAsync(
             factory,
             ownerId);
         using var creation = await ownerClient.PostAsync(
@@ -419,7 +419,7 @@ public class WishlistShareLinkIntegrationTests(PostgreSqlContainerFixture fixtur
             factory,
             memberId,
             cancellationToken);
-        using var ownerClient = CreateAuthorizedClient(
+        using var ownerClient = await CreateAuthorizedClientAsync(
             factory,
             ownerId);
         using var creation = await ownerClient.PostAsync(
@@ -443,7 +443,7 @@ public class WishlistShareLinkIntegrationTests(PostgreSqlContainerFixture fixtur
             .Single(value => value.StartsWith(
                 $"{GuestSessionCookieService.LocalCookieName}=",
                 StringComparison.Ordinal));
-        using var memberClient = CreateAuthorizedClient(
+        using var memberClient = await CreateAuthorizedClientAsync(
             factory,
             memberId,
             handleCookies: false);
@@ -646,7 +646,7 @@ public class WishlistShareLinkIntegrationTests(PostgreSqlContainerFixture fixtur
         await context.SaveChangesAsync(cancellationToken);
     }
 
-    private static HttpClient CreateAuthorizedClient(
+    private static async Task<HttpClient> CreateAuthorizedClientAsync(
         PostgreSqlApiFactory factory,
         Guid ownerId,
         bool handleCookies = true)
@@ -655,11 +655,11 @@ public class WishlistShareLinkIntegrationTests(PostgreSqlContainerFixture fixtur
         {
             HandleCookies = handleCookies
         });
-        var accessTokenService = factory.Services.GetRequiredService<IAccessTokenService>();
-        var accessToken = accessTokenService.Create(ownerId);
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
-            JwtBearerDefaults.AuthenticationScheme,
-            accessToken.Value);
+        using var authenticated = await AuthenticationTestData.CreateClientAsync(
+            factory,
+            ownerId,
+            TestContext.Current.CancellationToken);
+        client.DefaultRequestHeaders.Authorization = authenticated.DefaultRequestHeaders.Authorization;
 
         return client;
     }

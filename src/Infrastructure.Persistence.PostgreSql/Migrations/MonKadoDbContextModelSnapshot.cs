@@ -850,6 +850,77 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Migrati
                         });
                 });
 
+            modelBuilder.Entity("JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Entities.AdministrativeSessionRevocationEvent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid?>("AdministratorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("administrator_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("MemberId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("member_id");
+
+                    b.Property<string>("RequestReference")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("request_reference");
+
+                    b.HasKey("Id")
+                        .HasName("pk_administrative_session_revocation_events");
+
+                    b.HasIndex("AdministratorId")
+                        .HasDatabaseName("ix_administrative_session_revocation_events_administrator_id");
+
+                    b.HasIndex("MemberId")
+                        .HasDatabaseName("ix_administrative_session_revocation_events_member_id");
+
+                    b.HasIndex("CreatedAt", "Id")
+                        .HasDatabaseName("ix_administrative_session_revocation_events_created_at_id");
+
+                    b.ToTable("administrative_session_revocation_events", "public");
+                });
+
+            modelBuilder.Entity("JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Entities.AuthenticationAccessToken", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expires_at");
+
+                    b.Property<DateTime>("IssuedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("issued_at");
+
+                    b.Property<Guid>("SessionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("session_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_authentication_access_tokens");
+
+                    b.HasIndex("ExpiresAt")
+                        .HasDatabaseName("ix_authentication_access_tokens_expires_at");
+
+                    b.HasIndex("SessionId")
+                        .HasDatabaseName("ix_authentication_access_tokens_session_id");
+
+                    b.ToTable("authentication_access_tokens", "public");
+                });
+
             modelBuilder.Entity("JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Entities.AuthenticationEmailOutboxMessage", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1839,6 +1910,31 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Migrati
                         .HasForeignKey("MemberId")
                         .OnDelete(DeleteBehavior.SetNull)
                         .HasConstraintName("fk_administrative_data_export_events_asp_net_users_member_id");
+                });
+
+            modelBuilder.Entity("JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Entities.AdministrativeSessionRevocationEvent", b =>
+                {
+                    b.HasOne("JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Entities.MonKadoUser", null)
+                        .WithMany()
+                        .HasForeignKey("AdministratorId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_administrative_session_revocation_events_asp_net_users_admini");
+
+                    b.HasOne("JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Entities.MonKadoUser", null)
+                        .WithMany()
+                        .HasForeignKey("MemberId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_administrative_session_revocation_events_asp_net_users_member");
+                });
+
+            modelBuilder.Entity("JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Entities.AuthenticationAccessToken", b =>
+                {
+                    b.HasOne("JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Entities.AuthenticationSession", null)
+                        .WithMany()
+                        .HasForeignKey("SessionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_authentication_access_tokens_authentication_sessions_sessio");
                 });
 
             modelBuilder.Entity("JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Entities.AuthenticationEmailOutboxMessage", b =>

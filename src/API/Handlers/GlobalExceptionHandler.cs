@@ -36,6 +36,18 @@ public class GlobalExceptionHandler(
     {
         var response = exception switch
         {
+            AccountSelfSessionRevocationNotAllowedException => new ErrorResponse(
+                StatusCodes.Status409Conflict,
+                "Administrative self-session revocation forbidden",
+                "An administrator cannot revoke their own sessions through this operation.",
+                ErrorCodes.AccountSelfSessionRevocationNotAllowed,
+                null),
+            AccountSessionRevocationTargetNotFoundException => new ErrorResponse(
+                StatusCodes.Status404NotFound,
+                "Account not found",
+                "The account to disconnect no longer exists.",
+                ErrorCodes.AccountSessionRevocationTargetNotFound,
+                null),
             AccountSelfErasureNotAllowedException => new ErrorResponse(
                 StatusCodes.Status409Conflict,
                 "Administrative self-erasure forbidden",
@@ -138,7 +150,7 @@ public class GlobalExceptionHandler(
                 "The email address or password is invalid.",
                 ErrorCodes.AccountInvalidCredentials,
                 null),
-            InvalidAuthenticationSessionException => new ErrorResponse(
+            InvalidAuthenticationSessionException or InvalidAccessTokenException => new ErrorResponse(
                 StatusCodes.Status401Unauthorized,
                 "Authentication failed",
                 "The authentication session is invalid or expired.",

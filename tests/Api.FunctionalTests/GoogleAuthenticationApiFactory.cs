@@ -42,7 +42,9 @@ public class GoogleAuthenticationApiFactory : WebApplicationFactory<Program>
             0,
             TimeSpan.Zero));
         Backchannel = new FakeGoogleOpenIdConnectBackchannel(TimeProvider);
-        GoogleSessionService = new RecordingGoogleAccountSessionService(TimeProvider);
+        GoogleSessionService = new RecordingGoogleAccountSessionService(
+            TimeProvider,
+            memberId => Services.GetRequiredService<IAccessTokenService>().Create(memberId));
         RefreshSessionService = new RecordingRefreshSessionService(TimeProvider);
     }
 

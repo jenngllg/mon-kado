@@ -34,12 +34,14 @@ public class WishlistReportReviewAccessIntegrationTests(PostgreSqlContainerFixtu
             factory,
             ct);
         using var anonymous = factory.CreateClient();
-        using var owner = ReportedWishlistTestData.CreateClient(
+        using var owner = await AuthenticationTestData.CreateClientAsync(
             factory,
-            ownerId);
-        using var admin = ReportedWishlistTestData.CreateClient(
+            ownerId,
+            TestContext.Current.CancellationToken);
+        using var admin = await AuthenticationTestData.CreateClientAsync(
             factory,
-            adminId);
+            adminId,
+            TestContext.Current.CancellationToken);
         var route = Route(
             wishlist.Id,
             report.Id) + suffix;
@@ -125,9 +127,10 @@ public class WishlistReportReviewAccessIntegrationTests(PostgreSqlContainerFixtu
         var (adminId, _, wishlist, report) = await PrepareAsync(
             factory,
             ct);
-        using var client = ReportedWishlistTestData.CreateClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            adminId);
+            adminId,
+            TestContext.Current.CancellationToken);
         var route = Route(
             wishlist.Id,
             report.Id);
@@ -187,9 +190,10 @@ public class WishlistReportReviewAccessIntegrationTests(PostgreSqlContainerFixtu
             factory,
             ownerId,
             ct);
-        using var client = ReportedWishlistTestData.CreateClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            adminId);
+            adminId,
+            TestContext.Current.CancellationToken);
         using var initial = await client.GetAsync(
             Route(
                 wishlist.Id,
@@ -234,9 +238,10 @@ public class WishlistReportReviewAccessIntegrationTests(PostgreSqlContainerFixtu
         var (adminId, _, wishlist, report) = await PrepareAsync(
             factory,
             ct);
-        using var client = ReportedWishlistTestData.CreateClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            adminId);
+            adminId,
+            TestContext.Current.CancellationToken);
 
         // Act
         using var response = await client.GetAsync(

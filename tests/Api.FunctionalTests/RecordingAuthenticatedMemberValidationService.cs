@@ -14,6 +14,7 @@ public class RecordingAuthenticatedMemberValidationService : IAuthenticatedMembe
     /// <inheritdoc/>
     public Task ValidateAsync(
         Guid memberId,
+        Guid tokenId,
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();

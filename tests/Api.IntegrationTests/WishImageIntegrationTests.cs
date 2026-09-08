@@ -68,9 +68,10 @@ public class WishImageIntegrationTests(PostgreSqlContainerFixture fixture) : IAs
             factory,
             owner.Id,
             "Images");
-        using var client = CreateAuthorizedClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            owner.Id);
+            owner.Id,
+            TestContext.Current.CancellationToken);
         using var creation = await CreateWishAsync(
             client,
             wishlist.Id);
@@ -242,9 +243,10 @@ public class WishImageIntegrationTests(PostgreSqlContainerFixture fixture) : IAs
             factory,
             owner.Id,
             "Concurrent images");
-        using var client = CreateAuthorizedClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            owner.Id);
+            owner.Id,
+            TestContext.Current.CancellationToken);
         using var creation = await CreateWishAsync(
             client,
             wishlist.Id);
@@ -336,9 +338,10 @@ public class WishImageIntegrationTests(PostgreSqlContainerFixture fixture) : IAs
             factory,
             owner.Id,
             "Shared image");
-        using var client = CreateAuthorizedClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            owner.Id);
+            owner.Id,
+            TestContext.Current.CancellationToken);
         using var creation = await CreateWishAsync(
             client,
             wishlist.Id);
@@ -433,9 +436,10 @@ public class WishImageIntegrationTests(PostgreSqlContainerFixture fixture) : IAs
             factory,
             owner.Id,
             "Image deletion");
-        using var client = CreateAuthorizedClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            owner.Id);
+            owner.Id,
+            TestContext.Current.CancellationToken);
         using var creation = await CreateWishAsync(
             client,
             wishlist.Id);
@@ -692,9 +696,10 @@ public class WishImageIntegrationTests(PostgreSqlContainerFixture fixture) : IAs
             factory,
             owner.Id,
             "Concurrent deletion");
-        using var client = CreateAuthorizedClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            owner.Id);
+            owner.Id,
+            TestContext.Current.CancellationToken);
         using var creation = await CreateWishAsync(
             client,
             wishlist.Id);
@@ -848,16 +853,18 @@ public class WishImageIntegrationTests(PostgreSqlContainerFixture fixture) : IAs
             factory,
             administratorId,
             cancellationToken);
-        using var administrator = CreateAuthorizedClient(
+        using var administrator = await AuthenticationTestData.CreateClientAsync(
             factory,
-            administratorId);
+            administratorId,
+            TestContext.Current.CancellationToken);
         var wishlist = await SeedWishlistAsync(
             factory,
             owner.Id,
             "Moderated images");
-        using var client = CreateAuthorizedClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            owner.Id);
+            owner.Id,
+            TestContext.Current.CancellationToken);
         using var creation = await CreateWishAsync(
             client,
             wishlist.Id);
@@ -1011,22 +1018,7 @@ public class WishImageIntegrationTests(PostgreSqlContainerFixture fixture) : IAs
         return wishlist;
     }
 
-    private static HttpClient CreateAuthorizedClient(
-        PostgreSqlApiFactory factory,
-        Guid memberId)
-    {
-        var client = factory.CreateClient();
-        var jwtOptions = factory.Services.GetRequiredService<IOptions<JwtOptions>>();
-        var accessTokenService = new JwtAccessTokenService(
-            jwtOptions,
-            TimeProvider.System);
-        var accessToken = accessTokenService.Create(memberId);
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
-            JwtBearerDefaults.AuthenticationScheme,
-            accessToken.Value);
 
-        return client;
-    }
 
     private static Task<HttpResponseMessage> CreateWishAsync(
         HttpClient client,

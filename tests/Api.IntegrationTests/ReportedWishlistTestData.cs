@@ -121,20 +121,5 @@ public static class ReportedWishlistTestData
         return report;
     }
 
-    public static HttpClient CreateClient(
-        PostgreSqlApiFactory factory,
-        Guid memberId)
-    {
-        var client = factory.CreateClient();
-        var service = new JwtAccessTokenService(
-            factory.Services.GetRequiredService<IOptions<JwtOptions>>(),
-            TimeProvider.System);
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
-            "Bearer",
-            service
-                .Create(memberId)
-                .Value);
 
-        return client;
-    }
 }

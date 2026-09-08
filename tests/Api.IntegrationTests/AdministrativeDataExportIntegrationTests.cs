@@ -75,12 +75,14 @@ public class AdministrativeDataExportIntegrationTests(PostgreSqlContainerFixture
                     member => member.EmailConfirmed,
                     confirmed),
                 cancellationToken);
-        using var admin = ReportedWishlistTestData.CreateClient(
+        using var admin = await AuthenticationTestData.CreateClientAsync(
             factory,
-            administratorId);
-        using var owner = ReportedWishlistTestData.CreateClient(
+            administratorId,
+            TestContext.Current.CancellationToken);
+        using var owner = await AuthenticationTestData.CreateClientAsync(
             factory,
-            memberId);
+            memberId,
+            TestContext.Current.CancellationToken);
         var route = GetRoute(memberId);
 
         // Act
@@ -194,12 +196,14 @@ public class AdministrativeDataExportIntegrationTests(PostgreSqlContainerFixture
         var memberId = await ReportedWishlistTestData.CreateOwnerAsync(
             factory,
             cancellationToken);
-        using var admin = ReportedWishlistTestData.CreateClient(
+        using var admin = await AuthenticationTestData.CreateClientAsync(
             factory,
-            administratorId);
-        using var owner = ReportedWishlistTestData.CreateClient(
+            administratorId,
+            TestContext.Current.CancellationToken);
+        using var owner = await AuthenticationTestData.CreateClientAsync(
             factory,
-            memberId);
+            memberId,
+            TestContext.Current.CancellationToken);
         using var personalRequest = await owner.PostAsync(
             "/api/v1/members/current/data-exports",
             null,
@@ -259,9 +263,10 @@ public class AdministrativeDataExportIntegrationTests(PostgreSqlContainerFixture
         var memberId = await ReportedWishlistTestData.CreateOwnerAsync(
             factory,
             cancellationToken);
-        using var admin = ReportedWishlistTestData.CreateClient(
+        using var admin = await AuthenticationTestData.CreateClientAsync(
             factory,
-            administratorId);
+            administratorId,
+            TestContext.Current.CancellationToken);
 
         if (beforeCommit)
             interceptor.ArmBeforeCommit();
@@ -303,9 +308,10 @@ public class AdministrativeDataExportIntegrationTests(PostgreSqlContainerFixture
         var memberId = await ReportedWishlistTestData.CreateOwnerAsync(
             factory,
             cancellationToken);
-        using var admin = ReportedWishlistTestData.CreateClient(
+        using var admin = await AuthenticationTestData.CreateClientAsync(
             factory,
-            administratorId);
+            administratorId,
+            TestContext.Current.CancellationToken);
         using var response = await admin.PostAsJsonAsync(
             GetRoute(memberId),
             new
@@ -375,9 +381,10 @@ public class AdministrativeDataExportIntegrationTests(PostgreSqlContainerFixture
         var memberId = await ReportedWishlistTestData.CreateOwnerAsync(
             factory,
             cancellationToken);
-        using var admin = ReportedWishlistTestData.CreateClient(
+        using var admin = await AuthenticationTestData.CreateClientAsync(
             factory,
-            administratorId);
+            administratorId,
+            TestContext.Current.CancellationToken);
         using var request = await admin.PostAsJsonAsync(
             GetRoute(memberId),
             new
@@ -657,9 +664,10 @@ public class AdministrativeDataExportIntegrationTests(PostgreSqlContainerFixture
         var memberId = await ReportedWishlistTestData.CreateOwnerAsync(
             factory,
             cancellationToken);
-        using var admin = ReportedWishlistTestData.CreateClient(
+        using var admin = await AuthenticationTestData.CreateClientAsync(
             factory,
-            administratorId);
+            administratorId,
+            TestContext.Current.CancellationToken);
         using var requested = await admin.PostAsJsonAsync(
             GetRoute(memberId),
             new
@@ -719,9 +727,10 @@ public class AdministrativeDataExportIntegrationTests(PostgreSqlContainerFixture
         var memberId = await ReportedWishlistTestData.CreateOwnerAsync(
             factory,
             cancellationToken);
-        using var admin = ReportedWishlistTestData.CreateClient(
+        using var admin = await AuthenticationTestData.CreateClientAsync(
             factory,
-            administratorId);
+            administratorId,
+            TestContext.Current.CancellationToken);
         using var requested = await admin.PostAsJsonAsync(
             GetRoute(memberId),
             new
@@ -826,9 +835,10 @@ public class AdministrativeDataExportIntegrationTests(PostgreSqlContainerFixture
                 user => user.EmailConfirmed,
                 true),
             cancellationToken);
-        using var owner = ReportedWishlistTestData.CreateClient(
+        using var owner = await AuthenticationTestData.CreateClientAsync(
             factory,
-            memberId);
+            memberId,
+            TestContext.Current.CancellationToken);
         using var download = await owner.GetAsync(
             $"/api/v1/members/current/data-exports/{request.Id:D}/archive",
             cancellationToken);
@@ -857,12 +867,14 @@ public class AdministrativeDataExportIntegrationTests(PostgreSqlContainerFixture
         var memberId = await ReportedWishlistTestData.CreateOwnerAsync(
             factory,
             cancellationToken);
-        using var admin = ReportedWishlistTestData.CreateClient(
+        using var admin = await AuthenticationTestData.CreateClientAsync(
             factory,
-            administratorId);
-        using var owner = ReportedWishlistTestData.CreateClient(
+            administratorId,
+            TestContext.Current.CancellationToken);
+        using var owner = await AuthenticationTestData.CreateClientAsync(
             factory,
-            memberId);
+            memberId,
+            TestContext.Current.CancellationToken);
 
         // Act
         var responses = await Task.WhenAll(
@@ -970,9 +982,10 @@ public class AdministrativeDataExportIntegrationTests(PostgreSqlContainerFixture
             cancellationToken);
         using var client = anonymous
             ? factory.CreateClient()
-            : ReportedWishlistTestData.CreateClient(
+            : await AuthenticationTestData.CreateClientAsync(
                 factory,
-                memberId);
+                memberId,
+            TestContext.Current.CancellationToken);
         var route = GetRoute(memberId);
         var exportId = Guid.CreateVersion7();
         var path = operation switch
@@ -1016,9 +1029,10 @@ public class AdministrativeDataExportIntegrationTests(PostgreSqlContainerFixture
         var memberId = await ReportedWishlistTestData.CreateOwnerAsync(
             factory,
             cancellationToken);
-        using var admin = ReportedWishlistTestData.CreateClient(
+        using var admin = await AuthenticationTestData.CreateClientAsync(
             factory,
-            administratorId);
+            administratorId,
+            TestContext.Current.CancellationToken);
         using var requested = await admin.PostAsJsonAsync(
             GetRoute(memberId),
             new

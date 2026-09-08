@@ -252,7 +252,8 @@ public class AdministrativeAuditTests
                 "wishlistReactivated",
                 "memberDataExportRequested",
                 "memberDataExportDownloadStarted",
-                "memberErased"
+                "memberErased",
+                "memberSessionsRevoked"
             ],
             schemas.GetProperty("AdministrativeAuditAction")
                 .GetProperty("enum")

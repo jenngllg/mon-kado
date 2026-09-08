@@ -16,6 +16,29 @@ namespace JennGllg.Fr.MonKado.Back.Api.UnitTests.Handlers;
 
 public class GlobalExceptionHandlerTests
 {
+    [Fact]
+    public async Task TryHandleAsync_WhenAccessTokenIsInvalid_PreservesTheIndependentRefreshCookie()
+    {
+        // Arrange
+        var context = new DefaultHttpContext();
+        using var body = new MemoryStream();
+        context.Response.Body = body;
+
+        // Act
+        await _handler.TryHandleAsync(
+            context,
+            new InvalidAccessTokenException(),
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(
+            StatusCodes.Status401Unauthorized,
+            context.Response.StatusCode);
+        _refreshTokenCookieServiceMock.VerifyNoOtherCalls();
+        _guestSessionCookieServiceMock.VerifyNoOtherCalls();
+        _googleExternalAuthenticationServiceMock.VerifyNoOtherCalls();
+    }
+
     [Theory]
     [InlineData(false, false)]
     [InlineData(true, false)]

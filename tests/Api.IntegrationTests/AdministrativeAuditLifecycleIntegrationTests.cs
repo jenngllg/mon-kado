@@ -112,9 +112,10 @@ public class AdministrativeAuditLifecycleIntegrationTests(PostgreSqlContainerFix
                     .ExecuteDeleteAsync(ct);
                 break;
         }
-        using var client = ReportedWishlistTestData.CreateClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            data.ReaderId);
+            data.ReaderId,
+            TestContext.Current.CancellationToken);
 
         // Act
         var body = await client.GetFromJsonAsync<JsonElement>(
@@ -171,9 +172,10 @@ public class AdministrativeAuditLifecycleIntegrationTests(PostgreSqlContainerFix
         await context.Users
             .Where(user => user.Id == data.MemberId)
             .ExecuteDeleteAsync(ct);
-        using var client = ReportedWishlistTestData.CreateClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            data.ReaderId);
+            data.ReaderId,
+            TestContext.Current.CancellationToken);
 
         // Act
         var body = await client.GetFromJsonAsync<JsonElement>(
@@ -224,9 +226,10 @@ public class AdministrativeAuditLifecycleIntegrationTests(PostgreSqlContainerFix
         var data = await AdministrativeAuditTestData.CreateCompleteJournalAsync(
             factory,
             ct);
-        using var client = ReportedWishlistTestData.CreateClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            authentication == "member" ? data.MemberId : data.ReaderId);
+            authentication == "member" ? data.MemberId : data.ReaderId,
+            TestContext.Current.CancellationToken);
         await using var scope = factory.Services.CreateAsyncScope();
         var context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
         switch (authentication)

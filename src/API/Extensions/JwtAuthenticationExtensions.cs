@@ -1,6 +1,7 @@
 using JennGllg.Fr.MonKado.Back.Api.Authorization;
 using JennGllg.Fr.MonKado.Back.Api.Middleware;
 using JennGllg.Fr.MonKado.Back.Application.Abstractions;
+using JennGllg.Fr.MonKado.Back.Application.Common.Constants;
 using JennGllg.Fr.MonKado.Back.Application.Common.Exceptions;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Options;
 
@@ -95,6 +96,14 @@ public static class JwtAuthenticationExtensions
                     policy.AddRequirements(new AdministratorRequirement());
                 })
             .AddPolicy(
+                AuthorizationPolicies.RevokeMemberSessions,
+                policy =>
+                {
+                    policy.AddAuthenticationSchemes(JwtBearerDefaults.AuthenticationScheme);
+                    policy.RequireAuthenticatedUser();
+                    policy.AddRequirements(new AdministratorRequirement());
+                })
+            .AddPolicy(
                 AuthorizationPolicies.ViewAdministrativeAudit,
                 policy =>
                 {
@@ -148,7 +157,7 @@ public static class JwtAuthenticationExtensions
             OnAuthenticationFailed = context =>
             {
 
-                if (context.Exception is InvalidAuthenticationSessionException or DependencyUnavailableException)
+                if (context.Exception is InvalidAuthenticationSessionException or InvalidAccessTokenException or DependencyUnavailableException)
                     throw context.Exception;
 
                 return Task.CompletedTask;
@@ -162,18 +171,26 @@ public static class JwtAuthenticationExtensions
                     out var memberId) || memberId == Guid.Empty)
                 {
 
-                    throw new InvalidAuthenticationSessionException();
+                    throw new InvalidAccessTokenException();
                 }
 
                 var memberValidation = context.HttpContext.RequestServices.GetRequiredService<IAuthenticatedMemberValidationService>();
+                var identifier = context.Principal?.FindFirstValue(JwtRegisteredClaimNames.Jti);
+
+                if (!Guid.TryParseExact(
+                    identifier,
+                    "N",
+                    out var tokenId) || tokenId == Guid.Empty)
+                    throw new InvalidAccessTokenException();
                 await memberValidation.ValidateAsync(
                     memberId,
+                    tokenId,
                     context.HttpContext.RequestAborted);
             }
         };
         options.TokenValidationParameters = new TokenValidationParameters
         {
-            ClockSkew = TimeSpan.FromSeconds(30),
+            ClockSkew = TimeSpan.FromSeconds(AccessTokenConstraints.ClockSkewSeconds),
             IssuerSigningKey = new SymmetricSecurityKey(Convert.FromBase64String(jwtOptions.SigningKey)),
             NameClaimType = JwtRegisteredClaimNames.Sub,
             RequireExpirationTime = true,

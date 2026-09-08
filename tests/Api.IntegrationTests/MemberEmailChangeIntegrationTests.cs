@@ -33,9 +33,10 @@ public class MemberEmailChangeIntegrationTests(PostgreSqlContainerFixture fixtur
         var member = await CreateMemberAsync(
             factory,
             "old@example.fr");
-        using var client = CreateAuthorizedClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            member.Id);
+            member.Id,
+            TestContext.Current.CancellationToken);
         var entityTag = await GetCurrentEntityTagAsync(client);
 
         // Act
@@ -107,9 +108,10 @@ public class MemberEmailChangeIntegrationTests(PostgreSqlContainerFixture fixtur
         var member = await CreateMemberAsync(
             factory,
             "old@example.fr");
-        using var authorizedClient = CreateAuthorizedClient(
+        using var authorizedClient = await AuthenticationTestData.CreateClientAsync(
             factory,
-            member.Id);
+            member.Id,
+            TestContext.Current.CancellationToken);
         var initialEntityTag = await GetCurrentEntityTagAsync(authorizedClient);
         using var requestResponse = await RequestEmailChangeAsync(
             authorizedClient,
@@ -195,9 +197,10 @@ public class MemberEmailChangeIntegrationTests(PostgreSqlContainerFixture fixtur
         var member = await CreateMemberAsync(
             factory,
             "old@example.fr");
-        using var authorizedClient = CreateAuthorizedClient(
+        using var authorizedClient = await AuthenticationTestData.CreateClientAsync(
             factory,
-            member.Id);
+            member.Id,
+            TestContext.Current.CancellationToken);
         var entityTag = await GetCurrentEntityTagAsync(authorizedClient);
         using var requestResponse = await RequestEmailChangeAsync(
             authorizedClient,
@@ -239,9 +242,10 @@ public class MemberEmailChangeIntegrationTests(PostgreSqlContainerFixture fixtur
         var member = await CreateMemberAsync(
             factory,
             "old@example.fr");
-        using var client = CreateAuthorizedClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            member.Id);
+            member.Id,
+            TestContext.Current.CancellationToken);
         var entityTag = await GetCurrentEntityTagAsync(client);
         using var firstRequestResponse = await RequestEmailChangeAsync(
             client,
@@ -298,9 +302,10 @@ public class MemberEmailChangeIntegrationTests(PostgreSqlContainerFixture fixtur
         var member = await CreateMemberAsync(
             factory,
             "old@example.fr");
-        using var client = CreateAuthorizedClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            member.Id);
+            member.Id,
+            TestContext.Current.CancellationToken);
         var entityTag = await GetCurrentEntityTagAsync(client);
         using var requestResponse = await RequestEmailChangeAsync(
             client,
@@ -309,6 +314,7 @@ public class MemberEmailChangeIntegrationTests(PostgreSqlContainerFixture fixtur
             entityTag);
         var confirmation = await CreateConfirmationAsync(factory);
         timeProvider.Advance(TimeSpan.FromHours(24));
+        client.DefaultRequestHeaders.Authorization = null;
 
         // Act
         using var response = await ConfirmEmailChangeAsync(
@@ -330,9 +336,10 @@ public class MemberEmailChangeIntegrationTests(PostgreSqlContainerFixture fixtur
         var member = await CreateMemberAsync(
             factory,
             "old@example.fr");
-        using var client = CreateAuthorizedClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            member.Id);
+            member.Id,
+            TestContext.Current.CancellationToken);
         var entityTag = await GetCurrentEntityTagAsync(client);
 
         // Act
@@ -368,9 +375,10 @@ public class MemberEmailChangeIntegrationTests(PostgreSqlContainerFixture fixtur
         var member = await CreateMemberAsync(
             factory,
             "old@example.fr");
-        using var client = CreateAuthorizedClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            member.Id);
+            member.Id,
+            TestContext.Current.CancellationToken);
         var entityTag = await GetCurrentEntityTagAsync(client);
 
         // Act
@@ -398,9 +406,10 @@ public class MemberEmailChangeIntegrationTests(PostgreSqlContainerFixture fixtur
         var member = await CreateMemberAsync(
             factory,
             "old@example.fr");
-        using var client = CreateAuthorizedClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            member.Id);
+            member.Id,
+            TestContext.Current.CancellationToken);
         var entityTag = await GetCurrentEntityTagAsync(client);
         using var firstResponse = await RequestEmailChangeAsync(
             client,
@@ -458,9 +467,10 @@ public class MemberEmailChangeIntegrationTests(PostgreSqlContainerFixture fixtur
         var member = await CreateMemberAsync(
             factory,
             "old@example.fr");
-        using var client = CreateAuthorizedClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            member.Id);
+            member.Id,
+            TestContext.Current.CancellationToken);
         var entityTag = await GetCurrentEntityTagAsync(client);
         using var firstResponse = await RequestEmailChangeAsync(
             client,
@@ -470,8 +480,12 @@ public class MemberEmailChangeIntegrationTests(PostgreSqlContainerFixture fixtur
         timeProvider.Advance(TimeSpan.FromHours(24));
 
         // Act
+        using var reconnected = await AuthenticationTestData.CreateClientAsync(
+            factory,
+            member.Id,
+            TestContext.Current.CancellationToken);
         using var secondResponse = await RequestEmailChangeAsync(
-            client,
+            reconnected,
             "new@example.fr",
             CurrentPassword,
             entityTag);
@@ -538,9 +552,10 @@ public class MemberEmailChangeIntegrationTests(PostgreSqlContainerFixture fixtur
                     CurrentPassword));
         }
 
-        using var client = CreateAuthorizedClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            member.Id);
+            member.Id,
+            TestContext.Current.CancellationToken);
         var entityTag = await GetCurrentEntityTagAsync(client);
 
         // Act
@@ -568,9 +583,10 @@ public class MemberEmailChangeIntegrationTests(PostgreSqlContainerFixture fixtur
         var member = await CreateMemberWithoutPasswordAsync(
             factory,
             "old@example.fr");
-        using var client = CreateAuthorizedClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            member.Id);
+            member.Id,
+            TestContext.Current.CancellationToken);
         var entityTag = await GetCurrentEntityTagAsync(client);
 
         // Act
@@ -596,9 +612,10 @@ public class MemberEmailChangeIntegrationTests(PostgreSqlContainerFixture fixtur
     {
         // Arrange
         await using var factory = await CreateMigratedFactoryAsync();
-        using var client = CreateAuthorizedClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            Guid.CreateVersion7());
+            Guid.CreateVersion7(),
+            TestContext.Current.CancellationToken);
 
         // Act
         using var response = await RequestEmailChangeAsync(
@@ -624,9 +641,10 @@ public class MemberEmailChangeIntegrationTests(PostgreSqlContainerFixture fixtur
         await CreateMemberAsync(
             factory,
             "used@example.fr");
-        using var client = CreateAuthorizedClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            member.Id);
+            member.Id,
+            TestContext.Current.CancellationToken);
         var entityTag = await GetCurrentEntityTagAsync(client);
 
         // Act
@@ -655,9 +673,10 @@ public class MemberEmailChangeIntegrationTests(PostgreSqlContainerFixture fixtur
         var member = await CreateMemberAsync(
             factory,
             "old@example.fr");
-        using var client = CreateAuthorizedClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            member.Id);
+            member.Id,
+            TestContext.Current.CancellationToken);
         var entityTag = await GetCurrentEntityTagAsync(client);
 
         // Act
@@ -710,9 +729,10 @@ public class MemberEmailChangeIntegrationTests(PostgreSqlContainerFixture fixtur
         var member = await CreateMemberAsync(
             factory,
             "old@example.fr");
-        using var client = CreateAuthorizedClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            member.Id);
+            member.Id,
+            TestContext.Current.CancellationToken);
         var entityTag = await GetCurrentEntityTagAsync(client);
         using var requestResponse = await RequestEmailChangeAsync(
             client,
@@ -762,12 +782,14 @@ public class MemberEmailChangeIntegrationTests(PostgreSqlContainerFixture fixtur
         var secondMember = await CreateMemberAsync(
             factory,
             "second-old@example.fr");
-        using var firstClient = CreateAuthorizedClient(
+        using var firstClient = await AuthenticationTestData.CreateClientAsync(
             factory,
-            firstMember.Id);
-        using var secondClient = CreateAuthorizedClient(
+            firstMember.Id,
+            TestContext.Current.CancellationToken);
+        using var secondClient = await AuthenticationTestData.CreateClientAsync(
             factory,
-            secondMember.Id);
+            secondMember.Id,
+            TestContext.Current.CancellationToken);
         var firstEntityTag = await GetCurrentEntityTagAsync(firstClient);
         var secondEntityTag = await GetCurrentEntityTagAsync(secondClient);
         using var firstRequestResponse = await RequestEmailChangeAsync(
@@ -888,9 +910,10 @@ public class MemberEmailChangeIntegrationTests(PostgreSqlContainerFixture fixtur
         var member = await CreateMemberAsync(
             factory,
             "old@example.fr");
-        using var client = CreateAuthorizedClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            member.Id);
+            member.Id,
+            TestContext.Current.CancellationToken);
         var entityTag = await GetCurrentEntityTagAsync(client);
         using var requestResponse = await RequestEmailChangeAsync(
             client,
@@ -922,9 +945,10 @@ public class MemberEmailChangeIntegrationTests(PostgreSqlContainerFixture fixtur
         var member = await CreateMemberAsync(
             factory,
             "old@example.fr");
-        using var client = CreateAuthorizedClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            member.Id);
+            member.Id,
+            TestContext.Current.CancellationToken);
         var entityTag = await GetCurrentEntityTagAsync(client);
         using var requestResponse = await RequestEmailChangeAsync(
             client,
@@ -1012,9 +1036,10 @@ public class MemberEmailChangeIntegrationTests(PostgreSqlContainerFixture fixtur
         var member = await CreateMemberAsync(
             factory,
             "old@example.fr");
-        using var client = CreateAuthorizedClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            member.Id);
+            member.Id,
+            TestContext.Current.CancellationToken);
         var entityTag = await GetCurrentEntityTagAsync(client);
         using var requestResponse = await RequestEmailChangeAsync(
             client,
@@ -1059,9 +1084,12 @@ public class MemberEmailChangeIntegrationTests(PostgreSqlContainerFixture fixtur
     {
         // Arrange
         await using var factory = new PostgreSqlApiFactory("Host=127.0.0.1;Port=1;Database=mon_kado;Username=mon_kado;" + "Password=unavailable;Timeout=1;Command Timeout=1;Pooling=false;SSL Mode=Disable");
-        using var client = confirmsRequest ? factory.CreateClient() : CreateAuthorizedClient(
-            factory,
-            Guid.CreateVersion7());
+        using var client = factory.CreateClient();
+
+        if (!confirmsRequest)
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+                "Bearer",
+                factory.Services.GetRequiredService<IAccessTokenService>().Create(Guid.CreateVersion7()).Value);
 
         // Act
         using var response = confirmsRequest ? await ConfirmEmailChangeAsync(
@@ -1088,9 +1116,10 @@ public class MemberEmailChangeIntegrationTests(PostgreSqlContainerFixture fixtur
         var member = await CreateMemberAsync(
             factory,
             "old@example.fr");
-        using var client = CreateAuthorizedClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            member.Id);
+            member.Id,
+            TestContext.Current.CancellationToken);
         var entityTag = await GetCurrentEntityTagAsync(client);
         using var requestResponse = await RequestEmailChangeAsync(
             client,
@@ -1135,9 +1164,10 @@ public class MemberEmailChangeIntegrationTests(PostgreSqlContainerFixture fixtur
         var member = await CreateMemberAsync(
             factory,
             "old@example.fr");
-        using var client = CreateAuthorizedClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            member.Id);
+            member.Id,
+            TestContext.Current.CancellationToken);
         var entityTag = await GetCurrentEntityTagAsync(client);
         using var requestResponse = await RequestEmailChangeAsync(
             client,
@@ -1189,9 +1219,10 @@ public class MemberEmailChangeIntegrationTests(PostgreSqlContainerFixture fixtur
         var member = await CreateMemberAsync(
             factory,
             "old@example.fr");
-        using var client = CreateAuthorizedClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            member.Id);
+            member.Id,
+            TestContext.Current.CancellationToken);
         var entityTag = await GetCurrentEntityTagAsync(client);
         using var requestResponse = await RequestEmailChangeAsync(
             client,
@@ -1250,9 +1281,10 @@ public class MemberEmailChangeIntegrationTests(PostgreSqlContainerFixture fixtur
         var member = await CreateMemberAsync(
             factory,
             "old@example.fr");
-        using var client = CreateAuthorizedClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            member.Id);
+            member.Id,
+            TestContext.Current.CancellationToken);
         var entityTag = await GetCurrentEntityTagAsync(client);
         using var requestResponse = await RequestEmailChangeAsync(
             client,
@@ -1372,19 +1404,7 @@ public class MemberEmailChangeIntegrationTests(PostgreSqlContainerFixture fixtur
         return member;
     }
 
-    private static HttpClient CreateAuthorizedClient(
-        PostgreSqlApiFactory factory,
-        Guid memberId)
-    {
-        var client = factory.CreateClient();
-        var accessTokenService = factory.Services.GetRequiredService<IAccessTokenService>();
-        var accessToken = accessTokenService.Create(memberId);
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
-            JwtBearerDefaults.AuthenticationScheme,
-            accessToken.Value);
 
-        return client;
-    }
 
     private static async Task<string> GetCurrentEntityTagAsync(HttpClient client)
     {

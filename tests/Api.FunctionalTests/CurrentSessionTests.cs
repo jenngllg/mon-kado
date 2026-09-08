@@ -170,11 +170,7 @@ public class CurrentSessionTests
         Assert.Equal(
             ErrorCodes.AccountAuthenticationSessionInvalid,
             error.ErrorCode);
-        Assert.Contains(
-            response.Headers.GetValues("Set-Cookie"),
-            value => value.StartsWith(
-                "MonKado.Refresh=;",
-                StringComparison.Ordinal));
+        Assert.False(response.Headers.Contains("Set-Cookie"));
         Assert.Empty(factory.CurrentSessionService.MemberIds);
     }
 
@@ -250,6 +246,53 @@ public class CurrentSessionTests
         Assert.Equal(
             [memberId],
             factory.CurrentSessionService.MemberIds);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("not-a-token-id")]
+    [InlineData("00000000000000000000000000000000")]
+    [InlineData("0198e75d-8280-7000-8000-000000000001")]
+    public async Task GetCurrentAsync_WhenTokenIdentifierIsMissingOrMalformed_RejectsBeforeReadingSession(string? tokenId)
+    {
+        // Arrange
+        await using var factory = new RegistrationApiFactory();
+        using var client = factory.CreateClient();
+        var claims = new List<Claim>
+        {
+            new(
+                JwtRegisteredClaimNames.Sub,
+                Guid.CreateVersion7().ToString("D"))
+        };
+
+        if (tokenId is not null)
+            claims.Add(new Claim(
+                JwtRegisteredClaimNames.Jti,
+                tokenId));
+        var credentials = new SigningCredentials(
+            new SymmetricSecurityKey(Convert.FromBase64String(SigningKey)),
+            SecurityAlgorithms.HmacSha256);
+        var token = new JwtSecurityToken(
+            Issuer,
+            Audience,
+            claims,
+            notBefore: null,
+            expires: TimeProvider.System.GetUtcNow().UtcDateTime.AddMinutes(5),
+            credentials);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            "Bearer",
+            new JwtSecurityTokenHandler().WriteToken(token));
+
+        // Act
+        using var response = await client.GetAsync(
+            "/api/v1/auth/sessions/current",
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.Unauthorized,
+            response.StatusCode);
+        Assert.Empty(factory.CurrentSessionService.MemberIds);
     }
 
     private static string CreateSignedToken(string? subject)

@@ -41,14 +41,14 @@ public class GiftReservationIntegrationTests(PostgreSqlContainerFixture fixture)
             wishId,
             3,
             cancellationToken);
-        using var ownerClient = CreateAuthorizedClient(
+        using var ownerClient = await CreateAuthorizedClientAsync(
             factory,
             ownerId);
         var shareLink = await CreateShareLinkAsync(
             ownerClient,
             wishlistId,
             cancellationToken);
-        using var participantClient = CreateAuthorizedClient(
+        using var participantClient = await CreateAuthorizedClientAsync(
             factory,
             memberId);
         var csrfToken = await GetCsrfTokenAsync(
@@ -356,7 +356,7 @@ public class GiftReservationIntegrationTests(PostgreSqlContainerFixture fixture)
             wishId,
             3,
             cancellationToken);
-        using var ownerClient = CreateAuthorizedClient(
+        using var ownerClient = await CreateAuthorizedClientAsync(
             factory,
             ownerId);
         var shareLink = await CreateShareLinkAsync(
@@ -415,7 +415,7 @@ public class GiftReservationIntegrationTests(PostgreSqlContainerFixture fixture)
                 cancelled
             ],
             cancellationToken);
-        using var memberClient = CreateAuthorizedClient(
+        using var memberClient = await CreateAuthorizedClientAsync(
             factory,
             memberId);
 
@@ -505,17 +505,17 @@ public class GiftReservationIntegrationTests(PostgreSqlContainerFixture fixture)
             wishId,
             2,
             cancellationToken);
-        using var ownerClient = CreateAuthorizedClient(
+        using var ownerClient = await CreateAuthorizedClientAsync(
             factory,
             ownerId);
         var shareLink = await CreateShareLinkAsync(
             ownerClient,
             wishlistId,
             cancellationToken);
-        using var firstClient = CreateAuthorizedClient(
+        using var firstClient = await CreateAuthorizedClientAsync(
             factory,
             firstMemberId);
-        using var secondClient = CreateAuthorizedClient(
+        using var secondClient = await CreateAuthorizedClientAsync(
             factory,
             secondMemberId);
         var firstCsrfToken = await GetCsrfTokenAsync(
@@ -615,17 +615,17 @@ public class GiftReservationIntegrationTests(PostgreSqlContainerFixture fixture)
             wishId,
             1,
             cancellationToken);
-        using var ownerClient = CreateAuthorizedClient(
+        using var ownerClient = await CreateAuthorizedClientAsync(
             factory,
             ownerId);
         var shareLink = await CreateShareLinkAsync(
             ownerClient,
             wishlistId,
             cancellationToken);
-        using var firstClient = CreateAuthorizedClient(
+        using var firstClient = await CreateAuthorizedClientAsync(
             factory,
             firstMemberId);
-        using var secondClient = CreateAuthorizedClient(
+        using var secondClient = await CreateAuthorizedClientAsync(
             factory,
             secondMemberId);
         var firstCsrfToken = await GetCsrfTokenAsync(
@@ -725,14 +725,14 @@ public class GiftReservationIntegrationTests(PostgreSqlContainerFixture fixture)
             wishId,
             3,
             cancellationToken);
-        using var ownerClient = CreateAuthorizedClient(
+        using var ownerClient = await CreateAuthorizedClientAsync(
             factory,
             ownerId);
         var shareLink = await CreateShareLinkAsync(
             ownerClient,
             wishlistId,
             cancellationToken);
-        using var participantClient = CreateAuthorizedClient(
+        using var participantClient = await CreateAuthorizedClientAsync(
             factory,
             memberId);
         var csrfToken = await GetCsrfTokenAsync(
@@ -808,17 +808,17 @@ public class GiftReservationIntegrationTests(PostgreSqlContainerFixture fixture)
             wishId,
             2,
             cancellationToken);
-        using var ownerClient = CreateAuthorizedClient(
+        using var ownerClient = await CreateAuthorizedClientAsync(
             factory,
             ownerId);
         var shareLink = await CreateShareLinkAsync(
             ownerClient,
             wishlistId,
             cancellationToken);
-        using var firstClient = CreateAuthorizedClient(
+        using var firstClient = await CreateAuthorizedClientAsync(
             factory,
             firstMemberId);
-        using var secondClient = CreateAuthorizedClient(
+        using var secondClient = await CreateAuthorizedClientAsync(
             factory,
             secondMemberId);
         var firstCsrfToken = await GetCsrfTokenAsync(
@@ -936,14 +936,14 @@ public class GiftReservationIntegrationTests(PostgreSqlContainerFixture fixture)
             wishId,
             2,
             cancellationToken);
-        using var ownerClient = CreateAuthorizedClient(
+        using var ownerClient = await CreateAuthorizedClientAsync(
             factory,
             ownerId);
         var shareLink = await CreateShareLinkAsync(
             ownerClient,
             wishlistId,
             cancellationToken);
-        using var participantClient = CreateAuthorizedClient(
+        using var participantClient = await CreateAuthorizedClientAsync(
             factory,
             memberId);
         var csrfToken = await GetCsrfTokenAsync(
@@ -1013,7 +1013,7 @@ public class GiftReservationIntegrationTests(PostgreSqlContainerFixture fixture)
             Guid.CreateVersion7(),
             1,
             cancellationToken);
-        using var ownerClient = CreateAuthorizedClient(
+        using var ownerClient = await CreateAuthorizedClientAsync(
             factory,
             ownerId);
         var shareLink = await CreateShareLinkAsync(
@@ -1087,7 +1087,7 @@ public class GiftReservationIntegrationTests(PostgreSqlContainerFixture fixture)
             Guid.CreateVersion7(),
             1,
             cancellationToken);
-        using var ownerClient = CreateAuthorizedClient(
+        using var ownerClient = await CreateAuthorizedClientAsync(
             factory,
             ownerId);
         var shareLink = await CreateShareLinkAsync(
@@ -1107,7 +1107,7 @@ public class GiftReservationIntegrationTests(PostgreSqlContainerFixture fixture)
             shareLink.Secret,
             guestCsrfToken,
             cancellationToken);
-        AuthorizeClient(
+        await AuthorizeClientAsync(
             factory,
             participantClient,
             memberId);
@@ -1160,17 +1160,17 @@ public class GiftReservationIntegrationTests(PostgreSqlContainerFixture fixture)
             wishId,
             2,
             cancellationToken);
-        using var ownerClient = CreateAuthorizedClient(
+        using var ownerClient = await CreateAuthorizedClientAsync(
             factory,
             ownerId);
         var shareLink = await CreateShareLinkAsync(
             ownerClient,
             wishlistId,
             cancellationToken);
-        using var firstClient = CreateAuthorizedClient(
+        using var firstClient = await CreateAuthorizedClientAsync(
             factory,
             firstMemberId);
-        using var secondClient = CreateAuthorizedClient(
+        using var secondClient = await CreateAuthorizedClientAsync(
             factory,
             secondMemberId);
         var firstCsrfToken = await GetCsrfTokenAsync(
@@ -1368,7 +1368,7 @@ public class GiftReservationIntegrationTests(PostgreSqlContainerFixture fixture)
             wishId,
             3,
             cancellationToken);
-        using var ownerClient = CreateAuthorizedClient(
+        using var ownerClient = await CreateAuthorizedClientAsync(
             factory,
             ownerId);
         var shareLink = await CreateShareLinkAsync(
@@ -1398,7 +1398,7 @@ public class GiftReservationIntegrationTests(PostgreSqlContainerFixture fixture)
             null,
             cancellationToken);
         var guestReservationBody = await guestReservation.Content.ReadFromJsonAsync<JsonElement>(cancellationToken);
-        AuthorizeClient(
+        await AuthorizeClientAsync(
             factory,
             guestClient,
             memberId);
@@ -1461,7 +1461,7 @@ public class GiftReservationIntegrationTests(PostgreSqlContainerFixture fixture)
             wishId,
             3,
             cancellationToken);
-        using var ownerClient = CreateAuthorizedClient(
+        using var ownerClient = await CreateAuthorizedClientAsync(
             factory,
             ownerId);
         var shareLink = await CreateShareLinkAsync(
@@ -1498,7 +1498,7 @@ public class GiftReservationIntegrationTests(PostgreSqlContainerFixture fixture)
             guestCsrfToken,
             guestReservation.Headers.ETag?.Tag,
             cancellationToken);
-        AuthorizeClient(
+        await AuthorizeClientAsync(
             factory,
             guestClient,
             memberId);
@@ -1560,7 +1560,7 @@ public class GiftReservationIntegrationTests(PostgreSqlContainerFixture fixture)
             wishId,
             5,
             cancellationToken);
-        using var ownerClient = CreateAuthorizedClient(
+        using var ownerClient = await CreateAuthorizedClientAsync(
             factory,
             ownerId);
         var shareLink = await CreateShareLinkAsync(
@@ -1589,7 +1589,7 @@ public class GiftReservationIntegrationTests(PostgreSqlContainerFixture fixture)
             2,
             null,
             cancellationToken);
-        using var memberClient = CreateAuthorizedClient(
+        using var memberClient = await CreateAuthorizedClientAsync(
             factory,
             memberId);
         var memberCsrfToken = await GetCsrfTokenAsync(
@@ -1611,7 +1611,7 @@ public class GiftReservationIntegrationTests(PostgreSqlContainerFixture fixture)
             null,
             cancellationToken);
         var memberReservationBody = await memberReservation.Content.ReadFromJsonAsync<JsonElement>(cancellationToken);
-        AuthorizeClient(
+        await AuthorizeClientAsync(
             factory,
             guestClient,
             memberId);
@@ -1715,13 +1715,13 @@ public class GiftReservationIntegrationTests(PostgreSqlContainerFixture fixture)
             factory,
             administratorId,
             cancellationToken);
-        using var owner = CreateAuthorizedClient(
+        using var owner = await CreateAuthorizedClientAsync(
             factory,
             ownerId);
-        using var administrator = CreateAuthorizedClient(
+        using var administrator = await CreateAuthorizedClientAsync(
             factory,
             administratorId);
-        using var participant = isGuest ? factory.CreateClient() : CreateAuthorizedClient(
+        using var participant = isGuest ? factory.CreateClient() : await CreateAuthorizedClientAsync(
             factory,
             memberId);
         var link = await CreateShareLinkAsync(
@@ -1912,7 +1912,7 @@ public class GiftReservationIntegrationTests(PostgreSqlContainerFixture fixture)
         };
     }
 
-    private static HttpClient CreateAuthorizedClient(
+    private static async Task<HttpClient> CreateAuthorizedClientAsync(
         PostgreSqlApiFactory factory,
         Guid memberId)
     {
@@ -1920,7 +1920,7 @@ public class GiftReservationIntegrationTests(PostgreSqlContainerFixture fixture)
         {
             HandleCookies = true
         });
-        AuthorizeClient(
+        await AuthorizeClientAsync(
             factory,
             client,
             memberId);
@@ -1928,16 +1928,16 @@ public class GiftReservationIntegrationTests(PostgreSqlContainerFixture fixture)
         return client;
     }
 
-    private static void AuthorizeClient(
+    private static async Task AuthorizeClientAsync(
         PostgreSqlApiFactory factory,
         HttpClient client,
         Guid memberId)
     {
-        var accessTokenService = factory.Services.GetRequiredService<IAccessTokenService>();
-        var accessToken = accessTokenService.Create(memberId);
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
-            JwtBearerDefaults.AuthenticationScheme,
-            accessToken.Value);
+        using var authenticated = await AuthenticationTestData.CreateClientAsync(
+            factory,
+            memberId,
+            TestContext.Current.CancellationToken);
+        client.DefaultRequestHeaders.Authorization = authenticated.DefaultRequestHeaders.Authorization;
     }
 
     private static async Task<(Guid Id, string Secret, string? EntityTag)> CreateShareLinkAsync(

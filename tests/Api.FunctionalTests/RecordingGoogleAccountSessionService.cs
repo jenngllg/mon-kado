@@ -6,7 +6,9 @@ using System.Collections.Concurrent;
 
 namespace JennGllg.Fr.MonKado.Back.Api.FunctionalTests;
 
-public class RecordingGoogleAccountSessionService(TimeProvider timeProvider)
+public class RecordingGoogleAccountSessionService(
+    TimeProvider timeProvider,
+    Func<Guid, AccessToken> issueAccessToken)
     : IGoogleAccountSessionService
 {
     private readonly ConcurrentDictionary<Guid, byte> _consumedFlows = new();
@@ -129,10 +131,15 @@ public class RecordingGoogleAccountSessionService(TimeProvider timeProvider)
                 authenticationContext.IsPersistent)
             : null;
 
+        var memberId = ExpectedMemberId ?? Guid.Parse("0198e75d-8280-7000-8000-000000000001");
+
         return Task.FromResult(new GoogleAuthenticationResult(
             CompletionOutcome,
             session,
-                ExpectedMemberId ?? Guid.Parse("0198e75d-8280-7000-8000-000000000001")));
+            memberId)
+        {
+            AccessToken = session is null ? null : issueAccessToken(memberId)
+        });
     }
 
     public Task<GoogleAccountLinkResult> LinkAsync(

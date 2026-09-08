@@ -37,6 +37,15 @@ public class JwtAccessTokenServiceTests
 
         // Assert
         var token = new JwtSecurityTokenHandler().ReadJwtToken(result.Value);
+        Assert.Equal(
+            result.Id.ToString("N"),
+            token.Id);
+        Assert.Equal(
+            token.ValidTo,
+            result.ExpiresAt);
+        Assert.Equal(
+            _now.UtcDateTime,
+            result.IssuedAt);
         var claimTypes = token.Claims
             .Select(claim => claim.Type)
             .Order()

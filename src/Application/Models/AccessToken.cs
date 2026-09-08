@@ -12,6 +12,21 @@ public class AccessToken(
     string value,
     int expiresIn)
 {
+    /// <summary>Gets the unique identifier registered with the refresh session.</summary>
+    public Guid Id
+    {
+        get; init;
+    }
+    /// <summary>Gets the exact UTC issuance instant encoded in the JWT.</summary>
+    public DateTime IssuedAt
+    {
+        get; init;
+    }
+    /// <summary>Gets the exact UTC expiration encoded in the JWT.</summary>
+    public DateTime ExpiresAt
+    {
+        get; init;
+    }
     /// <summary>
     /// Gets the encoded token.
     /// </summary>

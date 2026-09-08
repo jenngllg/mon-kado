@@ -30,7 +30,7 @@ public class LogoutIntegrationTests(PostgreSqlContainerFixture fixture)
         TimeSpan.Zero);
 
     [Fact]
-    public async Task LogoutAsync_WhenSessionIsValid_RevokesRefreshAndLeavesAccessTokenValid()
+    public async Task LogoutAsync_WhenSessionIsValid_RevokesRefreshAndAccessTokenImmediately()
     {
         // Arrange
         await using var factory = await CreateMigratedFactoryAsync(new FixedTimeProvider(_now));
@@ -85,7 +85,7 @@ public class LogoutIntegrationTests(PostgreSqlContainerFixture fixture)
             "/api/v1/auth/sessions/current",
             TestContext.Current.CancellationToken);
         Assert.Equal(
-            HttpStatusCode.OK,
+            HttpStatusCode.Unauthorized,
             currentResponse.StatusCode);
     }
 

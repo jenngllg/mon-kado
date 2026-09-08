@@ -124,9 +124,26 @@ public class AdministrativeAuditService(
                 RequestReference = entry.RequestReference
             });
 
+        var revocations = context.AdministrativeSessionRevocationEvents
+            .AsNoTracking()
+            .Select(entry => new AdministrativeAuditEventDetails
+            {
+                Id = entry.Id,
+                CreatedAt = entry.CreatedAt,
+                Action = AdministrativeAuditAction.MemberSessionsRevoked,
+                AdministratorId = entry.AdministratorId,
+                AdministratorDisplayName = null,
+                WishlistId = null,
+                MemberId = entry.MemberId,
+                ExportId = null,
+                Reason = null,
+                RequestReference = entry.RequestReference
+            });
+
         return moderation
             .Concat(exports)
             .Concat(erasures)
+            .Concat(revocations)
             .LeftJoin(
                 context.Users.AsNoTracking(),
                 entry => entry.AdministratorId,

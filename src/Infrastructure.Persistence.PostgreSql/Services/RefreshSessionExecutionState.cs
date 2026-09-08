@@ -27,6 +27,12 @@ internal sealed class RefreshSessionExecutionState(Guid sessionId)
         get; private set;
     }
 
+    /// <summary>Gets the exact access-token identifier staged by this attempt.</summary>
+    internal Guid AttemptedAccessTokenId
+    {
+        get; private set;
+    }
+
     /// <summary>
     /// Gets whether the attempted rotation was persistent.
     /// </summary>
@@ -50,6 +56,7 @@ internal sealed class RefreshSessionExecutionState(Guid sessionId)
     {
         AttemptedSessionMemberId = null;
         AttemptedRefreshToken = null;
+        AttemptedAccessTokenId = Guid.Empty;
         AttemptedIsPersistent = null;
         RevocationWasRecorded = false;
     }
@@ -59,14 +66,17 @@ internal sealed class RefreshSessionExecutionState(Guid sessionId)
     /// </summary>
     /// <param name="memberId">The member identifier.</param>
     /// <param name="refreshToken">The exact refresh token returned by the attempt.</param>
+    /// <param name="accessTokenId">The exact access-token identifier returned by the attempt.</param>
     /// <param name="isPersistent">Whether the rotated session is persistent.</param>
     internal void RecordRotation(
         Guid memberId,
         string refreshToken,
+        Guid accessTokenId,
         bool isPersistent)
     {
         AttemptedSessionMemberId = memberId;
         AttemptedRefreshToken = refreshToken;
+        AttemptedAccessTokenId = accessTokenId;
         AttemptedIsPersistent = isPersistent;
     }
 

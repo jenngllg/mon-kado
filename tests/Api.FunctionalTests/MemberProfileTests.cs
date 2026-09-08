@@ -347,11 +347,7 @@ public class MemberProfileTests
         Assert.Equal(
             ErrorCodes.AccountAuthenticationSessionInvalid,
             error.ErrorCode);
-        Assert.Contains(
-            response.Headers.GetValues("Set-Cookie"),
-            value => value.StartsWith(
-                "MonKado.Refresh=;",
-                StringComparison.Ordinal));
+        Assert.False(response.Headers.Contains("Set-Cookie"));
         Assert.Empty(factory.MemberProfileService.Updates);
     }
 
@@ -389,11 +385,7 @@ public class MemberProfileTests
         Assert.Equal(
             ErrorCodes.AccountAuthenticationSessionInvalid,
             error.ErrorCode);
-        Assert.Contains(
-            response.Headers.GetValues("Set-Cookie"),
-            value => value.StartsWith(
-                "MonKado.Refresh=;",
-                StringComparison.Ordinal));
+        Assert.False(response.Headers.Contains("Set-Cookie"));
         Assert.Empty(factory.MemberProfileService.Updates);
     }
 

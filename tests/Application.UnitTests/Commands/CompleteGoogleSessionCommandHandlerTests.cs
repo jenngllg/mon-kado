@@ -17,18 +17,15 @@ public class CompleteGoogleSessionCommandHandlerTests
     private const string Flow = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
     private readonly Mock<IGoogleAuthenticationContextProvider> _contextProviderMock;
     private readonly Mock<ISender> _senderMock;
-    private readonly Mock<IAccessTokenService> _accessTokenServiceMock;
     private readonly CompleteGoogleSessionCommandHandler _handler;
     private readonly GoogleAuthenticationContext _context;
     public CompleteGoogleSessionCommandHandlerTests()
     {
         _contextProviderMock = new Mock<IGoogleAuthenticationContextProvider>(MockBehavior.Strict);
         _senderMock = new Mock<ISender>(MockBehavior.Strict);
-        _accessTokenServiceMock = new Mock<IAccessTokenService>(MockBehavior.Strict);
         _handler = new CompleteGoogleSessionCommandHandler(
             _contextProviderMock.Object,
-            _senderMock.Object,
-            _accessTokenServiceMock.Object);
+            _senderMock.Object);
         _context = TestFixture
             .Create()
             .Create<GoogleAuthenticationContext>();
@@ -45,10 +42,10 @@ public class CompleteGoogleSessionCommandHandlerTests
         ConfigureResult(new GoogleAuthenticationResult(
                 GoogleAuthenticationOutcome.SessionCreated,
                 refresh,
-                memberId));
-        _accessTokenServiceMock
-            .Setup(service => service.Create(memberId))
-            .Returns(accessToken);
+                memberId)
+        {
+            AccessToken = accessToken
+        });
 
         // Act
         var result = await _handler.Handle(
@@ -68,9 +65,6 @@ public class CompleteGoogleSessionCommandHandlerTests
         Assert.Equal(
             refresh.IsPersistent,
             result.IsPersistent);
-        _accessTokenServiceMock.Verify(
-            service => service.Create(memberId),
-            Times.Once);
         VerifyContext();
     }
 
@@ -103,17 +97,24 @@ public class CompleteGoogleSessionCommandHandlerTests
     [InlineData("session")]
     [InlineData("member")]
     [InlineData("emptyMember")]
+    [InlineData("accessToken")]
     public async Task Handle_WhenSuccessResultIsIncomplete_RejectsWithoutIssuingJwt(string missing)
     {
         // Arrange
         var session = missing == "session" ? null : TestFixture
             .Create()
             .Create<AccountRefreshSession>();
-        Guid? memberId = missing == "member" ? null : Guid.Empty;
+        Guid? memberId = missing == "member" ? null : Guid.CreateVersion7();
+
+        if (missing == "emptyMember")
+            memberId = Guid.Empty;
         ConfigureResult(new GoogleAuthenticationResult(
                 GoogleAuthenticationOutcome.SessionCreated,
                 session,
-                memberId));
+                memberId)
+        {
+            AccessToken = missing == "accessToken" ? null : TestFixture.Create().Create<AccessToken>()
+        });
 
         // Act
         var exception = await Record.ExceptionAsync(() => _handler.Handle(
@@ -153,6 +154,5 @@ public class CompleteGoogleSessionCommandHandlerTests
             Times.Once);
         _contextProviderMock.VerifyNoOtherCalls();
         _senderMock.VerifyNoOtherCalls();
-        _accessTokenServiceMock.VerifyNoOtherCalls();
     }
 }

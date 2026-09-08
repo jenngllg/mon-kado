@@ -30,6 +30,12 @@ internal sealed class GoogleAuthenticationExecutionState(
         get; private set;
     }
 
+    /// <summary>Gets the exact access-token identifier staged by this attempt.</summary>
+    internal Guid AttemptedAccessTokenId
+    {
+        get; private set;
+    }
+
     /// <summary>
     /// Gets whether the transaction attempt persisted a failed password check.
     /// </summary>
@@ -45,6 +51,7 @@ internal sealed class GoogleAuthenticationExecutionState(
     {
         AttemptedSessionMemberId = null;
         AttemptedRefreshToken = null;
+        AttemptedAccessTokenId = Guid.Empty;
         PasswordFailureWasRecorded = false;
     }
 
@@ -53,12 +60,15 @@ internal sealed class GoogleAuthenticationExecutionState(
     /// </summary>
     /// <param name="memberId">The member identifier.</param>
     /// <param name="refreshToken">The exact refresh token returned by the attempt.</param>
+    /// <param name="accessTokenId">The exact access-token identifier returned by the attempt.</param>
     internal void RecordSession(
         Guid memberId,
-        string refreshToken)
+        string refreshToken,
+        Guid accessTokenId)
     {
         AttemptedSessionMemberId = memberId;
         AttemptedRefreshToken = refreshToken;
+        AttemptedAccessTokenId = accessTokenId;
     }
 
     /// <summary>

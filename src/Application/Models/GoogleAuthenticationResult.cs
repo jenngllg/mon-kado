@@ -16,6 +16,11 @@ public class GoogleAuthenticationResult(
     Guid? memberId = null,
     GoogleMemberResolution? memberResolution = null)
 {
+    /// <summary>Gets the access token registered in the successful session transaction.</summary>
+    public AccessToken? AccessToken
+    {
+        get; init;
+    }
     /// <summary>
     /// Gets the completion outcome.
     /// </summary>

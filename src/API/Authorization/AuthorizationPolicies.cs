@@ -9,6 +9,8 @@ namespace JennGllg.Fr.MonKado.Back.Api.Authorization;
 public static class AuthorizationPolicies
 {
     #region Account
+    /// <summary>Identifies administrator-only revocation of another member's sessions.</summary>
+    public const string RevokeMemberSessions = "RevokeMemberSessions";
 
     /// <summary>
     /// Identifies the policy for an authenticated current member session.

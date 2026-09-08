@@ -46,12 +46,14 @@ public class WishlistModerationIntegrationTests(PostgreSqlContainerFixture fixtu
             factory,
             ownerId,
             cancellationToken);
-        using var administrator = CreateClient(
+        using var administrator = await AuthenticationTestData.CreateClientAsync(
             factory,
-            administratorId);
-        using var owner = CreateClient(
+            administratorId,
+            TestContext.Current.CancellationToken);
+        using var owner = await AuthenticationTestData.CreateClientAsync(
             factory,
-            ownerId);
+            ownerId,
+            TestContext.Current.CancellationToken);
         var route = $"/api/v1/admin/wishlists/{wishlistId}/moderation";
         using var initial = await administrator.GetAsync(
             route,
@@ -165,9 +167,10 @@ public class WishlistModerationIntegrationTests(PostgreSqlContainerFixture fixtu
             factory,
             memberId,
             cancellationToken);
-        using var client = CreateClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            memberId);
+            memberId,
+            TestContext.Current.CancellationToken);
         var route = $"/api/v1/admin/wishlists/{wishlistId}/moderation";
         using var before = await client.GetAsync(
             route,
@@ -214,9 +217,10 @@ public class WishlistModerationIntegrationTests(PostgreSqlContainerFixture fixtu
             factory,
             memberId,
             cancellationToken);
-        using var client = CreateClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            memberId);
+            memberId,
+            TestContext.Current.CancellationToken);
         using var before = await client.GetAsync(
             $"/api/v1/wishlists/{wishlistId}",
             cancellationToken);
@@ -271,12 +275,14 @@ public class WishlistModerationIntegrationTests(PostgreSqlContainerFixture fixtu
             factory,
             ownerId,
             cancellationToken);
-        using var administrator = CreateClient(
+        using var administrator = await AuthenticationTestData.CreateClientAsync(
             factory,
-            administratorId);
-        using var owner = CreateClient(
+            administratorId,
+            TestContext.Current.CancellationToken);
+        using var owner = await AuthenticationTestData.CreateClientAsync(
             factory,
-            ownerId);
+            ownerId,
+            TestContext.Current.CancellationToken);
         var moderationRoute = $"/api/v1/admin/wishlists/{wishlistId}/moderation";
         var ownerRoute = $"/api/v1/wishlists/{wishlistId}";
         using var initial = await administrator.GetAsync(
@@ -377,9 +383,10 @@ public class WishlistModerationIntegrationTests(PostgreSqlContainerFixture fixtu
             wishlistId,
             cancellationToken);
         Assert.NotNull(shareLink);
-        using var administrator = CreateClient(
+        using var administrator = await AuthenticationTestData.CreateClientAsync(
             factory,
-            administratorId);
+            administratorId,
+            TestContext.Current.CancellationToken);
         var route = $"/api/v1/admin/wishlists/{wishlistId}/moderation";
         using var initial = await administrator.GetAsync(
             route,
@@ -456,9 +463,10 @@ public class WishlistModerationIntegrationTests(PostgreSqlContainerFixture fixtu
             factory,
             ownerId,
             cancellationToken);
-        using var administrator = CreateClient(
+        using var administrator = await AuthenticationTestData.CreateClientAsync(
             factory,
-            administratorId);
+            administratorId,
+            TestContext.Current.CancellationToken);
         var moderationRoute = $"/api/v1/admin/wishlists/{wishlistId}/moderation";
         using var initial = await administrator.GetAsync(
             moderationRoute,
@@ -470,9 +478,10 @@ public class WishlistModerationIntegrationTests(PostgreSqlContainerFixture fixtu
             true,
             "Private reason",
             cancellationToken);
-        using var owner = CreateClient(
+        using var owner = await AuthenticationTestData.CreateClientAsync(
             factory,
-            ownerId);
+            ownerId,
+            TestContext.Current.CancellationToken);
         var route = $"/api/v1/wishlists/{wishlistId}" + suffix.Replace(
             "{wishId}",
             Guid
@@ -551,9 +560,10 @@ public class WishlistModerationIntegrationTests(PostgreSqlContainerFixture fixtu
             factory,
             ownerId,
             cancellationToken);
-        using var administrator = CreateClient(
+        using var administrator = await AuthenticationTestData.CreateClientAsync(
             factory,
-            administratorId);
+            administratorId,
+            TestContext.Current.CancellationToken);
         var route = $"/api/v1/admin/wishlists/{wishlistId}/moderation";
         using var initial = await administrator.GetAsync(
             route,
@@ -655,9 +665,10 @@ public class WishlistModerationIntegrationTests(PostgreSqlContainerFixture fixtu
             factory,
             ownerId,
             cancellationToken);
-        using var administrator = CreateClient(
+        using var administrator = await AuthenticationTestData.CreateClientAsync(
             factory,
-            administratorId);
+            administratorId,
+            TestContext.Current.CancellationToken);
         var route = $"/api/v1/admin/wishlists/{wishlistId}/moderation";
         using var initial = await administrator.GetAsync(
             route,
@@ -756,12 +767,14 @@ public class WishlistModerationIntegrationTests(PostgreSqlContainerFixture fixtu
             factory,
             ownerId,
             cancellationToken);
-        using var administrator = CreateClient(
+        using var administrator = await AuthenticationTestData.CreateClientAsync(
             factory,
-            administratorId);
-        using var owner = CreateClient(
+            administratorId,
+            TestContext.Current.CancellationToken);
+        using var owner = await AuthenticationTestData.CreateClientAsync(
             factory,
-            ownerId);
+            ownerId,
+            TestContext.Current.CancellationToken);
         var moderationRoute = $"/api/v1/admin/wishlists/{wishlistId}/moderation";
         using var initial = await administrator.GetAsync(
             moderationRoute,
@@ -1007,21 +1020,7 @@ public class WishlistModerationIntegrationTests(PostgreSqlContainerFixture fixtu
         return wishlist.Id;
     }
 
-    private static HttpClient CreateClient(
-        PostgreSqlApiFactory factory,
-        Guid memberId)
-    {
-        var client = factory.CreateClient();
-        var tokenService = new JwtAccessTokenService(
-            factory.Services.GetRequiredService<IOptions<JwtOptions>>(),
-            TimeProvider.System);
-        var token = tokenService.Create(memberId);
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
-            "Bearer",
-            token.Value);
 
-        return client;
-    }
 
     private static async Task<HttpResponseMessage> UpdateAsync(
         HttpClient client,

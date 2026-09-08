@@ -31,9 +31,10 @@ public class WishlistReportReviewIntegrationTests(PostgreSqlContainerFixture fix
         var (adminId, _, wishlist, report) = await PrepareAsync(
             factory,
             ct);
-        using var client = ReportedWishlistTestData.CreateClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            adminId);
+            adminId,
+            TestContext.Current.CancellationToken);
         var route = Route(
             wishlist.Id,
             report.Id);
@@ -251,9 +252,10 @@ public class WishlistReportReviewIntegrationTests(PostgreSqlContainerFixture fix
         var (adminId, _, wishlist, report) = await PrepareAsync(
             factory,
             ct);
-        using var client = ReportedWishlistTestData.CreateClient(
+        using var client = await AuthenticationTestData.CreateClientAsync(
             factory,
-            adminId);
+            adminId,
+            TestContext.Current.CancellationToken);
         var route = Route(
             wishlist.Id,
             report.Id);
@@ -313,12 +315,14 @@ public class WishlistReportReviewIntegrationTests(PostgreSqlContainerFixture fix
         var otherId = await ReportedWishlistTestData.CreateAdministratorAsync(
             factory,
             ct);
-        using var first = ReportedWishlistTestData.CreateClient(
+        using var first = await AuthenticationTestData.CreateClientAsync(
             factory,
-            adminId);
-        using var second = ReportedWishlistTestData.CreateClient(
+            adminId,
+            TestContext.Current.CancellationToken);
+        using var second = await AuthenticationTestData.CreateClientAsync(
             factory,
-            otherId);
+            otherId,
+            TestContext.Current.CancellationToken);
         var route = Route(
             wishlist.Id,
             report.Id);
