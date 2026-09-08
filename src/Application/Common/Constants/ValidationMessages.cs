@@ -8,6 +8,12 @@ namespace JennGllg.Fr.MonKado.Back.Application.Common.Constants;
 [ExcludeFromCodeCoverage]
 public static class ValidationMessages
 {
+    /// <summary>Distinguishes an absent optional query value from an invalid supplied blank.</summary>
+    public const string BlankQueryParameter = "A supplied query parameter must not be blank.";
+    /// <summary>Requires explicitly zoned ISO 8601 date-time boundaries.</summary>
+    public const string InvalidAuditDate = "The property {PropertyName} must be an ISO 8601 date-time with an explicit timezone.";
+    /// <summary>Requires a nonempty half-open audit interval.</summary>
+    public const string InvalidAuditDateRange = "The property from must be earlier than to.";
     /// <summary>Requires explicit confirmation of the account named by the route.</summary>
     public const string ErasureTargetMismatch = "The confirmed member must match the target account.";
     /// <summary>Describes an invalid administrative export reference.</summary>

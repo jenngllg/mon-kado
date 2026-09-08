@@ -28,6 +28,11 @@ public class WishlistModerationEventConfiguration : IEntityTypeConfiguration<Wis
                     "sequence > 0");
             });
         builder.HasKey(value => value.Id);
+        builder.HasIndex(value => new
+        {
+            value.OccurredAt,
+            value.Id
+        });
         builder
             .Property(value => value.Action)
             .HasConversion<string>()

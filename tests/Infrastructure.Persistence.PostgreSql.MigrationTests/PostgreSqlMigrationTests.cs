@@ -8,6 +8,7 @@ using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Contexts;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Entities;
 
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -20,6 +21,102 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Migrati
 [Collection(PostgreSqlMigrationTestSuite.Name)]
 public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
 {
+    [Fact]
+    public async Task MigrateAsync_WhenAdministrativeAuditIndexesAreAdded_PreservesEventsAcrossRollback()
+    {
+        // Arrange
+        var ct = TestContext.Current.CancellationToken;
+        await using var provider = CreateServiceProvider();
+        await using var scope = provider.CreateAsyncScope();
+        var context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
+        await context.Database.MigrateAsync(ct);
+        var administratorId = Guid.CreateVersion7();
+        context.Users.Add(CreateMigrationMember(
+            administratorId,
+            $"{administratorId:N}@example.test",
+            "Audit migration administrator"));
+        var audit = new AdministrativeDataExportEvent(
+            administratorId,
+            administratorId,
+            Guid.CreateVersion7(),
+            JennGllg.Fr.MonKado.Back.Application.Models.AdministrativeDataExportAction.Requested,
+            "MIGRATION-806",
+            new DateTime(
+                2026,
+                9,
+                8,
+                12,
+                0,
+                0,
+                DateTimeKind.Utc));
+        context.AdministrativeDataExportEvents.Add(audit);
+        await context.SaveChangesAsync(ct);
+        var migrator = context.GetService<Microsoft.EntityFrameworkCore.Migrations.IMigrator>();
+
+        try
+        {
+            // Act
+            await migrator.MigrateAsync(
+                "20260908090950_AddAdministrativeAccountErasure",
+                ct);
+            var indexesBefore = await ReadAdministrativeAuditIndexesAsync(
+                context,
+                ct);
+            await context.Database.MigrateAsync(ct);
+            var indexesAfter = await ReadAdministrativeAuditIndexesAsync(
+                context,
+                ct);
+
+            // Assert
+            Assert.Empty(indexesBefore);
+            Assert.Equal(
+                2,
+                indexesAfter.Length);
+            Assert.Contains(
+                indexesAfter,
+                definition => definition.Contains(
+                    "wishlist_moderation_events USING btree (occurred_at, id)",
+                    StringComparison.Ordinal));
+            Assert.Contains(
+                indexesAfter,
+                definition => definition.Contains(
+                    "administrative_data_export_events USING btree (created_at, id)",
+                    StringComparison.Ordinal));
+            context.ChangeTracker.Clear();
+            var persisted = await context.AdministrativeDataExportEvents.SingleAsync(
+                entry => entry.Id == audit.Id,
+                ct);
+            Assert.Equal(
+                audit.RequestReference,
+                persisted.RequestReference);
+            Assert.Equal(
+                audit.AdministratorId,
+                persisted.AdministratorId);
+            Assert.Equal(
+                audit.CreatedAt,
+                persisted.CreatedAt);
+        }
+        finally
+        {
+            await context.Database.MigrateAsync(ct);
+        }
+    }
+
+    private static async Task<string[]> ReadAdministrativeAuditIndexesAsync(
+        MonKadoDbContext context,
+        CancellationToken cancellationToken)
+    {
+
+        return await context.Database.SqlQueryRaw<string>(
+                """
+                SELECT indexdef AS "Value" FROM pg_indexes
+                WHERE schemaname = 'public'
+                  AND indexname IN (
+                    'ix_wishlist_moderation_events_occurred_at_id',
+                    'ix_administrative_data_export_events_created_at_id')
+                """)
+            .ToArrayAsync(cancellationToken);
+    }
     [Fact]
     public async Task MigrateAsync_WhenExportsContainNotifications_RollsBackWithoutDeletingOtherAccountData()
     {
@@ -308,6 +405,10 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
                 StringComparison.Ordinal),
             migration => Assert.EndsWith(
                 "_AddAdministrativeAccountErasure",
+                migration,
+                StringComparison.Ordinal),
+            migration => Assert.EndsWith(
+                "_AddAdministrativeAuditIndexes",
                 migration,
                 StringComparison.Ordinal));
         Assert.False(context.Database.HasPendingModelChanges());
