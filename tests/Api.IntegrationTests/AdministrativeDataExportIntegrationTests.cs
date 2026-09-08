@@ -1140,7 +1140,10 @@ public class AdministrativeDataExportIntegrationTests(PostgreSqlContainerFixture
         // Act
         using var response = await client.PostAsJsonAsync(
             GetRoute(memberId),
-            new { requestReference = "SUPPORT-807" },
+            new
+            {
+                requestReference = "SUPPORT-807"
+            },
             cancellationToken);
 
         // Assert
