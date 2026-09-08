@@ -46,5 +46,10 @@ public class AdministrativeDataExportEventConfiguration : IEntityTypeConfigurati
             true,
             true);
         builder.HasIndex(audit => audit.CreatedAt);
+        builder.HasIndex(audit => new
+        {
+            audit.CreatedAt,
+            audit.Id
+        });
     }
 }

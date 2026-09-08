@@ -20,6 +20,8 @@ public static class AuthorizationPolicies
 
     /// <summary>Allows database-authorized administrators to erase another member's account.</summary>
     public const string EraseMemberData = "EraseMemberData";
+    /// <summary>Allows database-authorized administrators to consult retained administrative events.</summary>
+    public const string ViewAdministrativeAudit = "ViewAdministrativeAudit";
 
     #endregion
 

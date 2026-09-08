@@ -8,6 +8,12 @@ namespace JennGllg.Fr.MonKado.Back.Application.Common.Constants;
 [ExcludeFromCodeCoverage]
 public static class LogEventIds
 {
+    #region AdministrativeAudit
+
+    /// <summary>Identifies successful administrative audit reads.</summary>
+    public const int AdministrativeAuditRetrieved = 1180;
+
+    #endregion
     #region AdministrativeAccountErasure
     /// <summary>Identifies a committed administrative erasure.</summary>
     public const int AdministrativeAccountErasureExecuted = 1170;
