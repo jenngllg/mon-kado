@@ -20,6 +20,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 
+using AccountErasureProcessingOptions = JennGllg.Fr.MonKado.Back.Application.Options.AccountErasureProcessingOptions;
+
 namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Configurations;
 
 /// <summary>
@@ -125,6 +127,14 @@ public static class InfrastructureInjectionConfiguration
         services.AddScoped<IMemberProfileService, MemberProfileService>();
         services.AddScoped<IPersonalDataExportService, PersonalDataExportService>();
         services.AddScoped<IAdministrativeDataExportService, AdministrativeDataExportService>();
+        services.AddScoped<IAdministrativeAccountErasureService, AdministrativeAccountErasureService>();
+        services.AddScoped<IAccountErasureRecipientProtector, AccountErasureRecipientProtector>();
+        services.AddScoped<IAccountErasureMaintenance, AccountErasureMaintenance>();
+        services.AddScoped<IAccountErasureEmailRepository, AccountErasureEmailRepository>();
+        services.AddSingleton<IValidateOptions<AccountErasureProcessingOptions>, AccountErasureProcessingOptionsValidator>();
+        services.AddOptions<AccountErasureProcessingOptions>()
+            .Bind(configuration.GetSection(AccountErasureProcessingOptions.SectionName))
+            .ValidateOnStart();
         services.AddScoped<IPersonalDataExportRequestRepository, PersonalDataExportRequestRepository>();
         services.AddScoped<IPersonalDataExportArchiveReader, PersonalDataExportArchiveReader>();
         services.AddScoped<IPersonalDataExportSnapshotReader, PersonalDataExportSnapshotReader>();
@@ -134,6 +144,7 @@ public static class InfrastructureInjectionConfiguration
         services.AddScoped<IMemberPasswordService, MemberPasswordService>();
         services.AddScoped<IPasswordResetService, PasswordResetService>();
         services.AddScoped<IMemberAccountDeletionService, MemberAccountDeletionService>();
+        services.AddScoped<IMemberAccountDataRemovalService, MemberAccountDataRemovalService>();
         services.AddScoped<IAuthenticatedMemberValidationService, AuthenticatedMemberValidationService>();
         services.AddScoped<IMemberAccountDeletionTokenService, MemberAccountDeletionTokenService>();
         services.AddSingleton<IValidateOptions<MemberAccountDeletionOptions>, MemberAccountDeletionOptionsValidator>();

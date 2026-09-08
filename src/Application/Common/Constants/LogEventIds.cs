@@ -8,6 +8,18 @@ namespace JennGllg.Fr.MonKado.Back.Application.Common.Constants;
 [ExcludeFromCodeCoverage]
 public static class LogEventIds
 {
+    #region AdministrativeAccountErasure
+    /// <summary>Identifies a committed administrative erasure.</summary>
+    public const int AdministrativeAccountErasureExecuted = 1170;
+    /// <summary>Identifies notifications abandoned without retaining recipients.</summary>
+    public const int AccountErasureNotificationsAbandoned = 1171;
+    /// <summary>Identifies an accepted post-erasure notification.</summary>
+    public const int AccountErasureNotificationAccepted = 1172;
+    /// <summary>Identifies a sanitized post-erasure delivery failure.</summary>
+    public const int AccountErasureNotificationFailed = 1173;
+    /// <summary>Identifies a failed erasure processing cycle.</summary>
+    public const int AccountErasureProcessingFailed = 1174;
+    #endregion
     #region AdministrativeDataExport
     /// <summary>Identifies an accepted administrative export request.</summary>
     public const int AdministrativeDataExportRequested = 1160;

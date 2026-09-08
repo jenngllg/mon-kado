@@ -36,6 +36,18 @@ public class GlobalExceptionHandler(
     {
         var response = exception switch
         {
+            AccountSelfErasureNotAllowedException => new ErrorResponse(
+                StatusCodes.Status409Conflict,
+                "Administrative self-erasure forbidden",
+                "Use the member account deletion flow to erase your own account.",
+                ErrorCodes.AccountSelfErasureNotAllowed,
+                null),
+            AccountErasureTargetNotFoundException => new ErrorResponse(
+                StatusCodes.Status404NotFound,
+                "Account not found",
+                "The account to erase no longer exists.",
+                ErrorCodes.AccountErasureTargetNotFound,
+                null),
             PersonalDataExportNotFoundException => new ErrorResponse(
                 StatusCodes.Status404NotFound,
                 "Export not found",

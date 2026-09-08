@@ -25,6 +25,10 @@ public static class ErrorCodes
     public const string WishImportUrlRejected = "WISH_IMPORT_URL_REJECTED";
     #endregion
     #region Account
+    /// <summary>Identifies attempts to erase the acting administrator through the administrative path.</summary>
+    public const string AccountSelfErasureNotAllowed = "ACCOUNT_SELF_ERASURE_NOT_ALLOWED";
+    /// <summary>Identifies a missing administrative erasure target.</summary>
+    public const string AccountErasureTargetNotFound = "ACCOUNT_ERASURE_TARGET_NOT_FOUND";
     /// <summary>Identifies ProfileImageUnsupportedFormat errors.</summary>
     public const string ProfileImageUnsupportedFormat = "ACCOUNT_PROFILE_IMAGE_UNSUPPORTED_FORMAT";
     /// <summary>Identifies ProfileImageInvalid errors.</summary>

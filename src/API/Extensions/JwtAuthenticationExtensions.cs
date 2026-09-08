@@ -87,6 +87,14 @@ public static class JwtAuthenticationExtensions
                     policy.AddRequirements(new AdministratorRequirement());
                 })
             .AddPolicy(
+                AuthorizationPolicies.EraseMemberData,
+                policy =>
+                {
+                    policy.AddAuthenticationSchemes(JwtBearerDefaults.AuthenticationScheme);
+                    policy.RequireAuthenticatedUser();
+                    policy.AddRequirements(new AdministratorRequirement());
+                })
+            .AddPolicy(
                 AuthorizationPolicies.ProcessWishlistReports,
                 policy =>
                 {

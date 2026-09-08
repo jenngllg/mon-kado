@@ -305,6 +305,10 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
             migration => Assert.EndsWith(
                 "_AddAdministrativeDataExportEvents",
                 migration,
+                StringComparison.Ordinal),
+            migration => Assert.EndsWith(
+                "_AddAdministrativeAccountErasure",
+                migration,
                 StringComparison.Ordinal));
         Assert.False(context.Database.HasPendingModelChanges());
         var tables = await GetPublicTablesAsync(
@@ -313,6 +317,8 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
         Assert.Equal(
             [
                 "__EFMigrationsHistory",
+                "account_erasure_email_outbox",
+                "administrative_account_erasure_events",
                 "administrative_data_export_events",
                 "authentication_email_outbox",
                 "authentication_sessions",

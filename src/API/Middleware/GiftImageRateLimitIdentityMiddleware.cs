@@ -7,13 +7,13 @@ using Microsoft.AspNetCore.RateLimiting;
 namespace JennGllg.Fr.MonKado.Back.Api.Middleware;
 
 /// <summary>
-/// Authenticates gift-image upload callers before their member-scoped rate limit is evaluated.
+/// Authenticates Bearer callers before their member-scoped rate limit is evaluated.
 /// </summary>
 /// <param name="next">The next request delegate.</param>
 public class GiftImageRateLimitIdentityMiddleware(RequestDelegate next)
 {
     /// <summary>
-    /// Authenticates upload requests without invoking remote authentication request handlers.
+    /// Authenticates limited requests without invoking remote authentication request handlers.
     /// </summary>
     /// <param name="context">The HTTP context.</param>
     /// <returns>A task that represents the asynchronous operation.</returns>
@@ -27,6 +27,7 @@ public class GiftImageRateLimitIdentityMiddleware(RequestDelegate next)
 
         if (policyName is not (AuthenticationRateLimitingExtensions.GiftImageUploadPolicy or
             AuthenticationRateLimitingExtensions.ProfileImageUploadPolicy or
+            AuthenticationRateLimitingExtensions.AdministrativeAccountErasurePolicy or
             AuthenticationRateLimitingExtensions.WishImportPreviewPolicy))
         {
             await next(context);
