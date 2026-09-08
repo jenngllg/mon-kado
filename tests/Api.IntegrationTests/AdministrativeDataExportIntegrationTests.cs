@@ -1106,6 +1106,56 @@ public class AdministrativeDataExportIntegrationTests(PostgreSqlContainerFixture
         Assert.Empty(await context.AdministrativeDataExportEvents.ToArrayAsync(cancellationToken));
     }
 
+    [Fact]
+    public async Task RequestAsync_WhenOnlyAdministratorRefreshCookieIsPresent_RejectsWithoutExportOrAudit()
+    {
+        // Arrange
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var factory = await CreateFactoryAsync();
+        var administratorId = await ReportedWishlistTestData.CreateAdministratorAsync(
+            factory,
+            cancellationToken);
+        var memberId = await ReportedWishlistTestData.CreateOwnerAsync(
+            factory,
+            cancellationToken);
+        await using var scope = factory.Services.CreateAsyncScope();
+        var sessions = scope.ServiceProvider.GetRequiredService<IRefreshSessionService>();
+        var session = await sessions.CreateAsync(
+            administratorId,
+            isPersistent: false,
+            requestedSessionId: null,
+            currentSessionId: null,
+            cancellationToken);
+        await scope.ServiceProvider
+            .GetRequiredService<IUnitOfWork>()
+            .SaveChangesAsync(cancellationToken);
+        using var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Add(
+            "Cookie",
+            $"MonKado.Refresh={session.RefreshToken}");
+        client.DefaultRequestHeaders.Add(
+            "Origin",
+            "https://foreign.example.test");
+
+        // Act
+        using var response = await client.PostAsJsonAsync(
+            GetRoute(memberId),
+            new { requestReference = "SUPPORT-807" },
+            cancellationToken);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.Unauthorized,
+            response.StatusCode);
+        Assert.False(response.Headers.Contains("Set-Cookie"));
+        var context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
+        Assert.Empty(await context.MemberDataExports.ToArrayAsync(cancellationToken));
+        Assert.Empty(await context.AdministrativeDataExportEvents.ToArrayAsync(cancellationToken));
+        Assert.NotNull(await sessions.ProveCurrentSessionAsync(
+            session.RefreshToken,
+            cancellationToken));
+    }
+
     private async Task<PostgreSqlApiFactory> CreateFactoryAsync(params IInterceptor[] interceptors)
     {
         await fixture.ResetDatabaseAsync(TestContext.Current.CancellationToken);

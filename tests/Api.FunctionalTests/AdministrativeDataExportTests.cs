@@ -17,12 +17,14 @@ namespace JennGllg.Fr.MonKado.Back.Api.FunctionalTests;
 
 public class AdministrativeDataExportTests
 {
-    private readonly Mock<IAdministrativeDataExportService> _serviceMock = new(MockBehavior.Strict);
-    private readonly Mock<IAdministratorAccessService> _accessMock = new(MockBehavior.Strict);
+    private readonly Mock<IAdministrativeDataExportService> _serviceMock;
+    private readonly Mock<IAdministratorAccessService> _accessMock;
     private readonly Guid _administratorId = Guid.CreateVersion7();
     private readonly Guid _memberId = Guid.CreateVersion7();
     public AdministrativeDataExportTests()
     {
+        _serviceMock = new Mock<IAdministrativeDataExportService>(MockBehavior.Strict);
+        _accessMock = new Mock<IAdministratorAccessService>(MockBehavior.Strict);
         _accessMock
             .Setup(service => service.GetAccessAsync(
                 _administratorId,
