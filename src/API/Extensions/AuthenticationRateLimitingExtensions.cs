@@ -60,6 +60,10 @@ public static class AuthenticationRateLimitingExtensions
     public const string PasswordResetPolicy = "PasswordReset";
     /// <summary>Identifies the authenticated account deletion confirmation quota.</summary>
     public const string AccountDeletionConfirmationPolicy = "AccountDeletionConfirmation";
+    /// <summary>Identifies the administrator-scoped account erasure quota.</summary>
+    public const string AdministrativeAccountErasurePolicy = "AdministrativeAccountErasure";
+    /// <summary>Gets the maximum administrative erasure attempts per minute.</summary>
+    public const int AdministrativeAccountErasurePermitLimit = 5;
     /// <summary>
     /// Identifies the Google authentication challenge policy.
     /// </summary>
@@ -193,6 +197,11 @@ public static class AuthenticationRateLimitingExtensions
                     context => CreateMemberLimiter(
                         context,
                         5));
+                options.AddPolicy(
+                    AdministrativeAccountErasurePolicy,
+                    context => CreateMemberLimiter(
+                        context,
+                        AdministrativeAccountErasurePermitLimit));
                 options.AddPolicy(
                     GoogleChallengePolicy,
                     context => CreateLimiter(

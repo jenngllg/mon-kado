@@ -25,6 +25,10 @@ public class MonKadoDbContext(DbContextOptions<MonKadoDbContext> options) : Iden
 
     /// <summary>Gets retained administrative export accountability events.</summary>
     public DbSet<AdministrativeDataExportEvent> AdministrativeDataExportEvents => Set<AdministrativeDataExportEvent>();
+    /// <summary>Gets the minimal administrative erasure audit.</summary>
+    public DbSet<AdministrativeAccountErasureEvent> AdministrativeAccountErasureEvents => Set<AdministrativeAccountErasureEvent>();
+    /// <summary>Gets the short-lived erasure notification outbox.</summary>
+    public DbSet<AccountErasureEmail> AccountErasureEmails => Set<AccountErasureEmail>();
     /// <summary>
     /// Gets authentication sessions.
     /// </summary>

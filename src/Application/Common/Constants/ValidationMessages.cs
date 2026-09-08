@@ -8,6 +8,8 @@ namespace JennGllg.Fr.MonKado.Back.Application.Common.Constants;
 [ExcludeFromCodeCoverage]
 public static class ValidationMessages
 {
+    /// <summary>Requires explicit confirmation of the account named by the route.</summary>
+    public const string ErasureTargetMismatch = "The confirmed member must match the target account.";
     /// <summary>Describes an invalid administrative export reference.</summary>
     public const string InvalidAdministrativeExportReference = "The property {PropertyName} must contain at most 128 characters and no control characters.";
     /// <summary>Gets the validation message for malformed Google browser proofs.</summary>

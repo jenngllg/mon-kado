@@ -1,6 +1,7 @@
 using JennGllg.Fr.MonKado.Back.Api.Errors;
 
 using Microsoft.AspNetCore.Http.Features;
+using Microsoft.AspNetCore.Http.Metadata;
 
 namespace JennGllg.Fr.MonKado.Back.Api.Extensions;
 
@@ -152,7 +153,7 @@ public static class RequestBodyLimitExtensions
 
         return IsLimitedRequest(request)
             ? MaximumRequestBodySize
-            : null;
+            : request.HttpContext.GetEndpoint()?.Metadata.GetMetadata<IRequestSizeLimitMetadata>()?.MaxRequestBodySize;
     }
 
     /// <summary>

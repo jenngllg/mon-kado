@@ -18,6 +18,9 @@ public static class AuthorizationPolicies
     /// <summary>Allows database-authorized administrators to request and download member data exports.</summary>
     public const string ExportMemberData = "ExportMemberData";
 
+    /// <summary>Allows database-authorized administrators to erase another member's account.</summary>
+    public const string EraseMemberData = "EraseMemberData";
+
     #endregion
 
     #region Wishlist
