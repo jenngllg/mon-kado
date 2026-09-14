@@ -8,6 +8,26 @@ namespace JennGllg.Fr.MonKado.Back.Application.Common.Constants;
 [ExcludeFromCodeCoverage]
 public static class ValidationMessages
 {
+    /// <summary>Identifies an invalid second-factor continuation proof.</summary>
+    public const string InvalidTwoFactorFlow = "The property {PropertyName} must be a canonical 256-bit Base64URL proof.";
+
+    /// <summary>Identifies an invalid authenticator code.</summary>
+    public const string InvalidTwoFactorCode = "The property {PropertyName} must contain exactly six ASCII digits.";
+
+    /// <summary>Identifies an invalid recovery-code representation.</summary>
+    public const string InvalidTwoFactorRecoveryCode = "The property {PropertyName} must contain a valid 128-bit recovery code.";
+
+    /// <summary>Identifies simultaneous authenticator and recovery proofs.</summary>
+    public const string TwoFactorProofsAreExclusive = "Submit an authenticator code or a recovery code, not both.";
+
+    /// <summary>Identifies missing second-factor proof for reauthentication.</summary>
+    public const string TwoFactorProofIsRequired = "An authenticator code or a recovery code is mandatory.";
+
+    /// <summary>Identifies a management grant requested for an unsupported purpose.</summary>
+    public const string InvalidTwoFactorManagementPurpose = "The operation must replace the authenticator or regenerate recovery codes.";
+
+    /// <summary>Prevents using a recovery code to obtain anything other than forced replacement.</summary>
+    public const string TwoFactorRecoveryRequiresReplacement = "A recovery code can only authorize authenticator replacement.";
     /// <summary>Distinguishes an absent optional query value from an invalid supplied blank.</summary>
     public const string BlankQueryParameter = "A supplied query parameter must not be blank.";
     /// <summary>Requires explicitly zoned ISO 8601 date-time boundaries.</summary>

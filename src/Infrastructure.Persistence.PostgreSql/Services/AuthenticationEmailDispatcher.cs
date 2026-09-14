@@ -182,6 +182,20 @@ public class AuthenticationEmailDispatcher(
         DateTime now,
         CancellationToken cancellationToken)
     {
+        var twoFactorEvent = message.Kind switch
+        {
+            AuthenticationEmailKind.TwoFactorEnrolled => TwoFactorSecurityEvent.Enrolled,
+            AuthenticationEmailKind.TwoFactorReplaced => TwoFactorSecurityEvent.Replaced,
+            AuthenticationEmailKind.TwoFactorRecoveryCodesRegenerated => TwoFactorSecurityEvent.RecoveryCodesRegenerated,
+            AuthenticationEmailKind.TwoFactorRecoveryCodeUsed => TwoFactorSecurityEvent.RecoveryCodeUsed,
+            _ => (TwoFactorSecurityEvent?)null
+        };
+
+        if (twoFactorEvent is { } securityEvent)
+            return await SendTwoFactorSecurityNotificationAsync(
+                message,
+                securityEvent,
+                cancellationToken);
 
         if (message.Kind == AuthenticationEmailKind.PersonalDataExportReady)
             return await SendPersonalDataExportReadyAsync(
@@ -225,6 +239,29 @@ public class AuthenticationEmailDispatcher(
 
         return await SendPasswordChangedSecurityNotificationAsync(
             message,
+            cancellationToken);
+    }
+
+    /// <summary>Delivers a security event without loading any authenticator, code or flow.</summary>
+    /// <param name="message">The committed security notification.</param>
+    /// <param name="securityEvent">The bounded event kind.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The provider result, or null when no recipient is available.</returns>
+    private async Task<AuthenticationEmailSendResult?> SendTwoFactorSecurityNotificationAsync(
+        AuthenticationEmailOutboxMessage message,
+        TwoFactorSecurityEvent securityEvent,
+        CancellationToken cancellationToken)
+    {
+
+        if (message.RecipientEmail is not { } recipient)
+            return null;
+
+        return await sender.SendTwoFactorSecurityNotificationAsync(
+            new TwoFactorSecurityNotification(
+                message.Id,
+                recipient,
+                securityEvent,
+                message.CreatedAt),
             cancellationToken);
     }
 

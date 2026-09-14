@@ -12,6 +12,12 @@ public class AccountSessionLoginResult(
     AccountLoginResult result,
     AccountSessionTokens? tokens)
 {
+    /// <summary>Gets the incomplete sign-in proof when no complete session may yet be created.</summary>
+    public TwoFactorChallengeResponse? Challenge
+    {
+        get; init;
+    }
+
     /// <summary>
     /// Gets the login outcome.
     /// </summary>

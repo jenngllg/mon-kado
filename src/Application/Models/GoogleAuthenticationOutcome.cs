@@ -18,5 +18,8 @@ public enum GoogleAuthenticationOutcome
     /// <summary>
     /// Indicates that a non-authoritative email requires a generic MonKado verification or linking path.
     /// </summary>
-    AdditionalVerificationRequired
+    AdditionalVerificationRequired,
+
+    /// <summary>Indicates that MonKado requires MFA before association or session creation.</summary>
+    TwoFactorRequired
 }

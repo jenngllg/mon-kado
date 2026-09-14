@@ -384,7 +384,31 @@ public class GlobalExceptionHandler(
                 "The If-Match header is required.",
                 ErrorCodes.RequestPreconditionRequired,
                 null),
-            DependencyUnavailableException => new ErrorResponse(
+            TwoFactorAuthenticationFailedException => new ErrorResponse(
+                StatusCodes.Status401Unauthorized,
+                "Second-factor authentication failed",
+                "The second-factor proof is invalid, expired or already consumed.",
+                ErrorCodes.AccountTwoFactorAuthenticationFailed,
+                null),
+            TwoFactorOperationConflictException => new ErrorResponse(
+                StatusCodes.Status409Conflict,
+                "Second-factor operation conflict",
+                "The second-factor grant does not permit this operation.",
+                ErrorCodes.AccountTwoFactorOperationConflict,
+                null),
+            TwoFactorRateLimitException => new ErrorResponse(
+                StatusCodes.Status429TooManyRequests,
+                "Second-factor verification rate limited",
+                "Second-factor verification is temporarily unavailable for this account.",
+                ErrorCodes.AccountTwoFactorRateLimited,
+                null),
+            TwoFactorAccessDeniedException => new ErrorResponse(
+                StatusCodes.Status403Forbidden,
+                "Second-factor management forbidden",
+                "An active verified session is required to manage this authenticator.",
+                ErrorCodes.AccountTwoFactorAccessDenied,
+                null),
+            DependencyUnavailableException or TwoFactorUnavailableException => new ErrorResponse(
                 StatusCodes.Status503ServiceUnavailable,
                 "Service temporarily unavailable",
                 "A required service is temporarily unavailable. Retry later.",
@@ -432,6 +456,16 @@ public class GlobalExceptionHandler(
         ErrorResponse response,
         Exception exception)
     {
+
+        if (exception is TwoFactorUnavailableException)
+        {
+            ApiLogMessages.DependencyUnavailable(
+                logger,
+                nameof(TwoFactorUnavailableException),
+                null);
+
+            return;
+        }
 
         if (exception is PersonalDataExportStorageUnavailableException)
         {

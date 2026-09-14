@@ -35,6 +35,9 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Service
 /// <param name="passwordHasher">The password hasher used to equalize non-authoritative link failures.</param>
 /// <param name="lookupNormalizer">The Identity lookup normalizer.</param>
 /// <param name="accessTokenService">The access token service.</param>
+/// <param name="twoFactorChallengeIssuer">The account-locked MFA challenge issuer.</param>
+/// <param name="twoFactorProofProtector">The purpose-bound deferred Google proof protector.</param>
+/// <param name="twoFactorRevocations">The revocation coordinator preserving the completing MFA grant.</param>
 /// <param name="logger">The logger.</param>
 /// <param name="timeProvider">The time provider.</param>
 public class GoogleAccountSessionService(
@@ -52,13 +55,162 @@ public class GoogleAccountSessionService(
     IPasswordHasher<MonKadoUser> passwordHasher,
     ILookupNormalizer lookupNormalizer,
     IAccessTokenService accessTokenService,
+    ITwoFactorChallengeIssuer twoFactorChallengeIssuer,
+    IGoogleTwoFactorProofProtector twoFactorProofProtector,
+    ITwoFactorRevocationService twoFactorRevocations,
     ILogger<GoogleAccountSessionService> logger,
-    TimeProvider timeProvider) : IGoogleAccountSessionService
+    TimeProvider timeProvider) : IGoogleAccountSessionService, IGoogleTwoFactorFinalizer
 {
     private const string DefaultDisplayName = "Membre";
     private const int MaximumTransactionRetryCount = 3;
     private const int SecurityStampByteLength = 20;
     private static readonly TimeSpan _maximumTransactionRetryDelay = TimeSpan.FromSeconds(1);
+
+    /// <inheritdoc/>
+    public async Task FinalizeAsync(
+        MonKadoUser member,
+        TwoFactorChallenge challenge,
+        CancellationToken cancellationToken)
+    {
+        var encrypted = challenge.ProtectedGoogleContext ?? throw new TwoFactorUnavailableException();
+        var proof = twoFactorProofProtector.Unprotect(
+            member.Id,
+            challenge.Id,
+            encrypted);
+        var authenticationContext = proof.Context;
+
+        if (authenticationContext.FlowId != challenge.GoogleFlowId ||
+            authenticationContext.IsPersistent != challenge.IsPersistent ||
+            authenticationContext.CurrentSessionId != challenge.PreviousSessionId)
+            throw new GoogleAuthenticationFailedException();
+
+        var subject = GetRequiredSubject(authenticationContext.Identity);
+        var linkedMemberId = await googleAccountRepository.GetMemberIdBySubjectAsync(
+            subject,
+            cancellationToken);
+        var existingSubject = await googleAccountRepository.GetSubjectByMemberIdAsync(
+            member.Id,
+            cancellationToken);
+        var subjectIsLinked = string.Equals(
+            existingSubject,
+            subject,
+            StringComparison.Ordinal);
+        EnsureExpectedMember(
+            authenticationContext.ExpectedMemberId,
+            member.Id,
+            subjectIsLinked);
+
+        if ((linkedMemberId is { } ownerId && ownerId != member.Id) ||
+            (existingSubject is not null && !subjectIsLinked))
+            throw new GoogleAccountLinkConflictException();
+
+        var now = timeProvider.GetUtcNow().UtcDateTime;
+        var canConfirmEmail = !member.EmailConfirmed && CanConfirmLocalEmail(
+            member,
+            authenticationContext.Identity);
+
+        if (!canConfirmEmail && IsLockedOut(
+                member,
+                now))
+            throw new GoogleAuthenticationFailedException();
+
+        if (subjectIsLinked)
+        {
+
+            if (canConfirmEmail)
+                await SecureAuthoritativeAccountClaimAsync(
+                    member,
+                    authenticationContext.Identity,
+                    replaceDisplayName: true,
+                    now,
+                    challenge.Id,
+                    cancellationToken);
+
+            ResetPasswordFailures(member);
+
+            return;
+        }
+
+        if (proof.PasswordWasVerified)
+        {
+
+            if (!member.EmailConfirmed)
+                throw new GoogleAuthenticationFailedException();
+        }
+        else
+        {
+
+            if (!CanCreateAccountWithoutAdditionalVerification(authenticationContext.Identity) ||
+                !CanAutoLinkExistingAccount(
+                    member,
+                    authenticationContext.Identity))
+                throw new GoogleAuthenticationFailedException();
+
+            await SecureAuthoritativeAccountClaimAsync(
+                member,
+                authenticationContext.Identity,
+                replaceDisplayName: !member.EmailConfirmed,
+                now,
+                challenge.Id,
+                cancellationToken);
+        }
+
+        googleAccountRepository.AddLogin(
+            member.Id,
+            subject);
+        ResetPasswordFailures(member);
+    }
+
+    /// <summary>Defers provider association and session creation until the MonKado second factor succeeds.</summary>
+    /// <param name="member">The first-factor-authenticated account locked by the caller.</param>
+    /// <param name="authenticationContext">The validated Google identity and browser context.</param>
+    /// <param name="passwordWasVerified">Whether the current local password was explicitly proved.</param>
+    /// <param name="cancellationToken">The request cancellation token.</param>
+    /// <returns>The MFA challenge, or null for an account that does not require MFA.</returns>
+    private async Task<TwoFactorChallengeResponse?> TryStageTwoFactorAsync(
+        MonKadoUser member,
+        GoogleAuthenticationContext authenticationContext,
+        bool passwordWasVerified,
+        CancellationToken cancellationToken)
+    {
+        var response = await twoFactorChallengeIssuer.StageAsync(
+            member,
+            authenticationContext.FlowId,
+            authenticationContext.IsPersistent,
+            authenticationContext.CurrentSessionId,
+            cancellationToken);
+
+        if (response is null)
+            return null;
+
+        var challenge = context.TwoFactorChallenges.Local.Single(candidate => candidate.Id == authenticationContext.FlowId);
+        challenge.BindGoogleProof(
+            authenticationContext.FlowId,
+            twoFactorProofProtector.Protect(
+                member.Id,
+                challenge.Id,
+                new GoogleTwoFactorProof(
+                    authenticationContext,
+                    passwordWasVerified)));
+
+        return response;
+    }
+
+    /// <summary>Rejects a provider flow already handed over to a one-time MonKado MFA challenge.</summary>
+    /// <param name="flowId">The server-generated Google flow identifier.</param>
+    /// <param name="cancellationToken">The request cancellation token.</param>
+    /// <returns>A task completed if the provider flow has not been consumed.</returns>
+    /// <exception cref="GoogleAuthenticationFailedException">The provider flow was already deferred or consumed.</exception>
+    private async Task EnsureGoogleFlowNotDeferredAsync(
+        Guid flowId,
+        CancellationToken cancellationToken)
+    {
+
+        if (await context.TwoFactorChallenges.AnyAsync(
+                challenge => challenge.GoogleFlowId == flowId,
+                cancellationToken))
+            throw new GoogleAuthenticationFailedException();
+    }
 
     /// <summary>
     /// Resolves the member currently associated with a validated Google identity.
@@ -272,6 +424,16 @@ public class GoogleAccountSessionService(
             executionState.AuthenticationContext,
             cancellationToken);
 
+        if (result.Challenge is { } challenge && result.MemberId is { } challengeMemberId)
+        {
+            executionState.RecordTwoFactorChallenge(
+                challengeMemberId,
+                challenge.Flow);
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+
+            return result;
+        }
+
         if (result.MemberId is { } memberId &&
             result.Session is { } session)
         {
@@ -313,6 +475,9 @@ public class GoogleAccountSessionService(
         CancellationToken cancellationToken)
     {
         context.ChangeTracker.Clear();
+        await EnsureGoogleFlowNotDeferredAsync(
+            authenticationContext.FlowId,
+            cancellationToken);
         var identity = authenticationContext.Identity;
         var subject = GetRequiredSubject(identity);
         var linkedMemberId = await googleAccountRepository.GetMemberIdBySubjectAsync(
@@ -423,12 +588,28 @@ public class GoogleAccountSessionService(
                 now))
             throw new GoogleAuthenticationFailedException();
 
+        var challenge = await TryStageTwoFactorAsync(
+            user,
+            authenticationContext,
+            passwordWasVerified: false,
+            cancellationToken);
+
+        if (challenge is not null)
+            return new GoogleAuthenticationResult(
+                GoogleAuthenticationOutcome.TwoFactorRequired,
+                null,
+                user.Id)
+            {
+                Challenge = challenge
+            };
+
         if (canConfirmEmail)
             await SecureAuthoritativeAccountClaimAsync(
                 user,
                 authenticationContext.Identity,
                 replaceDisplayName: true,
                 now,
+                preservedTwoFactorChallengeId: null,
                 cancellationToken);
 
         ResetPasswordFailures(user);
@@ -453,6 +634,7 @@ public class GoogleAccountSessionService(
     /// <param name="identity">The authoritative Google identity.</param>
     /// <param name="replaceDisplayName">Whether to replace the untrusted local display name.</param>
     /// <param name="now">The current UTC date and time.</param>
+    /// <param name="preservedTwoFactorChallengeId">The already verified MFA grant that may finish, if any.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>A task that represents the asynchronous operation.</returns>
     private async Task SecureAuthoritativeAccountClaimAsync(
@@ -460,6 +642,7 @@ public class GoogleAccountSessionService(
         GoogleIdentity identity,
         bool replaceDisplayName,
         DateTime now,
+        Guid? preservedTwoFactorChallengeId,
         CancellationToken cancellationToken)
     {
         user.PasswordHash = null;
@@ -478,10 +661,17 @@ public class GoogleAccountSessionService(
                 cancellationToken);
         }
 
-        _ = await sessionRepository.RevokeAllForUserAsync(
-            user.Id,
-            now,
-            cancellationToken);
+        if (preservedTwoFactorChallengeId is { } challengeId)
+            await twoFactorRevocations.RevokeOtherAsync(
+                user.Id,
+                challengeId,
+                now,
+                cancellationToken);
+        else
+            _ = await sessionRepository.RevokeAllForUserAsync(
+                user.Id,
+                now,
+                cancellationToken);
 
         if (replaceDisplayName)
             user.DisplayName = identity.DisplayName is null
@@ -550,6 +740,21 @@ public class GoogleAccountSessionService(
         GoogleAuthenticationContext authenticationContext,
         CancellationToken cancellationToken)
     {
+        var challenge = await TryStageTwoFactorAsync(
+            user,
+            authenticationContext,
+            passwordWasVerified: false,
+            cancellationToken);
+
+        if (challenge is not null)
+            return new GoogleAuthenticationResult(
+                GoogleAuthenticationOutcome.TwoFactorRequired,
+                null,
+                user.Id)
+            {
+                Challenge = challenge
+            };
+
         var now = timeProvider.GetUtcNow().UtcDateTime;
         var replaceDisplayName = !user.EmailConfirmed;
         await SecureAuthoritativeAccountClaimAsync(
@@ -557,6 +762,7 @@ public class GoogleAccountSessionService(
             authenticationContext.Identity,
             replaceDisplayName,
             now,
+            preservedTwoFactorChallengeId: null,
             cancellationToken);
 
         ResetPasswordFailures(user);
@@ -595,6 +801,16 @@ public class GoogleAccountSessionService(
             currentPassword,
             cancellationToken);
 
+        if (result.Challenge is { } challenge && result.MemberId is { } challengeMemberId)
+        {
+            executionState.RecordTwoFactorChallenge(
+                challengeMemberId,
+                challenge.Flow);
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+
+            return result;
+        }
+
         if (result.MemberId is { } memberId &&
             result.Tokens is { } tokens)
             executionState.RecordSession(
@@ -619,6 +835,9 @@ public class GoogleAccountSessionService(
     {
         context.ChangeTracker.Clear();
         var authenticationContext = executionState.AuthenticationContext;
+        await EnsureGoogleFlowNotDeferredAsync(
+            authenticationContext.FlowId,
+            cancellationToken);
         var identity = authenticationContext.Identity;
         var email = GetRequiredEmail(identity);
         var normalizedEmail = NormalizeEmail(email);
@@ -712,6 +931,21 @@ public class GoogleAccountSessionService(
                 GoogleAccountLinkOutcome.Conflict,
                 null);
 
+        var challenge = await TryStageTwoFactorAsync(
+            user,
+            authenticationContext,
+            passwordWasVerified: true,
+            cancellationToken);
+
+        if (challenge is not null)
+            return new GoogleAccountLinkResult(
+                GoogleAccountLinkOutcome.TwoFactorRequired,
+                null,
+                user.Id)
+            {
+                Challenge = challenge
+            };
+
         ResetPasswordFailures(user);
 
         if (existingSubject is null)
@@ -756,6 +990,14 @@ public class GoogleAccountSessionService(
         GoogleAuthenticationExecutionState executionState,
         CancellationToken cancellationToken)
     {
+
+        if (executionState.AttemptedTwoFactorMemberId is { } challengeMemberId &&
+            executionState.AttemptedTwoFactorFlow is { } flow)
+            return await twoFactorChallengeIssuer.IsIssuedAsync(
+                executionState.AuthenticationContext.FlowId,
+                challengeMemberId,
+                flow,
+                cancellationToken);
 
         if (executionState.AttemptedSessionMemberId is { } memberId &&
             executionState.AttemptedRefreshToken is { } refreshToken)
@@ -1065,7 +1307,7 @@ public class GoogleAccountSessionService(
         return exception.InnerException is PostgresException
         {
             SqlState: PostgresErrorCodes.UniqueViolation,
-            ConstraintName: "pk_authentication_sessions"
+            ConstraintName: "pk_authentication_sessions" or "pk_two_factor_challenges" or "ix_two_factor_challenges_google_flow_id"
         };
     }
 

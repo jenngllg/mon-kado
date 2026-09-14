@@ -21,6 +21,70 @@ public class LinkGoogleAccountCommandHandlerTests
             _googleAccountSessionServiceMock.Object);
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Handle_WhenSecondFactorIsRequired_RequiresAChallengeBeforeReturningContinuation(bool hasChallenge)
+    {
+        // Arrange
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var challenge = hasChallenge ? new TwoFactorChallengeResponse
+        {
+            Flow = new string('A', 43),
+            RequiredAction = TwoFactorRequiredAction.Verify,
+            ExpiresAt = DateTime.UnixEpoch.AddMinutes(5)
+        } : null;
+        _googleAccountSessionServiceMock
+            .Setup(service => service.LinkAsync(
+                It.IsAny<GoogleAuthenticationContext>(),
+                "current password",
+                cancellationToken))
+            .ReturnsAsync(new GoogleAccountLinkResult(
+                GoogleAccountLinkOutcome.TwoFactorRequired,
+                null)
+            {
+                Challenge = challenge
+            });
+        var command = new LinkGoogleAccountCommand(
+            CreateIdentity(),
+            false,
+            "/login/google-return",
+            Guid.CreateVersion7(),
+            null,
+            null,
+            "current password");
+
+        // Act
+        TwoFactorCompletionResult? result = null;
+        var exception = await Record.ExceptionAsync(async () => result = await _handler.Handle(
+            command,
+            cancellationToken));
+
+        // Assert
+
+        if (hasChallenge)
+        {
+            Assert.Null(exception);
+            Assert.NotNull(result);
+            Assert.Null(result.Tokens);
+            Assert.Same(
+                challenge,
+                result.Challenge);
+        }
+        else
+        {
+            Assert.IsType<InvalidOperationException>(exception);
+        }
+
+        _googleAccountSessionServiceMock.Verify(
+            service => service.LinkAsync(
+                It.IsAny<GoogleAuthenticationContext>(),
+                "current password",
+                cancellationToken),
+            Times.Once);
+        _googleAccountSessionServiceMock.VerifyNoOtherCalls();
+    }
+
     [Fact]
     public async Task Handle_WhenLinkSucceeds_ReturnsTokensWithoutChangingPassword()
     {
@@ -60,7 +124,8 @@ public class LinkGoogleAccountCommandHandlerTests
         // Assert
         Assert.Same(
             tokens,
-            result);
+            result.Tokens);
+        Assert.Null(result.Challenge);
         _googleAccountSessionServiceMock.Verify(
             service => service.LinkAsync(
                 It.Is<GoogleAuthenticationContext>(context =>

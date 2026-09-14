@@ -6,6 +6,29 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Service
 /// <param name="sessionId">The stable session identifier reserved for the logical login operation.</param>
 internal sealed class AccountLoginExecutionState(Guid sessionId)
 {
+    /// <summary>Gets the exact incomplete sign-in proof created by this attempt.</summary>
+    internal string? AttemptedTwoFactorFlow
+    {
+        get; private set;
+    }
+
+    /// <summary>Gets the account bound to the attempted second-factor challenge.</summary>
+    internal Guid? AttemptedTwoFactorMemberId
+    {
+        get; private set;
+    }
+
+    /// <summary>Records a staged second-factor challenge without recording any complete-session token.</summary>
+    /// <param name="memberId">The expected account.</param>
+    /// <param name="flow">The exact response proof, held only for commit verification.</param>
+    internal void RecordTwoFactorChallenge(
+        Guid memberId,
+        string flow)
+    {
+        AttemptedTwoFactorMemberId = memberId;
+        AttemptedTwoFactorFlow = flow;
+    }
+
     /// <summary>
     /// Gets the stable session identifier reserved for the logical login operation.
     /// </summary>
@@ -46,6 +69,8 @@ internal sealed class AccountLoginExecutionState(Guid sessionId)
     /// </summary>
     internal void Reset()
     {
+        AttemptedTwoFactorMemberId = null;
+        AttemptedTwoFactorFlow = null;
         AttemptedSessionMemberId = null;
         AttemptedRefreshToken = null;
         AttemptedAccessTokenId = Guid.Empty;
