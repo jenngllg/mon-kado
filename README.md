@@ -30,6 +30,8 @@ Two direct dependencies are deliberately pinned and therefore appear in outdated
 
 ## Continuous integration
 
+Tests use the official `xunit.v3.mtp-off` package variant to retain VSTest and the existing Coverlet/OpenCover pipeline on .NET 10. This runs the current xUnit framework without Microsoft Testing Platform, whose v2 runner does not support the repository's VSTest invocation. See the [xUnit runner selection documentation](https://xunit.net/docs/getting-started/v3/microsoft-testing-platform). Do not enable both test engines or change coverage exclusions as part of a package update.
+
 GitHub Actions validates every pull request and push targeting `develop` or `main`. The required `CI / quality` check scans the complete Git history for secrets and runs the .NET quality baseline, including PostgreSQL Testcontainers, package audits, EF migration checks, and both Compose configurations.
 
 The conditional `Containers / verify` workflow runs only when application or container files change. It builds but never publishes the images, exercises the isolated stack, verifies failure behavior, and scans the images for fixable high or critical vulnerabilities.

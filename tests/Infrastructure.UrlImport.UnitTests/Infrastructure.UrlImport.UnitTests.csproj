@@ -3,7 +3,6 @@
     <AssemblyName>JennGllg.Fr.MonKado.Back.Infrastructure.UrlImport.UnitTests</AssemblyName>
     <RootNamespace>JennGllg.Fr.MonKado.Back.Infrastructure.UrlImport.UnitTests</RootNamespace>
     <IsPackable>false</IsPackable>
-    <TestingPlatformDotnetTestSupport>false</TestingPlatformDotnetTestSupport>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="coverlet.collector">
@@ -12,7 +11,7 @@
     </PackageReference>
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="Moq" />
-    <PackageReference Include="xunit.v3" />
+    <PackageReference Include="xunit.v3.mtp-off" />
     <PackageReference Include="xunit.runner.visualstudio">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
