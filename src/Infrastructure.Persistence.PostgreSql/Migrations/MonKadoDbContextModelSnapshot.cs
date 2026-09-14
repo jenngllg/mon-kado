@@ -1012,7 +1012,7 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Migrati
                     b.HasIndex("UserId", "Kind")
                         .IsUnique()
                         .HasDatabaseName("ux_authentication_email_outbox_pending_user_kind")
-                        .HasFilter("processed_at IS NULL AND kind NOT IN ('PASSWORD_CHANGED_SECURITY_NOTIFICATION', 'PERSONAL_DATA_EXPORT_READY')");
+                        .HasFilter("processed_at IS NULL AND kind NOT IN ('PASSWORD_CHANGED_SECURITY_NOTIFICATION', 'PERSONAL_DATA_EXPORT_READY', 'TWO_FACTOR_ENROLLED', 'TWO_FACTOR_REPLACED', 'TWO_FACTOR_RECOVERY_CODES_REGENERATED', 'TWO_FACTOR_RECOVERY_CODE_USED')");
 
                     b.HasIndex("UserId", "Kind", "CreatedAt")
                         .IsDescending(false, false, true)
@@ -1026,9 +1026,9 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Migrati
 
                             t.HasCheckConstraint("ck_authentication_email_outbox_deletion_request_consistent", "(kind = 'ACCOUNT_DELETION_CONFIRMATION') = (member_account_deletion_request_id IS NOT NULL)");
 
-                            t.HasCheckConstraint("ck_authentication_email_outbox_email_change_fields_consistent", "(kind IN ('EMAIL_CONFIRMATION', 'PERSONAL_DATA_EXPORT_READY') AND member_email_change_request_id IS NULL AND recipient_email IS NULL AND security_stamp_snapshot IS NULL) OR (kind = 'EMAIL_CHANGE_CONFIRMATION' AND member_email_change_request_id IS NOT NULL AND recipient_email IS NOT NULL AND security_stamp_snapshot IS NOT NULL) OR (kind = 'EMAIL_CHANGE_SECURITY_NOTIFICATION' AND member_email_change_request_id IS NOT NULL AND recipient_email IS NOT NULL AND security_stamp_snapshot IS NULL) OR (kind = 'PASSWORD_RESET' AND member_email_change_request_id IS NULL AND recipient_email IS NOT NULL AND security_stamp_snapshot IS NOT NULL) OR (kind = 'PASSWORD_CHANGED_SECURITY_NOTIFICATION' AND member_email_change_request_id IS NULL AND recipient_email IS NOT NULL AND security_stamp_snapshot IS NULL) OR (kind = 'ACCOUNT_DELETION_CONFIRMATION' AND member_email_change_request_id IS NULL AND recipient_email IS NOT NULL AND security_stamp_snapshot IS NOT NULL)");
+                            t.HasCheckConstraint("ck_authentication_email_outbox_email_change_fields_consistent", "(kind IN ('EMAIL_CONFIRMATION', 'PERSONAL_DATA_EXPORT_READY') AND member_email_change_request_id IS NULL AND recipient_email IS NULL AND security_stamp_snapshot IS NULL) OR (kind = 'EMAIL_CHANGE_CONFIRMATION' AND member_email_change_request_id IS NOT NULL AND recipient_email IS NOT NULL AND security_stamp_snapshot IS NOT NULL) OR (kind = 'EMAIL_CHANGE_SECURITY_NOTIFICATION' AND member_email_change_request_id IS NOT NULL AND recipient_email IS NOT NULL AND security_stamp_snapshot IS NULL) OR (kind = 'PASSWORD_RESET' AND member_email_change_request_id IS NULL AND recipient_email IS NOT NULL AND security_stamp_snapshot IS NOT NULL) OR (kind IN ('PASSWORD_CHANGED_SECURITY_NOTIFICATION', 'TWO_FACTOR_ENROLLED', 'TWO_FACTOR_REPLACED', 'TWO_FACTOR_RECOVERY_CODES_REGENERATED', 'TWO_FACTOR_RECOVERY_CODE_USED') AND member_email_change_request_id IS NULL AND recipient_email IS NOT NULL AND security_stamp_snapshot IS NULL) OR (kind = 'ACCOUNT_DELETION_CONFIRMATION' AND member_email_change_request_id IS NULL AND recipient_email IS NOT NULL AND security_stamp_snapshot IS NOT NULL)");
 
-                            t.HasCheckConstraint("ck_authentication_email_outbox_kind_valid", "kind IN ('EMAIL_CONFIRMATION', 'EMAIL_CHANGE_CONFIRMATION', 'EMAIL_CHANGE_SECURITY_NOTIFICATION', 'PASSWORD_RESET', 'PASSWORD_CHANGED_SECURITY_NOTIFICATION', 'ACCOUNT_DELETION_CONFIRMATION', 'PERSONAL_DATA_EXPORT_READY')");
+                            t.HasCheckConstraint("ck_authentication_email_outbox_kind_valid", "kind IN ('EMAIL_CONFIRMATION', 'EMAIL_CHANGE_CONFIRMATION', 'EMAIL_CHANGE_SECURITY_NOTIFICATION', 'PASSWORD_RESET', 'PASSWORD_CHANGED_SECURITY_NOTIFICATION', 'ACCOUNT_DELETION_CONFIRMATION', 'PERSONAL_DATA_EXPORT_READY', 'TWO_FACTOR_ENROLLED', 'TWO_FACTOR_REPLACED', 'TWO_FACTOR_RECOVERY_CODES_REGENERATED', 'TWO_FACTOR_RECOVERY_CODE_USED')");
 
                             t.HasCheckConstraint("ck_authentication_email_outbox_timestamps_consistent", "available_at >= created_at AND (processed_at IS NULL OR processed_at >= created_at)");
                         });
@@ -1066,6 +1066,14 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Migrati
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("revoked_at");
 
+                    b.Property<Guid?>("TwoFactorCredentialId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("two_factor_credential_id");
+
+                    b.Property<DateTime?>("TwoFactorVerifiedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("two_factor_verified_at");
+
                     b.Property<Guid>("UserId")
                         .HasColumnType("uuid")
                         .HasColumnName("user_id");
@@ -1084,6 +1092,8 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Migrati
                             t.HasCheckConstraint("ck_authentication_sessions_refresh_token_hash_length", "octet_length(refresh_token_hash) = 32");
 
                             t.HasCheckConstraint("ck_authentication_sessions_timestamps_consistent", "renewed_at >= created_at AND expires_at > created_at AND expires_at >= renewed_at AND (revoked_at IS NULL OR revoked_at >= created_at)");
+
+                            t.HasCheckConstraint("ck_authentication_sessions_two_factor_proof_consistent", "(two_factor_credential_id IS NULL) = (two_factor_verified_at IS NULL)");
                         });
                 });
 
@@ -1345,6 +1355,56 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Migrati
                         });
                 });
 
+            modelBuilder.Entity("JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Entities.MemberTwoFactor", b =>
+                {
+                    b.Property<Guid>("MemberId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("member_id");
+
+                    b.Property<Guid?>("CredentialId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("credential_id");
+
+                    b.Property<DateTime?>("EnabledAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("enabled_at");
+
+                    b.Property<int>("FailedAttempts")
+                        .HasColumnType("integer")
+                        .HasColumnName("failed_attempts");
+
+                    b.Property<long?>("LastAcceptedTimeStep")
+                        .HasColumnType("bigint")
+                        .HasColumnName("last_accepted_time_step");
+
+                    b.Property<DateTime?>("LockedUntil")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("locked_until");
+
+                    b.Property<string>("ProtectedSecret")
+                        .HasMaxLength(4096)
+                        .HasColumnType("character varying(4096)")
+                        .HasColumnName("protected_secret");
+
+                    b.Property<int>("VerificationCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("verification_count");
+
+                    b.Property<DateTime?>("VerificationWindowStartedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("verification_window_started_at");
+
+                    b.HasKey("MemberId")
+                        .HasName("pk_member_two_factors");
+
+                    b.ToTable("member_two_factors", "public", t =>
+                        {
+                            t.HasCheckConstraint("ck_member_two_factors_attempts_nonnegative", "failed_attempts >= 0 AND verification_count >= 0");
+
+                            t.HasCheckConstraint("ck_member_two_factors_credential_consistent", "(credential_id IS NULL AND protected_secret IS NULL AND enabled_at IS NULL AND last_accepted_time_step IS NULL) OR (credential_id IS NOT NULL AND protected_secret IS NOT NULL AND enabled_at IS NOT NULL AND last_accepted_time_step IS NOT NULL)");
+                        });
+                });
+
             modelBuilder.Entity("JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Entities.MonKadoUser", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1476,6 +1536,192 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Migrati
                             t.HasCheckConstraint("ck_users_profile_image_consistent", "(profile_image_id IS NULL AND profile_image_hash IS NULL) OR (profile_image_id IS NOT NULL AND profile_image_hash IS NOT NULL AND octet_length(profile_image_hash) = 32)");
 
                             t.HasCheckConstraint("ck_users_timestamps_consistent", "updated_at >= created_at AND (unconfirmed_account_expires_at IS NULL OR unconfirmed_account_expires_at >= created_at)");
+                        });
+                });
+
+            modelBuilder.Entity("JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Entities.TwoFactorChallenge", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime?>("ConsumedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("consumed_at");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("ExpectedCredentialId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("expected_credential_id");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expires_at");
+
+                    b.Property<byte[]>("FlowHash")
+                        .IsRequired()
+                        .HasColumnType("bytea")
+                        .HasColumnName("flow_hash");
+
+                    b.Property<Guid?>("GoogleFlowId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("google_flow_id");
+
+                    b.Property<DateTime?>("InvalidatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("invalidated_at");
+
+                    b.Property<bool>("IsPersistent")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_persistent");
+
+                    b.Property<Guid?>("LastOperationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("last_operation_id");
+
+                    b.Property<Guid?>("ManagementSessionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("management_session_id");
+
+                    b.Property<Guid>("MemberId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("member_id");
+
+                    b.Property<Guid?>("PendingCredentialId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("pending_credential_id");
+
+                    b.Property<string>("PendingProtectedSecret")
+                        .HasMaxLength(4096)
+                        .HasColumnType("character varying(4096)")
+                        .HasColumnName("pending_protected_secret");
+
+                    b.Property<Guid?>("PreviousSessionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("previous_session_id");
+
+                    b.Property<string>("ProtectedGoogleContext")
+                        .HasMaxLength(16384)
+                        .HasColumnType("character varying(16384)")
+                        .HasColumnName("protected_google_context");
+
+                    b.Property<string>("Purpose")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("purpose");
+
+                    b.Property<string>("RequiredAction")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("required_action");
+
+                    b.Property<Guid?>("ReservedRecoveryCodeId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("reserved_recovery_code_id");
+
+                    b.Property<Guid?>("ResultAccessTokenId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("result_access_token_id");
+
+                    b.Property<Guid?>("ResultSessionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("result_session_id");
+
+                    b.Property<byte[]>("SecurityStampHash")
+                        .IsRequired()
+                        .HasColumnType("bytea")
+                        .HasColumnName("security_stamp_hash");
+
+                    b.Property<DateTime?>("VerifiedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("verified_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_two_factor_challenges");
+
+                    b.HasIndex("FlowHash")
+                        .IsUnique()
+                        .HasDatabaseName("ix_two_factor_challenges_flow_hash");
+
+                    b.HasIndex("GoogleFlowId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_two_factor_challenges_google_flow_id")
+                        .HasFilter("google_flow_id IS NOT NULL");
+
+                    b.HasIndex("MemberId")
+                        .HasDatabaseName("ix_two_factor_challenges_member_id");
+
+                    b.HasIndex("ExpiresAt", "Id")
+                        .HasDatabaseName("ix_two_factor_challenges_expires_at_id");
+
+                    b.ToTable("two_factor_challenges", "public", t =>
+                        {
+                            t.HasCheckConstraint("ck_two_factor_challenges_absolute_expiration", "expires_at = created_at + interval '5 minutes'");
+
+                            t.HasCheckConstraint("ck_two_factor_challenges_action_valid", "required_action IN ('Verify', 'Enroll', 'Replace', 'Complete')");
+
+                            t.HasCheckConstraint("ck_two_factor_challenges_candidate_consistent", "(pending_credential_id IS NULL) = (pending_protected_secret IS NULL)");
+
+                            t.HasCheckConstraint("ck_two_factor_challenges_hash_lengths", "octet_length(flow_hash) = 32 AND octet_length(security_stamp_hash) = 32");
+
+                            t.HasCheckConstraint("ck_two_factor_challenges_purpose_valid", "purpose IN ('SignIn', 'ReplaceAuthenticator', 'RegenerateRecoveryCodes')");
+
+                            t.HasCheckConstraint("ck_two_factor_challenges_receipt_consistent", "(result_session_id IS NULL) = (result_access_token_id IS NULL)");
+                        });
+                });
+
+            modelBuilder.Entity("JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Entities.TwoFactorRecoveryCode", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<byte[]>("CodeHash")
+                        .IsRequired()
+                        .HasColumnType("bytea")
+                        .HasColumnName("code_hash");
+
+                    b.Property<DateTime?>("ConsumedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("consumed_at");
+
+                    b.Property<Guid>("CredentialId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("credential_id");
+
+                    b.Property<Guid>("MemberId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("member_id");
+
+                    b.Property<Guid?>("ReservedChallengeId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("reserved_challenge_id");
+
+                    b.Property<DateTime?>("ReservedUntil")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("reserved_until");
+
+                    b.HasKey("Id")
+                        .HasName("pk_two_factor_recovery_codes");
+
+                    b.HasIndex("MemberId", "CodeHash")
+                        .IsUnique()
+                        .HasDatabaseName("ix_two_factor_recovery_codes_member_id_code_hash");
+
+                    b.ToTable("two_factor_recovery_codes", "public", t =>
+                        {
+                            t.HasCheckConstraint("ck_two_factor_recovery_codes_consumption_reserved", "consumed_at IS NULL OR reserved_challenge_id IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_two_factor_recovery_codes_hash_length", "octet_length(code_hash) = 32");
+
+                            t.HasCheckConstraint("ck_two_factor_recovery_codes_reservation_consistent", "(reserved_challenge_id IS NULL) = (reserved_until IS NULL)");
                         });
                 });
 
@@ -1996,6 +2242,36 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Migrati
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_member_email_change_requests_users_user_id");
+                });
+
+            modelBuilder.Entity("JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Entities.MemberTwoFactor", b =>
+                {
+                    b.HasOne("JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Entities.MonKadoUser", null)
+                        .WithMany()
+                        .HasForeignKey("MemberId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_member_two_factors_asp_net_users_member_id");
+                });
+
+            modelBuilder.Entity("JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Entities.TwoFactorChallenge", b =>
+                {
+                    b.HasOne("JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Entities.MonKadoUser", null)
+                        .WithMany()
+                        .HasForeignKey("MemberId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_two_factor_challenges_users_member_id");
+                });
+
+            modelBuilder.Entity("JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Entities.TwoFactorRecoveryCode", b =>
+                {
+                    b.HasOne("JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Entities.MonKadoUser", null)
+                        .WithMany()
+                        .HasForeignKey("MemberId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_two_factor_recovery_codes_users_member_id");
                 });
 
             modelBuilder.Entity("JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Entities.WishPositionSequence", b =>

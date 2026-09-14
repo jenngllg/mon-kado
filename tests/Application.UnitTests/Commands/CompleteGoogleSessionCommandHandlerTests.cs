@@ -53,18 +53,20 @@ public class CompleteGoogleSessionCommandHandlerTests
             TestContext.Current.CancellationToken);
 
         // Assert
+        Assert.NotNull(result.Tokens);
+        Assert.Null(result.Challenge);
         Assert.Same(
             accessToken,
-            result.AccessToken);
+            result.Tokens.AccessToken);
         Assert.Equal(
             refresh.RefreshToken,
-            result.RefreshToken);
+            result.Tokens.RefreshToken);
         Assert.Equal(
             refresh.RefreshTokenExpiresAt,
-            result.RefreshTokenExpiresAt);
+            result.Tokens.RefreshTokenExpiresAt);
         Assert.Equal(
             refresh.IsPersistent,
-            result.IsPersistent);
+            result.Tokens.IsPersistent);
         VerifyContext();
     }
 
@@ -72,6 +74,7 @@ public class CompleteGoogleSessionCommandHandlerTests
     [InlineData(GoogleAuthenticationOutcome.ExplicitLinkRequired, typeof(GoogleAccountLinkRequiredException))]
     [InlineData(GoogleAuthenticationOutcome.AdditionalVerificationRequired, typeof(GoogleAdditionalVerificationRequiredException))]
     [InlineData((GoogleAuthenticationOutcome)99, typeof(GoogleAuthenticationFailedException))]
+    [InlineData(GoogleAuthenticationOutcome.TwoFactorRequired, typeof(GoogleAuthenticationFailedException))]
     public async Task Handle_WhenOutcomeDoesNotCreateSession_ThrowsWithoutIssuingJwt(
         GoogleAuthenticationOutcome outcome,
         Type expectedException)
@@ -123,6 +126,32 @@ public class CompleteGoogleSessionCommandHandlerTests
 
         // Assert
         Assert.IsType<GoogleAuthenticationFailedException>(exception);
+        VerifyContext();
+    }
+
+    [Fact]
+    public async Task Handle_WhenSecondFactorIsRequired_ReturnsChallengeWithoutTokens()
+    {
+        // Arrange
+        var challenge = TestFixture.Create().Create<TwoFactorChallengeResponse>();
+        ConfigureResult(new GoogleAuthenticationResult(
+            GoogleAuthenticationOutcome.TwoFactorRequired,
+            null,
+            Guid.CreateVersion7())
+        {
+            Challenge = challenge
+        });
+
+        // Act
+        var result = await _handler.Handle(
+            new CompleteGoogleSessionCommand(Flow),
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Same(
+            challenge,
+            result.Challenge);
+        Assert.Null(result.Tokens);
         VerifyContext();
     }
 

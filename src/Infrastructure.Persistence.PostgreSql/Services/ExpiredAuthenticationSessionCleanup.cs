@@ -17,7 +17,7 @@ public class ExpiredAuthenticationSessionCleanup(
     : IExpiredAuthenticationSessionCleanup
 {
     /// <summary>
-    /// Purges expired token metadata and audits in batches, then deletes a bounded batch of expired sessions.
+    /// Purges expired token metadata, second-factor proofs and audits in batches, then deletes expired sessions.
     /// </summary>
     /// <param name="cutoff">The cutoff.</param>
     /// <param name="batchSize">The batch size.</param>
@@ -30,7 +30,21 @@ public class ExpiredAuthenticationSessionCleanup(
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(batchSize);
         var tokenCutoff = cutoff.AddSeconds(-AccessTokenConstraints.ClockSkewSeconds);
+        var challengeCutoff = cutoff.AddHours(-TwoFactorConstraints.CleanupGraceHours);
         var deleted = 0;
+        do
+        {
+            var identifiers = context.TwoFactorChallenges
+                .Where(challenge => challenge.ExpiresAt <= challengeCutoff)
+                .OrderBy(challenge => challenge.ExpiresAt)
+                .ThenBy(challenge => challenge.Id)
+                .Take(batchSize)
+                .Select(challenge => challenge.Id);
+            deleted = await context.TwoFactorChallenges
+                .Where(challenge => identifiers.Contains(challenge.Id))
+                .ExecuteDeleteAsync(cancellationToken);
+        }
+        while (deleted == batchSize);
         do
         {
             var identifiers = context.AuthenticationAccessTokens

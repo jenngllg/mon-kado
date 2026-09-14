@@ -1,3 +1,4 @@
+using JennGllg.Fr.MonKado.Back.Api.Attributes;
 using JennGllg.Fr.MonKado.Back.Api.Errors;
 using JennGllg.Fr.MonKado.Back.Api.Logging;
 
@@ -14,6 +15,12 @@ namespace JennGllg.Fr.MonKado.Back.Api.Extensions;
 public static class AuthenticationRateLimitingExtensions
 {
     private const string UnlimitedPartitionKey = "NonSharedWishlist";
+    /// <summary>Gets the aggregate per-minute first-factor challenge limit for one remote address.</summary>
+    public const int TwoFactorChallengeStartPermitLimit = 10;
+    /// <summary>Identifies the per-address bound on second-factor continuation requests.</summary>
+    public const string TwoFactorContinuationPolicy = "TwoFactorContinuation";
+    /// <summary>Identifies the per-address bound on management challenge creation.</summary>
+    public const string TwoFactorReauthenticationPolicy = "TwoFactorReauthentication";
     /// <summary>Identifies the per-address public member search quota.</summary>
     public const string UserSearchPolicy = "UserSearch";
     /// <summary>Gets the maximum public searches per minute and address.</summary>
@@ -145,7 +152,19 @@ public static class AuthenticationRateLimitingExtensions
     {
         services.AddRateLimiter(options =>
             {
-                options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(CreateGlobalLimiterPartition);
+                options.GlobalLimiter = PartitionedRateLimiter.CreateChained(
+                    PartitionedRateLimiter.Create<HttpContext, string>(CreateGlobalLimiterPartition),
+                    PartitionedRateLimiter.Create<HttpContext, string>(CreateTwoFactorChallengePartition));
+                options.AddPolicy(
+                    TwoFactorContinuationPolicy,
+                    context => CreateLimiter(
+                        context,
+                        60));
+                options.AddPolicy(
+                    TwoFactorReauthenticationPolicy,
+                    context => CreateLimiter(
+                        context,
+                        10));
                 options.AddPolicy(
                     RegistrationPolicy,
                     context => CreateLimiter(
@@ -313,6 +332,20 @@ public static class AuthenticationRateLimitingExtensions
             });
 
         return services;
+    }
+
+    /// <summary>Shares one first-factor quota across password, Google and authenticated management starts.</summary>
+    /// <param name="context">The routed request.</param>
+    /// <returns>A per-address limiter only for endpoints that can create a challenge.</returns>
+    private static RateLimitPartition<string> CreateTwoFactorChallengePartition(HttpContext context)
+    {
+
+        if (context.GetEndpoint()?.Metadata.GetMetadata<StartsTwoFactorChallengeAttribute>() is null)
+            return RateLimitPartition.GetNoLimiter("NonTwoFactorChallengeStart");
+
+        return CreateLimiter(
+            context,
+            TwoFactorChallengeStartPermitLimit);
     }
 
     private static RateLimitPartition<string> CreateGlobalLimiterPartition(HttpContext context)

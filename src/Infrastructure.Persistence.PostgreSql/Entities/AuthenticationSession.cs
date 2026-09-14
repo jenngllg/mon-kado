@@ -5,6 +5,29 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Entitie
 /// </summary>
 public class AuthenticationSession
 {
+    /// <summary>Gets the authenticator version proved before this session was issued.</summary>
+    public Guid? TwoFactorCredentialId
+    {
+        get; private set;
+    }
+
+    /// <summary>Gets the UTC time of the second-factor proof, without changing session duration.</summary>
+    public DateTime? TwoFactorVerifiedAt
+    {
+        get; private set;
+    }
+
+    /// <summary>Binds a session to a successfully proved authenticator version.</summary>
+    /// <param name="credentialId">The current authenticator version.</param>
+    /// <param name="verifiedAt">The second-factor verification time in UTC.</param>
+    public void BindTwoFactor(
+        Guid credentialId,
+        DateTime verifiedAt)
+    {
+        TwoFactorCredentialId = credentialId;
+        TwoFactorVerifiedAt = verifiedAt;
+    }
+
     /// <summary>
     /// Gets or sets the session identifier.
     /// </summary>

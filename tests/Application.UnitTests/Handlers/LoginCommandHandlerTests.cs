@@ -54,7 +54,7 @@ public class LoginCommandHandlerTests
         // Assert
         Assert.Same(
             tokens,
-            result);
+            result.Tokens);
         _sessionServiceMock.Verify(
             service => service.LoginAsync(
                 "Lea@example.fr",

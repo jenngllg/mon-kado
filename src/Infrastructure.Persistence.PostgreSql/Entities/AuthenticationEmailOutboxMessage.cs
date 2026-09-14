@@ -7,6 +7,35 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Entitie
 /// </summary>
 public class AuthenticationEmailOutboxMessage
 {
+    /// <summary>Stages a second-factor notification in the security operation's transaction.</summary>
+    /// <param name="userId">The current account identifier.</param>
+    /// <param name="recipientEmail">The account address at the time of the operation.</param>
+    /// <param name="kind">The bounded second-factor notification kind.</param>
+    /// <param name="createdAt">The UTC security operation timestamp.</param>
+    /// <returns>The pending notification without secret material.</returns>
+    /// <exception cref="ArgumentOutOfRangeException">The kind is not a second-factor event.</exception>
+    public static AuthenticationEmailOutboxMessage CreateTwoFactorNotification(
+        Guid userId,
+        string recipientEmail,
+        AuthenticationEmailKind kind,
+        DateTime createdAt)
+    {
+
+        if (kind is not (AuthenticationEmailKind.TwoFactorEnrolled or AuthenticationEmailKind.TwoFactorReplaced or
+            AuthenticationEmailKind.TwoFactorRecoveryCodesRegenerated or AuthenticationEmailKind.TwoFactorRecoveryCodeUsed))
+            throw new ArgumentOutOfRangeException(nameof(kind));
+
+        return new AuthenticationEmailOutboxMessage
+        {
+            Id = Guid.CreateVersion7(new DateTimeOffset(createdAt)),
+            UserId = userId,
+            RecipientEmail = recipientEmail,
+            Kind = kind,
+            CreatedAt = createdAt,
+            AvailableAt = createdAt
+        };
+    }
+
     private AuthenticationEmailOutboxMessage()
     {
     }

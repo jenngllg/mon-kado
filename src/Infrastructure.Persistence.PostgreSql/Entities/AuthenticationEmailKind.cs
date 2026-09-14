@@ -28,5 +28,13 @@ public enum AuthenticationEmailKind
     /// <summary>Indicates an account deletion confirmation sent to the current address.</summary>
     AccountDeletionConfirmation,
     /// <summary>Indicates that a private personal-data archive is ready to download.</summary>
-    PersonalDataExportReady
+    PersonalDataExportReady,
+    /// <summary>Indicates a confirmed first authenticator.</summary>
+    TwoFactorEnrolled,
+    /// <summary>Indicates a confirmed replacement authenticator.</summary>
+    TwoFactorReplaced,
+    /// <summary>Indicates replacement of the entire recovery-code set.</summary>
+    TwoFactorRecoveryCodesRegenerated,
+    /// <summary>Indicates use of a recovery code to authorize forced replacement.</summary>
+    TwoFactorRecoveryCodeUsed
 }

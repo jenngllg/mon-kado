@@ -54,6 +54,7 @@ public static class ApiInjectionConfiguration
             .ValidateOnStart();
         services.AddHttpContextAccessor();
         services.AddScoped<IGoogleAuthenticationContextProvider, GoogleAuthenticationContextProvider>();
+        services.AddScoped<ITwoFactorCallerProvider, TwoFactorCallerProvider>();
         services.AddScoped<IAuthorizationHandler, WishlistOwnerAuthorizationHandler>();
         services.AddScoped<IAuthorizationHandler, AdministratorAuthorizationHandler>();
         services.ConfigureDataProtection(
