@@ -92,7 +92,9 @@ public class TwoFactorSignInIntegrationTests(PostgreSqlContainerFixture fixture)
         using var refresh = await PostAsync(
             client,
             "/api/v1/auth/sessions/refresh",
-            new { },
+            new
+            {
+            },
             cancellationToken);
         Assert.Equal(
             HttpStatusCode.OK,
