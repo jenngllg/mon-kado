@@ -22,6 +22,83 @@ public class TwoFactorSignInIntegrationTests(PostgreSqlContainerFixture fixture)
 {
     private const string Password = "A deliberately long test password";
 
+    [Theory]
+    [InlineData("/api/v1/members/current/two-factor/reauthentications")]
+    [InlineData("/api/v1/auth/two-factor/recovery-codes/regenerations")]
+    public async Task ManageAsync_WhenOnlyValidRefreshCookieIsPresent_RejectsWithoutChangingCredentials(string endpoint)
+    {
+        // Arrange
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await fixture.ResetDatabaseAsync(cancellationToken);
+        var clock = new MutableTimeProvider(TimeProvider.System.GetUtcNow());
+        await using var factory = new PostgreSqlApiFactory(
+            fixture.Container.GetConnectionString(),
+            clock);
+        var email = await CreateAdministratorAsync(
+            factory,
+            cancellationToken);
+        using var client = factory.CreateClient();
+        var enrollment = await EnrollAndSignInAsync(
+            client,
+            email,
+            clock,
+            cancellationToken);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            "Bearer",
+            enrollment.Tokens.AccessToken);
+        clock.Advance(TimeSpan.FromSeconds(30));
+        using var authorization = await client.PostAsJsonAsync(
+            "/api/v1/members/current/two-factor/reauthentications",
+            new
+            {
+                purpose = "regenerateRecoveryCodes",
+                code = TwoFactorTestData.CreateCurrentCode(
+                    enrollment.ManualKey,
+                    clock)
+            },
+            cancellationToken);
+        Assert.Equal(
+            HttpStatusCode.OK,
+            authorization.StatusCode);
+        var grant = await authorization.Content.ReadFromJsonAsync<JsonElement>(cancellationToken);
+        client.DefaultRequestHeaders.Authorization = null;
+
+        // Act
+        using var response = await client.PostAsJsonAsync(
+            endpoint,
+            new
+            {
+                flow = grant.GetProperty("flow").GetString(),
+                purpose = "replaceAuthenticator",
+                recoveryCode = enrollment.Codes.RecoveryCodes.First()
+            },
+            cancellationToken);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.Unauthorized,
+            response.StatusCode);
+        Assert.False(response.Headers.Contains("Set-Cookie"));
+        await using var scope = factory.Services.CreateAsyncScope();
+        var database = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
+        Assert.Equal(
+            10,
+            await database.TwoFactorRecoveryCodes.CountAsync(
+                code => code.ConsumedAt == null,
+                cancellationToken));
+        Assert.False(await database.AuthenticationSessions.AnyAsync(
+            session => session.RevokedAt != null,
+            cancellationToken));
+        using var refresh = await PostAsync(
+            client,
+            "/api/v1/auth/sessions/refresh",
+            new { },
+            cancellationToken);
+        Assert.Equal(
+            HttpStatusCode.OK,
+            refresh.StatusCode);
+    }
+
     [Fact]
     public async Task ReauthenticateAsync_WhenPurposeDoesNotMatchProof_RejectsWithoutConsumingRecoveryCodeOrGrant()
     {
