@@ -26,6 +26,14 @@ dotnet list JennGllg.Fr.MonKado.Back.slnx package --outdated
 
 The complete test suite starts temporary PostgreSQL 18 containers for API integration and migration tests. Docker must be running before `dotnet test`.
 
+Coverage must be measured in `Release`, matching CI. The strict gate combines Linux
+and Windows reports because file permissions, symbolic links and file deletion have
+platform-specific behavior. A Windows-only or Debug report is not the complete gate.
+Use `coverlet.runsettings`, normalize cross-platform source paths with
+`scripts/Normalize-CoveragePaths.ps1`, then run `scripts/Verify-Coverage.ps1` against
+only the reports from the same source revision and Release configuration. Never lower
+the 100% line/branch thresholds or exclude executable code to compensate for a missing platform.
+
 Two direct dependencies are deliberately pinned and therefore appear in outdated-package reports. MediatR stays on `12.5.0`, the last Apache-2.0 release before the commercial license mechanism. `Microsoft.OpenApi` stays on the latest compatible 2.x release because ASP.NET Core 10 requires a version lower than 3.0. Upgrade either dependency only after reviewing its license and framework compatibility.
 
 ## Continuous integration
@@ -134,7 +142,14 @@ The production frontend and API use HTTPS origins under the same registrable dom
 
 Only exact origins configured under `WebSecurity:AllowedOrigins` receive credentialed CORS headers. Wildcards are rejected, and Production accepts HTTPS origins only.
 
-The frontend must initialize and refresh CSRF protection after login and logout:
+The frontend must initialize and refresh CSRF protection after login and logout.
+
+CSRF request tokens are bound to the identity used when calling `/security/csrf-token`.
+Send the same Bearer on that call when protecting an authenticated mutation; use no
+Bearer for anonymous or cookie-only operations. Keep those in-memory caches separate.
+A rejected token returns `400 ErrorResponse` with `SECURITY_CSRF_VALIDATION_FAILED`
+before the controller runs. A client may fetch the appropriate token and retry once
+for that explicit code, never for an arbitrary or unstructured `400` response.
 
 1. Call `GET /security/csrf-token` with `credentials: "include"`.
 2. Keep the returned token in memory.

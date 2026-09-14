@@ -119,6 +119,8 @@ public static class ErrorCodes
     public const string RequestPreconditionRequired = "REQUEST_PRECONDITION_REQUIRED";
     #endregion
     #region Security
+    /// <summary>Identifies an antiforgery rejection before the action executes.</summary>
+    public const string SecurityCsrfValidationFailed = "SECURITY_CSRF_VALIDATION_FAILED";
     /// <summary>
     /// Identifies security unauthorized.
     /// </summary>

@@ -1,6 +1,7 @@
 using JennGllg.Fr.MonKado.Back.Api.Abstractions;
 using JennGllg.Fr.MonKado.Back.Api.Authorization;
 using JennGllg.Fr.MonKado.Back.Api.Extensions;
+using JennGllg.Fr.MonKado.Back.Api.Filters;
 using JennGllg.Fr.MonKado.Back.Api.Options;
 using JennGllg.Fr.MonKado.Back.Api.Services;
 using JennGllg.Fr.MonKado.Back.Application.Abstractions;
@@ -61,7 +62,7 @@ public static class ApiInjectionConfiguration
             configuration,
             environment);
         services
-            .AddControllersWithViews()
+            .AddControllersWithViews(options => options.Filters.Add<AntiforgeryErrorResponseFilter>(int.MinValue))
             .AddJsonOptions(options => options.JsonSerializerOptions.Converters.Add(
                 new JsonStringEnumConverter(
                     JsonNamingPolicy.CamelCase,
