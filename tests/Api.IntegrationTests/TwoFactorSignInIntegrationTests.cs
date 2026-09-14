@@ -122,6 +122,7 @@ public class TwoFactorSignInIntegrationTests(PostgreSqlContainerFixture fixture)
     [InlineData("changedCodes")]
     [InlineData("expiredSetup")]
     [InlineData("verificationUnavailable")]
+    [InlineData("verificationUnexpectedFailure")]
     public async Task ConfirmSetupAsync_WhenResultChangesBeforeCommitRecovery_DoesNotExposeObsoleteMaterial(string scenario)
     {
         // Arrange
@@ -189,6 +190,8 @@ public class TwoFactorSignInIntegrationTests(PostgreSqlContainerFixture fixture)
                 clock.Advance(TimeSpan.FromMinutes(5));
             else if (scenario == "verificationUnavailable")
                 readFailure.Arm();
+            else if (scenario == "verificationUnexpectedFailure")
+                readFailure.Arm(new InvalidOperationException("The receipt query failed unexpectedly."));
             else if (scenario == "deletedCodes")
                 await database.TwoFactorRecoveryCodes.ExecuteDeleteAsync(cancellationToken);
             else
@@ -210,12 +213,12 @@ public class TwoFactorSignInIntegrationTests(PostgreSqlContainerFixture fixture)
 
         // Assert
         Assert.Equal(
-            HttpStatusCode.ServiceUnavailable,
+            scenario == "verificationUnexpectedFailure" ? HttpStatusCode.InternalServerError : HttpStatusCode.ServiceUnavailable,
             response.StatusCode);
         Assert.False(response.Headers.Contains("Set-Cookie"));
         var error = await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken);
         Assert.Equal(
-            "TECHNICAL_DEPENDENCY_UNAVAILABLE",
+            scenario == "verificationUnexpectedFailure" ? null : "TECHNICAL_DEPENDENCY_UNAVAILABLE",
             error.GetProperty("errorCode").GetString());
         Assert.False(error.TryGetProperty(
             "recoveryCodes",

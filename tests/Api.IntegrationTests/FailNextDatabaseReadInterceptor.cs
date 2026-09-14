@@ -8,6 +8,7 @@ namespace JennGllg.Fr.MonKado.Back.Api.IntegrationTests;
 public class FailNextDatabaseReadInterceptor : DbCommandInterceptor
 {
     private int _armed;
+    private Exception _failure = new TimeoutException("The database read could not be completed.");
 
     /// <summary>Arms a failure for the next asynchronous reader command.</summary>
     public void Arm()
@@ -15,6 +16,14 @@ public class FailNextDatabaseReadInterceptor : DbCommandInterceptor
         Interlocked.Exchange(
             ref _armed,
             1);
+    }
+
+    /// <summary>Arms the supplied technical failure for the next read.</summary>
+    /// <param name="failure">The failure to propagate without wrapping.</param>
+    public void Arm(Exception failure)
+    {
+        _failure = failure;
+        Arm();
     }
 
     /// <inheritdoc />
@@ -28,7 +37,7 @@ public class FailNextDatabaseReadInterceptor : DbCommandInterceptor
         if (Interlocked.Exchange(
                 ref _armed,
                 0) == 1)
-            throw new TimeoutException("The database read could not be completed.");
+            throw _failure;
 
         return ValueTask.FromResult(result);
     }

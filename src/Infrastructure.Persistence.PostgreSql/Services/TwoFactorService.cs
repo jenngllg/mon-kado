@@ -831,14 +831,14 @@ public class TwoFactorService(
 
             if (result is not null && !challenge.IsLive(Now()))
                 return false;
-
-            return true;
         }
         catch (Exception exception) when (PostgreSqlFailureClassifier.IsUnavailable(exception))
         {
 
             return false;
         }
+
+        return true;
     }
 
     /// <summary>Projects only the original proof, next action and immutable expiration.</summary>

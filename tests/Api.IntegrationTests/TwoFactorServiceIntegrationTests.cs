@@ -227,6 +227,8 @@ public class TwoFactorServiceIntegrationTests(PostgreSqlContainerFixture fixture
     [Theory]
     [InlineData("missingFactor")]
     [InlineData("changedCredential")]
+    [InlineData("missingExpectedCredential")]
+    [InlineData("staleExpectedCredential")]
     [InlineData("changedStamp")]
     [InlineData("missingCode")]
     [InlineData("missingCredential")]
@@ -257,7 +259,7 @@ public class TwoFactorServiceIntegrationTests(PostgreSqlContainerFixture fixture
         var credentialId = Guid.CreateVersion7();
         var factor = MemberTwoFactor.Create(memberId);
 
-        if (scenario is not ("missingCredential" or "missingCompletedCredential"))
+        if (scenario is not ("missingCredential" or "missingCompletedCredential" or "staleExpectedCredential"))
             factor.ConfirmAuthenticator(
                 credentialId,
                 cryptography.ProtectSecret(
@@ -271,11 +273,19 @@ public class TwoFactorServiceIntegrationTests(PostgreSqlContainerFixture fixture
             database.MemberTwoFactors.Add(factor);
 
         var flow = cryptography.CreateFlow();
+        var expectedCredential = factor.CredentialId;
+
+        if (scenario is "changedCredential" or "staleExpectedCredential")
+            expectedCredential = Guid.CreateVersion7();
+
+        if (scenario == "missingExpectedCredential")
+            expectedCredential = null;
+
         var challenge = TwoFactorChallenge.CreateSignIn(
             Guid.CreateVersion7(),
             memberId,
             flow.Hash,
-            scenario == "changedCredential" ? Guid.CreateVersion7() : factor.CredentialId,
+            expectedCredential,
             SHA256.HashData(Encoding.UTF8.GetBytes(scenario == "changedStamp" ? "obsolete-stamp" : member.SecurityStamp ?? string.Empty)),
             false,
             null,
