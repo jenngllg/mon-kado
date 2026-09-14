@@ -8,6 +8,24 @@ namespace JennGllg.Fr.MonKado.Back.Application.Common.Constants;
 [ExcludeFromCodeCoverage]
 public static class LogEventIds
 {
+    #region TwoFactor
+    /// <summary>Identifies a second-factor operation without its sensitive inputs.</summary>
+    public const int TwoFactorOperationStarted = 1200;
+    /// <summary>Identifies the TwoFactorCompletionProcessed event.</summary>
+    public const int TwoFactorCompletionProcessed = 1201;
+    /// <summary>Identifies the TwoFactorSetupPrepared event.</summary>
+    public const int TwoFactorSetupPrepared = 1202;
+    /// <summary>Identifies the TwoFactorSetupConfirmed event.</summary>
+    public const int TwoFactorSetupConfirmed = 1203;
+    /// <summary>Identifies the TwoFactorRecoveryCodesRegenerated event.</summary>
+    public const int TwoFactorRecoveryCodesRegenerated = 1204;
+    /// <summary>Identifies the TwoFactorManagementAuthorized event.</summary>
+    public const int TwoFactorManagementAuthorized = 1205;
+    /// <summary>Identifies the TwoFactorStatusRetrieved event.</summary>
+    public const int TwoFactorStatusRetrieved = 1206;
+    /// <summary>Identifies successful second-factor security notification delivery.</summary>
+    public const int TwoFactorSecurityNotificationSent = 1207;
+    #endregion
     #region AdministrativeAudit
 
     /// <summary>Identifies successful administrative audit reads.</summary>

@@ -1,6 +1,7 @@
 using JennGllg.Fr.MonKado.Back.Application.Abstractions;
 using JennGllg.Fr.MonKado.Back.Application.Common.Exceptions;
 using JennGllg.Fr.MonKado.Back.Application.Models;
+using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Queries;
 
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -22,6 +23,7 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Service
 /// <param name="accessTokenService">The access token service.</param>
 /// <param name="refreshTokenService">The refresh token service.</param>
 /// <param name="refreshSessionService">The refresh session service.</param>
+/// <param name="twoFactorChallengeIssuer">The account-locked second-factor challenge issuer.</param>
 /// <param name="timeProvider">The time provider.</param>
 public class AccountSessionService(
     MonKadoDbContext context,
@@ -33,6 +35,7 @@ public class AccountSessionService(
     IAccessTokenService accessTokenService,
     IRefreshTokenService refreshTokenService,
     IRefreshSessionService refreshSessionService,
+    ITwoFactorChallengeIssuer twoFactorChallengeIssuer,
     TimeProvider timeProvider) : IAccountSessionService
 {
     private const int MaximumTransactionRetryCount = 3;
@@ -319,6 +322,28 @@ public class AccountSessionService(
         var currentSessionId = await refreshSessionService.ProveCurrentSessionAsync(
             currentRefreshToken,
             cancellationToken);
+        var challenge = await twoFactorChallengeIssuer.StageAsync(
+            existingUser,
+            executionState.SessionId,
+            isPersistent,
+            currentSessionId,
+            cancellationToken);
+
+        if (challenge is not null)
+        {
+            executionState.RecordTwoFactorChallenge(
+                existingUser.Id,
+                challenge.Flow);
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+
+            return new AccountSessionLoginResult(
+                AccountLoginResult.TwoFactorRequired,
+                null)
+            {
+                Challenge = challenge
+            };
+        }
+
         var refreshSession = await refreshSessionService.CreateAsync(
             existingUser.Id,
             isPersistent,
@@ -452,6 +477,9 @@ public class AccountSessionService(
         if (user is null ||
             session.RevokedAt is not null ||
             session.ExpiresAt <= now ||
+            !await AuthenticationSessionQueries.WithValidTwoFactor(context).AnyAsync(
+                candidate => candidate.Id == session.Id,
+                cancellationToken) ||
             !refreshTokenService.Verify(
                 currentRefreshToken,
                 session.RefreshTokenHash))
@@ -500,6 +528,14 @@ public class AccountSessionService(
         AccountLoginExecutionState executionState,
         CancellationToken cancellationToken)
     {
+        if (executionState.AttemptedTwoFactorMemberId is { } challengeMemberId &&
+            executionState.AttemptedTwoFactorFlow is { } flow)
+            return await twoFactorChallengeIssuer.IsIssuedAsync(
+                executionState.SessionId,
+                challengeMemberId,
+                flow,
+                cancellationToken);
+
         if (executionState.AttemptedSessionMemberId is { } memberId &&
             executionState.AttemptedRefreshToken is { } refreshToken)
         {

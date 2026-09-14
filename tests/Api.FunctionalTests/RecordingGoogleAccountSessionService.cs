@@ -12,6 +12,10 @@ public class RecordingGoogleAccountSessionService(
     : IGoogleAccountSessionService
 {
     private readonly ConcurrentDictionary<Guid, byte> _consumedFlows = new();
+    public TwoFactorChallengeResponse? TwoFactorChallenge
+    {
+        get; set;
+    }
 
     public Guid? ExpectedMemberId
     {
@@ -138,7 +142,8 @@ public class RecordingGoogleAccountSessionService(
             session,
             memberId)
         {
-            AccessToken = session is null ? null : issueAccessToken(memberId)
+            AccessToken = session is null ? null : issueAccessToken(memberId),
+            Challenge = TwoFactorChallenge
         });
     }
 
@@ -175,6 +180,9 @@ public class RecordingGoogleAccountSessionService(
 
         return Task.FromResult(new GoogleAccountLinkResult(
             LinkOutcome,
-            tokens));
+            tokens)
+        {
+            Challenge = TwoFactorChallenge
+        });
     }
 }

@@ -20,10 +20,28 @@ internal sealed class AuthenticationEmailOutboxMessageConfiguration : IEntityTyp
                     "attempt_count >= 0");
                 table.HasCheckConstraint(
                     "ck_authentication_email_outbox_kind_valid",
-                    "kind IN ('EMAIL_CONFIRMATION', 'EMAIL_CHANGE_CONFIRMATION', " + "'EMAIL_CHANGE_SECURITY_NOTIFICATION', 'PASSWORD_RESET', " + "'PASSWORD_CHANGED_SECURITY_NOTIFICATION', 'ACCOUNT_DELETION_CONFIRMATION', 'PERSONAL_DATA_EXPORT_READY')");
+                    "kind IN ('EMAIL_CONFIRMATION', 'EMAIL_CHANGE_CONFIRMATION', " +
+                    "'EMAIL_CHANGE_SECURITY_NOTIFICATION', 'PASSWORD_RESET', " +
+                    "'PASSWORD_CHANGED_SECURITY_NOTIFICATION', 'ACCOUNT_DELETION_CONFIRMATION', 'PERSONAL_DATA_EXPORT_READY', " +
+                    "'TWO_FACTOR_ENROLLED', 'TWO_FACTOR_REPLACED', 'TWO_FACTOR_RECOVERY_CODES_REGENERATED', 'TWO_FACTOR_RECOVERY_CODE_USED')");
                 table.HasCheckConstraint(
                     "ck_authentication_email_outbox_email_change_fields_consistent",
-                    "(kind IN ('EMAIL_CONFIRMATION', 'PERSONAL_DATA_EXPORT_READY') AND member_email_change_request_id IS NULL " + "AND recipient_email IS NULL AND security_stamp_snapshot IS NULL) OR " + "(kind = 'EMAIL_CHANGE_CONFIRMATION' " + "AND member_email_change_request_id IS NOT NULL AND recipient_email IS NOT NULL " + "AND security_stamp_snapshot IS NOT NULL) OR " + "(kind = 'EMAIL_CHANGE_SECURITY_NOTIFICATION' " + "AND member_email_change_request_id IS NOT NULL AND recipient_email IS NOT NULL " + "AND security_stamp_snapshot IS NULL) OR " + "(kind = 'PASSWORD_RESET' AND member_email_change_request_id IS NULL " + "AND recipient_email IS NOT NULL AND security_stamp_snapshot IS NOT NULL) OR " + "(kind = 'PASSWORD_CHANGED_SECURITY_NOTIFICATION' " + "AND member_email_change_request_id IS NULL AND recipient_email IS NOT NULL " + "AND security_stamp_snapshot IS NULL) OR " + "(kind = 'ACCOUNT_DELETION_CONFIRMATION' AND member_email_change_request_id IS NULL " + "AND recipient_email IS NOT NULL AND security_stamp_snapshot IS NOT NULL)");
+                    "(kind IN ('EMAIL_CONFIRMATION', 'PERSONAL_DATA_EXPORT_READY') AND member_email_change_request_id IS NULL " +
+                    "AND recipient_email IS NULL AND security_stamp_snapshot IS NULL) OR " +
+                    "(kind = 'EMAIL_CHANGE_CONFIRMATION' " +
+                    "AND member_email_change_request_id IS NOT NULL AND recipient_email IS NOT NULL " +
+                    "AND security_stamp_snapshot IS NOT NULL) OR " +
+                    "(kind = 'EMAIL_CHANGE_SECURITY_NOTIFICATION' " +
+                    "AND member_email_change_request_id IS NOT NULL AND recipient_email IS NOT NULL " +
+                    "AND security_stamp_snapshot IS NULL) OR " +
+                    "(kind = 'PASSWORD_RESET' AND member_email_change_request_id IS NULL " +
+                    "AND recipient_email IS NOT NULL AND security_stamp_snapshot IS NOT NULL) OR " +
+                    "(kind IN ('PASSWORD_CHANGED_SECURITY_NOTIFICATION', 'TWO_FACTOR_ENROLLED', 'TWO_FACTOR_REPLACED', " +
+                    "'TWO_FACTOR_RECOVERY_CODES_REGENERATED', 'TWO_FACTOR_RECOVERY_CODE_USED') " +
+                    "AND member_email_change_request_id IS NULL AND recipient_email IS NOT NULL " +
+                    "AND security_stamp_snapshot IS NULL) OR " +
+                    "(kind = 'ACCOUNT_DELETION_CONFIRMATION' AND member_email_change_request_id IS NULL " +
+                    "AND recipient_email IS NOT NULL AND security_stamp_snapshot IS NOT NULL)");
                 table.HasCheckConstraint(
                     "ck_authentication_email_outbox_deletion_request_consistent",
                     "(kind = 'ACCOUNT_DELETION_CONFIRMATION') = (member_account_deletion_request_id IS NOT NULL)");
@@ -78,7 +96,8 @@ internal sealed class AuthenticationEmailOutboxMessageConfiguration : IEntityTyp
             .HasIndex(message => new { message.UserId, message.Kind })
             .HasDatabaseName("ux_authentication_email_outbox_pending_user_kind")
             .IsUnique()
-            .HasFilter("processed_at IS NULL AND kind NOT IN ('PASSWORD_CHANGED_SECURITY_NOTIFICATION', 'PERSONAL_DATA_EXPORT_READY')");
+            .HasFilter("processed_at IS NULL AND kind NOT IN ('PASSWORD_CHANGED_SECURITY_NOTIFICATION', 'PERSONAL_DATA_EXPORT_READY', " +
+                "'TWO_FACTOR_ENROLLED', 'TWO_FACTOR_REPLACED', 'TWO_FACTOR_RECOVERY_CODES_REGENERATED', 'TWO_FACTOR_RECOVERY_CODE_USED')");
         builder
             .HasIndex(message => new { message.AvailableAt, message.CreatedAt })
             .HasDatabaseName("ix_authentication_email_outbox_pending_delivery")
@@ -108,6 +127,10 @@ internal sealed class AuthenticationEmailOutboxMessageConfiguration : IEntityTyp
             AuthenticationEmailKind.AccountDeletionConfirmation => "ACCOUNT_DELETION_CONFIRMATION",
             AuthenticationEmailKind.PersonalDataExportReady => "PERSONAL_DATA_EXPORT_READY",
             AuthenticationEmailKind.PasswordChangedSecurityNotification => "PASSWORD_CHANGED_SECURITY_NOTIFICATION",
+            AuthenticationEmailKind.TwoFactorEnrolled => "TWO_FACTOR_ENROLLED",
+            AuthenticationEmailKind.TwoFactorReplaced => "TWO_FACTOR_REPLACED",
+            AuthenticationEmailKind.TwoFactorRecoveryCodesRegenerated => "TWO_FACTOR_RECOVERY_CODES_REGENERATED",
+            AuthenticationEmailKind.TwoFactorRecoveryCodeUsed => "TWO_FACTOR_RECOVERY_CODE_USED",
             _ => throw new ArgumentOutOfRangeException(
                 nameof(kind),
                 kind,
@@ -127,6 +150,10 @@ internal sealed class AuthenticationEmailOutboxMessageConfiguration : IEntityTyp
             "ACCOUNT_DELETION_CONFIRMATION" => AuthenticationEmailKind.AccountDeletionConfirmation,
             "PERSONAL_DATA_EXPORT_READY" => AuthenticationEmailKind.PersonalDataExportReady,
             "PASSWORD_CHANGED_SECURITY_NOTIFICATION" => AuthenticationEmailKind.PasswordChangedSecurityNotification,
+            "TWO_FACTOR_ENROLLED" => AuthenticationEmailKind.TwoFactorEnrolled,
+            "TWO_FACTOR_REPLACED" => AuthenticationEmailKind.TwoFactorReplaced,
+            "TWO_FACTOR_RECOVERY_CODES_REGENERATED" => AuthenticationEmailKind.TwoFactorRecoveryCodesRegenerated,
+            "TWO_FACTOR_RECOVERY_CODE_USED" => AuthenticationEmailKind.TwoFactorRecoveryCodeUsed,
             _ => throw new InvalidOperationException($"Unknown authentication email kind '{value}'.")
         };
     }

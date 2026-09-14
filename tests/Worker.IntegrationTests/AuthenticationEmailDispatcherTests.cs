@@ -28,6 +28,74 @@ namespace JennGllg.Fr.MonKado.Back.Worker.IntegrationTests;
 [Collection(PostgreSqlWorkerTestSuite.Name)]
 public class AuthenticationEmailDispatcherTests(PostgreSqlWorkerFixture fixture) : IDisposable
 {
+    [Theory]
+    [InlineData(AuthenticationEmailKind.TwoFactorEnrolled, TwoFactorSecurityEvent.Enrolled)]
+    [InlineData(AuthenticationEmailKind.TwoFactorReplaced, TwoFactorSecurityEvent.Replaced)]
+    [InlineData(AuthenticationEmailKind.TwoFactorRecoveryCodesRegenerated, TwoFactorSecurityEvent.RecoveryCodesRegenerated)]
+    [InlineData(AuthenticationEmailKind.TwoFactorRecoveryCodeUsed, TwoFactorSecurityEvent.RecoveryCodeUsed)]
+    public async Task DispatchAsync_WhenTwoFactorNotificationsArePending_DeliversEachCommittedEventOnce(
+        AuthenticationEmailKind kind,
+        TwoFactorSecurityEvent expectedEvent)
+    {
+        // Arrange
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var sender = new FakeEmailSender();
+        var now = DateTimeOffset.FromUnixTimeSeconds(1800000000);
+        await using var provider = await CreateProviderAsync(
+            sender,
+            now);
+        await using var scope = provider.CreateAsyncScope();
+        var database = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
+        var member = new MonKadoUser
+        {
+            Id = Guid.CreateVersion7(),
+            Email = "member@example.test",
+            UserName = "member@example.test",
+            EmailConfirmed = true,
+            DisplayName = "Member"
+        };
+        var manager = scope.ServiceProvider.GetRequiredService<UserManager<MonKadoUser>>();
+        Assert.True((await manager.CreateAsync(member)).Succeeded);
+        var messages = Enumerable.Range(
+                0,
+                2)
+            .Select(_ => AuthenticationEmailOutboxMessage.CreateTwoFactorNotification(
+                member.Id,
+                member.Email,
+                kind,
+                now.UtcDateTime))
+            .ToArray();
+        database.AuthenticationEmailOutboxMessages.AddRange(messages);
+        await database.SaveChangesAsync(cancellationToken);
+
+        // Act
+        await DispatchAsync(provider);
+        await DispatchAsync(provider);
+
+        // Assert
+        Assert.Equal(
+            2,
+            sender.TwoFactorNotifications.Count);
+        Assert.All(
+            sender.TwoFactorNotifications,
+            notification =>
+            {
+                Assert.Equal(
+                    expectedEvent,
+                    notification.SecurityEvent);
+                Assert.Equal(
+                    now.UtcDateTime,
+                    notification.CreatedAt);
+                Assert.Equal(
+                    member.Email,
+                    notification.RecipientAddress);
+            });
+        Assert.True(await database.AuthenticationEmailOutboxMessages.AllAsync(
+            message => message.ProcessedAt != null,
+            cancellationToken));
+        Assert.Empty(sender.PasswordChangedNotifications);
+    }
+
     private readonly string _keysPath = Path.Combine(
         Path.GetTempPath(),
         "mon-kado-worker-tests",

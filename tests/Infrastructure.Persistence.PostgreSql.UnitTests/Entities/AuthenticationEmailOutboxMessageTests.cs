@@ -4,6 +4,25 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.UnitTes
 
 public class AuthenticationEmailOutboxMessageTests
 {
+    [Theory]
+    [InlineData(AuthenticationEmailKind.PasswordReset)]
+    [InlineData((AuthenticationEmailKind)99)]
+    public void CreateTwoFactorNotification_WhenKindDoesNotDescribeSecondFactor_RejectsIt(AuthenticationEmailKind kind)
+    {
+        // Arrange
+        var memberId = Guid.CreateVersion7();
+
+        // Act
+        var exception = Record.Exception(() => AuthenticationEmailOutboxMessage.CreateTwoFactorNotification(
+            memberId,
+            "member@example.test",
+            kind,
+            DateTime.UnixEpoch));
+
+        // Assert
+        Assert.IsType<ArgumentOutOfRangeException>(exception);
+    }
+
     private readonly DateTime _now = new(
         2026,
         8,

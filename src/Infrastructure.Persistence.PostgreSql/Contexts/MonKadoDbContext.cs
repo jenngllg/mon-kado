@@ -20,6 +20,15 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Context
 /// <param name="options">The options.</param>
 public class MonKadoDbContext(DbContextOptions<MonKadoDbContext> options) : IdentityDbContext<MonKadoUser, IdentityRole<Guid>, Guid>(options), IUnitOfWork
 {
+    /// <summary>Gets encrypted second-factor credentials and account-wide verification defenses.</summary>
+    public DbSet<MemberTwoFactor> MemberTwoFactors => Set<MemberTwoFactor>();
+
+    /// <summary>Gets hashed, short-lived second-factor challenges.</summary>
+    public DbSet<TwoFactorChallenge> TwoFactorChallenges => Set<TwoFactorChallenge>();
+
+    /// <summary>Gets hashed single-use recovery credentials.</summary>
+    public DbSet<TwoFactorRecoveryCode> TwoFactorRecoveryCodes => Set<TwoFactorRecoveryCode>();
+
     /// <summary>Gets durable personal-data export requests and cleanup identities.</summary>
     public DbSet<MemberDataExport> MemberDataExports => Set<MemberDataExport>();
 

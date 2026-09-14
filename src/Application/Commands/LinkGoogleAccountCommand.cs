@@ -25,7 +25,7 @@ public class LinkGoogleAccountCommand(
     Guid flowId,
     Guid? expectedMemberId,
     Guid? currentSessionId,
-    string? currentPassword) : IRequest<AccountSessionTokens>, IGenericValidationFailure
+    string? currentPassword) : IRequest<TwoFactorCompletionResult>, IGenericValidationFailure
 {
     /// <summary>
     /// Gets the validated Google identity.
@@ -86,21 +86,21 @@ public class LinkGoogleAccountCommand(
 /// <param name="googleAccountSessionService">The Google account session service.</param>
 public class LinkGoogleAccountCommandHandler(
     IGoogleAccountSessionService googleAccountSessionService)
-    : IRequestHandler<LinkGoogleAccountCommand, AccountSessionTokens>
+    : IRequestHandler<LinkGoogleAccountCommand, TwoFactorCompletionResult>
 {
     /// <summary>
     /// Verifies the current password, links Google and creates MonKado session tokens.
     /// </summary>
     /// <param name="request">The explicit link command.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>The created MonKado session tokens.</returns>
+    /// <returns>The confirmed session tokens or the required second-factor challenge.</returns>
     /// <exception cref="DependencyUnavailableException">PostgreSQL is unavailable.</exception>
     /// <exception cref="GoogleAuthenticationFailedException">The protected Google identity cannot be linked safely.</exception>
     /// <exception cref="GoogleAccountLinkFailedException">The current account could not be proven.</exception>
     /// <exception cref="GoogleAccountLinkConflictException">The Google login conflicts with current account state.</exception>
     /// <exception cref="InvalidOperationException">The service reports success without session tokens.</exception>
     /// <exception cref="OperationCanceledException">The operation was canceled.</exception>
-    public async Task<AccountSessionTokens> Handle(
+    public async Task<TwoFactorCompletionResult> Handle(
         LinkGoogleAccountCommand request,
         CancellationToken cancellationToken)
     {
@@ -122,7 +122,13 @@ public class LinkGoogleAccountCommandHandler(
         if (result.Outcome == GoogleAccountLinkOutcome.Conflict)
             throw new GoogleAccountLinkConflictException();
 
-        return result.Tokens ?? throw new InvalidOperationException(
-            "A successful Google account link must return session tokens.");
+        if (result.Outcome == GoogleAccountLinkOutcome.TwoFactorRequired && result.Challenge is { } challenge)
+            return new TwoFactorCompletionResult { Challenge = challenge };
+
+        return new TwoFactorCompletionResult
+        {
+            Tokens = result.Tokens ?? throw new InvalidOperationException(
+                "A successful Google account link must return session tokens.")
+        };
     }
 }
