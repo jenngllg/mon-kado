@@ -21,6 +21,92 @@ namespace JennGllg.Fr.MonKado.Back.Worker.UnitTests;
 
 public class GmailAuthenticationEmailSenderTests
 {
+    [Theory]
+    [InlineData(TwoFactorSecurityEvent.Enrolled, "activée")]
+    [InlineData(TwoFactorSecurityEvent.Replaced, "remplacée")]
+    [InlineData(TwoFactorSecurityEvent.RecoveryCodesRegenerated, "renouvelés")]
+    [InlineData(TwoFactorSecurityEvent.RecoveryCodeUsed, "autoriser le remplacement")]
+    public async Task SendTwoFactorSecurityNotificationAsync_WhenSecurityOperationCompletes_SendsOnlyEventMetadata(
+        TwoFactorSecurityEvent securityEvent,
+        string expectedDescription)
+    {
+        // Arrange
+        var client = new CapturingGmailClient();
+        var logger = new RecordingLogger<GmailAuthenticationEmailSender>();
+        var sender = CreateSender(
+            client,
+            logger);
+        var message = new TwoFactorSecurityNotification(
+            Guid.CreateVersion7(),
+            "member@example.test",
+            securityEvent,
+            new DateTime(
+                2026,
+                9,
+                8,
+                12,
+                30,
+                0,
+                DateTimeKind.Utc));
+
+        // Act
+        var result = await sender.SendTwoFactorSecurityNotificationAsync(
+            message,
+            TestContext.Current.CancellationToken);
+        var mime = await DecodeAsync(client.RawMessage ?? string.Empty);
+
+        // Assert
+        Assert.Equal(
+            "gmail-message-id",
+            result.ProviderMessageId);
+        Assert.Contains(
+            expectedDescription,
+            mime.TextBody);
+        Assert.Contains(
+            "2026-09-08 12:30 UTC",
+            mime.TextBody);
+        Assert.DoesNotContain(
+            "otpauth:",
+            mime.TextBody);
+        Assert.DoesNotContain(
+            "flow=",
+            mime.TextBody);
+        Assert.Empty(mime.Attachments);
+        var entry = Assert.Single(logger.Entries);
+        Assert.Equal(
+            LogEventIds.TwoFactorSecurityNotificationSent,
+            entry.EventId.Id);
+        Assert.DoesNotContain(
+            message.RecipientAddress,
+            entry.Message);
+        Assert.Null(entry.Exception);
+    }
+
+    [Fact]
+    public async Task SendTwoFactorSecurityNotificationAsync_WhenEventIsUnknown_RejectsBeforeDelivery()
+    {
+        // Arrange
+        var client = new CapturingGmailClient();
+        var logger = new RecordingLogger<GmailAuthenticationEmailSender>();
+        var sender = CreateSender(
+            client,
+            logger);
+
+        // Act
+        var exception = await Record.ExceptionAsync(() => sender.SendTwoFactorSecurityNotificationAsync(
+            new TwoFactorSecurityNotification(
+                Guid.CreateVersion7(),
+                "member@example.test",
+                (TwoFactorSecurityEvent)99,
+                DateTime.UnixEpoch),
+            TestContext.Current.CancellationToken));
+
+        // Assert
+        Assert.IsType<ArgumentOutOfRangeException>(exception);
+        Assert.Null(client.RawMessage);
+        Assert.Empty(logger.Entries);
+    }
+
     [Fact]
     public async Task SendPersonalDataExportReadyAsync_WhenReady_SendsAuthenticatedAccountLinkWithoutAttachmentOrSecret()
     {

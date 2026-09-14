@@ -9,6 +9,29 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Service
 internal sealed class GoogleAuthenticationExecutionState(
     GoogleAuthenticationContext authenticationContext)
 {
+    /// <summary>Gets the exact opaque MFA proof staged by the attempt.</summary>
+    internal string? AttemptedTwoFactorFlow
+    {
+        get; private set;
+    }
+
+    /// <summary>Gets the account bound to the staged MFA proof.</summary>
+    internal Guid? AttemptedTwoFactorMemberId
+    {
+        get; private set;
+    }
+
+    /// <summary>Records the exact deferred sign-in proof for ambiguous-commit verification.</summary>
+    /// <param name="memberId">The resolved account.</param>
+    /// <param name="flow">The exact response proof, retained only in memory.</param>
+    internal void RecordTwoFactorChallenge(
+        Guid memberId,
+        string flow)
+    {
+        AttemptedTwoFactorMemberId = memberId;
+        AttemptedTwoFactorFlow = flow;
+    }
+
     /// <summary>
     /// Gets the protected Google authentication context.
     /// </summary>
@@ -49,6 +72,8 @@ internal sealed class GoogleAuthenticationExecutionState(
     /// </summary>
     internal void Reset()
     {
+        AttemptedTwoFactorMemberId = null;
+        AttemptedTwoFactorFlow = null;
         AttemptedSessionMemberId = null;
         AttemptedRefreshToken = null;
         AttemptedAccessTokenId = Guid.Empty;

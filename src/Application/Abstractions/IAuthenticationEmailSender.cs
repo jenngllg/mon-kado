@@ -8,6 +8,14 @@ namespace JennGllg.Fr.MonKado.Back.Application.Abstractions;
 /// </summary>
 public interface IAuthenticationEmailSender
 {
+    /// <summary>Notifies the account about a second-factor security operation without any credential material.</summary>
+    /// <param name="message">The security event and delivery metadata.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The provider delivery result.</returns>
+    Task<AuthenticationEmailSendResult> SendTwoFactorSecurityNotificationAsync(
+        TwoFactorSecurityNotification message,
+        CancellationToken cancellationToken);
+
     /// <summary>Notifies the member that an authenticated archive download is available.</summary>
     /// <param name="message">The deadline and account-page notification.</param>
     /// <param name="cancellationToken">The cancellation token.</param>

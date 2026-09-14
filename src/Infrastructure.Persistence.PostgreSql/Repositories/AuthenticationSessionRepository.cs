@@ -82,13 +82,31 @@ public class AuthenticationSessionRepository(MonKadoDbContext context)
     }
 
     /// <inheritdoc />
-    public Task<int> RevokeAllForUserAsync(
+    public async Task<int> RevokeAllForUserAsync(
         Guid userId,
         DateTime revokedAt,
         CancellationToken cancellationToken)
     {
+        // A proved first factor must not survive the security event that revoked existing sessions.
+        await context.TwoFactorChallenges
+            .Where(challenge => challenge.MemberId == userId && challenge.ConsumedAt == null && challenge.InvalidatedAt == null)
+            .ExecuteUpdateAsync(
+                setters => setters
+                    .SetProperty(
+                        challenge => challenge.InvalidatedAt,
+                        revokedAt)
+                    .SetProperty(
+                        challenge => challenge.PendingCredentialId,
+                        (Guid?)null)
+                    .SetProperty(
+                        challenge => challenge.PendingProtectedSecret,
+                        (string?)null)
+                    .SetProperty(
+                        challenge => challenge.ProtectedGoogleContext,
+                        (string?)null),
+                cancellationToken);
 
-        return context.AuthenticationSessions
+        return await context.AuthenticationSessions
             .Where(session =>
                 session.UserId == userId &&
                 session.RevokedAt == null)

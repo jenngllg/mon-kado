@@ -414,6 +414,18 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
             migration => Assert.EndsWith(
                 "_AddImmediateSessionRevocation",
                 migration,
+                StringComparison.Ordinal),
+            migration => Assert.EndsWith(
+                "_AddAdministratorTwoFactor",
+                migration,
+                StringComparison.Ordinal),
+            migration => Assert.EndsWith(
+                "_AddTwoFactorOperationReceipts",
+                migration,
+                StringComparison.Ordinal),
+            migration => Assert.EndsWith(
+                "_AddTwoFactorSecurityNotifications",
+                migration,
                 StringComparison.Ordinal));
         Assert.False(context.Database.HasPendingModelChanges());
         var tables = await GetPublicTablesAsync(
@@ -436,8 +448,11 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
                 "member_account_deletion_requests",
                 "member_data_exports",
                 "member_email_change_requests",
+                "member_two_factors",
                 "role_claims",
                 "roles",
+                "two_factor_challenges",
+                "two_factor_recovery_codes",
                 "user_claims",
                 "user_logins",
                 "user_roles",
@@ -730,6 +745,8 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
                 "refresh_token_hash",
                 "renewed_at",
                 "revoked_at",
+                "two_factor_credential_id",
+                "two_factor_verified_at",
                 "user_id"
             ],
             await GetAuthenticationSessionColumnsAsync(

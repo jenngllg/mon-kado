@@ -14,6 +14,12 @@ public class GoogleAccountLinkResult(
     AccountSessionTokens? tokens,
     Guid? memberId = null)
 {
+    /// <summary>Gets the MFA continuation required before the account association may be committed.</summary>
+    public TwoFactorChallengeResponse? Challenge
+    {
+        get; init;
+    }
+
     /// <summary>
     /// Gets the link outcome.
     /// </summary>

@@ -34,6 +34,42 @@ public class GmailAuthenticationEmailSender(
     private const string HtmlGreeting = "<p>Bonjour,</p>";
     private readonly GmailOptions _gmail = options.Value;
     /// <inheritdoc/>
+    public async Task<AuthenticationEmailSendResult> SendTwoFactorSecurityNotificationAsync(
+        TwoFactorSecurityNotification message,
+        CancellationToken cancellationToken)
+    {
+        var description = message.SecurityEvent switch
+        {
+            TwoFactorSecurityEvent.Enrolled => "L'authentification à deux facteurs de votre compte a été activée.",
+            TwoFactorSecurityEvent.Replaced => "L'application d'authentification de votre compte a été remplacée.",
+            TwoFactorSecurityEvent.RecoveryCodesRegenerated => "Les codes de récupération de votre compte ont été renouvelés.",
+            TwoFactorSecurityEvent.RecoveryCodeUsed => "Un code de récupération a été utilisé pour autoriser le remplacement de votre application d'authentification.",
+            _ => throw new ArgumentOutOfRangeException(nameof(message))
+        };
+        var timestamp = message.CreatedAt.ToString(
+            "yyyy-MM-dd HH:mm 'UTC'",
+            CultureInfo.InvariantCulture);
+        var body = $"{description}\nDate : {timestamp}.\n\n" +
+            "Si vous n'êtes pas à l'origine de cette opération, contactez immédiatement l'assistance MonKado. " +
+            "Ne communiquez jamais vos codes d'authentification ou de récupération.";
+        var result = await SendAsync(
+            message.OutboxMessageId,
+            token => CreateRawMessageAsync(
+                message.OutboxMessageId,
+                message.RecipientAddress,
+                "Sécurité de votre authentification à deux facteurs – MonKado",
+                TextGreeting + body,
+                HtmlDocumentStart + HtmlGreeting + "<p>" + HtmlEncoder.Default.Encode(body) + "</p>" + HtmlDocumentEnd,
+                token),
+            cancellationToken);
+        TwoFactorLogMessages.SecurityNotificationSent(
+            logger,
+            message.OutboxMessageId);
+
+        return result;
+    }
+
+    /// <inheritdoc/>
     public async Task<AuthenticationEmailSendResult> SendPersonalDataExportReadyAsync(
         PersonalDataExportNotification message,
         CancellationToken cancellationToken)
