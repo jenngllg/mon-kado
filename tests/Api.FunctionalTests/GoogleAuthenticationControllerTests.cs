@@ -24,6 +24,76 @@ namespace JennGllg.Fr.MonKado.Back.Api.FunctionalTests;
 
 public class GoogleAuthenticationControllerTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task CompleteAsync_WhenSecondFactorIsRequired_ReturnsPendingContractWithoutChangingRefreshCookie(bool explicitLink)
+    {
+        // Arrange
+        using var factory = new GoogleAuthenticationApiFactory();
+        var challenge = new TwoFactorChallengeResponse
+        {
+            Flow = new string('A', 43),
+            RequiredAction = TwoFactorRequiredAction.Verify,
+            ExpiresAt = factory.TimeProvider.GetUtcNow().UtcDateTime.AddMinutes(5)
+        };
+        factory.GoogleSessionService.TwoFactorChallenge = challenge;
+        factory.GoogleSessionService.CompletionOutcome = GoogleAuthenticationOutcome.TwoFactorRequired;
+        factory.GoogleSessionService.LinkOutcome = GoogleAccountLinkOutcome.TwoFactorRequired;
+        using var client = factory.CreateGoogleClient();
+        client.DefaultRequestHeaders.TryAddWithoutValidation(
+            "Cookie",
+            $"{RefreshCookieName}=existing-browser-refresh");
+        var (state, nonce, codeChallenge) = await StartFlowAsync(
+            client,
+            rememberMe: true,
+            TestContext.Current.CancellationToken);
+        factory.Backchannel.Nonce = nonce;
+        factory.Backchannel.ExpectedCodeChallenge = codeChallenge;
+        using var callback = await PostCallbackAsync(
+            client,
+            state,
+            TestContext.Current.CancellationToken);
+        var csrfToken = await GetAntiforgeryTokenAsync(
+            client,
+            TestContext.Current.CancellationToken);
+
+        // Act
+        using var response = explicitLink
+            ? await PostLinkAsync(
+                client,
+                csrfToken,
+                "current password",
+                GetFlowBinding(callback.Headers.Location),
+                TestContext.Current.CancellationToken)
+            : await PostCompletionAsync(
+                client,
+                callback.Headers.Location,
+                TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.Accepted,
+            response.StatusCode);
+        var json = await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
+        Assert.Equal(
+            ["expiresAt", "flow", "requiredAction"],
+            json.EnumerateObject().Select(property => property.Name).Order());
+        Assert.Equal(
+            challenge.Flow,
+            json.GetProperty("flow").GetString());
+        Assert.Equal(
+            "verify",
+            json.GetProperty("requiredAction").GetString());
+        Assert.True(response.Headers.CacheControl?.NoStore);
+        Assert.DoesNotContain(
+            response.Headers.GetValues("Set-Cookie"),
+            cookie => cookie.StartsWith($"{RefreshCookieName}=", StringComparison.Ordinal));
+        Assert.Contains(
+            response.Headers.GetValues("Set-Cookie"),
+            cookie => cookie.StartsWith($"{ExternalCookieName}=;", StringComparison.Ordinal));
+    }
+
     private const string AntiforgeryCookieName = "MonKado.Antiforgery";
     private const string ExternalCookieName = GoogleAuthenticationConstants.LocalExternalCookieName;
     private const string RefreshCookieName = "MonKado.Refresh";

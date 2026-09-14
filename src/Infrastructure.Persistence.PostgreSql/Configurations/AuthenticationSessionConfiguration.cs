@@ -14,6 +14,9 @@ internal sealed class AuthenticationSessionConfiguration : IEntityTypeConfigurat
             table =>
             {
                 table.HasCheckConstraint(
+                    "ck_authentication_sessions_two_factor_proof_consistent",
+                    "(two_factor_credential_id IS NULL) = (two_factor_verified_at IS NULL)");
+                table.HasCheckConstraint(
                     "ck_authentication_sessions_refresh_token_hash_length",
                     "octet_length(refresh_token_hash) = 32");
                 table.HasCheckConstraint(

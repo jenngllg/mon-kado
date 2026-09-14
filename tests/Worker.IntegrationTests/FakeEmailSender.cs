@@ -14,6 +14,16 @@ internal class FakeEmailSender(
 {
     public ConcurrentQueue<AuthenticationEmailMessage> Messages { get; } = new();
     public ConcurrentQueue<PersonalDataExportNotification> PersonalDataExportNotifications { get; } = new();
+    public ConcurrentQueue<TwoFactorSecurityNotification> TwoFactorNotifications { get; } = new();
+
+    public Task<AuthenticationEmailSendResult> SendTwoFactorSecurityNotificationAsync(
+        TwoFactorSecurityNotification message,
+        CancellationToken cancellationToken)
+    {
+        TwoFactorNotifications.Enqueue(message);
+
+        return CompleteAsync(cancellationToken);
+    }
 
     public async Task<AuthenticationEmailSendResult> SendPersonalDataExportReadyAsync(
         PersonalDataExportNotification message,

@@ -34,7 +34,7 @@ public class LinkGoogleSessionCommandHandlerTests
         // Arrange
         var fixture = TestFixture.Create();
         var context = fixture.Create<GoogleAuthenticationContext>();
-        var expected = fixture.Create<AccountSessionTokens>();
+        var expected = new TwoFactorCompletionResult { Tokens = fixture.Create<AccountSessionTokens>() };
         _contextProviderMock
             .Setup(provider => provider.GetAsync(
                 Flow,

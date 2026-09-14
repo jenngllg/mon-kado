@@ -56,7 +56,7 @@ public interface IAuthenticationSessionRepository
         CancellationToken cancellationToken);
 
     /// <summary>
-    /// Revokes every active refresh session for a member.
+    /// Revokes every active refresh session and pending second-factor proof for a member in the caller's transaction.
     /// </summary>
     /// <param name="userId">The member identifier.</param>
     /// <param name="revokedAt">The revocation date and time.</param>

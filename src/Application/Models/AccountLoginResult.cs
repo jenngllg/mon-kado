@@ -16,5 +16,7 @@ public enum AccountLoginResult
     /// <summary>
     /// Indicates email not confirmed.
     /// </summary>
-    EmailNotConfirmed
+    EmailNotConfirmed,
+    /// <summary>Indicates that the first factor succeeded but a second factor remains mandatory.</summary>
+    TwoFactorRequired
 }

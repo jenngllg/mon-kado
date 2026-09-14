@@ -20,7 +20,7 @@ public class LoginCommand(
     string? email,
     string? password,
     bool rememberMe = false,
-    string? currentRefreshToken = null) : IRequest<AccountSessionTokens>
+    string? currentRefreshToken = null) : IRequest<AccountSessionLoginResult>
 {
     /// <summary>
     /// Gets email.
@@ -51,7 +51,7 @@ public class LoginCommand(
 public class LoginCommandHandler(
     IAccountSessionService sessionService,
     ILogger<LoginCommandHandler> logger)
-    : IRequestHandler<LoginCommand, AccountSessionTokens>
+    : IRequestHandler<LoginCommand, AccountSessionLoginResult>
 {
     /// <summary>
     /// Authenticates an account and creates its session tokens.
@@ -61,7 +61,7 @@ public class LoginCommandHandler(
     /// <returns>The created session tokens.</returns>
     /// <exception cref="EmailNotConfirmedException">The email address is not confirmed.</exception>
     /// <exception cref="InvalidCredentialsException">The credentials are invalid.</exception>
-    public async Task<AccountSessionTokens> Handle(
+    public async Task<AccountSessionLoginResult> Handle(
         LoginCommand request,
         CancellationToken cancellationToken)
     {
@@ -76,13 +76,16 @@ public class LoginCommandHandler(
         if (result.Result == AccountLoginResult.EmailNotConfirmed)
             throw new EmailNotConfirmedException();
 
+        if (result.Result == AccountLoginResult.TwoFactorRequired && result.Challenge is not null)
+            return result;
+
         if (result.Result != AccountLoginResult.Success)
             throw new InvalidCredentialsException();
 
-        var tokens = result.Tokens ?? throw new InvalidOperationException(
-            "A successful login must return session tokens.");
+        if (result.Tokens is null)
+            throw new InvalidOperationException("A successful login must return session tokens.");
         ApplicationLogMessages.PasswordLoginCompleted(logger);
 
-        return tokens;
+        return result;
     }
 }

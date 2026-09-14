@@ -16,6 +16,12 @@ public class GoogleAuthenticationResult(
     Guid? memberId = null,
     GoogleMemberResolution? memberResolution = null)
 {
+    /// <summary>Gets an incomplete MFA sign-in proof without any session tokens.</summary>
+    public TwoFactorChallengeResponse? Challenge
+    {
+        get; init;
+    }
+
     /// <summary>Gets the access token registered in the successful session transaction.</summary>
     public AccessToken? AccessToken
     {
