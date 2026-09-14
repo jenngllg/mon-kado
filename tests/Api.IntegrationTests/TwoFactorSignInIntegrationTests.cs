@@ -23,6 +23,108 @@ public class TwoFactorSignInIntegrationTests(PostgreSqlContainerFixture fixture)
     private const string Password = "A deliberately long test password";
 
     [Theory]
+    [InlineData("deletedCodes")]
+    [InlineData("changedCodes")]
+    [InlineData("expiredSetup")]
+    public async Task ConfirmSetupAsync_WhenResultChangesBeforeCommitRecovery_DoesNotExposeObsoleteMaterial(string scenario)
+    {
+        // Arrange
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await fixture.ResetDatabaseAsync(cancellationToken);
+        var interceptor = new CoordinatedAmbiguousCommitInterceptor();
+        var clock = new MutableTimeProvider(TimeProvider.System.GetUtcNow());
+        await using var factory = new PostgreSqlApiFactory(
+            fixture.Container.GetConnectionString(),
+            clock,
+            configureServices: services => services.AddDbContextPool<MonKadoDbContext>((
+                _,
+                options) => options.AddInterceptors(interceptor)));
+        var email = await CreateAdministratorAsync(
+            factory,
+            cancellationToken);
+        using var client = factory.CreateClient();
+        var challenge = await StartSignInAsync(
+            client,
+            email,
+            cancellationToken);
+        using var setupResponse = await PostAsync(
+            client,
+            "/api/v1/auth/two-factor/setup",
+            new
+            {
+                flow = challenge.Flow
+            },
+            cancellationToken);
+        var setup = await setupResponse.Content.ReadFromJsonAsync<TwoFactorSetupResponse>(cancellationToken);
+        Assert.NotNull(setup);
+        interceptor.Arm();
+
+        // Act
+        var operation = scenario == "expiredSetup"
+            ? PostAsync(
+                client,
+                "/api/v1/auth/two-factor/setup",
+                new
+                {
+                    flow = challenge.Flow
+                },
+                cancellationToken)
+            : PostAsync(
+                client,
+                "/api/v1/auth/two-factor/setup/confirmations",
+                new
+                {
+                    flow = challenge.Flow,
+                    code = TwoFactorTestData.CreateCurrentCode(
+                        setup.ManualKey,
+                        clock)
+                },
+                cancellationToken);
+        await interceptor.WaitForFirstCommitAsync(cancellationToken);
+        try
+        {
+            await using var scope = factory.Services.CreateAsyncScope();
+            var database = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
+
+            if (scenario == "expiredSetup")
+                clock.Advance(TimeSpan.FromMinutes(5));
+            else if (scenario == "deletedCodes")
+                await database.TwoFactorRecoveryCodes.ExecuteDeleteAsync(cancellationToken);
+            else
+            {
+                var code = await database.TwoFactorRecoveryCodes.FirstAsync(cancellationToken);
+                code.CodeHash[0] ^= 1;
+                await database.TwoFactorRecoveryCodes
+                    .Where(candidate => candidate.Id == code.Id)
+                    .ExecuteUpdateAsync(
+                        setters => setters.SetProperty(candidate => candidate.CodeHash, code.CodeHash),
+                        cancellationToken);
+            }
+        }
+        finally
+        {
+            interceptor.ReleaseFailure();
+        }
+        using var response = await operation;
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.ServiceUnavailable,
+            response.StatusCode);
+        Assert.False(response.Headers.Contains("Set-Cookie"));
+        var error = await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken);
+        Assert.Equal(
+            "TECHNICAL_DEPENDENCY_UNAVAILABLE",
+            error.GetProperty("errorCode").GetString());
+        Assert.False(error.TryGetProperty(
+            "recoveryCodes",
+            out _));
+        Assert.False(error.TryGetProperty(
+            "manualKey",
+            out _));
+    }
+
+    [Theory]
     [InlineData("/api/v1/members/current/two-factor/reauthentications")]
     [InlineData("/api/v1/auth/two-factor/recovery-codes/regenerations")]
     public async Task ManageAsync_WhenOnlyValidRefreshCookieIsPresent_RejectsWithoutChangingCredentials(string endpoint)
