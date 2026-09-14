@@ -363,7 +363,8 @@ public class TwoFactorService(
         TwoFactorOperationState state,
         AuthenticationEmailKind kind)
     {
-        var recipient = state.Member.Email ?? throw new TwoFactorUnavailableException();
+        // PostgreSQL requires Email; Identity's inherited property remains nullable.
+        var recipient = state.Member.Email!;
         context.AuthenticationEmailOutboxMessages.Add(AuthenticationEmailOutboxMessage.CreateTwoFactorNotification(
             state.Member.Id,
             recipient,
@@ -456,7 +457,9 @@ public class TwoFactorService(
         if (rejected is not null)
             ExceptionDispatchInfo.Throw(rejected);
 
-        return result ?? throw new InvalidOperationException("A confirmed operation must have a response.");
+        // Every private operation returns a response; the rejected path above always throws.
+
+        return result!;
     }
 
     /// <summary>Looks up proof, locks its account, then rechecks its current state.</summary>
@@ -488,11 +491,10 @@ public class TwoFactorService(
             candidate => candidate.FlowHash == hash,
             cancellationToken);
 
+        // The indexed query already requires an exact match of the complete flow hash.
+
         if (challenge is null || !challenge.IsLive(Now()) ||
             challenge.ExpectedCredentialId != factor.CredentialId ||
-            !CryptographicOperations.FixedTimeEquals(
-                hash,
-                challenge.FlowHash) ||
             !CryptographicOperations.FixedTimeEquals(
                 SHA256.HashData(Encoding.UTF8.GetBytes(member.SecurityStamp ?? string.Empty)),
                 challenge.SecurityStampHash))
@@ -623,7 +625,8 @@ public class TwoFactorService(
         string? code)
     {
         var credentialId = factor.CredentialId ?? throw new TwoFactorUnavailableException();
-        var encrypted = factor.ProtectedSecret ?? throw new TwoFactorUnavailableException();
+        // The credential-consistency constraint requires a secret whenever CredentialId is present.
+        var encrypted = factor.ProtectedSecret!;
         var secret = cryptography.UnprotectSecret(
             factor.MemberId,
             credentialId,

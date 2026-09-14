@@ -123,14 +123,14 @@ if ($coveredLines -ne $lineValues.Count -or $coveredBranches -ne $branchValues.C
     $lineValues |
         Where-Object { $_.Visits -eq 0 } |
         Sort-Object Path, Line |
-        ForEach-Object { Write-Error "Uncovered line: $($_.Path):$($_.Line)" }
+        ForEach-Object { Write-Error "Uncovered line: $($_.Path):$($_.Line)" -ErrorAction Continue }
     $branchValues |
         Where-Object { $_.Visits -eq 0 } |
         Sort-Object Path, Line, BranchPath |
         ForEach-Object {
             Write-Error (
                 "Uncovered branch: $($_.Path):$($_.Line), " +
-                "path $($_.BranchPath), method $($_.Method)")
+                "path $($_.BranchPath), method $($_.Method)") -ErrorAction Continue
         }
 
     throw 'Coverage must remain at 100% for both lines and branches.'

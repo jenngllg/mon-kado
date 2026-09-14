@@ -78,8 +78,10 @@ public class TwoFactorRecoveryCode
         if (ConsumedAt is not null || expiresAt <= now)
             return false;
 
-        if (ReservedUntil > now)
-            return ReservedChallengeId == challengeId;
+        if (ReservedUntil is { } reservedUntil && reservedUntil > now)
+            return Nullable.Equals(
+                ReservedChallengeId,
+                challengeId);
 
         ReservedChallengeId = challengeId;
         ReservedUntil = expiresAt;
@@ -96,7 +98,9 @@ public class TwoFactorRecoveryCode
         DateTime now)
     {
 
-        if (ConsumedAt is not null || ReservedChallengeId != challengeId || ReservedUntil <= now || ReservedUntil is null)
+        if (ConsumedAt is not null || ReservedUntil is not { } reservedUntil || !Nullable.Equals(
+                ReservedChallengeId,
+                challengeId) || reservedUntil <= now)
             return false;
 
         ConsumedAt = now;

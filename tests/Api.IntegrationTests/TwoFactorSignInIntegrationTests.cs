@@ -23,22 +23,121 @@ public class TwoFactorSignInIntegrationTests(PostgreSqlContainerFixture fixture)
     private const string Password = "A deliberately long test password";
 
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ConfirmSetupAsync_WhenReservedRecoveryCodeIsUnavailable_KeepsOriginalAuthenticator(bool deleteCode)
+    {
+        // Arrange
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await fixture.ResetDatabaseAsync(cancellationToken);
+        var clock = new MutableTimeProvider(TimeProvider.System.GetUtcNow());
+        await using var factory = new PostgreSqlApiFactory(
+            fixture.Container.GetConnectionString(),
+            clock);
+        var email = await CreateAdministratorAsync(
+            factory,
+            cancellationToken);
+        using var original = factory.CreateClient();
+        var enrolled = await EnrollAndSignInAsync(
+            original,
+            email,
+            clock,
+            cancellationToken);
+        using var recovering = factory.CreateClient();
+        var challenge = await StartSignInAsync(
+            recovering,
+            email,
+            cancellationToken);
+        using var recovery = await PostAsync(
+            recovering,
+            "/api/v1/auth/two-factor/completions",
+            new
+            {
+                flow = challenge.Flow,
+                recoveryCode = enrolled.Codes.RecoveryCodes.First()
+            },
+            cancellationToken);
+        await ReadChallengeAsync(
+            recovery,
+            cancellationToken);
+        using var setupResponse = await PostAsync(
+            recovering,
+            "/api/v1/auth/two-factor/setup",
+            new
+            {
+                flow = challenge.Flow
+            },
+            cancellationToken);
+        var setup = await setupResponse.Content.ReadFromJsonAsync<TwoFactorSetupResponse>(cancellationToken);
+        Assert.NotNull(setup);
+        await using var scope = factory.Services.CreateAsyncScope();
+        var database = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
+        var originalCredential = await database.MemberTwoFactors
+            .Select(factor => factor.CredentialId)
+            .SingleAsync(cancellationToken);
+        var reserved = await database.TwoFactorRecoveryCodes.SingleAsync(
+            code => code.ReservedChallengeId != null,
+            cancellationToken);
+
+        if (deleteCode)
+            database.TwoFactorRecoveryCodes.Remove(reserved);
+        else
+            Assert.True(reserved.TryConsume(
+                reserved.ReservedChallengeId.GetValueOrDefault(),
+                clock.GetUtcNow().UtcDateTime));
+
+        await database.SaveChangesAsync(cancellationToken);
+
+        // Act
+        using var response = await PostAsync(
+            recovering,
+            "/api/v1/auth/two-factor/setup/confirmations",
+            new
+            {
+                flow = challenge.Flow,
+                code = TwoFactorTestData.CreateCurrentCode(
+                    setup.ManualKey,
+                    clock)
+            },
+            cancellationToken);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.Unauthorized,
+            response.StatusCode);
+        Assert.False(response.Headers.Contains("Set-Cookie"));
+        Assert.Equal(
+            originalCredential,
+            await database.MemberTwoFactors
+                .AsNoTracking()
+                .Select(factor => factor.CredentialId)
+                .SingleAsync(cancellationToken));
+        Assert.False(await database.AuthenticationSessions.AnyAsync(
+            session => session.RevokedAt != null,
+            cancellationToken));
+    }
+
+    [Theory]
     [InlineData("deletedCodes")]
     [InlineData("changedCodes")]
     [InlineData("expiredSetup")]
+    [InlineData("verificationUnavailable")]
     public async Task ConfirmSetupAsync_WhenResultChangesBeforeCommitRecovery_DoesNotExposeObsoleteMaterial(string scenario)
     {
         // Arrange
         var cancellationToken = TestContext.Current.CancellationToken;
         await fixture.ResetDatabaseAsync(cancellationToken);
         var interceptor = new CoordinatedAmbiguousCommitInterceptor();
+        var readFailure = new FailNextDatabaseReadInterceptor();
         var clock = new MutableTimeProvider(TimeProvider.System.GetUtcNow());
         await using var factory = new PostgreSqlApiFactory(
             fixture.Container.GetConnectionString(),
             clock,
             configureServices: services => services.AddDbContextPool<MonKadoDbContext>((
                 _,
-                options) => options.AddInterceptors(interceptor)));
+                options) => options.AddInterceptors(
+                    interceptor,
+                    readFailure)));
         var email = await CreateAdministratorAsync(
             factory,
             cancellationToken);
@@ -88,6 +187,8 @@ public class TwoFactorSignInIntegrationTests(PostgreSqlContainerFixture fixture)
 
             if (scenario == "expiredSetup")
                 clock.Advance(TimeSpan.FromMinutes(5));
+            else if (scenario == "verificationUnavailable")
+                readFailure.Arm();
             else if (scenario == "deletedCodes")
                 await database.TwoFactorRecoveryCodes.ExecuteDeleteAsync(cancellationToken);
             else

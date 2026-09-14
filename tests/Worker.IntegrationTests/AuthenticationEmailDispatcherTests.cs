@@ -28,6 +28,52 @@ namespace JennGllg.Fr.MonKado.Back.Worker.IntegrationTests;
 [Collection(PostgreSqlWorkerTestSuite.Name)]
 public class AuthenticationEmailDispatcherTests(PostgreSqlWorkerFixture fixture) : IDisposable
 {
+    [Fact]
+    public async Task DispatchAsync_WhenTwoFactorNotificationHasNoRecipient_ClosesWithoutSending()
+    {
+        // Arrange
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var sender = new FakeEmailSender();
+        var now = DateTimeOffset.FromUnixTimeSeconds(1800000000);
+        await using var provider = await CreateProviderAsync(
+            sender,
+            now);
+        await CreatePasswordChangedNotificationAsync(
+            provider,
+            now);
+        await using (var setupScope = provider.CreateAsyncScope())
+        {
+            var database = setupScope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
+            // Simulate a damaged historical row; the fixture recreates the schema for each test.
+            await database.Database.ExecuteSqlRawAsync(
+                "ALTER TABLE public.authentication_email_outbox DROP CONSTRAINT ck_authentication_email_outbox_email_change_fields_consistent;",
+                cancellationToken);
+            await database.AuthenticationEmailOutboxMessages.ExecuteUpdateAsync(
+                setters => setters
+                    .SetProperty(
+                        message => message.Kind,
+                        AuthenticationEmailKind.TwoFactorEnrolled)
+                    .SetProperty(
+                        message => message.RecipientEmail,
+                        (string?)null),
+                cancellationToken);
+        }
+
+        // Act
+        await DispatchAsync(provider);
+
+        // Assert
+        Assert.Empty(sender.TwoFactorNotifications);
+        Assert.Empty(sender.PasswordChangedNotifications);
+        await using var assertionScope = provider.CreateAsyncScope();
+        var message = await assertionScope.ServiceProvider
+            .GetRequiredService<MonKadoDbContext>()
+            .AuthenticationEmailOutboxMessages
+            .AsNoTracking()
+            .SingleAsync(cancellationToken);
+        Assert.NotNull(message.ProcessedAt);
+    }
+
     [Theory]
     [InlineData(AuthenticationEmailKind.TwoFactorEnrolled, TwoFactorSecurityEvent.Enrolled)]
     [InlineData(AuthenticationEmailKind.TwoFactorReplaced, TwoFactorSecurityEvent.Replaced)]

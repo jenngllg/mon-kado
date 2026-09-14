@@ -10,6 +10,8 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
+using Npgsql;
+
 namespace JennGllg.Fr.MonKado.Back.Api.IntegrationTests;
 
 [Collection(PostgreSqlApiTestSuite.Name)]
@@ -17,6 +19,66 @@ public class GoogleTwoFactorIntegrationTests(PostgreSqlContainerFixture fixture)
 {
     private const string Password = "An explicit secure test password";
     private const string Subject = "administrator-google-subject";
+
+    [Theory]
+    [InlineData("pk_two_factor_challenges")]
+    [InlineData("ix_two_factor_challenges_google_flow_id")]
+    public async Task CompleteAsync_WhenDeferredProofUniquenessFails_RejectsReplayWithoutIssuingTokens(string constraint)
+    {
+        // Arrange
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await fixture.ResetDatabaseAsync(cancellationToken);
+        var interceptor = new ProfileImageSaveFailureInterceptor();
+        await using var factory = new PostgreSqlApiFactory(
+            fixture.Container.GetConnectionString(),
+            configureServices: services => services.AddDbContextPool<MonKadoDbContext>((
+                _,
+                options) => options.AddInterceptors(interceptor)));
+        var memberId = await ReportedWishlistTestData.CreateAdministratorAsync(
+            factory,
+            cancellationToken);
+        await using var scope = factory.Services.CreateAsyncScope();
+        var database = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
+        var member = await database.Users.SingleAsync(cancellationToken);
+        database.UserLogins.Add(new IdentityUserLogin<Guid>
+        {
+            LoginProvider = ExternalLoginProviders.Google,
+            ProviderKey = Subject,
+            UserId = memberId
+        });
+        await database.SaveChangesAsync(cancellationToken);
+        var service = scope.ServiceProvider.GetRequiredService<IGoogleAccountSessionService>();
+        interceptor.Arm(new DbUpdateException(
+            "A deferred proof already exists.",
+            new PostgresException(
+                "A deferred proof already exists.",
+                "ERROR",
+                "ERROR",
+                PostgresErrorCodes.UniqueViolation,
+                constraintName: constraint)));
+
+        // Act
+        var exception = await Record.ExceptionAsync(() => service.CompleteAsync(
+            new GoogleAuthenticationContext(
+                new GoogleIdentity(
+                    Subject,
+                    member.Email,
+                    true,
+                    null,
+                    "Administrator"),
+                false,
+                "/login/google-return",
+                Guid.CreateVersion7(),
+                memberId,
+                null),
+            cancellationToken));
+
+        // Assert
+        Assert.IsType<GoogleAuthenticationFailedException>(exception);
+        Assert.False(await database.AuthenticationSessions.AnyAsync(cancellationToken));
+        Assert.False(await database.AuthenticationAccessTokens.AnyAsync(cancellationToken));
+        Assert.False(await database.TwoFactorChallenges.AnyAsync(cancellationToken));
+    }
 
     [Theory]
     [InlineData(false)]

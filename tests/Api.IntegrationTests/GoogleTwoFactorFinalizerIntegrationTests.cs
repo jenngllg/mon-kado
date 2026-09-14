@@ -27,6 +27,10 @@ public class GoogleTwoFactorFinalizerIntegrationTests(PostgreSqlContainerFixture
     [InlineData("confirmedWorkspaceAccount")]
     [InlineData("linkedEmailConfirmation")]
     [InlineData("automaticEmailConfirmation")]
+    [InlineData("missingProtectedProof")]
+    [InlineData("missingGoogleFlow")]
+    [InlineData("missingBrowserProof")]
+    [InlineData("sameBrowser")]
     public async Task FinalizeAsync_WhenProtectedProofIsRechecked_EnforcesCurrentBindingAndAssociationRules(string scenario)
     {
         // Arrange
@@ -68,6 +72,7 @@ public class GoogleTwoFactorFinalizerIntegrationTests(PostgreSqlContainerFixture
         }
 
         var flowId = Guid.CreateVersion7();
+        var previousSessionId = Guid.CreateVersion7();
         var cryptography = scope.ServiceProvider.GetRequiredService<ITwoFactorCryptography>();
         var challenge = TwoFactorChallenge.CreateSignIn(
             Guid.CreateVersion7(),
@@ -76,7 +81,7 @@ public class GoogleTwoFactorFinalizerIntegrationTests(PostgreSqlContainerFixture
             null,
             new byte[32],
             false,
-            null,
+            scenario is "missingBrowserProof" or "sameBrowser" ? previousSessionId : null,
             clock.GetUtcNow().UtcDateTime);
         var proof = new GoogleTwoFactorProof(
             new GoogleAuthenticationContext(
@@ -90,17 +95,30 @@ public class GoogleTwoFactorFinalizerIntegrationTests(PostgreSqlContainerFixture
                 "/login/google-return",
                 scenario == "otherFlow" ? Guid.CreateVersion7() : flowId,
                 memberId,
-                scenario == "otherBrowser" ? Guid.CreateVersion7() : null),
+                scenario is "otherBrowser" or "sameBrowser" ? previousSessionId : null),
             scenario is not ("nonAuthoritativeIdentity" or "confirmedWorkspaceAccount" or "automaticEmailConfirmation"));
         var protector = scope.ServiceProvider.GetRequiredService<IGoogleTwoFactorProofProtector>();
-        challenge.BindGoogleProof(
-            flowId,
-            protector.Protect(
-                memberId,
-                challenge.Id,
-                proof));
+
+        if (scenario != "missingProtectedProof")
+            challenge.BindGoogleProof(
+                flowId,
+                protector.Protect(
+                    memberId,
+                    challenge.Id,
+                    proof));
         database.TwoFactorChallenges.Add(challenge);
         await database.SaveChangesAsync(cancellationToken);
+
+        if (scenario == "missingGoogleFlow")
+        {
+            await database.TwoFactorChallenges.ExecuteUpdateAsync(
+                setters => setters.SetProperty(
+                    candidate => candidate.GoogleFlowId,
+                    (Guid?)null),
+                cancellationToken);
+            await database.Entry(challenge).ReloadAsync(cancellationToken);
+        }
+
         var finalizer = scope.ServiceProvider.GetRequiredService<IGoogleTwoFactorFinalizer>();
         await using var transaction = await database.Database.BeginTransactionAsync(cancellationToken);
 
@@ -125,6 +143,10 @@ public class GoogleTwoFactorFinalizerIntegrationTests(PostgreSqlContainerFixture
                     login => login.UserId == memberId && login.ProviderKey == subject,
                     cancellationToken));
         }
+        else if (scenario == "missingProtectedProof")
+            Assert.IsType<TwoFactorUnavailableException>(exception);
+        else if (scenario == "sameBrowser")
+            Assert.Null(exception);
         else if (scenario is "otherSubject" or "subjectAlreadyOwned")
             Assert.IsType<GoogleAccountLinkConflictException>(exception);
         else

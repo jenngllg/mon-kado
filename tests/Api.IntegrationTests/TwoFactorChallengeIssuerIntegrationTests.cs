@@ -12,6 +12,43 @@ namespace JennGllg.Fr.MonKado.Back.Api.IntegrationTests;
 [Collection(PostgreSqlApiTestSuite.Name)]
 public class TwoFactorChallengeIssuerIntegrationTests(PostgreSqlContainerFixture fixture)
 {
+    [Fact]
+    public async Task StageAsync_WhenIdentityStampIsNull_BindsTheEmptyStampWithoutCreatingSession()
+    {
+        // Arrange
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await fixture.ResetDatabaseAsync(cancellationToken);
+        await using var factory = new PostgreSqlApiFactory(fixture.Container.GetConnectionString());
+        var memberId = await ReportedWishlistTestData.CreateAdministratorAsync(
+            factory,
+            cancellationToken);
+        await using var scope = factory.Services.CreateAsyncScope();
+        var database = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
+        var member = await database.Users.SingleAsync(cancellationToken);
+        member.SecurityStamp = null;
+        var issuer = scope.ServiceProvider.GetRequiredService<ITwoFactorChallengeIssuer>();
+
+        // Act
+        var response = await issuer.StageAsync(
+            member,
+            Guid.CreateVersion7(),
+            false,
+            null,
+            cancellationToken);
+        await database.SaveChangesAsync(cancellationToken);
+
+        // Assert
+        Assert.NotNull(response);
+        var challenge = await database.TwoFactorChallenges.SingleAsync(cancellationToken);
+        Assert.Equal(
+            System.Security.Cryptography.SHA256.HashData([]),
+            challenge.SecurityStampHash);
+        Assert.Equal(
+            memberId,
+            challenge.MemberId);
+        Assert.False(await database.AuthenticationSessions.AnyAsync(cancellationToken));
+    }
+
     [Theory]
     [InlineData("valid")]
     [InlineData("missing")]
