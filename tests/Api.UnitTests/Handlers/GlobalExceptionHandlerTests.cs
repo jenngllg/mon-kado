@@ -16,6 +16,50 @@ namespace JennGllg.Fr.MonKado.Back.Api.UnitTests.Handlers;
 
 public class GlobalExceptionHandlerTests
 {
+    [Theory]
+    [InlineData(false, StatusCodes.Status403Forbidden, ErrorCodes.AccountTwoFactorAccessDenied)]
+    [InlineData(true, StatusCodes.Status503ServiceUnavailable, ErrorCodes.TechnicalDependencyUnavailable)]
+    public async Task TryHandleAsync_WhenTwoFactorAccessOrStorageFails_PreservesCookiesAndReturnsSanitizedError(
+        bool unavailable,
+        int status,
+        string errorCode)
+    {
+        // Arrange
+        var logger = new RecordingExceptionLogger<GlobalExceptionHandler>();
+        var handler = new GlobalExceptionHandler(
+            logger,
+            _refreshTokenCookieServiceMock.Object,
+            _googleExternalAuthenticationServiceMock.Object,
+            _guestSessionCookieServiceMock.Object);
+        var context = new DefaultHttpContext();
+        using var body = new MemoryStream();
+        context.Response.Body = body;
+        Exception exception = unavailable ? new TwoFactorUnavailableException() : new TwoFactorAccessDeniedException();
+
+        // Act
+        var handled = await handler.TryHandleAsync(
+            context,
+            exception,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.True(handled);
+        Assert.Equal(
+            status,
+            context.Response.StatusCode);
+        body.Position = 0;
+        using var json = await JsonDocument.ParseAsync(
+            body,
+            cancellationToken: TestContext.Current.CancellationToken);
+        Assert.Equal(
+            errorCode,
+            json.RootElement.GetProperty("errorCode").GetString());
+        Assert.Single(logger.Entries);
+        _refreshTokenCookieServiceMock.VerifyNoOtherCalls();
+        _googleExternalAuthenticationServiceMock.VerifyNoOtherCalls();
+        _guestSessionCookieServiceMock.VerifyNoOtherCalls();
+    }
+
     [Fact]
     public async Task TryHandleAsync_WhenAccessTokenIsInvalid_PreservesTheIndependentRefreshCookie()
     {

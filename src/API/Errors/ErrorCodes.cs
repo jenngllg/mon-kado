@@ -25,6 +25,14 @@ public static class ErrorCodes
     public const string WishImportUrlRejected = "WISH_IMPORT_URL_REJECTED";
     #endregion
     #region Account
+    /// <summary>Identifies an invalid, expired or consumed second-factor proof.</summary>
+    public const string AccountTwoFactorAuthenticationFailed = "ACCOUNT_TWO_FACTOR_AUTHENTICATION_FAILED";
+    /// <summary>Identifies a second-factor grant used for an incompatible operation.</summary>
+    public const string AccountTwoFactorOperationConflict = "ACCOUNT_TWO_FACTOR_OPERATION_CONFLICT";
+    /// <summary>Identifies account-wide second-factor lockout or verification throttling.</summary>
+    public const string AccountTwoFactorRateLimited = "ACCOUNT_TWO_FACTOR_RATE_LIMITED";
+    /// <summary>Identifies missing authority for authenticator management.</summary>
+    public const string AccountTwoFactorAccessDenied = "ACCOUNT_TWO_FACTOR_ACCESS_DENIED";
     /// <summary>Identifies attempts to erase the acting administrator through the administrative path.</summary>
     public const string AccountSelfErasureNotAllowed = "ACCOUNT_SELF_ERASURE_NOT_ALLOWED";
     /// <summary>Identifies forbidden administrative self-session revocation.</summary>

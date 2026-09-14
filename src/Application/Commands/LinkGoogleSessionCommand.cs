@@ -11,7 +11,7 @@ namespace JennGllg.Fr.MonKado.Back.Application.Commands;
 /// <param name="currentPassword">The exact current MonKado password.</param>
 public class LinkGoogleSessionCommand(
     string? flow,
-    string? currentPassword) : IRequest<AccountSessionTokens>
+    string? currentPassword) : IRequest<TwoFactorCompletionResult>
 {
     /// <summary>Gets the browser-flow binding.</summary>
     public string? Flow { get; } = flow;
@@ -24,14 +24,14 @@ public class LinkGoogleSessionCommand(
 /// <param name="sender">The validated application request pipeline.</param>
 public class LinkGoogleSessionCommandHandler(
     IGoogleAuthenticationContextProvider contextProvider,
-    ISender sender) : IRequestHandler<LinkGoogleSessionCommand, AccountSessionTokens>
+    ISender sender) : IRequestHandler<LinkGoogleSessionCommand, TwoFactorCompletionResult>
 {
     /// <summary>Links a server-validated identity after proving the current MonKado password.</summary>
     /// <param name="request">The validated browser submission.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>The created MonKado session tokens.</returns>
+    /// <returns>The confirmed session tokens or the required second-factor challenge.</returns>
     /// <exception cref="GoogleAccountLinkFailedException">The browser proof belongs to another flow.</exception>
-    public async Task<AccountSessionTokens> Handle(
+    public async Task<TwoFactorCompletionResult> Handle(
         LinkGoogleSessionCommand request,
         CancellationToken cancellationToken)
     {

@@ -117,6 +117,8 @@ public class GoogleAuthenticationController(
     /// <exception cref="GoogleAdditionalVerificationRequiredException">Additional identity verification is required.</exception>
     /// <exception cref="GoogleAuthenticationFailedException">The flow cannot be completed safely.</exception>
     [HttpPost("completions")]
+    [StartsTwoFactorChallenge]
+    [NoStoreResponse(StatusCodes.Status202Accepted)]
     [GoogleExternalCookie]
     [NoStoreResponse(StatusCodes.Status200OK)]
     [ValidateAntiForgeryToken]
@@ -124,6 +126,7 @@ public class GoogleAuthenticationController(
     [RequestSizeLimit(MaximumRequestBodySize)]
     [Consumes("application/json")]
     [ProducesResponseType(typeof(AccessTokenResponse), StatusCodes.Status200OK, "application/json")]
+    [ProducesResponseType(typeof(TwoFactorChallengeResponse), StatusCodes.Status202Accepted, "application/json")]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest, "application/json")]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized, "application/json")]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status409Conflict, "application/json")]
@@ -153,6 +156,8 @@ public class GoogleAuthenticationController(
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>The bearer access token and a protected refresh cookie.</returns>
     [HttpPost("link")]
+    [StartsTwoFactorChallenge]
+    [NoStoreResponse(StatusCodes.Status202Accepted)]
     [GoogleExternalCookie]
     [NoStoreResponse(StatusCodes.Status200OK)]
     [ValidateAntiForgeryToken]
@@ -160,6 +165,7 @@ public class GoogleAuthenticationController(
     [RequestSizeLimit(MaximumRequestBodySize)]
     [Consumes("application/json")]
     [ProducesResponseType(typeof(AccessTokenResponse), StatusCodes.Status200OK, "application/json")]
+    [ProducesResponseType(typeof(TwoFactorChallengeResponse), StatusCodes.Status202Accepted, "application/json")]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest, "application/json")]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized, "application/json")]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status409Conflict, "application/json")]
@@ -185,13 +191,25 @@ public class GoogleAuthenticationController(
     }
 
     /// <summary>Publishes only a committed session and clears the completed external cookie.</summary>
-    /// <param name="tokens">The confirmed MonKado session tokens.</param>
+    /// <param name="result">The committed session or second-factor continuation.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>The access-token response.</returns>
     private async Task<ActionResult<AccessTokenResponse>> CreateSessionResponseAsync(
-        AccountSessionTokens tokens,
+        TwoFactorCompletionResult result,
         CancellationToken cancellationToken)
     {
+        Response.Headers.CacheControl = "no-store";
+
+        if (result.Challenge is { } challenge)
+        {
+            await externalAuthenticationService.DeleteAsync(
+                HttpContext,
+                cancellationToken);
+
+            return Accepted(challenge);
+        }
+
+        var tokens = result.Tokens ?? throw new GoogleAuthenticationFailedException();
         refreshTokenCookieService.Append(
             HttpContext,
             tokens);

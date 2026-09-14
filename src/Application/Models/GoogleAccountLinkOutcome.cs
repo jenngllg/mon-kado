@@ -18,5 +18,8 @@ public enum GoogleAccountLinkOutcome
     /// <summary>
     /// Indicates that concurrent account state prevents an unambiguous link.
     /// </summary>
-    Conflict
+    Conflict,
+
+    /// <summary>Indicates that the password was verified but association must wait for MonKado MFA.</summary>
+    TwoFactorRequired
 }

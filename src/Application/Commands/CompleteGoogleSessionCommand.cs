@@ -8,7 +8,7 @@ namespace JennGllg.Fr.MonKado.Back.Application.Commands;
 
 /// <summary>Submits the browser proof to complete a Google sign-in.</summary>
 /// <param name="flow">The opaque browser-flow binding.</param>
-public class CompleteGoogleSessionCommand(string? flow) : IRequest<AccountSessionTokens>
+public class CompleteGoogleSessionCommand(string? flow) : IRequest<TwoFactorCompletionResult>
 {
     /// <summary>Gets the browser-flow binding.</summary>
     public string? Flow { get; } = flow;
@@ -19,16 +19,16 @@ public class CompleteGoogleSessionCommand(string? flow) : IRequest<AccountSessio
 /// <param name="sender">The validated application request pipeline.</param>
 public class CompleteGoogleSessionCommandHandler(
     IGoogleAuthenticationContextProvider contextProvider,
-    ISender sender) : IRequestHandler<CompleteGoogleSessionCommand, AccountSessionTokens>
+    ISender sender) : IRequestHandler<CompleteGoogleSessionCommand, TwoFactorCompletionResult>
 {
     /// <summary>Completes a sign-in using only server-validated identity and session state.</summary>
     /// <param name="request">The validated browser submission.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>The confirmed session tokens.</returns>
+    /// <returns>The confirmed session tokens or the required second-factor challenge.</returns>
     /// <exception cref="GoogleAccountLinkRequiredException">The current password must be proven.</exception>
     /// <exception cref="GoogleAdditionalVerificationRequiredException">Additional identity verification is needed.</exception>
     /// <exception cref="GoogleAuthenticationFailedException">The result does not confirm a complete session.</exception>
-    public async Task<AccountSessionTokens> Handle(
+    public async Task<TwoFactorCompletionResult> Handle(
         CompleteGoogleSessionCommand request,
         CancellationToken cancellationToken)
     {
@@ -51,6 +51,9 @@ public class CompleteGoogleSessionCommandHandler(
         if (result.Outcome == GoogleAuthenticationOutcome.AdditionalVerificationRequired)
             throw new GoogleAdditionalVerificationRequiredException();
 
+        if (result.Outcome == GoogleAuthenticationOutcome.TwoFactorRequired && result.Challenge is { } challenge)
+            return new TwoFactorCompletionResult { Challenge = challenge };
+
         if (result.Outcome != GoogleAuthenticationOutcome.SessionCreated ||
             result.Session is null ||
             result.AccessToken is null ||
@@ -58,10 +61,13 @@ public class CompleteGoogleSessionCommandHandler(
             memberId == Guid.Empty)
             throw new GoogleAuthenticationFailedException();
 
-        return new AccountSessionTokens(
-            result.AccessToken,
-            result.Session.RefreshToken,
-            result.Session.RefreshTokenExpiresAt,
-            result.Session.IsPersistent);
+        return new TwoFactorCompletionResult
+        {
+            Tokens = new AccountSessionTokens(
+                result.AccessToken,
+                result.Session.RefreshToken,
+                result.Session.RefreshTokenExpiresAt,
+                result.Session.IsPersistent)
+        };
     }
 }

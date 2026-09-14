@@ -121,6 +121,13 @@ public static class InfrastructureInjectionConfiguration
         services.AddSingleton<IAccessTokenService, JwtAccessTokenService>();
         services.AddSingleton<IRefreshTokenService, RefreshTokenService>();
         services.AddScoped<IRefreshSessionService, RefreshSessionService>();
+        services.AddScoped<ITwoFactorCryptography, TwoFactorCryptography>();
+        services.AddScoped<ITwoFactorChallengeIssuer, TwoFactorChallengeIssuer>();
+        services.AddScoped<ITwoFactorService, TwoFactorService>();
+        services.AddScoped<IGoogleTwoFactorProofProtector, GoogleTwoFactorProofProtector>();
+        services.AddScoped<IGoogleTwoFactorFinalizer, GoogleAccountSessionService>();
+        services.AddScoped<ITwoFactorRevocationService, TwoFactorRevocationService>();
+        services.TryAddScoped<ITwoFactorCallerProvider, UnauthenticatedTwoFactorCallerProvider>();
         services.AddScoped<IAccountSessionService, AccountSessionService>();
         services.AddScoped<IGoogleAccountSessionService, GoogleAccountSessionService>();
         services.AddScoped<ICurrentSessionService, CurrentSessionService>();

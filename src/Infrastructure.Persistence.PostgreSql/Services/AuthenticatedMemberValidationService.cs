@@ -1,6 +1,7 @@
 using JennGllg.Fr.MonKado.Back.Application.Abstractions;
 using JennGllg.Fr.MonKado.Back.Application.Common.Constants;
 using JennGllg.Fr.MonKado.Back.Application.Common.Exceptions;
+using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Queries;
 
 using Microsoft.EntityFrameworkCore;
 
@@ -23,11 +24,12 @@ public class AuthenticatedMemberValidationService(
         {
             var now = timeProvider.GetUtcNow().UtcDateTime;
             var cutoff = now.AddSeconds(-AccessTokenConstraints.ClockSkewSeconds);
+            var eligibleSessions = AuthenticationSessionQueries.WithValidTwoFactor(context);
             var exists = await context.AuthenticationAccessTokens
                 .AsNoTracking()
                 .AnyAsync(
                 token => token.Id == tokenId && token.ExpiresAt >= cutoff &&
-                    context.AuthenticationSessions.Any(session => session.Id == token.SessionId &&
+                    eligibleSessions.Any(session => session.Id == token.SessionId &&
                         session.UserId == memberId && session.RevokedAt == null && session.ExpiresAt > now) &&
                     context.Users.Any(member => member.Id == memberId),
                 cancellationToken);

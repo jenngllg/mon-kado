@@ -47,12 +47,15 @@ public class AuthSessionsController(
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>A bearer access token when authentication succeeds.</returns>
     [HttpPost]
+    [StartsTwoFactorChallenge]
+    [NoStoreResponse(StatusCodes.Status202Accepted)]
     [ValidateAntiForgeryToken]
     [EnableRateLimiting(AuthenticationRateLimitingExtensions.LoginPolicy)]
     [RefreshTokenCookie(isRequired: false)]
     [RequestSizeLimit(MaximumRequestBodySize)]
     [Consumes("application/json")]
     [ProducesResponseType(typeof(AccessTokenResponse), StatusCodes.Status200OK, "application/json")]
+    [ProducesResponseType(typeof(TwoFactorChallengeResponse), StatusCodes.Status202Accepted, "application/json")]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest, "application/json")]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized, "application/json")]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status413PayloadTooLarge, "application/json")]
@@ -63,13 +66,20 @@ public class AuthSessionsController(
         LoginRequest request,
         CancellationToken cancellationToken)
     {
-        var tokens = await sender.Send(
+        var result = await sender.Send(
             new LoginCommand(
                 request.Email,
                 request.Password,
                 request.RememberMe,
                 refreshTokenCookieService.GetValue(Request)),
             cancellationToken);
+
+        Response.Headers.CacheControl = "no-store";
+
+        if (result.Challenge is { } challenge)
+            return Accepted(challenge);
+
+        var tokens = result.Tokens ?? throw new InvalidOperationException("A completed sign-in requires confirmed tokens.");
 
         refreshTokenCookieService.Append(
             HttpContext,

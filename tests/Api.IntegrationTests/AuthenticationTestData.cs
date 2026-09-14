@@ -1,4 +1,5 @@
 using JennGllg.Fr.MonKado.Back.Application.Abstractions;
+using JennGllg.Fr.MonKado.Back.Application.Models;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Contexts;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Entities;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Options;
@@ -40,7 +41,7 @@ public static class AuthenticationTestData
             cancellationToken))
         {
             var sessionId = Guid.CreateVersion7();
-            database.AuthenticationSessions.Add(AuthenticationSession.Create(
+            var session = AuthenticationSession.Create(
                 sessionId,
                 memberId,
                 new byte[32],
@@ -50,7 +51,14 @@ public static class AuthenticationTestData
                     .UtcDateTime,
                 clock
                     .GetUtcNow()
-                    .UtcDateTime.AddHours(8)));
+                    .UtcDateTime.AddHours(8));
+            await BindCompletedTwoFactorAsync(
+                scope.ServiceProvider,
+                database,
+                session,
+                clock,
+                cancellationToken);
+            database.AuthenticationSessions.Add(session);
             database.AuthenticationAccessTokens.Add(new AuthenticationAccessToken
             {
                 Id = token.Id,
@@ -67,5 +75,60 @@ public static class AuthenticationTestData
             token.Value);
 
         return client;
+    }
+
+    /// <summary>Seeds completed MFA only for business tests that deliberately bypass the real sign-in protocol.</summary>
+    /// <param name="services">The test scope.</param>
+    /// <param name="database">The shared test context.</param>
+    /// <param name="session">The business-test session.</param>
+    /// <param name="clock">The business clock.</param>
+    /// <param name="cancellationToken">The test cancellation token.</param>
+    /// <returns>A task completed when any required MFA proof has been staged.</returns>
+    private static async Task BindCompletedTwoFactorAsync(
+        IServiceProvider services,
+        MonKadoDbContext database,
+        AuthenticationSession session,
+        TimeProvider clock,
+        CancellationToken cancellationToken)
+    {
+        var factor = await database.MemberTwoFactors.SingleOrDefaultAsync(
+            candidate => candidate.MemberId == session.UserId,
+            cancellationToken);
+        var administrator = await services.GetRequiredService<IAdministratorAccessService>().GetAccessAsync(
+            session.UserId,
+            cancellationToken);
+
+        if (factor?.CredentialId is null && administrator != AdministratorAccess.Granted)
+            return;
+
+        if (factor?.CredentialId is null)
+        {
+            var cryptography = services.GetRequiredService<ITwoFactorCryptography>();
+            var credentialId = Guid.CreateVersion7();
+            var secret = cryptography.CreateSecret();
+
+            if (factor is null)
+            {
+                factor = MemberTwoFactor.Create(session.UserId);
+                database.MemberTwoFactors.Add(factor);
+            }
+
+            factor.ConfirmAuthenticator(
+                credentialId,
+                cryptography.ProtectSecret(
+                    session.UserId,
+                    credentialId,
+                    secret),
+                clock.GetUtcNow().ToUnixTimeSeconds() / 30,
+                clock.GetUtcNow().UtcDateTime);
+            var member = await database.Users.SingleAsync(
+                user => user.Id == session.UserId,
+                cancellationToken);
+            member.TwoFactorEnabled = true;
+        }
+
+        session.BindTwoFactor(
+            factor.CredentialId ?? throw new InvalidOperationException("The test authenticator was not initialized."),
+            clock.GetUtcNow().UtcDateTime);
     }
 }
