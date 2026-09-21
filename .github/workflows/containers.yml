@@ -183,15 +183,16 @@ jobs:
           trap '"${compose[@]}" down --volumes --remove-orphans' EXIT
           "${compose[@]}" up -d --no-build
           for attempt in {1..30}; do
-            if curl --insecure --fail --silent https://localhost:18490/readiness >/dev/null; then
+            if docker cp mon-kado-production-ci-caddy-1:/data/caddy/pki/authorities/local/root.crt "$RUNNER_TEMP/production-ci-root.crt" 2>/dev/null \
+              && curl --cacert "$RUNNER_TEMP/production-ci-root.crt" --fail --silent https://localhost:18490/readiness >/dev/null; then
               break
             fi
             test "$attempt" -lt 30
             sleep 2
           done
-          # Only this loopback fixture uses Caddy's untrusted internal CA.
+          # Trust only this fixture's CA; keep hostname and certificate verification enabled.
           for route in liveness readiness openapi/v1.json security/csrf-token; do
-            curl --insecure --fail --silent "https://localhost:18490/$route" >/dev/null
+            curl --cacert "$RUNNER_TEMP/production-ci-root.crt" --fail --silent "https://localhost:18490/$route" >/dev/null
           done
           test "$(docker inspect mon-kado-production-ci-migrations-1 --format '{{.State.ExitCode}}')" = 0
           test "$(docker inspect mon-kado-production-ci-worker-1 --format '{{.State.Running}} {{.RestartCount}}')" = 'true 0'

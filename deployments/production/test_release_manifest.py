@@ -91,10 +91,10 @@ class ManifestTests(unittest.TestCase):
             output = io.StringIO()
             with contextlib.redirect_stdout(output):
                 manifest.main(["release", str(target)])
-            self.assertEqual(output.getvalue(),
-                             f'API_IMAGE={self.value["apiImage"]}\n'
+            self.assertEqual(f'API_IMAGE={self.value["apiImage"]}\n'
                              f'WORKER_IMAGE={self.value["workerImage"]}\n'
-                             f'RELEASE_REVISION={self.value["revision"]}\n')
+                             f'RELEASE_REVISION={self.value["revision"]}\n',
+                             output.getvalue())
             target.write_bytes(b"x" * 65537)
             with self.assertRaises(ValueError):
                 manifest.main(["release", str(target)])
