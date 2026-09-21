@@ -1,4 +1,37 @@
+{
+	servers {
+		strict_sni_host
+	}
+}
+
+# Override the automatic catch-all redirect: unknown HTTP hosts must not
+# control a Location header. Caddy retains its hostname-matched HTTPS redirect.
+:80 {
+    header -Server
+    header Cache-Control "no-store"
+    respond "Unknown host." 404
+}
+
+(api-security-headers) {
+	header {
+		-Server
+		>Strict-Transport-Security "max-age=31536000"
+		>Content-Security-Policy "default-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+		>X-Content-Type-Options "nosniff"
+		>X-Frame-Options "DENY"
+		>Referrer-Policy "no-referrer"
+		>Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		>Cross-Origin-Resource-Policy "same-site"
+	}
+}
+
 {$API_HOST} {
+	import api-security-headers
 	header -Server
 	reverse_proxy api:8080
+	handle_errors {
+		import api-security-headers
+		header Cache-Control "no-store"
+		respond "Upstream service unavailable." {err.status_code}
+	}
 }

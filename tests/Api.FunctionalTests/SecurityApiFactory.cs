@@ -12,7 +12,9 @@ public class SecurityApiFactory(
     string? allowedHosts = "localhost",
     string? dataProtectionKeysPath = null,
     string? knownProxyNetwork = "127.0.0.0/8",
-    IPAddress? remoteIpAddress = null) : WebApplicationFactory<Program>
+    IPAddress? remoteIpAddress = null,
+    int generalPermitLimit = 300,
+    int generalWindowSeconds = 60) : WebApplicationFactory<Program>
 {
     public const string JwtAudience = "MonKado.Frontend";
     public const string JwtIssuer = "MonKado.Api";
@@ -21,6 +23,12 @@ public class SecurityApiFactory(
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment(environment);
+        builder.UseSetting(
+            "GeneralRateLimit:PermitLimit",
+            generalPermitLimit.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        builder.UseSetting(
+            "GeneralRateLimit:WindowSeconds",
+            generalWindowSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture));
         builder.UseSetting(
             "ConnectionStrings:PostgreSql",
             UnavailableConnectionString);

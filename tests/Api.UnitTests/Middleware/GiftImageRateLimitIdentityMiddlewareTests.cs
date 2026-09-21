@@ -50,10 +50,16 @@ public class GiftImageRateLimitIdentityMiddlewareTests
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
+    [InlineData(false, AuthenticationRateLimitingExtensions.GiftImageUploadPolicy)]
+    [InlineData(true, AuthenticationRateLimitingExtensions.GiftImageUploadPolicy)]
+    [InlineData(true, AuthenticationRateLimitingExtensions.ProfileImageUploadPolicy)]
+    [InlineData(true, AuthenticationRateLimitingExtensions.AdministrativeAccountErasurePolicy)]
+    [InlineData(true, AuthenticationRateLimitingExtensions.AdministrativeSessionRevocationPolicy)]
+    [InlineData(true, AuthenticationRateLimitingExtensions.AccountDeletionConfirmationPolicy)]
+    [InlineData(true, AuthenticationRateLimitingExtensions.WishImportPreviewPolicy)]
     public async Task InvokeAsync_WhenUploadPolicyIsPresent_UsesValidatedPrincipal(
-        bool authenticationSucceeds)
+        bool authenticationSucceeds,
+        string policy)
     {
         // Arrange
         var nextWasCalled = false;
@@ -91,7 +97,7 @@ public class GiftImageRateLimitIdentityMiddlewareTests
         context.SetEndpoint(new Endpoint(
             _ => Task.CompletedTask,
             new EndpointMetadataCollection(new EnableRateLimitingAttribute(
-                AuthenticationRateLimitingExtensions.GiftImageUploadPolicy)),
+                policy)),
             "Gift image upload"));
 
         // Act

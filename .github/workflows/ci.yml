@@ -25,6 +25,37 @@ env:
     Host=127.0.0.1;Port=1;Database=mon_kado;Username=mon_kado;Timeout=1;Command Timeout=1;Pooling=false;SSL Mode=Disable
 
 jobs:
+  security_proxy:
+    name: HTTPS and proxy security
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Test real TLS and proxy boundaries without production credentials
+        env:
+          MONKADO_CADDY_TESTS: "1"
+        run: |
+          python3 tests/Deployment.SecurityTests/test_caddy.py
+          python3 tests/Deployment.SecurityTests/test_build_context.py
+          python3 tests/Deployment.SecurityTests/test_secret_replacement.py
+      - name: Cover the read-only production probe without external calls
+        env:
+          PYTHONPATH: src/Operations.Security
+          COVERAGE_RCFILE: src/Operations.Security/.coveragerc
+        run: |
+          python3 -m pip install --only-binary :all: 'coverage==7.10.7'
+          python3 -m coverage run --branch --source=security_probe -m unittest discover -s tests/Deployment.SecurityTests -p test_security_probe.py
+          python3 -m coverage report --fail-under=100
+          python3 -m coverage xml -o TestResults/security-coverage.xml
+      - name: Upload security probe coverage
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: security-coverage
+          path: TestResults/security-coverage.xml
+          if-no-files-found: error
+          retention-days: 3
   deployment_configuration:
     name: Deployment configuration
     runs-on: ubuntu-latest
@@ -106,7 +137,7 @@ jobs:
 
   quality:
     name: quality
-    needs: [windows_export_coverage, deployment_configuration]
+    needs: [windows_export_coverage, deployment_configuration, security_proxy]
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -156,7 +187,7 @@ jobs:
           /d:sonar.token="$SONAR_TOKEN"
           /d:sonar.host.url="https://sonarcloud.io"
           /d:sonar.cs.opencover.reportsPaths="**/coverage.opencover.xml"
-          /d:sonar.python.coverage.reportPaths="TestResults/deployment-coverage.xml"
+          /d:sonar.python.coverage.reportPaths="TestResults/deployment-coverage.xml,TestResults/security-coverage.xml"
           /d:sonar.test.inclusions="tests/**,deployments/production/test_*.py,deployments/production/verify_compose.py"
           /d:sonar.exclusions="src/**/Migrations/**"
           /d:sonar.qualitygate.wait=true
@@ -196,11 +227,17 @@ jobs:
           name: deployment-coverage
           path: TestResults
 
+      - name: Download security probe coverage for Sonar
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: security-coverage
+          path: TestResults
+
       - name: Verify coverage reports
         shell: pwsh
         run: >-
           ./scripts/Verify-Coverage.ps1
-          -ResultsDirectory TestResults
+            -ResultsDirectory TestResults
 
       - name: Upload coverage diagnostics
         if: failure()

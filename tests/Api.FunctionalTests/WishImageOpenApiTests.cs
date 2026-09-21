@@ -140,6 +140,7 @@ public class WishImageOpenApiTests
             operation,
             "200",
             "404",
+            "429",
             "500",
             "503");
         var success = operation.GetProperty("responses").GetProperty("200");

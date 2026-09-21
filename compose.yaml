@@ -81,6 +81,8 @@ services:
       GoogleAuthentication__FrontendOrigin: ${FRONTEND_ORIGIN:?Set FRONTEND_ORIGIN in .env}
       ReverseProxy__KnownNetworks__0: ${EDGE_NETWORK_CIDR:-172.30.0.0/24}
       ASPNETCORE_HTTP_PORTS: "8080"
+      GeneralRateLimit__PermitLimit: ${GENERAL_RATE_LIMIT_PERMIT_LIMIT:-300}
+      GeneralRateLimit__WindowSeconds: ${GENERAL_RATE_LIMIT_WINDOW_SECONDS:-60}
       AllowedHosts: ${API_ALLOWED_HOST:?Set API_ALLOWED_HOST in .env}
       WebSecurity__AllowedOrigins__0: ${FRONTEND_ORIGIN:?Set FRONTEND_ORIGIN in .env}
       WishlistSharing__FrontendOrigin: ${FRONTEND_ORIGIN:?Set FRONTEND_ORIGIN in .env}

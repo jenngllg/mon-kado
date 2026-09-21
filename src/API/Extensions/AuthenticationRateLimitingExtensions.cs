@@ -1,6 +1,4 @@
 using JennGllg.Fr.MonKado.Back.Api.Attributes;
-using JennGllg.Fr.MonKado.Back.Api.Errors;
-using JennGllg.Fr.MonKado.Back.Api.Logging;
 
 using System.Globalization;
 using System.IdentityModel.Tokens.Jwt;
@@ -299,34 +297,9 @@ public static class AuthenticationRateLimitingExtensions
                     rejectionContext,
                     cancellationToken) =>
                 {
-                    var context = rejectionContext.HttpContext;
-                    var retryAfter = _window;
-
-                    if (rejectionContext.Lease.TryGetMetadata(
-                        MetadataName.RetryAfter,
-                        out var metadata))
-                        retryAfter = metadata;
-                    context.Response.Headers.RetryAfter = Math
-                        .Max(
-                        1,
-                        (int)Math.Ceiling(retryAfter.TotalSeconds))
-                        .ToString(CultureInfo.InvariantCulture);
-                    context.Response.Headers.CacheControl = "no-store";
-                    var errorResponse = new ErrorResponse(
-                        StatusCodes.Status429TooManyRequests,
-                        "Rate limit exceeded",
-                        "Too many requests. Retry later.",
-                        ErrorCodes.RequestRateLimitExceeded,
-                        null);
-                    var loggerFactory = context.RequestServices.GetRequiredService<ILoggerFactory>();
-                    var logger = loggerFactory.CreateLogger(typeof(AuthenticationRateLimitingExtensions));
-                    ApiLogMessages.ExpectedHttpError(
-                        logger,
-                        errorResponse.StatusCode,
-                        ErrorCodes.RequestRateLimitExceeded);
-                    context.Response.StatusCode = errorResponse.StatusCode;
-                    await context.Response.WriteAsJsonAsync(
-                        errorResponse,
+                    await RateLimitResponseExtensions.WriteRejectionAsync(
+                        rejectionContext.HttpContext,
+                        rejectionContext.Lease,
                         cancellationToken);
                 };
             });
