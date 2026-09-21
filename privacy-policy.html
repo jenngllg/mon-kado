@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <meta name="description" content="Utilisation des données et de l’autorisation Google Drive par MonKado Backups.">
+  <title>Confidentialité — MonKado Backups</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <a class="skip" href="#contenu">Aller au contenu</a>
+  <header><span class="label">OUTIL D’ADMINISTRATION PRIVÉ</span><p class="brand">MonKado Backups</p>
+    <nav aria-label="Navigation principale"><a href="./">Présentation</a><a href="privacy-policy.html" aria-current="page">Confidentialité</a></nav>
+  </header>
+  <main id="contenu">
+    <h1>Politique de confidentialité de MonKado Backups</h1>
+    <p class="intro">Cette politique décrit uniquement l’outil privé de sauvegarde MonKado Backups et ses pages d’information. Elle ne remplace pas la politique générale de l’application MonKado.</p>
+    <section><h2>Finalité et compte autorisé</h2>
+      <p>L’outil est administré pour sauvegarder et restaurer le backend MonKado en cas d’incident. Le compte Google Drive utilisé est <a href="mailto:monkado.app@gmail.com">monkado.app@gmail.com</a>. Il ne s’agit pas d’un service de sauvegarde proposé au public et aucun accès au Drive personnel des utilisateurs de MonKado n’est demandé.</p>
+    </section>
+    <section><h2>Données Google utilisées</h2>
+      <p>L’autorisation OAuth distincte est limitée à <code>https://www.googleapis.com/auth/drive.file</code>. Elle permet d’accéder aux fichiers créés par l’outil ou explicitement rendus accessibles à cette application, sans donner un accès général au Drive.</p>
+      <p>MonKado Backups utilise les fichiers du dépôt chiffré et leurs métadonnées techniques pour les transferts, contrôles d’intégrité, restaurations et opérations de conservation. Il consulte aussi les informations de quota disponibles pour éviter de saturer le stockage. L’outil n’utilise pas cet accès pour explorer des documents personnels, lire des e-mails ou collecter des contacts.</p>
+      <p>Les jetons OAuth permettent de renouveler l’accès autorisé sans intervention quotidienne. Ils sont conservés dans une configuration privée accessible à l’administration du serveur, et non dans le dépôt de code ou sur ces pages publiques.</p>
+    </section>
+    <section><h2>Contenu des sauvegardes et protection</h2>
+      <p>Les sauvegardes proviennent du backend MonKado, et non d’une collecte de documents Google. Elles peuvent contenir les données de comptes et de profils, listes et cadeaux, participations, réservations, signalements et historiques encore présents en base, ainsi que les images, clés techniques et paramètres nécessaires à la reconstruction.</p>
+      <p>Une capture locale temporaire est préparée dans un répertoire réservé à l’administration du serveur. Restic chiffre son contenu avant envoi. Le secret de déchiffrement est conservé séparément sur le serveur et dans Bitwarden ; il n’est pas inclus dans la sauvegarde qu’il protège.</p>
+      <p>Les archives temporaires d’export de données personnelles, les journaux applicatifs, caches et fichiers temporaires sont exclus du périmètre de capture. Le chiffrement ne supprime pas les risques liés à la compromission simultanée du serveur, du secret et de l’accès Drive.</p>
+    </section>
+    <section><h2>Destinataires et prestataires</h2>
+      <p>L’accès opérationnel est réservé à l’administration autorisée de MonKado. DigitalOcean héberge le serveur et les captures locales ; Google Drive héberge le dépôt chiffré ; Bitwarden conserve la copie de secours du secret. Des copies de restauration peuvent être téléchargées sur un poste contrôlé par l’administration pour les exercices de récupération.</p>
+      <p>Les données obtenues par l’accès Google ne sont ni vendues, ni utilisées pour la publicité, le profilage commercial ou l’entraînement de modèles d’intelligence artificielle. Aucun accès public aux sauvegardes n’est fourni par ce site.</p>
+      <p>Les prestataires peuvent traiter leurs propres métadonnées de fonctionnement et de sécurité selon leurs politiques. Cette page ne garantit pas que tous ces traitements sont limités à un pays donné.</p>
+    </section>
+    <section><h2>Conservation et suppression</h2>
+      <p>La conservation configurée est de 14 jours. Les points plus anciens sont supprimés après validation d’une nouvelle sauvegarde distante ; le dernier point vérifié est préservé en cas d’échec, même au-delà de cette durée. La capture locale en attente est gardée en cas de transfert échoué jusqu’à son transfert ou son remplacement par une capture validée.</p>
+      <p>La suppression d’une donnée dans MonKado ne la retire pas immédiatement des sauvegardes existantes. Elle disparaît au fil de leur rotation. Avant une remise en production après restauration, les suppressions intervenues depuis le point choisi doivent être examinées afin d’éviter de rétablir des données effacées.</p>
+      <p>L’autorisation peut être retirée dans les <a href="https://myaccount.google.com/connections">connexions du compte Google</a>. Cela bloque les accès ultérieurs mais ne supprime pas automatiquement les fichiers déjà stockés. La suppression du dépôt, de ses copies et des identifiants conservés doit être effectuée séparément par l’administration.</p>
+    </section>
+    <section><h2>Visite de ces pages</h2>
+      <p>Ce site statique ne contient ni formulaire, ni publicité, ni outil de mesure d’audience, ni script de suivi ajouté par MonKado Backups. Il est hébergé sur GitHub Pages. GitHub peut traiter les informations techniques des requêtes, notamment l’adresse IP, pour fournir et sécuriser l’hébergement, conformément à sa <a href="https://docs.github.com/fr/site-policy/privacy-policies/github-general-privacy-statement">politique de confidentialité</a>.</p>
+    </section>
+    <section><h2>Questions et demandes relatives aux données</h2>
+      <p>Contactez <a href="mailto:monkado.app@gmail.com">monkado.app@gmail.com</a> pour toute question ou demande concernant l’accès, la rectification ou l’effacement de vos données, ainsi que les autres droits applicables à votre situation. N’envoyez pas de mot de passe, de jeton ni de secret de sauvegarde. Une vérification proportionnée de la demande peut être nécessaire.</p>
+    </section>
+  </main>
+  <footer><p>Dernière mise à jour : <time datetime="2026-09-21">21 septembre 2026</time>.</p><p><a href="./">Retour à la présentation de MonKado Backups</a></p></footer>
+</body>
+</html>

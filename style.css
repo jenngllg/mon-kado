@@ -1,0 +1,18 @@
+:root { color-scheme: light; font-family: system-ui, sans-serif; color: #202d3e; background: #f6f8fb; line-height: 1.7; }
+* { box-sizing: border-box; }
+body { margin: 0 auto; max-width: 850px; padding: 2rem 1.4rem; }
+header { border-bottom: 1px solid #cad4e2; padding-bottom: 1.4rem; }
+.label { color: #465879; font-size: .75rem; font-weight: 700; letter-spacing: .1em; }
+.brand { font-size: 1.5rem; font-weight: 750; margin: .3rem 0 .7rem; }
+nav { display: flex; flex-wrap: wrap; gap: .7rem 1.5rem; }
+a { color: #254aa0; text-underline-offset: .2em; overflow-wrap: anywhere; }
+a:hover { color: #11255b; }
+a:focus-visible { outline: 3px solid #a34800; outline-offset: 4px; }
+h1 { font-size: clamp(1.9rem, 5vw, 2.7rem); line-height: 1.2; letter-spacing: -.025em; margin-top: 2.2rem; }
+h2 { font-size: 1.3rem; line-height: 1.35; margin-top: 2rem; }
+.intro { font-size: 1.12rem; }
+.notice { border-left: 4px solid #5676b4; padding: .8rem 1rem; background: #e9eff9; }
+code { overflow-wrap: anywhere; font-size: .9em; }
+footer { border-top: 1px solid #cad4e2; margin-top: 2.3rem; padding-top: 1rem; font-size: .9rem; color: #48566b; }
+.skip { position: absolute; top: -10rem; background: white; padding: .7rem; }
+.skip:focus { top: .5rem; }

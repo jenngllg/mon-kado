@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <meta name="description" content="MonKado Backups : outil privé de sauvegarde chiffrée et de restauration du backend MonKado.">
+  <title>MonKado Backups — Présentation</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <a class="skip" href="#contenu">Aller au contenu</a>
+  <header><span class="label">OUTIL D’ADMINISTRATION PRIVÉ</span><p class="brand">MonKado Backups</p>
+    <nav aria-label="Navigation principale"><a href="./" aria-current="page">Présentation</a><a href="privacy-policy.html">Confidentialité</a></nav>
+  </header>
+  <main id="contenu">
+    <h1>Des sauvegardes chiffrées pour pouvoir restaurer MonKado.</h1>
+    <p class="intro">MonKado Backups est un outil technique réservé à l’administration de MonKado. Il utilise Restic et rclone pour déposer et retrouver des sauvegardes chiffrées dans un compte Google Drive dédié.</p>
+    <section><h2>À quoi sert l’accès Google Drive ?</h2>
+      <p>L’autorisation est accordée par l’administratrice du compte dédié. Elle permet de créer, lire, mettre à jour et supprimer les fichiers du dépôt de sauvegarde accessibles à l’outil avec la permission <code>drive.file</code>. Elle sert également à contrôler l’espace disponible.</p>
+      <p>L’outil ne demande pas d’accès général à tous les fichiers du Drive, aux messages Gmail ni aux contacts. Les utilisateurs de MonKado n’ont pas à connecter leur propre Drive.</p>
+    </section>
+    <section><h2>Ce qui est sauvegardé</h2>
+      <p>Le périmètre comprend une copie logique de la base de données du backend, les images de cadeaux et de profils, les clés Data Protection et la configuration nécessaire à une restauration. Le contenu est chiffré localement par Restic avant son transfert vers Google Drive.</p>
+      <p>La configuration prévue est une sauvegarde quotidienne à 03 h, heure de Paris, avec une conservation de 14 jours. La suppression des anciens points dépend de la réussite et de la vérification d’une nouvelle sauvegarde ; une panne peut prolonger leur conservation.</p>
+      <p class="notice">Le dispositif est en cours de configuration et de validation. Cette page ne constitue pas une attestation de sauvegardes actives ni une garantie de récupération.</p>
+    </section>
+    <section><h2>Un site d’information, pas un accès aux sauvegardes</h2>
+      <p>Ces pages ne proposent ni connexion, ni téléchargement d’archive, ni accès aux données de MonKado. Aucun secret, jeton OAuth ou fichier de sauvegarde n’y est publié.</p>
+      <p>Consultez la <a href="privacy-policy.html">politique de confidentialité de MonKado Backups</a> pour comprendre l’utilisation de l’autorisation Google et les limites de conservation.</p>
+    </section>
+    <section><h2>Contact</h2><p>Pour une question sur cet outil : <a href="mailto:monkado.app@gmail.com">monkado.app@gmail.com</a>.</p></section>
+  </main>
+  <footer><p>Dernière mise à jour : <time datetime="2026-09-21">21 septembre 2026</time>.</p><p>Cette présentation concerne l’outil de sauvegarde, pas les conditions générales du service MonKado.</p></footer>
+</body>
+</html>
