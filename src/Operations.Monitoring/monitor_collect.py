@@ -125,7 +125,7 @@ class Collector:
         try:
             raw = self.cgroup.read_text(encoding="ascii")
             require(len(raw) <= 4096)
-            oom = int(dict(line.split() for line in raw.splitlines())["oom_kill"])
+            oom = int({key: value for key, value in (line.split() for line in raw.splitlines())}["oom_kill"])
             require(oom >= 0)
             result["newHostOom"] = previous.get("oomKills") is not None and oom > previous["oomKills"]
         except (OSError, ValueError, KeyError):

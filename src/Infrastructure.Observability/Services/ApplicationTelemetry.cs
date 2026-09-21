@@ -11,7 +11,8 @@ using System.Diagnostics.Metrics;
 namespace JennGllg.Fr.MonKado.Back.Infrastructure.Observability.Services;
 
 /// <summary>Collects bounded native metrics and consistent snapshots for one process lifetime.</summary>
-public class ApplicationTelemetry : IApplicationTelemetry, ITelemetrySnapshotSource, IDisposable
+/// <remarks>Inheritance is prohibited so disposal cannot omit the owned native meter.</remarks>
+public sealed class ApplicationTelemetry : IApplicationTelemetry, ITelemetrySnapshotSource, IDisposable
 {
     private static readonly double[] _bucketBounds =
     [

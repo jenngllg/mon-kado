@@ -47,6 +47,16 @@ class GmailTests(unittest.TestCase):
             with self.subTest(invalid=invalid), self.assertRaisesRegex(ValueError, "^INVALID_MONITORING_DATA$"):
                 gmail.credentials(invalid)
 
+    def test_recipient_validation_handles_subdomains_and_rejects_ambiguous_labels(self):
+        # Arrange / Act / Assert
+        for recipient in ("operator+alerts@example.test", "operator@alerts.example.test"):
+            with self.subTest(recipient=recipient):
+                self.assertEqual(recipient, gmail.credentials(credentials() | {"recipient": recipient})["recipient"])
+        for recipient in ("operator@example..test", "operator@.example.test", "operator@example.test.",
+                          "operator@" + "a" * 4000, "operator@" + "a." * 1900):
+            with self.subTest(recipient=recipient), self.assertRaisesRegex(ValueError, "^INVALID_MONITORING_DATA$"):
+                gmail.credentials(credentials() | {"recipient": recipient})
+
     def test_ambiguous_send_is_not_retried_or_acknowledged(self):
         # Arrange
         calls = []

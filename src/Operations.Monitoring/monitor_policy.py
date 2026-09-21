@@ -80,21 +80,26 @@ def validate_snapshot(value, service):
     require(isinstance(jobs, dict) and set(jobs) <= set(OPERATIONS))
     require(set(jobs) == (set(OPERATIONS) if service == "worker" else set()))
     for job in jobs.values():
-        require(isinstance(job, dict) and job.get("state") in ("running", "waiting", "disabled"))
-        require(set(job) <= {"state", "consecutiveFailures", "startedAt", "nextExpectedAt", "lastCompletedAt",
-                            "successes", "failures", "terminalFailures", "lastDurationMilliseconds"})
-        require(type(job.get("consecutiveFailures")) is int and job["consecutiveFailures"] >= 0)
-        for key in ("successes", "failures", "terminalFailures"):
-            if key in job:
-                require(type(job[key]) is int and job[key] >= 0)
-        if "lastDurationMilliseconds" in job:
-            require(finite_number(job["lastDurationMilliseconds"]))
-        for key in ("startedAt", "nextExpectedAt", "lastCompletedAt"):
-            if job.get(key) is not None:
-                timestamp(job[key])
-        require(job["state"] != "running" or job.get("startedAt") is not None)
-        require(job["state"] != "waiting" or job.get("nextExpectedAt") is not None)
+        validate_job(job)
     return value
+
+
+def validate_job(job):
+    """Validate one worker operation independently of the enclosing snapshot."""
+    require(isinstance(job, dict) and job.get("state") in ("running", "waiting", "disabled"))
+    require(set(job) <= {"state", "consecutiveFailures", "startedAt", "nextExpectedAt", "lastCompletedAt",
+                        "successes", "failures", "terminalFailures", "lastDurationMilliseconds"})
+    require(type(job.get("consecutiveFailures")) is int and job["consecutiveFailures"] >= 0)
+    for key in ("successes", "failures", "terminalFailures"):
+        if key in job:
+            require(type(job[key]) is int and job[key] >= 0)
+    if "lastDurationMilliseconds" in job:
+        require(finite_number(job["lastDurationMilliseconds"]))
+    for key in ("startedAt", "nextExpectedAt", "lastCompletedAt"):
+        if job.get(key) is not None:
+            timestamp(job[key])
+    require(job["state"] != "running" or job.get("startedAt") is not None)
+    require(job["state"] != "waiting" or job.get("nextExpectedAt") is not None)
 
 
 def counter_window(history, current, now, seconds):
@@ -127,9 +132,29 @@ def evaluate(observation, history, now, options):
     suppressed, overdue = maintenance(observation, now, options)
     frontend_suppressed, frontend_overdue = maintenance({"maintenance": observation.get("frontendMaintenance", [])}, now, options)
     decisions = {"maintenance.overdue": overdue or frontend_overdue}
+    decisions.update(availability_decisions(observation, suppressed, frontend_suppressed))
+    decisions.update(container_decisions(observation, options, suppressed))
+    decisions.update(snapshot_decisions(observation, history, now, options, suppressed))
+    decisions.update(http_decisions(observation["snapshots"].get("api"), history, now, options, suppressed))
+    decisions.update(backup_decisions(observation.get("backup"), now, options))
+    for host, expiry in observation["certificates"].items():
+        require(host in ("api", "frontend"))
+        decisions[host + ".certificate"] = None if expiry is None else timestamp(expiry) - now < timedelta(days=options["certificateDays"])
+    return decisions
+
+
+def availability_decisions(observation, suppressed, frontend_suppressed):
+    """Apply frontend maintenance only to its own availability probe."""
+    decisions = {}
     for name in ("api", "database", "frontend"):
         if name != "frontend" or observation["frontendEnabled"]:
             decisions[name + ".unavailable"] = None if suppressed or name == "frontend" and frontend_suppressed else observation["checks"].get(name)
+    return decisions
+
+
+def container_decisions(observation, options, suppressed):
+    """Never suppress resource incidents during an application maintenance window."""
+    decisions = {}
     for name in SERVICES:
         container = observation["containers"].get(name)
         decisions[name + ".stopped"] = None if suppressed or container is None else not container["running"]
@@ -137,24 +162,47 @@ def evaluate(observation, history, now, options):
         decisions[name + ".restarts"] = None if container is None else container["recentRestarts"] >= options["restartCount"]
     decisions["host.oom"] = observation.get("newHostOom")
     decisions["monitor.collection"] = any(value is None for value in observation["containers"].values()) or observation.get("newHostOom") is None
+    return decisions
+
+
+def snapshot_decisions(observation, history, now, options, suppressed):
+    """Separate freshness from the result of actual worker cycles."""
+    decisions = {}
     for service in ("api", "worker"):
         snapshot = observation["snapshots"].get(service)
         fresh = snapshot is not None and age(snapshot["createdAt"], now) <= options["snapshotSeconds"]
         decisions[service + ".telemetry"] = None if suppressed else not fresh
         if service == "worker" and fresh:
-            previous = [entry for entry in history if entry["service"] == "worker" and entry["bootId"] == snapshot["bootId"]]
-            baseline = max(previous, key=lambda entry: timestamp(entry["createdAt"]), default=None)
-            for name, job in snapshot["jobs"].items():
-                bad = job["consecutiveFailures"] >= options["workerFailures"]
-                if job["state"] == "running":
-                    bad = bad or age(job["startedAt"], now) > options["workerRunningSeconds"]
-                if job["state"] == "waiting":
-                    bad = bad or now > timestamp(job["nextExpectedAt"]) + timedelta(seconds=options["workerLateSeconds"])
-                decisions["worker." + name] = None if suppressed else bad and job["state"] != "disabled"
-                previous_failures = baseline["jobs"][name].get("terminalFailures", 0) if baseline is not None else 0
-                decisions["worker." + name + ".terminal"] = job.get("terminalFailures", 0) > previous_failures
-    decisions.update(http_decisions(observation["snapshots"].get("api"), history, now, options, suppressed))
-    backup = observation.get("backup")
+            decisions.update(worker_decisions(snapshot, history, now, options, suppressed))
+    return decisions
+
+
+def worker_decisions(snapshot, history, now, options, suppressed):
+    """Compare terminal failures only with the same worker process lifetime."""
+    previous = [entry for entry in history if entry["service"] == "worker" and entry["bootId"] == snapshot["bootId"]]
+    baseline = max(previous, key=lambda entry: timestamp(entry["createdAt"]), default=None)
+    decisions = {}
+    for name, job in snapshot["jobs"].items():
+        bad = job_failed(job, now, options)
+        decisions["worker." + name] = None if suppressed else bad
+        previous_failures = baseline["jobs"][name].get("terminalFailures", 0) if baseline is not None else 0
+        decisions["worker." + name + ".terminal"] = job.get("terminalFailures", 0) > previous_failures
+    return decisions
+
+
+def job_failed(job, now, options):
+    """Evaluate a cycle's failure streak or overdue progress without conflating disabled jobs."""
+    bad = job["consecutiveFailures"] >= options["workerFailures"]
+    if job["state"] == "running":
+        bad = bad or age(job["startedAt"], now) > options["workerRunningSeconds"]
+    if job["state"] == "waiting":
+        bad = bad or now > timestamp(job["nextExpectedAt"]) + timedelta(seconds=options["workerLateSeconds"])
+    return bad and job["state"] != "disabled"
+
+
+def backup_decisions(backup, now, options):
+    """Use capture age, not transfer age, to assess the retained recovery point."""
+    decisions = {}
     decisions["backup.unavailable"] = backup is None
     if backup is not None:
         captured = backup.get("lastRemoteCapture")
@@ -163,9 +211,6 @@ def evaluate(observation, history, now, options):
         decisions["backup.integrity"] = checked is None or age(checked, now) > options["integrityHours"] * 3600
         decisions["backup.failed"] = bool(backup.get("terminalFailure"))
         decisions["backup.missed"] = bool(backup.get("missedScheduledCapture"))
-    for host, expiry in observation["certificates"].items():
-        require(host in ("api", "frontend"))
-        decisions[host + ".certificate"] = None if expiry is None else timestamp(expiry) - now < timedelta(days=options["certificateDays"])
     return decisions
 
 
@@ -193,30 +238,41 @@ def transition(previous, decisions, now, options):
     """Debounce durable incidents and preserve open incidents while evidence is unavailable."""
     result = {}
     for key in sorted(set(previous) | set(decisions)):
-        decision = decisions.get(key)
-        incident = dict(previous.get(key, {"open": False, "badSamples": 0, "goodSamples": 0, "generation": 0}))
-        if decision is None:
-            # Missing evidence interrupts consecutive samples, but cannot close an incident.
-            incident.update(badSamples=0, goodSamples=0)
-        if decision is None and not incident["open"]:
-            result[key] = incident
-            continue
-        require(decision is None or type(decision) is bool)
-        if decision is not None:
-            incident["badSamples"] = min(options["failureSamples"], incident["badSamples"] + 1) if decision else 0
-            incident["goodSamples"] = 0 if decision else min(options["recoverySamples"], incident["goodSamples"] + 1)
-        immediate = not (key.endswith(".stopped") or key in {"api.unavailable", "database.unavailable", "frontend.unavailable"})
-        opening = decision is True and not incident["open"] and (immediate or incident["badSamples"] >= options["failureSamples"])
-        closing = decision is False and incident["open"] and incident["goodSamples"] >= options["recoverySamples"]
-        if opening or closing:
-            incident.update(open=opening, changedAt=now.isoformat(), generation=incident["generation"] + 1,
-                            pending=True, attempts=0, nextAttemptAt=now.isoformat())
-        elif incident["open"] and not incident.get("pending", False):
-            last = incident.get("lastAttemptAt", incident["changedAt"])
-            if age(last, now) >= options["reminderSeconds"]:
-                incident.update(pending=True, attempts=0, nextAttemptAt=now.isoformat())
-        result[key] = incident
+        result[key] = transition_incident(key, previous.get(key), decisions.get(key), now, options)
     return result
+
+
+def transition_incident(key, previous, decision, now, options):
+    """Apply one decision without changing unrelated incident generations."""
+    incident = dict(previous or {"open": False, "badSamples": 0, "goodSamples": 0, "generation": 0})
+    require(decision is None or type(decision) is bool)
+    update_samples(incident, decision, options)
+    immediate = not (key.endswith(".stopped") or key in {"api.unavailable", "database.unavailable", "frontend.unavailable"})
+    opening = decision is True and not incident["open"] and (immediate or incident["badSamples"] >= options["failureSamples"])
+    closing = decision is False and incident["open"] and incident["goodSamples"] >= options["recoverySamples"]
+    if opening or closing:
+        incident.update(open=opening, changedAt=now.isoformat(), generation=incident["generation"] + 1,
+                        pending=True, attempts=0, nextAttemptAt=now.isoformat())
+    else:
+        schedule_reminder(incident, now, options)
+    return incident
+
+
+def update_samples(incident, decision, options):
+    """Missing evidence interrupts consecutive samples but cannot close an incident."""
+    if decision is None:
+        incident.update(badSamples=0, goodSamples=0)
+        return
+    incident["badSamples"] = min(options["failureSamples"], incident["badSamples"] + 1) if decision else 0
+    incident["goodSamples"] = 0 if decision else min(options["recoverySamples"], incident["goodSamples"] + 1)
+
+
+def schedule_reminder(incident, now, options):
+    """Only an open incident without an outstanding attempt can receive a reminder."""
+    if incident["open"] and not incident.get("pending", False):
+        last = incident.get("lastAttemptAt", incident["changedAt"])
+        if age(last, now) >= options["reminderSeconds"]:
+            incident.update(pending=True, attempts=0, nextAttemptAt=now.isoformat())
 
 
 def notifications(incidents, sent, now, options):

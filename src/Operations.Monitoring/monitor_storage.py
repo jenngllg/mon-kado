@@ -10,6 +10,7 @@ from monitor_policy import require, timestamp
 
 MAX_JSON_BYTES = 65536
 HISTORY_BYTES = 32 * 1024 * 1024
+JSON_SUFFIX = ".json"
 
 
 def read_json(path, private=False):
@@ -48,14 +49,14 @@ def append_history(directory, now, measurement, maximum_bytes=HISTORY_BYTES):
     """Retain seven days under a hard total-size limit, deleting only owned sample files."""
     directory.mkdir(mode=0o700, exist_ok=True)
     require(not directory.is_symlink())
-    path = directory / (now.strftime("%Y%m%dT%H%MZ") + ".json")
+    path = directory / (now.strftime("%Y%m%dT%H%MZ") + JSON_SUFFIX)
     size_needed = len(json.dumps(measurement, allow_nan=False, separators=(",", ":"), sort_keys=True).encode())
     require(size_needed <= min(MAX_JSON_BYTES, maximum_bytes))
     files = []
     for candidate in directory.iterdir():
-        if candidate.suffix not in (".json", ".new"):
+        if candidate.suffix not in (JSON_SUFFIX, ".new"):
             continue
-        require(re.fullmatch(r"[0-9]{8}T[0-9]{4}Z\.(json|new)", candidate.name) is not None)
+        require(re.fullmatch(r"\d{8}T\d{4}Z\.(json|new)", candidate.name, flags=re.ASCII) is not None)
         metadata = candidate.lstat()
         require(stat.S_ISREG(metadata.st_mode))
         if candidate.suffix == ".new":
@@ -79,7 +80,7 @@ def recent_snapshots(directory, now, service="api"):
         return []
     result = []
     for offset in range(1, 13):
-        path = directory / ((now - timedelta(minutes=offset)).strftime("%Y%m%dT%H%MZ") + ".json")
+        path = directory / ((now - timedelta(minutes=offset)).strftime("%Y%m%dT%H%MZ") + JSON_SUFFIX)
         if path.exists():
             snapshot = read_json(path).get(service)
             if snapshot is not None:

@@ -39,7 +39,7 @@ def credentials(value):
     require(all(isinstance(item, str) and 0 < len(item) <= 4096 and not any(ord(char) < 32 for char in item)
                 for item in value.values()))
     require(value["sender"] == "monkado.app@gmail.com")
-    require(re.fullmatch(r"[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+", value["recipient"]) is not None)
+    require(re.fullmatch(r"[^\s<>@]++@(?:[^\s<>@.]++\.)+[^\s<>@.]++", value["recipient"]) is not None)
     return value
 
 

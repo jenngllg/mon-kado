@@ -9,6 +9,8 @@ import monitor_policy as policy
 import monitor_runtime as runtime
 from monitor_storage import atomic_json, read_json
 
+FAILURE_FILE = "failure.json"
+
 
 def status(root, now):
     """Report only the bounded local status contract and detect a stopped monitor."""
@@ -25,7 +27,7 @@ def status(root, now):
                            all(character.isascii() and (character.isalnum() or character == ".") for character in key)
                            for key in value[name]))
     stale = policy.age(value["createdAt"], now) > 180
-    failed = (root / "failure.json").exists()
+    failed = (root / FAILURE_FILE).exists()
     return value | {"health": "degraded" if stale or failed else value["health"],
                     "monitorStale": stale, "monitorFailed": failed}
 
@@ -44,7 +46,7 @@ def execute(arguments, now, root=runtime.STATE, configuration_path=runtime.SETTI
     if arguments == ["test-email"]:
         return observer.run(configuration, now, test_email=True)
     result = observer.run(configuration, now)
-    (root / "failure.json").unlink(missing_ok=True)
+    (root / FAILURE_FILE).unlink(missing_ok=True)
     return result
 
 
@@ -57,7 +59,7 @@ def main(arguments=None):
     except Exception:
         if arguments == ["run"] and os.geteuid() == 0:
             try:
-                atomic_json(runtime.STATE / "failure.json", {"createdAt": now.isoformat(), "error": "MONITOR_OPERATION_FAILED"})
+                atomic_json(runtime.STATE / FAILURE_FILE, {"createdAt": now.isoformat(), "error": "MONITOR_OPERATION_FAILED"})
             except Exception:
                 pass
         print(json.dumps({"error": "MONITOR_OPERATION_FAILED"}))

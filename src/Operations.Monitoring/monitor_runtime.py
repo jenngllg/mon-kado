@@ -38,20 +38,7 @@ def validate_state(value, now):
     policy.require(isinstance(value, dict) and set(value) == set(empty_state()))
     policy.require(value["schemaVersion"] == 1 and isinstance(value["incidents"], dict) and len(value["incidents"]) <= 100)
     for key, incident in value["incidents"].items():
-        policy.require(isinstance(key, str) and re.fullmatch(r"[A-Za-z][A-Za-z0-9.]{0,99}", key) is not None)
-        policy.require(isinstance(incident, dict) and type(incident.get("open")) is bool)
-        policy.require(type(incident.get("pending", False)) is bool)
-        policy.require(incident.get("delivery") in (None, "sent", "unconfirmed"))
-        policy.require(set(incident) <= {"open", "badSamples", "goodSamples", "generation", "changedAt", "pending", "attempts",
-                                        "nextAttemptAt", "lastAttemptAt", "lastNotifiedAt", "delivery"})
-        for name in ("badSamples", "goodSamples", "generation", "attempts"):
-            policy.require(type(incident.get(name, 0)) is int and incident.get(name, 0) >= 0)
-        for name in ("changedAt", "lastAttemptAt", "lastNotifiedAt"):
-            if name in incident:
-                policy.age(incident[name], now)
-        policy.require(not incident["open"] or "changedAt" in incident)
-        if incident.get("pending"):
-            policy.timestamp(incident["nextAttemptAt"])
+        validate_incident(key, incident, now)
     policy.require(isinstance(value["deliveries"], list) and len(value["deliveries"]) <= 60)
     for delivered in value["deliveries"]:
         policy.age(delivered, now)
@@ -66,6 +53,24 @@ def validate_state(value, now):
         policy.validate_snapshot(value["workerSnapshot"], "worker")
         policy.age(value["workerSnapshot"]["createdAt"], now)
     return value
+
+
+def validate_incident(key, incident, now):
+    """Keep persisted notification state strictly typed before any delivery is attempted."""
+    policy.require(isinstance(key, str) and re.fullmatch(r"[A-Za-z][A-Za-z0-9.]{0,99}", key) is not None)
+    policy.require(isinstance(incident, dict) and type(incident.get("open")) is bool)
+    policy.require(type(incident.get("pending", False)) is bool)
+    policy.require(incident.get("delivery") in (None, "sent", "unconfirmed"))
+    policy.require(set(incident) <= {"open", "badSamples", "goodSamples", "generation", "changedAt", "pending", "attempts",
+                                    "nextAttemptAt", "lastAttemptAt", "lastNotifiedAt", "delivery"})
+    for name in ("badSamples", "goodSamples", "generation", "attempts"):
+        policy.require(type(incident.get(name, 0)) is int and incident.get(name, 0) >= 0)
+    for name in ("changedAt", "lastAttemptAt", "lastNotifiedAt"):
+        if name in incident:
+            policy.age(incident[name], now)
+    policy.require(not incident["open"] or "changedAt" in incident)
+    if incident.get("pending"):
+        policy.timestamp(incident["nextAttemptAt"])
 
 
 class Monitor:

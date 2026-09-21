@@ -488,7 +488,9 @@ public class AuthenticationEmailDispatcherTests(PostgreSqlWorkerFixture fixture)
             message.LastError);
         Assert.Null(message.LockedUntil);
         Assert.Null(message.ProviderMessageId);
-        var telemetry = Assert.IsAssignableFrom<ITelemetrySnapshotSource>(provider.GetRequiredService<IApplicationTelemetry>());
+        var telemetry = Assert.IsType<ITelemetrySnapshotSource>(
+            provider.GetRequiredService<IApplicationTelemetry>(),
+            exactMatch: false);
         Assert.Equal(
             1,
             telemetry.Capture().Jobs["AuthenticationEmailDelivery"].TerminalFailures);
