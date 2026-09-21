@@ -12,7 +12,12 @@ namespace JennGllg.Fr.MonKado.Back.Api.UnitTests.Middleware;
 
 public class GeneralRateLimitMiddlewareTests
 {
-    private readonly Mock<IGeneralRequestLimiter> _limiterMock = new(MockBehavior.Strict);
+    private readonly Mock<IGeneralRequestLimiter> _limiterMock;
+
+    public GeneralRateLimitMiddlewareTests()
+    {
+        _limiterMock = new Mock<IGeneralRequestLimiter>(MockBehavior.Strict);
+    }
 
     [Theory]
     [InlineData("OPTIONS", "/api/v1/wishlists")]
