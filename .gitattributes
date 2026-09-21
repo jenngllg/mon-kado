@@ -11,3 +11,4 @@
 *.slnx text eol=lf
 *.yml text eol=lf
 *.yaml text eol=lf
+deployments/production/** text eol=lf

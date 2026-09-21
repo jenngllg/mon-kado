@@ -1,0 +1,11 @@
+[Unit]
+Description=Check for an explicitly approved MonKado release every five minutes
+
+[Timer]
+OnBootSec=5min
+OnUnitInactiveSec=5min
+RandomizedDelaySec=30s
+Unit=monkado-deploy.service
+
+[Install]
+WantedBy=timers.target

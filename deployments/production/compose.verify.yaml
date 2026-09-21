@@ -1,0 +1,17 @@
+# Test-only adaptation for hosted runners: no systemd slice, loopback TLS.
+# Never include this file in a VPS rollout.
+services:
+  migrations:
+    cgroup_parent: !reset null
+  api:
+    cgroup_parent: !reset null
+  worker:
+    cgroup_parent: !reset null
+  postgres:
+    cgroup_parent: !reset null
+  caddy:
+    cgroup_parent: !reset null
+    volumes:
+      - ./deployments/production/Caddyfile.verify:/etc/caddy/Caddyfile:ro
+    ports: !override
+      - "127.0.0.1:18490:443"

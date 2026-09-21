@@ -1,5 +1,11 @@
 # Deployment configuration
 
+## Production VPS
+
+See [the production runbook](production/README.md) for MK-812: approved GitHub
+publication, digest-pinned images, outbound-only VPS deployment, small-server
+limits and failure recovery. Production credentials never belong in this folder.
+
 ## Shared image storage
 
 Gift images and member profile photos use the same persistent `gift_images` volume,
