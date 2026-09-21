@@ -1,4 +1,5 @@
 using JennGllg.Fr.MonKado.Back.Application.Abstractions;
+using JennGllg.Fr.MonKado.Back.Application.Models;
 using JennGllg.Fr.MonKado.Back.Worker.Logging;
 using JennGllg.Fr.MonKado.Back.Worker.Options;
 
@@ -14,6 +15,7 @@ namespace JennGllg.Fr.MonKado.Back.Worker.Workers;
 /// </summary>
 public sealed class ProcessedAuthenticationEmailCleanupWorker : BackgroundService
 {
+    private readonly IApplicationTelemetry _telemetry;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly TimeProvider _timeProvider;
     private readonly ILogger<ProcessedAuthenticationEmailCleanupWorker> _logger;
@@ -23,18 +25,21 @@ public sealed class ProcessedAuthenticationEmailCleanupWorker : BackgroundServic
     /// <summary>
     /// Initializes a new instance of the <see cref="ProcessedAuthenticationEmailCleanupWorker" /> class.
     /// </summary>
+    /// <param name="telemetry">The process-local operational measurements.</param>
     /// <param name="scopeFactory">The service scope factory.</param>
     /// <param name="timeProvider">The time provider.</param>
     /// <param name="options">The authentication email options.</param>
     /// <param name="cleanupOptions">The shared cleanup options.</param>
     /// <param name="logger">The logger.</param>
     public ProcessedAuthenticationEmailCleanupWorker(
+        IApplicationTelemetry telemetry,
         IServiceScopeFactory scopeFactory,
         TimeProvider timeProvider,
         IOptions<AuthenticationEmailOptions> options,
         IOptions<AuthenticationCleanupOptions> cleanupOptions,
         ILogger<ProcessedAuthenticationEmailCleanupWorker> logger)
     {
+        _telemetry = telemetry;
         _scopeFactory = scopeFactory;
         _timeProvider = timeProvider;
         _logger = logger;
@@ -75,6 +80,7 @@ public sealed class ProcessedAuthenticationEmailCleanupWorker : BackgroundServic
     /// <returns>The delay before the next cleanup cycle.</returns>
     private async Task<TimeSpan> CleanupOnceAsync(CancellationToken cancellationToken)
     {
+        _telemetry.BeginCycle(WorkerOperation.ProcessedAuthenticationEmailCleanup);
         try
         {
             var deletedCount = await DeleteProcessedEmailsAsync(cancellationToken);
@@ -85,6 +91,11 @@ public sealed class ProcessedAuthenticationEmailCleanupWorker : BackgroundServic
                     _logger,
                     deletedCount);
             }
+
+            _telemetry.CompleteCycle(
+                WorkerOperation.ProcessedAuthenticationEmailCleanup,
+                _cleanupOptions.Interval,
+                true);
 
             return _cleanupOptions.Interval;
         }
@@ -99,6 +110,11 @@ public sealed class ProcessedAuthenticationEmailCleanupWorker : BackgroundServic
                 _logger,
                 exception.GetType().Name,
                 exception);
+
+            _telemetry.CompleteCycle(
+                WorkerOperation.ProcessedAuthenticationEmailCleanup,
+                _cleanupOptions.FailureRetryInterval,
+                false);
 
             return _cleanupOptions.FailureRetryInterval;
         }

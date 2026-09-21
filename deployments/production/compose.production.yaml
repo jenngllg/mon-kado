@@ -17,6 +17,15 @@ services:
     environment:
       <<: *small-pool
       DOTNET_GCHeapHardLimit: "0x10000000"
+      Observability__Enabled: "true"
+      Observability__Version: ${RELEASE_REVISION:?Set the approved RELEASE_REVISION}
+      Observability__Directory: /var/lib/monkado-observability
+    volumes:
+      - type: bind
+        source: /var/lib/monkado-observability/api
+        target: /var/lib/monkado-observability
+        bind:
+          create_host_path: false
   worker:
     image: ${WORKER_IMAGE:?Set a digest-pinned WORKER_IMAGE}
     build: !reset null
@@ -24,6 +33,15 @@ services:
     environment:
       <<: *small-pool
       DOTNET_GCHeapHardLimit: "0x0C000000"
+      Observability__Enabled: "true"
+      Observability__Version: ${RELEASE_REVISION:?Set the approved RELEASE_REVISION}
+      Observability__Directory: /var/lib/monkado-observability
+    volumes:
+      - type: bind
+        source: /var/lib/monkado-observability/worker
+        target: /var/lib/monkado-observability
+        bind:
+          create_host_path: false
   postgres:
     cgroup_parent: monkado.slice
     command:

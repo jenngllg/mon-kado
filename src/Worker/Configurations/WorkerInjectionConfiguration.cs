@@ -1,3 +1,4 @@
+using JennGllg.Fr.MonKado.Back.Infrastructure.Observability.Configurations;
 using JennGllg.Fr.MonKado.Back.Worker.Workers;
 
 using Microsoft.Extensions.Configuration;
@@ -23,6 +24,10 @@ public static class WorkerInjectionConfiguration
         IConfiguration configuration,
         IHostEnvironment environment)
     {
+        services.ConfigureObservabilityInjection(
+            configuration,
+            "worker",
+            []);
         services.ConfigureAuthenticationCleanup(configuration);
         services.ConfigureGiftImageCleanup(configuration);
         services.ConfigureAuthenticationEmailDelivery(

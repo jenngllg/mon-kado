@@ -1,0 +1,11 @@
+[Unit]
+Description=Observe MonKado every minute without automatic repairs
+
+[Timer]
+OnCalendar=*-*-* *:*:00
+AccuracySec=1s
+Persistent=false
+Unit=monkado-monitor.service
+
+[Install]
+WantedBy=timers.target

@@ -18,7 +18,8 @@ class BuildContextTests(unittest.TestCase):
         name = "monkado-security-context-" + secrets.token_hex(8)
         root = Path(__file__).resolve().parents[2]
         private_names = [".env", ".env.production", "src/API/.env", "src/API/.local/key.xml", "production.env",
-                         "rclone.conf", "secrets.json", "client_secret_fixture.json", "certificate.pfx",
+                         "rclone.conf", "monitoring-gmail.json", "src/Operations.Monitoring/monitoring-gmail.json",
+                         "secrets.json", "client_secret_fixture.json", "certificate.pfx",
                          "private.pem", "private.key", "TestResults/synthetic-credentials.txt"]
         with tempfile.TemporaryDirectory(prefix="monkado-context-") as temporary:
             context = Path(temporary)

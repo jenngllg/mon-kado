@@ -1,4 +1,7 @@
 using JennGllg.Fr.MonKado.Back.Application.Abstractions;
+using JennGllg.Fr.MonKado.Back.Infrastructure.Observability.Options;
+using JennGllg.Fr.MonKado.Back.Infrastructure.Observability.Services;
+using JennGllg.Fr.MonKado.Back.Tests.Common;
 using JennGllg.Fr.MonKado.Back.Worker.Options;
 using JennGllg.Fr.MonKado.Back.Worker.Workers;
 
@@ -11,6 +14,45 @@ namespace JennGllg.Fr.MonKado.Back.Worker.UnitTests;
 
 public class ExpiredGuestSessionCleanupWorkerTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ExecuteAsync_WhenCycleFinishes_ReportsActualNextSchedule(bool fails)
+    {
+        // Arrange
+        using var stopping = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        var clock = new CapturingTimeProvider(
+            DateTimeOffset.UnixEpoch,
+            stopping);
+        using var telemetry = new ApplicationTelemetry(
+            clock,
+            Microsoft.Extensions.Options.Options.Create(new ObservabilityOptions { Service = "worker" }));
+        IExpiredGuestSessionCleanup cleanup = fails
+            ? new ThrowingGuestSessionCleanup(new InvalidOperationException())
+            : new RecordingGuestSessionCleanup(0);
+        await using var provider = CreateProvider(cleanup);
+        using var worker = new ExpiredGuestSessionCleanupWorker(
+            telemetry,
+            provider.GetRequiredService<IServiceScopeFactory>(),
+            clock,
+            Microsoft.Extensions.Options.Options.Create(new AuthenticationCleanupOptions()),
+            NullLogger<ExpiredGuestSessionCleanupWorker>.Instance);
+
+        // Act
+        await worker.StartAsync(stopping.Token);
+        await GetExecuteTask(worker).WaitAsync(TestContext.Current.CancellationToken);
+        var snapshot = telemetry.Capture().Jobs["ExpiredGuestSessionCleanup"];
+
+        // Assert
+        Assert.Equal("waiting", snapshot.State);
+        Assert.Equal(DateTime.UnixEpoch, snapshot.StartedAt);
+        Assert.Equal(DateTime.UnixEpoch, snapshot.LastCompletedAt);
+        Assert.Equal(DateTime.UnixEpoch + clock.DueTime.GetValueOrDefault(), snapshot.NextExpectedAt);
+        Assert.Equal(fails ? 1 : 0, snapshot.ConsecutiveFailures);
+        Assert.Equal(fails ? 0 : 1, snapshot.Successes);
+        Assert.Equal(fails ? TimeSpan.FromMinutes(15) : TimeSpan.FromHours(24), clock.DueTime);
+    }
+
     private static readonly DateTimeOffset _now = new(
         2026,
         8,
@@ -155,6 +197,7 @@ public class ExpiredGuestSessionCleanupWorkerTests
     private static ServiceProvider CreateProvider(IExpiredGuestSessionCleanup cleanup)
     {
         var services = new ServiceCollection();
+        services.AddTestTelemetry();
         services.AddSingleton(cleanup);
 
         return services.BuildServiceProvider();
@@ -166,6 +209,7 @@ public class ExpiredGuestSessionCleanupWorkerTests
         ILogger<ExpiredGuestSessionCleanupWorker>? logger = null)
     {
         return new ExpiredGuestSessionCleanupWorker(
+            provider.GetRequiredService<IApplicationTelemetry>(),
             provider.GetRequiredService<IServiceScopeFactory>(),
             timeProvider ?? new FixedTimeProvider(_now),
             Microsoft.Extensions.Options.Options.Create(new AuthenticationCleanupOptions()),

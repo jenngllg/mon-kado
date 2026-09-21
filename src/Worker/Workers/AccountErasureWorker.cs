@@ -1,5 +1,6 @@
 using JennGllg.Fr.MonKado.Back.Application.Abstractions;
 using JennGllg.Fr.MonKado.Back.Application.Logging;
+using JennGllg.Fr.MonKado.Back.Application.Models;
 using JennGllg.Fr.MonKado.Back.Application.Options;
 using JennGllg.Fr.MonKado.Back.Worker.Logging;
 using JennGllg.Fr.MonKado.Back.Worker.Options;
@@ -17,7 +18,9 @@ namespace JennGllg.Fr.MonKado.Back.Worker.Workers;
 /// <param name="emailOptions">The existing Gmail enablement configuration.</param>
 /// <param name="timeProvider">The cycle clock.</param>
 /// <param name="logger">The correlated technical logger.</param>
+/// <param name="telemetry">The process-local operational measurements.</param>
 public class AccountErasureWorker(
+    IApplicationTelemetry telemetry,
     IServiceScopeFactory scopeFactory,
     IOptions<AccountErasureProcessingOptions> options,
     IOptions<AuthenticationEmailOptions> emailOptions,
@@ -49,6 +52,7 @@ public class AccountErasureWorker(
     /// <returns>The next bounded cycle delay.</returns>
     private async Task<TimeSpan> ProcessOnceAsync(CancellationToken cancellationToken)
     {
+        telemetry.BeginCycle(WorkerOperation.AccountErasureProcessing);
         using var logScope = WorkerLogScope.Begin(
             logger,
             "AccountErasureProcessing");
@@ -72,8 +76,18 @@ public class AccountErasureWorker(
         {
             AdministrativeAccountErasureLogMessages.ProcessingFailed(logger);
 
+            telemetry.CompleteCycle(
+                WorkerOperation.AccountErasureProcessing,
+                options.Value.FailureInterval,
+                false);
+
             return options.Value.FailureInterval;
         }
+
+        telemetry.CompleteCycle(
+            WorkerOperation.AccountErasureProcessing,
+            options.Value.PollInterval,
+            true);
 
         return options.Value.PollInterval;
     }

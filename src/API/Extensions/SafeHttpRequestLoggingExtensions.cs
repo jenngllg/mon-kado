@@ -1,4 +1,5 @@
 using JennGllg.Fr.MonKado.Back.Api.Logging;
+using JennGllg.Fr.MonKado.Back.Application.Abstractions;
 
 using Microsoft.AspNetCore.Routing;
 
@@ -36,18 +37,38 @@ public static class SafeHttpRequestLoggingExtensions
             context,
             next) =>
         {
-            await next(context);
-            var routePattern = (context.GetEndpoint() as RouteEndpoint)?
-                .RoutePattern
-                .RawText ?? "Unmatched";
-            var method = _knownMethods.Contains(context.Request.Method)
-                ? context.Request.Method
-                : OtherMethod;
-            ApiLogMessages.HttpRequestCompleted(
-                logger,
-                method,
-                routePattern,
-                context.Response.StatusCode);
+            var clock = context.RequestServices.GetRequiredService<TimeProvider>();
+            var telemetry = context.RequestServices.GetRequiredService<IApplicationTelemetry>();
+            var started = clock.GetTimestamp();
+            var completed = false;
+            try
+            {
+                await next(context);
+                completed = true;
+            }
+            finally
+            {
+                var elapsed = clock.GetElapsedTime(started);
+                var abandoned = context.RequestAborted.IsCancellationRequested;
+                var status = completed ? context.Response.StatusCode : StatusCodes.Status500InternalServerError;
+                telemetry.RecordHttp(
+                    status,
+                    elapsed,
+                    abandoned);
+                var routePattern = (context.GetEndpoint() as RouteEndpoint)?
+                    .RoutePattern
+                    .RawText ?? "Unmatched";
+                var method = _knownMethods.Contains(context.Request.Method)
+                    ? context.Request.Method
+                    : OtherMethod;
+                ApiLogMessages.HttpRequestCompleted(
+                    logger,
+                    method,
+                    routePattern,
+                    status,
+                    elapsed.TotalMilliseconds,
+                    abandoned);
+            }
         });
 
         return application;

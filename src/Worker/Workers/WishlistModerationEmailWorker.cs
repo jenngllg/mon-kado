@@ -17,7 +17,9 @@ namespace JennGllg.Fr.MonKado.Back.Worker.Workers;
 /// <param name="emailOptions">The existing configured Gmail enablement.</param>
 /// <param name="timeProvider">The delay and UTC clock.</param>
 /// <param name="logger">The technical structured logger.</param>
+/// <param name="telemetry">The process-local operational measurements.</param>
 public class WishlistModerationEmailWorker(
+    IApplicationTelemetry telemetry,
     IServiceScopeFactory scopeFactory,
     IOptions<WishlistModerationEmailOptions> options,
     IOptions<AuthenticationEmailOptions> emailOptions,
@@ -29,7 +31,11 @@ public class WishlistModerationEmailWorker(
     {
 
         if (!emailOptions.Value.IsEnabled)
+        {
+            telemetry.Disable(WorkerOperation.WishlistModerationEmailDelivery);
+
             return;
+        }
         var configuration = options.Value;
         var policy = new WishlistModerationEmailDeliveryPolicy(
             configuration.BatchSize,
@@ -65,6 +71,7 @@ public class WishlistModerationEmailWorker(
         WishlistModerationEmailDeliveryPolicy policy,
         CancellationToken cancellationToken)
     {
+        telemetry.BeginCycle(WorkerOperation.WishlistModerationEmailDelivery);
         using var logScope = WorkerLogScope.Begin(
             logger,
             "WishlistModerationEmailDelivery");
@@ -80,6 +87,11 @@ public class WishlistModerationEmailWorker(
                 completedResult = options.Value.PollInterval;
             }
 
+            telemetry.CompleteCycle(
+                WorkerOperation.WishlistModerationEmailDelivery,
+                completedResult,
+                true);
+
             return completedResult;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -90,6 +102,11 @@ public class WishlistModerationEmailWorker(
         catch (Exception)
         {
             WishlistModerationLogMessages.EmailCycleFailed(logger);
+
+            telemetry.CompleteCycle(
+                WorkerOperation.WishlistModerationEmailDelivery,
+                options.Value.FailureInterval,
+                false);
 
             return options.Value.FailureInterval;
         }

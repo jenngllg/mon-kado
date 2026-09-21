@@ -1,4 +1,5 @@
 using JennGllg.Fr.MonKado.Back.Application.Abstractions;
+using JennGllg.Fr.MonKado.Back.Tests.Common;
 using JennGllg.Fr.MonKado.Back.Worker.Options;
 using JennGllg.Fr.MonKado.Back.Worker.Workers;
 
@@ -163,6 +164,7 @@ public class ExpiredMemberEmailChangeRequestCleanupWorkerTests
     private static ServiceProvider CreateProvider(IExpiredMemberEmailChangeRequestCleanup cleanup)
     {
         var services = new ServiceCollection();
+        services.AddTestTelemetry();
         services.AddSingleton(cleanup);
 
         return services.BuildServiceProvider();
@@ -175,6 +177,7 @@ public class ExpiredMemberEmailChangeRequestCleanupWorkerTests
     {
 
         return new ExpiredMemberEmailChangeRequestCleanupWorker(
+            provider.GetRequiredService<IApplicationTelemetry>(),
             provider.GetRequiredService<IServiceScopeFactory>(),
             timeProvider ?? new FixedTimeProvider(_now),
             Microsoft.Extensions.Options.Options.Create(new AuthenticationCleanupOptions()),

@@ -415,3 +415,6 @@ FodyWeavers.xsd
 
 # JetBrains Rider
 *.sln.iml
+
+# Private host-monitor Gmail handoff; the production copy lives outside the checkout.
+**/monitoring-gmail.json

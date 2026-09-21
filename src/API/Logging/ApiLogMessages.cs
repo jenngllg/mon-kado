@@ -59,13 +59,17 @@ public static partial class ApiLogMessages
     /// <param name="method">The HTTP method.</param>
     /// <param name="routePattern">The developer-defined route pattern or a fixed unmatched marker.</param>
     /// <param name="statusCode">The response status code.</param>
+    /// <param name="elapsedMilliseconds">The monotonic request duration.</param>
+    /// <param name="abandoned">Whether the client abandoned the request.</param>
     [LoggerMessage(
         EventId = LogEventIds.HttpRequestCompleted,
         Level = LogLevel.Information,
-        Message = "HTTP {Method} {RoutePattern} completed with status {StatusCode}.")]
+        Message = "HTTP {Method} {RoutePattern} completed with status {StatusCode} in {ElapsedMilliseconds} ms; abandoned {Abandoned}.")]
     public static partial void HttpRequestCompleted(
         ILogger logger,
         string method,
         string routePattern,
-        int statusCode);
+        int statusCode,
+        double elapsedMilliseconds,
+        bool abandoned);
 }

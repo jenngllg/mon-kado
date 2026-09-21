@@ -1,0 +1,32 @@
+[Unit]
+Description=Observe MonKado health and send bounded operational alerts
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+UMask=0077
+ExecStart=/usr/bin/python3 /opt/monkado/src/Operations.Monitoring/monitor_cli.py run
+Environment=PYTHONDONTWRITEBYTECODE=1
+TimeoutStartSec=45s
+MemoryMax=128M
+MemorySwapMax=0
+CPUQuota=10%
+Nice=10
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+ReadWritePaths=/var/lib/monkado-monitoring
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

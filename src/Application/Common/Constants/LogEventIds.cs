@@ -526,5 +526,7 @@ public static class LogEventIds
     /// Identifies a completed HTTP request logged without query-string values.
     /// </summary>
     public const int HttpRequestCompleted = 9003;
+    /// <summary>Identifies an unsuccessful private telemetry snapshot publication.</summary>
+    public const int TelemetrySnapshotFailed = 9004;
     #endregion
 }

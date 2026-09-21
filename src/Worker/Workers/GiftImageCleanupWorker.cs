@@ -18,6 +18,7 @@ public sealed class GiftImageCleanupWorker : BackgroundService
 {
     private static readonly TimeSpan _firstRetryDelay = TimeSpan.FromMinutes(1);
 
+    private readonly IApplicationTelemetry _telemetry;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly IGiftImageStore _store;
     private readonly TimeProvider _timeProvider;
@@ -27,18 +28,21 @@ public sealed class GiftImageCleanupWorker : BackgroundService
     /// <summary>
     /// Initializes a new instance of the <see cref="GiftImageCleanupWorker" /> class.
     /// </summary>
+    /// <param name="telemetry">The process-local operational measurements.</param>
     /// <param name="scopeFactory">The service scope factory.</param>
     /// <param name="store">The shared durable image store.</param>
     /// <param name="timeProvider">The time provider.</param>
     /// <param name="options">The cleanup options.</param>
     /// <param name="logger">The logger.</param>
     public GiftImageCleanupWorker(
+        IApplicationTelemetry telemetry,
         IServiceScopeFactory scopeFactory,
         IGiftImageStore store,
         TimeProvider timeProvider,
         IOptions<GiftImageCleanupOptions> options,
         ILogger<GiftImageCleanupWorker> logger)
     {
+        _telemetry = telemetry;
         _scopeFactory = scopeFactory;
         _store = store;
         _timeProvider = timeProvider;
@@ -73,6 +77,7 @@ public sealed class GiftImageCleanupWorker : BackgroundService
     /// <returns>The delay before the next cycle.</returns>
     private async Task<TimeSpan> CleanupOnceAsync(CancellationToken cancellationToken)
     {
+        _telemetry.BeginCycle(WorkerOperation.GiftImageCleanup);
         using var logScope = WorkerLogScope.Begin(
             _logger,
             "GiftImageCleanup");
@@ -84,6 +89,11 @@ public sealed class GiftImageCleanupWorker : BackgroundService
                 _timeProvider.GetUtcNow().UtcDateTime - _options.PendingGracePeriod,
                 _options.BatchSize,
                 cancellationToken);
+
+            _telemetry.CompleteCycle(
+                WorkerOperation.GiftImageCleanup,
+                _options.Interval,
+                true);
 
             return _options.Interval;
         }
@@ -97,6 +107,11 @@ public sealed class GiftImageCleanupWorker : BackgroundService
                 _logger,
                 exception.GetType().Name,
                 exception is GiftImageStorageUnavailableException ? null : exception);
+
+            _telemetry.CompleteCycle(
+                WorkerOperation.GiftImageCleanup,
+                _options.FailureRetryInterval,
+                false);
 
             return _options.FailureRetryInterval;
         }

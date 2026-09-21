@@ -1,5 +1,6 @@
 <Solution>
   <Folder Name="/Tests/">
+    <Project Path="tests/Infrastructure.Observability.UnitTests/Infrastructure.Observability.UnitTests.csproj" />
     <Project Path="tests/Infrastructure.PersonalDataExports.UnitTests/Infrastructure.PersonalDataExports.UnitTests.csproj" />
     <Project Path="tests/Infrastructure.UrlImport.UnitTests/Infrastructure.UrlImport.UnitTests.csproj" />
     <Project Path="tests/Api.IntegrationTests/Api.IntegrationTests.csproj" />
@@ -16,6 +17,7 @@
     <Project Path="tests/Worker.IntegrationTests/Worker.IntegrationTests.csproj" />
   </Folder>
   <Project Path="src/API/Api.csproj" />
+  <Project Path="src/Infrastructure.Observability/Infrastructure.Observability.csproj" />
   <Project Path="src/Application/Application.csproj" />
   <Project Path="src/Domain/Domain.csproj" />
   <Project Path="src/Infrastructure.Persistence.PostgreSql/Infrastructure.Persistence.PostgreSql.csproj" />

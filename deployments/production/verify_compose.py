@@ -1,6 +1,7 @@
 """Assert the resolved deployment contract; do not print interpolated secrets."""
 
 import json
+import re
 import sys
 
 services = json.load(sys.stdin)["services"]
@@ -22,4 +23,15 @@ assert services["migrations"]["environment"]["ReverseProxy__KnownNetworks__0"]
 for volume in ("gift_images", "data_protection_keys", "personal_data_exports"):
     assert any(item["source"] == volume for item in services["api"]["volumes"])
     assert any(item["source"] == volume for item in services["worker"]["volumes"])
+for name in ("api", "worker"):
+    service = services[name]
+    assert service["environment"]["Observability__Enabled"] == "true", name
+    assert re.fullmatch(r"[0-9a-f]{40}", service["environment"]["Observability__Version"]), name
+    assert service["environment"]["Observability__Directory"] == "/var/lib/monkado-observability", name
+    snapshots = [item for item in service["volumes"] if item["target"] == "/var/lib/monkado-observability"]
+    assert len(snapshots) == 1, name
+    assert snapshots[0]["type"] == "bind", name
+    assert snapshots[0]["source"] == "/var/lib/monkado-observability/" + name, name
+    assert not snapshots[0].get("read_only", False), name
+    assert not snapshots[0].get("bind", {}).get("create_host_path", False), name
 print("Production Compose contract verified.")

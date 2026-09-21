@@ -2,6 +2,7 @@ using JennGllg.Fr.MonKado.Back.Application.Abstractions;
 using JennGllg.Fr.MonKado.Back.Application.Commands;
 using JennGllg.Fr.MonKado.Back.Application.Models;
 using JennGllg.Fr.MonKado.Back.Application.Validators;
+using JennGllg.Fr.MonKado.Back.Tests.Common;
 using JennGllg.Fr.MonKado.Back.Worker.Options;
 using JennGllg.Fr.MonKado.Back.Worker.Workers;
 
@@ -163,6 +164,7 @@ public class ExpiredAuthenticationSessionCleanupWorkerTests
     private static ServiceProvider CreateProvider(IExpiredAuthenticationSessionCleanup cleanup)
     {
         var services = new ServiceCollection();
+        services.AddTestTelemetry();
         services.AddSingleton(cleanup);
 
         return services.BuildServiceProvider();
@@ -174,6 +176,7 @@ public class ExpiredAuthenticationSessionCleanupWorkerTests
         ILogger<ExpiredAuthenticationSessionCleanupWorker>? logger = null)
     {
         return new(
+            provider.GetRequiredService<IApplicationTelemetry>(),
             provider.GetRequiredService<IServiceScopeFactory>(),
             timeProvider ?? new FixedTimeProvider(_now),
             Microsoft.Extensions.Options.Options.Create(new AuthenticationCleanupOptions()),

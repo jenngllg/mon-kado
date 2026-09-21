@@ -2,6 +2,7 @@ using JennGllg.Fr.MonKado.Back.Application.Abstractions;
 using JennGllg.Fr.MonKado.Back.Application.Common.Constants;
 using JennGllg.Fr.MonKado.Back.Application.Common.Exceptions;
 using JennGllg.Fr.MonKado.Back.Application.Models;
+using JennGllg.Fr.MonKado.Back.Tests.Common;
 using JennGllg.Fr.MonKado.Back.Worker.Options;
 using JennGllg.Fr.MonKado.Back.Worker.Workers;
 
@@ -597,6 +598,7 @@ public class GiftImageCleanupWorkerTests
     private static ServiceProvider CreateProvider(IGiftImageCleanupService cleanupService)
     {
         var services = new ServiceCollection();
+        services.AddTestTelemetry();
         services.AddSingleton(cleanupService);
 
         return services.BuildServiceProvider();
@@ -611,6 +613,7 @@ public class GiftImageCleanupWorkerTests
     {
 
         return new GiftImageCleanupWorker(
+            provider.GetRequiredService<IApplicationTelemetry>(),
             provider.GetRequiredService<IServiceScopeFactory>(),
             store,
             timeProvider,

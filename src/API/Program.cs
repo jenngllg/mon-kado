@@ -1,9 +1,11 @@
 using JennGllg.Fr.MonKado.Back.Api.Configurations;
+using JennGllg.Fr.MonKado.Back.Api.Errors;
 using JennGllg.Fr.MonKado.Back.Api.Extensions;
 using JennGllg.Fr.MonKado.Back.Api.Middleware;
 using JennGllg.Fr.MonKado.Back.Application.Configurations;
 using JennGllg.Fr.MonKado.Back.Domain.Configurations;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Images.Configurations;
+using JennGllg.Fr.MonKado.Back.Infrastructure.Observability.Configurations;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Configurations;
 using JennGllg.Fr.MonKado.Back.Infrastructure.PersonalDataExports.Configurations;
 using JennGllg.Fr.MonKado.Back.Infrastructure.UrlImport.Configurations;
@@ -23,6 +25,12 @@ builder.Logging.AddFilter(
 
 builder.Services.ConfigureDomainInjection();
 builder.Services.ConfigureApplicationInjection();
+builder.Services.ConfigureObservabilityInjection(
+    builder.Configuration,
+    "api",
+    typeof(ErrorCodes)
+        .GetFields(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static)
+        .Select(field => (string)field.GetRawConstantValue()!));
 builder.Services.ConfigureImageInfrastructureInjection(builder.Configuration);
 builder.Services.ConfigurePersonalDataExportsInjection(builder.Configuration);
 builder.Services.ConfigureUrlImportInjection(builder.Configuration);

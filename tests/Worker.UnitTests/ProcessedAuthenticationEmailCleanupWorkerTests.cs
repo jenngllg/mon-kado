@@ -1,5 +1,6 @@
 using JennGllg.Fr.MonKado.Back.Application.Abstractions;
 using JennGllg.Fr.MonKado.Back.Application.Common.Constants;
+using JennGllg.Fr.MonKado.Back.Tests.Common;
 using JennGllg.Fr.MonKado.Back.Worker.Options;
 using JennGllg.Fr.MonKado.Back.Worker.Workers;
 
@@ -220,6 +221,7 @@ public class ProcessedAuthenticationEmailCleanupWorkerTests
     private static ServiceProvider CreateProvider(IProcessedAuthenticationEmailCleanup cleanup)
     {
         var services = new ServiceCollection();
+        services.AddTestTelemetry();
         services.AddSingleton(cleanup);
 
         return services.BuildServiceProvider();
@@ -236,6 +238,7 @@ public class ProcessedAuthenticationEmailCleanupWorkerTests
         });
 
         return new ProcessedAuthenticationEmailCleanupWorker(
+            provider.GetRequiredService<IApplicationTelemetry>(),
             provider.GetRequiredService<IServiceScopeFactory>(),
             timeProvider ?? new FixedTimeProvider(_now),
             options,

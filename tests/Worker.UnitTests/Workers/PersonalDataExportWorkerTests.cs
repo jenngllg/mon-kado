@@ -3,6 +3,7 @@ using JennGllg.Fr.MonKado.Back.Application.Common.Constants;
 using JennGllg.Fr.MonKado.Back.Application.Common.Exceptions;
 using JennGllg.Fr.MonKado.Back.Application.Models;
 using JennGllg.Fr.MonKado.Back.Application.Options;
+using JennGllg.Fr.MonKado.Back.Tests.Common;
 using JennGllg.Fr.MonKado.Back.Worker.Workers;
 
 using Microsoft.Extensions.DependencyInjection;
@@ -573,6 +574,7 @@ public class PersonalDataExportWorkerTests
     {
 
         return new ServiceCollection()
+            .AddTestTelemetry()
             .AddScoped(_ => _jobsMock.Object)
             .AddScoped(_ => _builderMock.Object)
             .BuildServiceProvider();
@@ -582,6 +584,7 @@ public class PersonalDataExportWorkerTests
     {
 
         return new PersonalDataExportWorker(
+            provider.GetRequiredService<IApplicationTelemetry>(),
             provider.GetRequiredService<IServiceScopeFactory>(),
             _clock,
             Microsoft.Extensions.Options.Options.Create(_options),

@@ -1,6 +1,7 @@
 using JennGllg.Fr.MonKado.Back.Application.Abstractions;
 using JennGllg.Fr.MonKado.Back.Application.Common.Constants;
 using JennGllg.Fr.MonKado.Back.Application.Models;
+using JennGllg.Fr.MonKado.Back.Tests.Common;
 using JennGllg.Fr.MonKado.Back.Worker.Options;
 using JennGllg.Fr.MonKado.Back.Worker.Workers;
 
@@ -25,6 +26,7 @@ public class WishlistModerationEmailWorkerTests : IAsyncDisposable
         _dispatcherMock = new Mock<IWishlistModerationEmailDispatcher>(MockBehavior.Strict);
         _logger = new RecordingLogger<WishlistModerationEmailWorker>();
         var services = new ServiceCollection();
+        services.AddTestTelemetry();
         services.AddScoped(_ => _dispatcherMock.Object);
         _provider = services.BuildServiceProvider();
         _timeProvider = new CapturingTimeProvider(
@@ -277,6 +279,7 @@ public class WishlistModerationEmailWorkerTests : IAsyncDisposable
     {
 
         return new WishlistModerationEmailWorker(
+            _provider.GetRequiredService<IApplicationTelemetry>(),
             _provider.GetRequiredService<IServiceScopeFactory>(),
             Microsoft.Extensions.Options.Options.Create(new WishlistModerationEmailOptions()),
             Microsoft.Extensions.Options.Options.Create(new AuthenticationEmailOptions { Provider = provider }),

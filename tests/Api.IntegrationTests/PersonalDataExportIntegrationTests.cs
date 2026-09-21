@@ -812,7 +812,11 @@ public class PersonalDataExportIntegrationTests(PostgreSqlContainerFixture fixtu
             TimeSpan.FromHours(1)
         };
         await using var scope = factory.Services.CreateAsyncScope();
-        var jobs = scope.ServiceProvider.GetRequiredService<IPersonalDataExportJobs>();
+        var telemetryMock = new Mock<IApplicationTelemetry>(MockBehavior.Strict);
+        telemetryMock.Setup(telemetry => telemetry.RecordTerminalFailure(WorkerOperation.PersonalDataExport));
+        var jobs = ActivatorUtilities.CreateInstance<PersonalDataExportJobs>(
+            scope.ServiceProvider,
+            telemetryMock.Object);
         var leases = new HashSet<Guid>();
 
         // Act
@@ -824,6 +828,10 @@ public class PersonalDataExportIntegrationTests(PostgreSqlContainerFixture fixtu
                 attempt,
                 work.AttemptCount);
             Assert.True(leases.Add(work.LeaseId));
+            await jobs.FailAsync(
+                work,
+                PersonalDataExportFailure.GenerationFailed,
+                TestContext.Current.CancellationToken);
             await jobs.FailAsync(
                 work,
                 PersonalDataExportFailure.GenerationFailed,
@@ -863,6 +871,8 @@ public class PersonalDataExportIntegrationTests(PostgreSqlContainerFixture fixtu
             await scope.ServiceProvider
                 .GetRequiredService<MonKadoDbContext>()
                 .AuthenticationEmailOutboxMessages.CountAsync(TestContext.Current.CancellationToken));
+        telemetryMock.Verify(telemetry => telemetry.RecordTerminalFailure(WorkerOperation.PersonalDataExport), Times.Once);
+        telemetryMock.VerifyNoOtherCalls();
     }
 
     [Theory]

@@ -19,6 +19,16 @@ FILES = (
     "src/Operations.Frontend/frontend_contract.py",
     "src/Operations.Frontend/frontend_runtime.py",
     "src/Operations.Frontend/frontend_cli.py",
+    "deployments/monitoring/monkado-monitor.service",
+    "deployments/monitoring/monkado-monitor.timer",
+    "deployments/monitoring/monitoring.json.example",
+    "src/Operations.Monitoring/monitor_cli.py",
+    "src/Operations.Monitoring/monitor_collect.py",
+    "src/Operations.Monitoring/monitor_gmail.py",
+    "src/Operations.Monitoring/monitor_policy.py",
+    "src/Operations.Monitoring/monitor_provision.py",
+    "src/Operations.Monitoring/monitor_runtime.py",
+    "src/Operations.Monitoring/monitor_storage.py",
 )
 REPOSITORY = "jenngllg/mon-kado"
 
