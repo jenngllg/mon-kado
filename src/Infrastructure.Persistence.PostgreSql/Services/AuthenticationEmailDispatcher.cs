@@ -13,6 +13,7 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Service
 /// Claims and delivers pending authentication email messages.
 /// </summary>
 /// <param name="context">The database context.</param>
+/// <param name="telemetry">The bounded operational counters.</param>
 /// <param name="unitOfWork">The unit of work.</param>
 /// <param name="userRepository">The member repository.</param>
 /// <param name="outboxRepository">The authentication email outbox repository.</param>
@@ -22,6 +23,7 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Service
 /// <param name="timeProvider">The time provider.</param>
 /// <param name="deletionTokenService">The member-bound account deletion token service.</param>
 public class AuthenticationEmailDispatcher(
+    IApplicationTelemetry telemetry,
     MonKadoDbContext context,
     IUnitOfWork unitOfWork,
     IMonKadoUserRepository userRepository,
@@ -123,6 +125,7 @@ public class AuthenticationEmailDispatcher(
             now))
             return;
         var deliverableMessage = message;
+        var terminalFailure = false;
         try
         {
             var result = await SendMessageAsync(
@@ -150,6 +153,7 @@ public class AuthenticationEmailDispatcher(
                 deliverableMessage.MarkFailed(
                     failedAt,
                     failureCategory);
+                terminalFailure = true;
             }
             else
             {
@@ -165,6 +169,9 @@ public class AuthenticationEmailDispatcher(
         }
 
         await unitOfWork.SaveChangesAsync(cancellationToken);
+
+        if (terminalFailure)
+            telemetry.RecordTerminalFailure(WorkerOperation.AuthenticationEmailDelivery);
     }
 
     /// <summary>

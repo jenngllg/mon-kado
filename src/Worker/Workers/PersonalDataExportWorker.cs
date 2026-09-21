@@ -17,7 +17,9 @@ namespace JennGllg.Fr.MonKado.Back.Worker.Workers;
 /// <param name="timeProvider">The controlled deadline and scheduling clock.</param>
 /// <param name="options">The validated worker limits.</param>
 /// <param name="logger">The structured lifecycle logger.</param>
+/// <param name="telemetry">The process-local operational measurements.</param>
 public class PersonalDataExportWorker(
+    IApplicationTelemetry telemetry,
     IServiceScopeFactory scopeFactory,
     TimeProvider timeProvider,
     IOptions<PersonalDataExportOptions> options,
@@ -48,12 +50,18 @@ public class PersonalDataExportWorker(
     /// <returns>The next cycle delay.</returns>
     private async Task<TimeSpan> RunCycleAsync(CancellationToken cancellationToken)
     {
+        telemetry.BeginCycle(WorkerOperation.PersonalDataExport);
         using var logScope = WorkerLogScope.Begin(
             logger,
             "PersonalDataExport");
         try
         {
             await ProcessNextAsync(cancellationToken);
+
+            telemetry.CompleteCycle(
+                WorkerOperation.PersonalDataExport,
+                options.Value.PollInterval,
+                true);
 
             return options.Value.PollInterval;
         }
@@ -67,6 +75,11 @@ public class PersonalDataExportWorker(
             PersonalDataExportLogMessages.CycleFailed(
                 logger,
                 ClassifyFailure(exception));
+
+            telemetry.CompleteCycle(
+                WorkerOperation.PersonalDataExport,
+                options.Value.FailureInterval,
+                false);
 
             return options.Value.FailureInterval;
         }

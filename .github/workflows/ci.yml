@@ -25,6 +25,39 @@ env:
     Host=127.0.0.1;Port=1;Database=mon_kado;Username=mon_kado;Timeout=1;Command Timeout=1;Pooling=false;SSL Mode=Disable
 
 jobs:
+  local_monitoring:
+    name: Local monitoring without provider access
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Test private Linux storage and simulated alerts in a disposable root container
+        run: |
+          docker run --rm -v "$PWD:/workspace" -w /workspace \
+            -e PYTHONPATH=/workspace/src/Operations.Monitoring \
+            -e COVERAGE_RCFILE=/workspace/src/Operations.Monitoring/.coveragerc \
+            python:3.13-slim@sha256:8d9d0b8bcf6506481eae4907c18f5e3e7902e629f5f6d684f9e7c32e85e3ddf0 \
+            sh -c 'python -m pip install --only-binary :all: coverage==7.10.7 && python -m coverage run --branch --source=src/Operations.Monitoring -m unittest discover -s tests/Operations.MonitoringTests && python -m coverage report --fail-under=100 && python -m coverage xml -o TestResults/monitoring-coverage.xml'
+      - name: Upload monitoring coverage
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: monitoring-coverage
+          path: TestResults/monitoring-coverage.xml
+          if-no-files-found: error
+          retention-days: 3
+      - name: Exercise the monitor under the VPS resource budget without a network
+        env:
+          MONKADO_MONITOR_DOCKER_TESTS: "1"
+        run: |
+          docker pull python:3.13-slim@sha256:8d9d0b8bcf6506481eae4907c18f5e3e7902e629f5f6d684f9e7c32e85e3ddf0
+          python3 tests/Operations.MonitoringTests/test_monitor_container.py
+      - name: Verify installation preserves monitoring credentials and backup state
+        run: >-
+          docker run --rm -e MONKADO_MONITOR_INSTALL_TESTS=1 -v "$PWD:/source:ro" -w /source
+          python:3.13-slim@sha256:8d9d0b8bcf6506481eae4907c18f5e3e7902e629f5f6d684f9e7c32e85e3ddf0
+          python tests/Deployment.MonitoringTests/test_install.py
   frontend_publication:
     name: Static frontend publication
     runs-on: ubuntu-latest
@@ -124,9 +157,11 @@ jobs:
           export POSTGRES_DB=mon_kado POSTGRES_USER=mon_kado
           compose_database_secret="$(openssl rand -hex 32)"
           export POSTGRES_PASSWORD="$compose_database_secret"
-          export JWT_SIGNING_KEY="$(openssl rand -base64 32)"
-          export API_IMAGE="ghcr.io/jenngllg/mon-kado-api@sha256:$(printf 'a%.0s' {1..64})"
-          export WORKER_IMAGE="ghcr.io/jenngllg/mon-kado-worker@sha256:$(printf 'b%.0s' {1..64})"
+          JWT_SIGNING_KEY="$(openssl rand -base64 32)"
+          API_IMAGE="ghcr.io/jenngllg/mon-kado-api@sha256:$(printf 'a%.0s' {1..64})"
+          WORKER_IMAGE="ghcr.io/jenngllg/mon-kado-worker@sha256:$(printf 'b%.0s' {1..64})"
+          RELEASE_REVISION="$(printf 'a%.0s' {1..40})"
+          export JWT_SIGNING_KEY API_IMAGE WORKER_IMAGE RELEASE_REVISION
           docker compose -f compose.yaml -f deployments/production/compose.production.yaml config --format json \
             | python3 deployments/production/verify_compose.py
 
@@ -151,6 +186,8 @@ jobs:
         run: |
           dotnet test tests/Infrastructure.PersonalDataExports.UnitTests/Infrastructure.PersonalDataExports.UnitTests.csproj --configuration Release --settings coverlet.runsettings --collect:"XPlat Code Coverage" --results-directory TestResults
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet test tests/Infrastructure.Observability.UnitTests/Infrastructure.Observability.UnitTests.csproj --configuration Release --settings coverlet.runsettings --collect:"XPlat Code Coverage" --results-directory TestResults
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $env:GITHUB_WORKSPACE | Set-Content -LiteralPath TestResults/windows-workspace.txt
 
       - name: Upload Windows coverage
@@ -165,7 +202,7 @@ jobs:
 
   quality:
     name: quality
-    needs: [windows_export_coverage, deployment_configuration, security_proxy, frontend_publication]
+    needs: [windows_export_coverage, deployment_configuration, security_proxy, frontend_publication, local_monitoring]
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -215,7 +252,7 @@ jobs:
           /d:sonar.token="$SONAR_TOKEN"
           /d:sonar.host.url="https://sonarcloud.io"
           /d:sonar.cs.opencover.reportsPaths="**/coverage.opencover.xml"
-          /d:sonar.python.coverage.reportPaths="TestResults/deployment-coverage.xml,TestResults/security-coverage.xml,TestResults/frontend-publication-coverage.xml"
+          /d:sonar.python.coverage.reportPaths="TestResults/deployment-coverage.xml,TestResults/security-coverage.xml,TestResults/frontend-publication-coverage.xml,TestResults/monitoring-coverage.xml"
           /d:sonar.test.inclusions="tests/**,deployments/production/test_*.py,deployments/production/verify_compose.py"
           /d:sonar.exclusions="src/**/Migrations/**"
           /d:sonar.qualitygate.wait=true
@@ -265,6 +302,12 @@ jobs:
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: frontend-publication-coverage
+          path: TestResults
+
+      - name: Download local monitoring coverage for Sonar
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: monitoring-coverage
           path: TestResults
 
       - name: Verify coverage reports

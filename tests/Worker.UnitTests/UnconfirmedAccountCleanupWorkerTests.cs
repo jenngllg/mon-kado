@@ -1,4 +1,5 @@
 using JennGllg.Fr.MonKado.Back.Application.Abstractions;
+using JennGllg.Fr.MonKado.Back.Tests.Common;
 using JennGllg.Fr.MonKado.Back.Worker.Options;
 using JennGllg.Fr.MonKado.Back.Worker.Workers;
 
@@ -165,6 +166,7 @@ public class UnconfirmedAccountCleanupWorkerTests
     private static ServiceProvider CreateProvider(IExpiredAccountCleanup cleanup)
     {
         var services = new ServiceCollection();
+        services.AddTestTelemetry();
         services.AddSingleton(cleanup);
 
         return services.BuildServiceProvider();
@@ -177,6 +179,7 @@ public class UnconfirmedAccountCleanupWorkerTests
         ILogger<UnconfirmedAccountCleanupWorker>? logger = null)
     {
         return new(
+            provider.GetRequiredService<IApplicationTelemetry>(),
             provider.GetRequiredService<IServiceScopeFactory>(),
             timeProvider ?? new FixedTimeProvider(now),
             Microsoft.Extensions.Options.Options.Create(new AuthenticationCleanupOptions()),

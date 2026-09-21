@@ -12,6 +12,7 @@
 
   <ItemGroup>
     <ProjectReference Include="../../src/Application/Application.csproj" />
+    <ProjectReference Include="../../src/Infrastructure.Observability/Infrastructure.Observability.csproj" />
   </ItemGroup>
 
 </Project>

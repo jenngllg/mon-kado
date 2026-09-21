@@ -1,3 +1,4 @@
+using JennGllg.Fr.MonKado.Back.Application.Abstractions;
 using JennGllg.Fr.MonKado.Back.Application.Models;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Abstractions;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Contexts;
@@ -8,7 +9,10 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Reposit
 
 /// <summary>Serializes per-wishlist delivery while allowing independent worker instances.</summary>
 /// <param name="context">The scoped database context.</param>
-public class WishlistModerationEmailRepository(MonKadoDbContext context) : IWishlistModerationEmailRepository
+/// <param name="telemetry">The bounded operational counters.</param>
+public class WishlistModerationEmailRepository(
+    MonKadoDbContext context,
+    IApplicationTelemetry telemetry) : IWishlistModerationEmailRepository
 {
     /// <inheritdoc />
     public async Task<WishlistModerationEmailClaim?> ClaimAsync(
@@ -113,7 +117,7 @@ public class WishlistModerationEmailRepository(MonKadoDbContext context) : IWish
         CancellationToken cancellationToken)
     {
         var processedAt = isTerminal ? now : (DateTime?)null;
-        await context.Database.ExecuteSqlInterpolatedAsync($"""
+        var updated = await context.Database.ExecuteSqlInterpolatedAsync($"""
             UPDATE public.wishlist_moderation_email_outbox
             SET processed_at = {processedAt}, available_at = {retryAt}, last_error = {failure},
                 lease_id = NULL, locked_until = NULL
@@ -121,6 +125,9 @@ public class WishlistModerationEmailRepository(MonKadoDbContext context) : IWish
                 AND locked_until > {now} AND processed_at IS NULL
             """,
             cancellationToken);
+
+        if (updated == 1 && isTerminal && failure is not null and not "ResourceUnavailable")
+            telemetry.RecordTerminalFailure(WorkerOperation.WishlistModerationEmailDelivery);
     }
 
     /// <inheritdoc />

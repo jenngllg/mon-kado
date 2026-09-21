@@ -1,4 +1,5 @@
 using JennGllg.Fr.MonKado.Back.Application.Abstractions;
+using JennGllg.Fr.MonKado.Back.Application.Models;
 using JennGllg.Fr.MonKado.Back.Worker.Logging;
 using JennGllg.Fr.MonKado.Back.Worker.Options;
 
@@ -12,7 +13,13 @@ namespace JennGllg.Fr.MonKado.Back.Worker.Workers;
 /// <summary>
 /// Removes expired authentication sessions in the background.
 /// </summary>
+/// <param name="telemetry">The process-local operational measurements.</param>
+/// <param name="scopeFactory">The scoped business dependencies.</param>
+/// <param name="timeProvider">The UTC and scheduling clock.</param>
+/// <param name="options">The validated processing configuration.</param>
+/// <param name="logger">The structured operational logger.</param>
 public sealed class ExpiredAuthenticationSessionCleanupWorker(
+    IApplicationTelemetry telemetry,
     IServiceScopeFactory scopeFactory,
     TimeProvider timeProvider,
     IOptions<AuthenticationCleanupOptions> options,
@@ -48,6 +55,7 @@ public sealed class ExpiredAuthenticationSessionCleanupWorker(
 
     private async Task<TimeSpan> CleanupOnceAsync(CancellationToken cancellationToken)
     {
+        telemetry.BeginCycle(WorkerOperation.ExpiredAuthenticationSessionCleanup);
         try
         {
             var deletedCount = await DeleteExpiredSessionsAsync(cancellationToken);
@@ -58,6 +66,11 @@ public sealed class ExpiredAuthenticationSessionCleanupWorker(
                     logger,
                     deletedCount);
             }
+
+            telemetry.CompleteCycle(
+                WorkerOperation.ExpiredAuthenticationSessionCleanup,
+                _options.Interval,
+                true);
 
             return _options.Interval;
         }
@@ -72,6 +85,11 @@ public sealed class ExpiredAuthenticationSessionCleanupWorker(
                 logger,
                 exception.GetType().Name,
                 exception);
+
+            telemetry.CompleteCycle(
+                WorkerOperation.ExpiredAuthenticationSessionCleanup,
+                _options.FailureRetryInterval,
+                false);
 
             return _options.FailureRetryInterval;
         }

@@ -12,6 +12,7 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Service
 
 /// <summary>Coordinates fenced archive generation without holding a database transaction during filesystem writes.</summary>
 /// <param name="context">The scoped database context.</param>
+/// <param name="telemetry">The bounded operational counters.</param>
 /// <param name="unitOfWork">The shared unit of work.</param>
 /// <param name="userRepository">The account locking repository.</param>
 /// <param name="store">The private export volume.</param>
@@ -19,6 +20,7 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Service
 /// <param name="timeProvider">The UTC lifecycle clock.</param>
 /// <param name="scopeFactory">The independent commit verification scope factory.</param>
 public class PersonalDataExportJobs(
+    IApplicationTelemetry telemetry,
     MonKadoDbContext context,
     IUnitOfWork unitOfWork,
     IMonKadoUserRepository userRepository,
@@ -75,7 +77,13 @@ public class PersonalDataExportJobs(
         await transaction.CommitAsync(cancellationToken);
 
         if (!claimed)
+        {
+
+            if (export.Status == PersonalDataExportStatus.Failed)
+                telemetry.RecordTerminalFailure(WorkerOperation.PersonalDataExport);
+
             return null;
+        }
 
         return new PersonalDataExportWorkItem
         {
@@ -206,10 +214,13 @@ public class PersonalDataExportJobs(
             var export = await ReadForUpdateAsync(
                 workItem,
                 cancellationToken);
+
+            if (export is null)
+                return;
             var retryIndex = Math.Min(
                 workItem.AttemptCount - 1,
                 options.Value.RetryDelays.Length - 1);
-            export?.FailAttempt(
+            var acknowledged = export.FailAttempt(
                 workItem.LeaseId,
                 timeProvider
                     .GetUtcNow()
@@ -219,6 +230,9 @@ public class PersonalDataExportJobs(
                 failure);
             await unitOfWork.SaveChangesAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
+
+            if (acknowledged && export.Status == PersonalDataExportStatus.Failed)
+                telemetry.RecordTerminalFailure(WorkerOperation.PersonalDataExport);
         }
         catch (Exception exception) when (PostgreSqlFailureClassifier.IsUnavailable(exception))
         {

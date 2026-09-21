@@ -1,6 +1,7 @@
 using JennGllg.Fr.MonKado.Back.Application.Abstractions;
 using JennGllg.Fr.MonKado.Back.Application.Common.Constants;
 using JennGllg.Fr.MonKado.Back.Application.Options;
+using JennGllg.Fr.MonKado.Back.Tests.Common;
 using JennGllg.Fr.MonKado.Back.Worker.Options;
 using JennGllg.Fr.MonKado.Back.Worker.Workers;
 
@@ -29,6 +30,7 @@ public class AccountErasureWorkerTests : IAsyncDisposable
             DateTimeOffset.UnixEpoch,
             _cancellationSource);
         var services = new ServiceCollection();
+        services.AddTestTelemetry();
         services.AddScoped(_ => _maintenanceMock.Object);
         services.AddScoped(_ => _dispatcherMock.Object);
         _provider = services.BuildServiceProvider();
@@ -72,6 +74,7 @@ public class AccountErasureWorkerTests : IAsyncDisposable
             _dispatcherMock.Setup(dispatcher => dispatcher.DispatchAsync(It.IsAny<CancellationToken>()))
                 .Returns<CancellationToken>(token => scenario == "delivery-failure" ? Task.FromException<int>(new InvalidOperationException("PRIVATE recipient@example.test")) : Task.FromResult(1));
         using var worker = new AccountErasureWorker(
+            _provider.GetRequiredService<IApplicationTelemetry>(),
             _provider.GetRequiredService<IServiceScopeFactory>(),
             Microsoft.Extensions.Options.Options.Create(new AccountErasureProcessingOptions()),
             Microsoft.Extensions.Options.Options.Create(new AuthenticationEmailOptions
@@ -154,6 +157,7 @@ public class AccountErasureWorkerTests : IAsyncDisposable
                 return Task.FromCanceled(token);
             });
         using var worker = new AccountErasureWorker(
+            _provider.GetRequiredService<IApplicationTelemetry>(),
             _provider.GetRequiredService<IServiceScopeFactory>(),
             Microsoft.Extensions.Options.Options.Create(new AccountErasureProcessingOptions()),
             Microsoft.Extensions.Options.Options.Create(new AuthenticationEmailOptions()),

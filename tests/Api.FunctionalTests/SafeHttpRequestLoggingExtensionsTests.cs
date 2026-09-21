@@ -40,11 +40,11 @@ public class SafeHttpRequestLoggingExtensionsTests
             logs,
             StringComparison.Ordinal);
         Assert.Contains(
-            "HTTP Other Unmatched completed with status 404.",
+            "HTTP Other Unmatched completed with status 404 in ",
             logs,
             StringComparison.Ordinal);
         Assert.Contains(
-            "HTTP GET api/v1/auth/google completed with status 302.",
+            "HTTP GET api/v1/auth/google completed with status 302 in ",
             logs,
             StringComparison.Ordinal);
     }

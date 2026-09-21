@@ -4,6 +4,7 @@ using JennGllg.Fr.MonKado.Back.Infrastructure.Images.Configurations;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Configurations;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Contexts;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Entities;
+using JennGllg.Fr.MonKado.Back.Tests.Common;
 using JennGllg.Fr.MonKado.Back.Worker.Options;
 using JennGllg.Fr.MonKado.Back.Worker.Workers;
 
@@ -188,6 +189,7 @@ public class ProfileImageCleanupTests(PostgreSqlWorkerFixture fixture) : IAsyncL
             _testDirectory,
             "images");
         var services = new ServiceCollection();
+        services.AddTestTelemetry();
         services.AddSingleton<TimeProvider>(new FixedTimeProvider(now));
         services.ConfigureInfrastructureInjection(configuration);
         services.ConfigureImageInfrastructureInjection(configuration);
@@ -220,6 +222,7 @@ public class ProfileImageCleanupTests(PostgreSqlWorkerFixture fixture) : IAsyncL
     {
         var timeProvider = new CleanupCycleTimeProvider(now);
         using var worker = new GiftImageCleanupWorker(
+            provider.GetRequiredService<IApplicationTelemetry>(),
             provider.GetRequiredService<IServiceScopeFactory>(),
             provider.GetRequiredService<IGiftImageStore>(),
             timeProvider,

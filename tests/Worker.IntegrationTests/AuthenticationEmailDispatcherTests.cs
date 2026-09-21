@@ -3,6 +3,7 @@ using JennGllg.Fr.MonKado.Back.Application.Commands;
 using JennGllg.Fr.MonKado.Back.Application.Common.Exceptions;
 using JennGllg.Fr.MonKado.Back.Application.Models;
 using JennGllg.Fr.MonKado.Back.Application.Validators;
+using JennGllg.Fr.MonKado.Back.Infrastructure.Observability.Abstractions;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Abstractions;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Configurations;
@@ -487,6 +488,12 @@ public class AuthenticationEmailDispatcherTests(PostgreSqlWorkerFixture fixture)
             message.LastError);
         Assert.Null(message.LockedUntil);
         Assert.Null(message.ProviderMessageId);
+        var telemetry = Assert.IsType<ITelemetrySnapshotSource>(
+            provider.GetRequiredService<IApplicationTelemetry>(),
+            exactMatch: false);
+        Assert.Equal(
+            1,
+            telemetry.Capture().Jobs["AuthenticationEmailDelivery"].TerminalFailures);
     }
 
     [Fact]
@@ -1499,6 +1506,7 @@ public class AuthenticationEmailDispatcherTests(PostgreSqlWorkerFixture fixture)
         configuration["ConnectionStrings:PostgreSql"] = fixture.Container.GetConnectionString();
         configuration["DataProtection:KeysPath"] = _keysPath;
         var services = new ServiceCollection();
+        services.AddTestTelemetry();
         services.AddSingleton<TimeProvider>(timeProvider ?? new FixedTimeProvider(now));
         services.AddSingleton<IAuthenticationEmailSender>(sender);
         services.ConfigureDataProtection(

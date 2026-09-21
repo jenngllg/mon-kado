@@ -11,6 +11,7 @@
 **/.local
 **/production.env
 **/rclone.conf
+**/monitoring-gmail.json
 **/secrets.json
 **/client_secret_*.json
 **/*.pfx

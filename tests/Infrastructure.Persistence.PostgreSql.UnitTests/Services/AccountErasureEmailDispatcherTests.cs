@@ -16,6 +16,7 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.UnitTes
 
 public class AccountErasureEmailDispatcherTests
 {
+    private readonly Mock<IApplicationTelemetry> _telemetryMock = new(MockBehavior.Strict);
     private readonly Mock<IAccountErasureEmailRepository> _repositoryMock;
     private readonly Mock<IAccountErasureRecipientProtector> _protectorMock;
     private readonly Mock<IAccountErasureEmailSender> _senderMock;
@@ -44,6 +45,7 @@ public class AccountErasureEmailDispatcherTests
         _clockMock.Setup(clock => clock.GetUtcNow())
             .Returns(DateTimeOffset.UnixEpoch);
         _dispatcher = new AccountErasureEmailDispatcher(
+            _telemetryMock.Object,
             _repositoryMock.Object,
             _protectorMock.Object,
             _senderMock.Object,
@@ -152,6 +154,9 @@ public class AccountErasureEmailDispatcherTests
         }
 
         var retryAt = DateTime.UnixEpoch.AddMinutes(retryMinutes);
+
+        if (expectedStatus == AccountErasureNotificationStatus.Failed)
+            _telemetryMock.Setup(telemetry => telemetry.RecordTerminalFailure(WorkerOperation.AccountErasureProcessing));
         _repositoryMock.Setup(repository => repository.CompleteAsync(
                 claim,
                 DateTime.UnixEpoch,
@@ -167,6 +172,8 @@ public class AccountErasureEmailDispatcherTests
         Assert.Equal(
             1,
             processed);
+        _telemetryMock.Verify(telemetry => telemetry.RecordTerminalFailure(WorkerOperation.AccountErasureProcessing),
+            expectedStatus == AccountErasureNotificationStatus.Failed ? Times.Once : Times.Never);
         VerifyClaim(cancellationToken);
         _protectorMock.Verify(protector => protector.Read(
                 claim.OperationId,
@@ -328,6 +335,7 @@ public class AccountErasureEmailDispatcherTests
 
     private void VerifyNoOtherCalls(int expectedClockReads)
     {
+        _telemetryMock.VerifyNoOtherCalls();
         _clockMock.Verify(clock => clock.GetUtcNow(), Times.Exactly(expectedClockReads));
         _repositoryMock.VerifyNoOtherCalls();
         _protectorMock.VerifyNoOtherCalls();

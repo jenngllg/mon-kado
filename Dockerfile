@@ -7,6 +7,7 @@ COPY global.json Directory.Build.props Directory.Packages.props ./
 COPY .config/dotnet-tools.json .config/
 COPY src/Domain/Domain.csproj src/Domain/
 COPY src/Application/Application.csproj src/Application/
+COPY src/Infrastructure.Observability/Infrastructure.Observability.csproj src/Infrastructure.Observability/
 COPY src/Infrastructure.Persistence.PostgreSql/Infrastructure.Persistence.PostgreSql.csproj src/Infrastructure.Persistence.PostgreSql/
 COPY src/Infrastructure.Images/Infrastructure.Images.csproj src/Infrastructure.Images/
 COPY src/Infrastructure.PersonalDataExports/Infrastructure.PersonalDataExports.csproj src/Infrastructure.PersonalDataExports/

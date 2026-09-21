@@ -986,6 +986,7 @@ public class AdministrativeAccountErasureIntegrationTests(PostgreSqlContainerFix
                 null))
             .Returns(Task.CompletedTask);
         var dispatcher = new AccountErasureEmailDispatcher(
+            scope.ServiceProvider.GetRequiredService<IApplicationTelemetry>(),
             scope.ServiceProvider.GetRequiredService<IAccountErasureEmailRepository>(),
             protector,
             senderMock.Object,

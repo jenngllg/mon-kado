@@ -11,12 +11,14 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Service
 
 /// <summary>Delivers leased notifications before their absolute recipient deadline.</summary>
 /// <param name="repository">The fenced outbox.</param>
+/// <param name="telemetry">The bounded operational counters.</param>
 /// <param name="protector">The operation-bound recipient protector.</param>
 /// <param name="sender">The provider sender without transparent retries.</param>
 /// <param name="options">The validated processing bounds.</param>
 /// <param name="timeProvider">The UTC and timeout clock.</param>
 /// <param name="logger">The technical outcome logger.</param>
 public class AccountErasureEmailDispatcher(
+    IApplicationTelemetry telemetry,
     IAccountErasureEmailRepository repository,
     IAccountErasureRecipientProtector protector,
     IAccountErasureEmailSender sender,
@@ -131,12 +133,15 @@ public class AccountErasureEmailDispatcher(
             failure.RetryAfter);
         var retryAt = now.Add(delay);
         var terminal = claim.AttemptCount >= options.Value.MaximumAttempts || retryAt >= claim.ExpiresAt || failure.Failure is AccountErasureEmailFailure.InvalidRecipient or AccountErasureEmailFailure.Rejected;
-        await repository.CompleteAsync(
+        var failureAcknowledged = await repository.CompleteAsync(
             claim,
             now,
             terminal ? AccountErasureNotificationStatus.Failed : AccountErasureNotificationStatus.Pending,
             retryAt,
             cancellationToken);
+
+        if (terminal && failureAcknowledged)
+            telemetry.RecordTerminalFailure(WorkerOperation.AccountErasureProcessing);
         AdministrativeAccountErasureLogMessages.NotificationFailed(
             logger,
             claim.OperationId,

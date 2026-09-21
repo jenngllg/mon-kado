@@ -13,7 +13,13 @@ namespace JennGllg.Fr.MonKado.Back.Worker.Workers;
 /// <summary>
 /// Delivers pending authentication emails in the background.
 /// </summary>
+/// <param name="telemetry">The process-local operational measurements.</param>
+/// <param name="scopeFactory">The scoped business dependencies.</param>
+/// <param name="timeProvider">The UTC and scheduling clock.</param>
+/// <param name="options">The validated processing configuration.</param>
+/// <param name="logger">The structured operational logger.</param>
 public sealed class AuthenticationEmailDeliveryWorker(
+    IApplicationTelemetry telemetry,
     IServiceScopeFactory scopeFactory,
     IOptions<AuthenticationEmailOptions> options,
     TimeProvider timeProvider,
@@ -38,6 +44,7 @@ public sealed class AuthenticationEmailDeliveryWorker(
 
         if (!_emailOptions.IsEnabled)
         {
+            telemetry.Disable(WorkerOperation.AuthenticationEmailDelivery);
             using var logScope = WorkerLogScope.Begin(
                 logger,
                 "AuthenticationEmailDeliveryDisabled");
@@ -79,7 +86,9 @@ public sealed class AuthenticationEmailDeliveryWorker(
         Uri frontendOrigin,
         CancellationToken cancellationToken)
     {
+        telemetry.BeginCycle(WorkerOperation.AuthenticationEmailDelivery);
         TimeSpan nextDelay;
+        var successful = true;
 
         try
         {
@@ -105,8 +114,14 @@ public sealed class AuthenticationEmailDeliveryWorker(
                 exception.GetType().Name,
                 exception);
 
+            successful = false;
             nextDelay = _emailOptions.FailureRetryInterval;
         }
+
+        telemetry.CompleteCycle(
+            WorkerOperation.AuthenticationEmailDelivery,
+            nextDelay,
+            successful);
 
         return nextDelay;
     }
