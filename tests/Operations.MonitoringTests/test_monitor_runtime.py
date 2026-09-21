@@ -6,9 +6,10 @@ import fcntl
 from pathlib import Path
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import patch, Mock
 
 import monitor_runtime as runtime
+from monitor_collect import Collector
 from monitor_storage import atomic_json, read_json, append_history
 from test_monitor_policy import NOW, observation, snapshot
 
@@ -39,6 +40,28 @@ class MonitorTests(unittest.TestCase):
 
     def send(self, incidents, keys, now):
         self.messages.append(list(keys))
+
+    def test_oom_counter_survives_failed_collection_and_detects_next_increment(self):
+        # Arrange
+        cgroup = Mock()
+        cgroup.read_text.side_effect = ["oom_kill 3\n", OSError("simulated failure"), "oom_kill 4\n", "oom_kill 0\n"]
+        collector = Collector(root=Path(self.directory.name), cgroup=cgroup,
+                              runner=lambda arguments: (1, ""),
+                              probe=lambda service, path: (False, (NOW + timedelta(days=90)).isoformat()))
+        monitor = runtime.Monitor(self.root, collector, self.send)
+        configuration = self.configuration | {"notificationsEnabled": False}
+        reports = []
+        counters = []
+        # Act
+        for minute in range(4):
+            reports.append(monitor.run(configuration, NOW + timedelta(minutes=minute)))
+            counters.append(read_json(self.root / "state.json")["oomKills"])
+        # Assert
+        self.assertEqual([3, 3, 4, 0], counters)
+        self.assertIn("host.oom", reports[1]["unknownChecks"])
+        self.assertNotIn("host.oom", reports[1]["openIncidents"])
+        self.assertIn("host.oom", reports[2]["openIncidents"])
+        self.assertEqual([], self.messages)
 
     def test_run_reserves_delivery_before_post_and_recovers_after_three_samples(self):
         # Arrange

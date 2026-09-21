@@ -68,6 +68,34 @@ class CollectorTests(unittest.TestCase):
         self.assertEqual([], observed["maintenance"])
         self.assertNotIn("PRIVATE", json.dumps(observed))
 
+    def test_frontend_requires_both_page_and_release_even_when_one_probe_fails(self):
+        # Arrange / Act / Assert
+        for failing_path in ("/", "/release.json", None):
+            for raises in (False, True):
+                calls = []
+                def probe(service, path):
+                    calls.append((service, path))
+                    bad = service == "frontend" and path == failing_path
+                    if bad and raises:
+                        raise OSError("simulated unavailable page")
+                    return bad, (NOW + timedelta(days=90)).isoformat()
+                self.collector.probe = probe
+                with self.subTest(failing_path=failing_path, raises=raises):
+                    observed, _, _ = self.collector.collect(NOW, {}, policy.DEFAULTS, True)
+                    self.assertEqual(failing_path is not None, observed["checks"]["frontend"])
+                    self.assertEqual([("frontend", "/"), ("frontend", "/release.json")],
+                                     [call for call in calls if call[0] == "frontend"])
+
+    def test_disabled_frontend_does_not_probe_page_or_release(self):
+        # Arrange
+        probe = Mock(side_effect=self.probe)
+        self.collector.probe = probe
+        # Act
+        self.collector.collect(NOW, {}, policy.DEFAULTS, False)
+        # Assert
+        self.assertEqual([("api", "/liveness"), ("api", "/readiness")],
+                         [call.args for call in probe.call_args_list])
+
     def test_missing_or_corrupt_evidence_is_unknown_not_healthy(self):
         # Arrange
         self.cgroup.unlink()
@@ -135,6 +163,19 @@ class CollectorTests(unittest.TestCase):
 
 
 class TransportTests(unittest.TestCase):
+    def test_frontend_html_page_uses_http_status_without_parsing_release_json(self):
+        # Arrange / Act / Assert
+        for status in (200, 404, 503):
+            connection = Mock()
+            connection.sock.getpeercert.return_value = {"notAfter": "Dec 21 12:00:00 2026 GMT"}
+            connection.getresponse.return_value.status = status
+            connection.getresponse.return_value.read.return_value = b"<!doctype html><html></html>"
+            with self.subTest(status=status), patch.object(collect.http.client, "HTTPSConnection", return_value=connection):
+                bad, _ = collect.https("frontend", "/")
+                self.assertEqual(status != 200, bad)
+                connection.request.assert_called_once_with("GET", "/", headers={"User-Agent": "MonKado-local-monitoring"})
+                connection.close.assert_called_once()
+
     def test_command_bounds_output_and_has_no_retry(self):
         # Arrange
         process = Mock(returncode=1, stdout=b"technical")

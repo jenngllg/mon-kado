@@ -73,6 +73,10 @@ observations et les tests d’e-mail simultanés.
 | Certificat HTTPS | expiration dans moins de quatorze jours |
 
 Les décisions de latence utilisent les buckets du histogramme, pas les durées individuelles.
+La disponibilité frontend exige une réponse 200 de la page `/` et un marqueur
+`/release.json` valide ; le marqueur seul ne prouve pas que la page est accessible.
+Une lecture OOM indisponible reste inconnue, mais ne supprime pas le dernier compteur
+valide : une augmentation après cette interruption reste détectable.
 Après un redémarrage ou faute de trafic suffisant, les contrôles HTTP peuvent rester
 `unknown`. Ce n’est ni une preuve de panne ni une preuve de bonne santé. Une collecte hôte
 incomplète est signalée ; elle ne ferme pas un incident existant.

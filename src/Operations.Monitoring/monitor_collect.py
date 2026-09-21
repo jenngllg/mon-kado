@@ -25,7 +25,7 @@ def command(arguments):
 
 def https(service, path):
     """Verify the public certificate and never follow redirects or log response bodies."""
-    require(service in HOSTS and path in ("/liveness", "/readiness", "/release.json"))
+    require(service in HOSTS and path in ("/liveness", "/readiness", "/release.json", "/"))
     context = ssl.create_default_context()
     context.minimum_version = ssl.TLSVersion.TLSv1_2
     context.verify_mode = ssl.CERT_REQUIRED
@@ -40,7 +40,7 @@ def https(service, path):
         body = response.read(65537)
         require(len(body) <= 65536)
         healthy = response.status == 200
-        if service == "frontend" and healthy:
+        if service == "frontend" and path == "/release.json" and healthy:
             marker = json.loads(body)
             healthy = (isinstance(marker, dict) and re.fullmatch(r"[0-9a-f]{40}", str(marker.get("revision", ""))) is not None
                        and marker.get("apiOrigin") == "https://api.monkado.fr" and marker.get("googleEnabled") is False)
@@ -105,12 +105,13 @@ class Collector:
     def collect(self, now, previous, options, frontend_enabled):
         """Missing or invalid evidence remains unknown and cannot silently close an incident."""
         result = {"frontendEnabled": frontend_enabled, "checks": {}, "certificates": {}, "snapshots": {}, "maintenance": [], "frontendMaintenance": []}
-        for service, path, check in (("api", "/liveness", "api"), ("api", "/readiness", "database"), ("frontend", "/release.json", "frontend")):
+        for service, path, check in (("api", "/liveness", "api"), ("api", "/readiness", "database"),
+                                      ("frontend", "/", "frontend"), ("frontend", "/release.json", "frontend")):
             if service == "frontend" and not frontend_enabled:
                 continue
             try:
                 bad, expires = self.probe(service, path)
-                result["checks"][check] = bad
+                result["checks"][check] = result["checks"].get(check, False) or bad
                 result["certificates"][service] = expires
             except (OSError, ValueError, TypeError, KeyError, http.client.HTTPException):
                 result["checks"][check] = True

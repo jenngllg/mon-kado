@@ -127,7 +127,8 @@ class Monitor:
         due, recent = policy.notifications(incidents, previous["deliveries"], now, options)
         container_history = [item for item in previous["containerHistory"] if policy.age(item["createdAt"], now) <= options["restartWindowSeconds"]]
         state = {"schemaVersion": 1, "incidents": incidents, "deliveries": recent,
-                 "containerHistory": (container_history + samples)[-500:], "oomKills": oom,
+                 "containerHistory": (container_history + samples)[-500:],
+                 "oomKills": previous["oomKills"] if oom is None else oom,
                  "workerSnapshot": observed["snapshots"].get("worker") or previous["workerSnapshot"]}
         atomic_json(state_path, state)
         append_history(history_path, now, {"schemaVersion": 1, "createdAt": now.isoformat(),
