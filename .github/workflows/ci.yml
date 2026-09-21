@@ -235,9 +235,7 @@ jobs:
 
       - name: Verify coverage reports
         shell: pwsh
-        run: >-
-          ./scripts/Verify-Coverage.ps1
-            -ResultsDirectory TestResults
+        run: ./scripts/Verify-Coverage.ps1 -ResultsDirectory TestResults
 
       - name: Upload coverage diagnostics
         if: failure()
