@@ -37,6 +37,20 @@ public class CommonErrorResponsesOperationTransformer : IOpenApiOperationTransfo
             "Internal server error",
             schema);
 
+        var path = new PathString(string.Concat(
+            "/",
+            context.Description.RelativePath));
+
+        if (path.StartsWithSegments("/api/v1")
+            || path.StartsWithSegments("/security/csrf-token"))
+        {
+            AddResponse(
+                operation,
+                StatusCodes.Status429TooManyRequests,
+                "Request quota exceeded; Retry-After indicates seconds before retrying",
+                schema);
+        }
+
         AddAuthorizationResponses(
             operation,
             schema,

@@ -77,6 +77,17 @@ public static class ApiInjectionConfiguration
             environment);
         services.AddApiErrorResponses();
         services.AddAuthenticationRateLimiting();
+        services.AddOptions<GeneralRateLimitOptions>()
+            .Bind(configuration.GetSection(GeneralRateLimitOptions.SectionName))
+            .Validate(
+                options => options.PermitLimit > 0,
+                "General request capacity must be positive.")
+            .Validate(
+                options => options.WindowSeconds is > 0 and <= 3600,
+                "General request window must be between 1 and 3600 seconds.")
+            .ValidateOnStart();
+        // Partition state and timers must be shared for the entire host lifetime.
+        services.AddSingleton<IGeneralRequestLimiter, GeneralRequestLimiter>();
 
         return services;
     }

@@ -38,6 +38,7 @@ app.UseCorrelationId();
 app.UseSafeHttpRequestLogging();
 app.UseApiErrorHandling();
 app.UseWebSecurity();
+app.UseMiddleware<GeneralRateLimitMiddleware>();
 app.UseMiddleware<GiftImageRateLimitIdentityMiddleware>();
 app.UseRateLimiter();
 app.UseRequestBodyLimits();

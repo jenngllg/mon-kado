@@ -1,6 +1,16 @@
 # Local container secrets
 /.env
+**/.env
+**/.env.*
+!**/.env.example
 /.local/
+**/.local/
+**/production.env
+**/rclone.conf
+**/secrets.json
+**/client_secret_*.json
+**/*.pem
+**/*.key
 
 # Local implementation plans
 *-implementation-plan.md

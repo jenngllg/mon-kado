@@ -25,8 +25,19 @@ public class SecurityTestController : ControllerBase
     }
 
     [HttpGet("bearer")]
+    [HttpGet("/api/v1/_tests/security/bearer")]
     [Authorize]
     public IActionResult GetBearer()
+    {
+
+        return NoContent();
+    }
+
+    [HttpGet("/api/v1/_tests/security/member-quota")]
+    [Authorize]
+    [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting(
+        JennGllg.Fr.MonKado.Back.Api.Extensions.AuthenticationRateLimitingExtensions.AdministrativeSessionRevocationPolicy)]
+    public IActionResult GetMemberQuota()
     {
 
         return NoContent();
