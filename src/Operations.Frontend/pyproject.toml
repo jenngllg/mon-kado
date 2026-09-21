@@ -1,0 +1,6 @@
+[project]
+name = "monkado-frontend-publication"
+version = "0.1.0"
+requires-python = ">=3.12"
+description = "Approved static frontend publication and verified VPS installation"
+

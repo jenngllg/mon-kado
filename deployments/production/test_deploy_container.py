@@ -36,6 +36,10 @@ class DeploymentTests(unittest.TestCase):
         spec = importlib.util.spec_from_file_location("installed_manifest", self.root / "deployments/production/release_manifest.py")
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
+        for name in module.FILES:
+            target = self.root / name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(source / name, target)
         self.manifest = {
             "schemaVersion": 1, "revision": "a" * 40,
             "configurationHash": module.configuration_hash(self.root),

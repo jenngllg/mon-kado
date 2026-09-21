@@ -4,6 +4,10 @@
 	}
 }
 
+# The production overlay mounts the reviewed static frontend site here.
+# Local API-only environments intentionally have no matching files.
+import frontend/*.caddy
+
 # Override the automatic catch-all redirect: unknown HTTP hosts must not
 # control a Location header. Caddy retains its hostname-matched HTTPS redirect.
 :80 {

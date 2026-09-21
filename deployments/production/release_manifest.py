@@ -13,6 +13,12 @@ FILES = (
     "deployments/production/monkado.slice",
     "deployments/production/deploy.sh",
     "deployments/production/release_manifest.py",
+    "deployments/frontend/frontend.caddy",
+    "deployments/frontend/monkado-frontend.service",
+    "deployments/frontend/monkado-frontend.timer",
+    "src/Operations.Frontend/frontend_contract.py",
+    "src/Operations.Frontend/frontend_runtime.py",
+    "src/Operations.Frontend/frontend_cli.py",
 )
 REPOSITORY = "jenngllg/mon-kado"
 

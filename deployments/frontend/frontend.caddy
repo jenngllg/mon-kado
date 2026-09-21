@@ -1,0 +1,61 @@
+# Import this site into the VPS Caddy configuration; do not replace the API site.
+# FRONTEND_HOST: HTTPS hostname; FRONTEND_ROOT: absolute built dist directory.
+# FRONTEND_API_ORIGIN: exact HTTPS API origin, without a path or trailing slash.
+(frontend_security) {
+	header {
+		-Server
+		Content-Security-Policy "default-src 'none'; script-src 'self'; style-src 'self'; style-src-attr 'unsafe-inline'; font-src 'self'; img-src 'self' blob: data: {$FRONTEND_API_ORIGIN}; connect-src 'self' {$FRONTEND_API_ORIGIN}; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; form-action 'self'"
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+		Referrer-Policy no-referrer
+		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=(), clipboard-write=(self)"
+		Strict-Transport-Security "max-age=31536000"
+		X-Robots-Tag "noindex, nofollow, noarchive"
+	}
+}
+
+{$FRONTEND_HOST} {
+	root * {$FRONTEND_ROOT}
+	import frontend_security
+	encode zstd gzip
+
+	route {
+		header Cache-Control no-store
+		@unsupported not method GET HEAD
+		respond @unsupported 405
+
+		@immutable {
+			path_regexp fingerprint ^/assets/[A-Za-z0-9._-]+-[A-Za-z0-9_-]{8,}\.(js|css|woff2?|ttf|png|webp|jpe?g|svg|ico|avif)$
+			file {path}
+		}
+		handle @immutable {
+			header Cache-Control "public, max-age=31536000, immutable"
+			file_server
+		}
+
+		handle {
+			route {
+				@private path /.* */.* /src/* /tools/* /node_modules/* /api/* /security/* /assets/* *.map
+				respond @private 404
+				@missingStatic {
+					path_regexp extension \.[^/]+$
+					not file {path}
+				}
+				respond @missingStatic 404
+				try_files {path} /index.html
+				file_server
+			}
+		}
+	}
+
+	handle_errors {
+		import frontend_security
+		header Cache-Control no-store
+		respond "Frontend unavailable" {err.status_code}
+	}
+}
+
+# Canonical frontend origin must match credentialed CORS on the API.
+{$FRONTEND_APEX_HOST} {
+	redir https://www.monkado.fr{uri} 308
+}

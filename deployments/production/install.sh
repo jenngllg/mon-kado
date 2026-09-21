@@ -12,19 +12,36 @@ command -v python3 >/dev/null
 command -v curl >/dev/null
 command -v flock >/dev/null
 systemctl stop monkado-deploy.timer 2>/dev/null || true
+systemctl stop monkado-frontend.timer 2>/dev/null || true
 if systemctl is-active --quiet monkado-deploy.service; then
     echo 'Wait for the active deployment before installing configuration.' >&2
     exit 1
 fi
+if systemctl is-active --quiet monkado-frontend.service; then
+    echo 'Wait for the active frontend publication before installing configuration.' >&2
+    exit 1
+fi
 install -d -m 0700 /var/lib/monkado-deployment
+exec 8>/var/lib/monkado-deployment/backup-coordination.lock
+flock -n 8 || { echo 'A backup operation holds the coordination lock.' >&2; exit 1; }
 exec 9>/var/lib/monkado-deployment/deploy.lock
 flock -n 9 || { echo 'A deployment holds the configuration lock.' >&2; exit 1; }
 install -d -m 0755 /opt/monkado/deployments/caddy /opt/monkado/deployments/production
+install -d -m 0755 /opt/monkado/deployments/frontend /opt/monkado/src/Operations.Frontend
+install -d -m 0755 /var/lib/monkado-frontend /var/lib/monkado-frontend/releases
 install -d -m 0700 /etc/monkado /var/lib/monkado-deployment
 install -m 0644 "$source_root/compose.yaml" /opt/monkado/compose.yaml
 install -m 0644 "$source_root/deployments/caddy/Caddyfile" /opt/monkado/deployments/caddy/Caddyfile
 for file in compose.production.yaml release_manifest.py deploy.sh monkado.slice; do
     install -m 0644 "$source_root/deployments/production/$file" "/opt/monkado/deployments/production/$file"
+done
+install -m 0644 "$source_root/deployments/frontend/frontend.caddy" /opt/monkado/deployments/frontend/frontend.caddy
+for file in frontend_contract.py frontend_runtime.py frontend_cli.py; do
+    install -m 0644 "$source_root/src/Operations.Frontend/$file" "/opt/monkado/src/Operations.Frontend/$file"
+done
+for unit in monkado-frontend.service monkado-frontend.timer; do
+    install -m 0644 "$source_root/deployments/frontend/$unit" "/opt/monkado/deployments/frontend/$unit"
+    install -m 0644 "$source_root/deployments/frontend/$unit" "/etc/systemd/system/$unit"
 done
 for unit in monkado.slice monkado-deploy.service monkado-deploy.timer; do
     install -m 0644 "$source_root/deployments/production/$unit" "/etc/systemd/system/$unit"
@@ -35,3 +52,4 @@ echo 'Deployment code installed. Timer remains stopped; no application has been 
 echo 'Configure /etc/monkado/production.env (root:root, 0600), approve a publication,'
 echo 'then run: sudo systemctl start monkado-deploy.service'
 echo 'Enable the timer only after a successful first rollout and review.'
+echo 'Frontend publication remains stopped. Review DNS, HTTPS and the approved frontend release before enabling its timer.'

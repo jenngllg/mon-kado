@@ -36,6 +36,14 @@ services:
       - work_mem=2MB
   caddy:
     cgroup_parent: monkado.slice
+    environment:
+      FRONTEND_HOST: www.monkado.fr
+      FRONTEND_APEX_HOST: monkado.fr
+      FRONTEND_ROOT: /srv/monkado-front/current
+      FRONTEND_API_ORIGIN: https://api.monkado.fr
+    volumes:
+      - ./deployments/frontend/frontend.caddy:/etc/caddy/frontend/site.caddy:ro
+      - /var/lib/monkado-frontend/releases:/srv/monkado-front:ro
     ports: !override
       - "80:80"
       - "443:443"
