@@ -81,7 +81,8 @@ class TransportTests(unittest.TestCase):
 
     def test_download_streams_with_bound_and_never_overwrites(self):
         # Arrange
-        with tempfile.TemporaryDirectory() as directory, patch.object(runtime.urllib.request, "build_opener") as build:
+        with tempfile.TemporaryDirectory() as directory, patch.object(runtime.urllib.request, "build_opener") as build, \
+                patch.object(runtime.urllib.request, "HTTPSHandler", wraps=runtime.urllib.request.HTTPSHandler) as tls:
             response = build.return_value.open.return_value.__enter__.return_value
             target = Path(directory) / "download"
             response.read.side_effect = [b"synthetic", b""]
@@ -89,6 +90,10 @@ class TransportTests(unittest.TestCase):
             runtime.download("https://github.com/file", target, 20)
             # Assert
             self.assertEqual(b"synthetic", target.read_bytes())
+            context = tls.call_args.kwargs["context"]
+            self.assertEqual(runtime.ssl.CERT_REQUIRED, context.verify_mode)
+            self.assertTrue(context.check_hostname)
+            self.assertGreaterEqual(context.minimum_version, runtime.ssl.TLSVersion.TLSv1_2)
             with self.assertRaises(FileExistsError):
                 runtime.download("https://github.com/file", target, 20)
             target.unlink()

@@ -11,6 +11,8 @@ API_ORIGIN = "https://api.monkado.fr"
 MAX_COMPRESSED = 50 * 1024 * 1024
 MAX_EXTRACTED = 200 * 1024 * 1024
 MAX_FILES = 10000
+ENTRYPOINT = "index.html"
+MARKER = "release.json"
 SHA = r"[0-9a-f]{40}"
 DIGEST = r"[0-9a-f]{64}"
 FIELDS = {"schemaVersion", "revision", "backendRevision", "configurationHash", "apiOrigin", "archiveSha256"}
@@ -64,7 +66,7 @@ def file_digest(path):
 
 def allowed_file(name):
     """Only built entrypoint, revision marker and flat static assets can be served."""
-    return name in {"index.html", "release.json"} or ASSET.fullmatch(name) is not None
+    return name in {ENTRYPOINT, MARKER} or ASSET.fullmatch(name) is not None
 
 
 def extract(archive, destination, manifest):
@@ -85,7 +87,7 @@ def extract(archive, destination, manifest):
             require(total <= MAX_EXTRACTED)
             seen.add(entry.name.casefold())
             entries.append(entry)
-        require("index.html" in seen and "release.json" in seen)
+        require(ENTRYPOINT in seen and MARKER in seen)
         destination.mkdir(mode=0o755)
         for entry in entries:
             target = destination / entry.name
@@ -94,7 +96,7 @@ def extract(archive, destination, manifest):
                 while chunk := source.read(65536):
                     output.write(chunk)
             target.chmod(0o644)
-        marker = json.loads((destination / "release.json").read_text(encoding="utf-8"))
+        marker = json.loads((destination / MARKER).read_text(encoding="utf-8"))
         require(marker == {"revision": manifest["revision"], "apiOrigin": API_ORIGIN, "googleEnabled": False})
 
 
@@ -108,18 +110,18 @@ def package_build(dist, output, revision, backend_revision, configuration_hash):
     require(0 < len(files) < MAX_FILES)
     for path in files:
         require(path.is_file() and not path.is_symlink())
-        require(allowed_file(path.relative_to(dist).as_posix()) and path.name != "release.json")
-    require((dist / "index.html").is_file())
+        require(allowed_file(path.relative_to(dist).as_posix()) and path.name != MARKER)
+    require((dist / ENTRYPOINT).is_file())
     require(sum(path.stat().st_size for path in files) < MAX_EXTRACTED)
     output.mkdir(parents=True)
-    marker = output / "release.json"
+    marker = output / MARKER
     marker.write_text(json.dumps({"revision": revision, "apiOrigin": API_ORIGIN, "googleEnabled": False}), encoding="utf-8")
     archive = output / "frontend.tar.gz"
     with archive.open("xb") as raw, gzip.GzipFile(fileobj=raw, mode="wb", filename="", mtime=0) as compressed:
         with tarfile.open(fileobj=compressed, mode="w", format=tarfile.PAX_FORMAT) as package:
             for path in files:
                 package.add(path, arcname=path.relative_to(dist).as_posix(), recursive=False, filter=normalize_entry)
-            package.add(marker, arcname="release.json", recursive=False, filter=normalize_entry)
+            package.add(marker, arcname=MARKER, recursive=False, filter=normalize_entry)
     require(archive.stat().st_size <= MAX_COMPRESSED)
     result = {"schemaVersion": 1, "revision": revision, "backendRevision": backend_revision,
               "configurationHash": configuration_hash, "apiOrigin": API_ORIGIN,

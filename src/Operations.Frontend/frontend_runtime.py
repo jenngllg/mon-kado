@@ -38,7 +38,11 @@ def validate_url(url):
 def download(url, destination, limit):
     """Stream bounded public data without printing provider URLs, headers or failures."""
     validate_url(url)
-    opener = urllib.request.build_opener(SafeRedirect(), urllib.request.HTTPSHandler(context=ssl.create_default_context()))
+    context = ssl.create_default_context()
+    context.minimum_version = ssl.TLSVersion.TLSv1_2
+    context.verify_mode = ssl.CERT_REQUIRED
+    context.check_hostname = True
+    opener = urllib.request.build_opener(SafeRedirect(), urllib.request.HTTPSHandler(context=context))
     request = urllib.request.Request(url, headers={"Accept": "application/octet-stream", "User-Agent": "MonKado-publication"})
     size = 0
     with opener.open(request, timeout=30) as response, destination.open("xb") as output:
@@ -157,7 +161,7 @@ class Deployment:
     def __init__(self, root, deployment, configuration_hash, transport=download, health=probe):
         self.root = root
         self.releases = root / "releases"
-        self.deployment = deployment
+        self.backend_state = deployment
         self.configuration_hash = configuration_hash
         self.transport = transport
         self.health = health
@@ -192,9 +196,9 @@ class Deployment:
 
     def deploy(self, approved=None, retry=False):
         """Install only after complete capture verification; restore the old site on failed smoke checks."""
-        with locks(self.deployment):
+        with locks(self.backend_state):
             self.recover()
-            backend = backend_revision(self.deployment)
+            backend = backend_revision(self.backend_state)
             with tempfile.TemporaryDirectory(prefix="attempt-", dir=self.root) as temporary:
                 staging = Path(temporary)
                 if approved is None:
