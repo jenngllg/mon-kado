@@ -16,6 +16,7 @@ on:
       - compose.yaml
       - compose.local.yaml
       - deployments/caddy/**
+      - deployments/production/**
       - global.json
       - src/**
   push:
@@ -33,6 +34,7 @@ on:
       - compose.yaml
       - compose.local.yaml
       - deployments/caddy/**
+      - deployments/production/**
       - global.json
       - src/**
   workflow_dispatch:
@@ -161,6 +163,39 @@ jobs:
           severity: HIGH,CRITICAL
           ignore-unfixed: true
           exit-code: "1"
+
+      - name: Verify real Production startup and migrations over local TLS
+        shell: bash
+        env:
+          API_IMAGE: mon-kado-api:ci
+          WORKER_IMAGE: mon-kado-worker:ci
+          FRONTEND_ORIGIN: https://www.monkado.fr
+          EDGE_NETWORK_CIDR: 172.29.81.0/24
+          AUTHENTICATION_EMAIL_PROVIDER: Gmail
+          GMAIL_SENDER_ADDRESS: smoke@example.test
+          GMAIL_CLIENT_ID: test-only
+          GMAIL_CLIENT_SECRET: test-only
+          GMAIL_REFRESH_TOKEN: test-only
+        run: |
+          set -euo pipefail
+          compose=(docker compose -p mon-kado-production-ci -f compose.yaml
+            -f deployments/production/compose.production.yaml -f deployments/production/compose.verify.yaml)
+          trap '"${compose[@]}" down --volumes --remove-orphans' EXIT
+          "${compose[@]}" up -d --no-build
+          for attempt in {1..30}; do
+            if docker cp mon-kado-production-ci-caddy-1:/data/caddy/pki/authorities/local/root.crt "$RUNNER_TEMP/production-ci-root.crt" 2>/dev/null \
+              && curl --cacert "$RUNNER_TEMP/production-ci-root.crt" --fail --silent https://localhost:18490/readiness >/dev/null; then
+              break
+            fi
+            test "$attempt" -lt 30
+            sleep 2
+          done
+          # Trust only this fixture's CA; keep hostname and certificate verification enabled.
+          for route in liveness readiness openapi/v1.json security/csrf-token; do
+            curl --cacert "$RUNNER_TEMP/production-ci-root.crt" --fail --silent "https://localhost:18490/$route" >/dev/null
+          done
+          test "$(docker inspect mon-kado-production-ci-migrations-1 --format '{{.State.ExitCode}}')" = 0
+          test "$(docker inspect mon-kado-production-ci-worker-1 --format '{{.State.Running}} {{.RestartCount}}')" = 'true 0'
 
       - name: Scan Worker image
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0

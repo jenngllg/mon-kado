@@ -1,0 +1,10 @@
+[Unit]
+Description=Shared memory budget for MonKado containers
+
+[Slice]
+MemoryAccounting=true
+MemoryMax=768M
+MemorySwapMax=0
+
+[Install]
+WantedBy=multi-user.target

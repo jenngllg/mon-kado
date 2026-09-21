@@ -1,0 +1,13 @@
+[Unit]
+Description=Pull the approved MonKado backend release
+Wants=network-online.target
+After=network-online.target docker.service monkado.slice
+Requires=docker.service monkado.slice
+
+[Service]
+Type=oneshot
+User=root
+UMask=0077
+ExecStart=/bin/bash /opt/monkado/deployments/production/deploy.sh
+TimeoutStartSec=20min
+Nice=10

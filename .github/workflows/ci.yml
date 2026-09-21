@@ -25,6 +25,52 @@ env:
     Host=127.0.0.1;Port=1;Database=mon_kado;Username=mon_kado;Timeout=1;Command Timeout=1;Pooling=false;SSL Mode=Disable
 
 jobs:
+  deployment_configuration:
+    name: Deployment configuration
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Verify production scripts and release validation
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n deployments/production/deploy.sh deployments/production/install.sh
+          shellcheck deployments/production/deploy.sh deployments/production/install.sh
+          python3 -m pip install --only-binary :all: 'coverage==7.10.7'
+          PYTHONPATH=deployments/production python3 -m coverage run --branch --source=release_manifest -m unittest discover -s deployments/production -p 'test_*.py'
+          python3 -m coverage report --fail-under=100
+          python3 -m coverage xml -o TestResults/deployment-coverage.xml
+      - name: Upload deployment coverage
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: deployment-coverage
+          path: TestResults/deployment-coverage.xml
+          if-no-files-found: error
+          retention-days: 3
+      - name: Test deployment failure handling in a disposable container
+        run: >-
+          docker run --rm -e MONKADO_DEPLOYMENT_SANDBOX=1
+          -v "$PWD:/source:ro" -w /source
+          python:3.13-slim@sha256:8d9d0b8bcf6506481eae4907c18f5e3e7902e629f5f6d684f9e7c32e85e3ddf0
+          python deployments/production/test_deploy_container.py
+      - name: Validate production Compose contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          export API_HOST=api.monkado.fr API_ALLOWED_HOST=api.monkado.fr FRONTEND_ORIGIN=https://www.monkado.fr
+          export POSTGRES_DB=mon_kado POSTGRES_USER=mon_kado
+          compose_database_secret="$(openssl rand -hex 32)"
+          export POSTGRES_PASSWORD="$compose_database_secret"
+          export JWT_SIGNING_KEY="$(openssl rand -base64 32)"
+          export API_IMAGE="ghcr.io/jenngllg/mon-kado-api@sha256:$(printf 'a%.0s' {1..64})"
+          export WORKER_IMAGE="ghcr.io/jenngllg/mon-kado-worker@sha256:$(printf 'b%.0s' {1..64})"
+          docker compose -f compose.yaml -f deployments/production/compose.production.yaml config --format json \
+            | python3 deployments/production/verify_compose.py
+
   windows_export_coverage:
     name: Windows export storage coverage
     runs-on: windows-latest
@@ -60,7 +106,7 @@ jobs:
 
   quality:
     name: quality
-    needs: windows_export_coverage
+    needs: [windows_export_coverage, deployment_configuration]
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -110,6 +156,8 @@ jobs:
           /d:sonar.token="$SONAR_TOKEN"
           /d:sonar.host.url="https://sonarcloud.io"
           /d:sonar.cs.opencover.reportsPaths="**/coverage.opencover.xml"
+          /d:sonar.python.coverage.reportPaths="TestResults/deployment-coverage.xml"
+          /d:sonar.test.inclusions="tests/**,deployments/production/test_*.py,deployments/production/verify_compose.py"
           /d:sonar.exclusions="src/**/Migrations/**"
           /d:sonar.qualitygate.wait=true
           /d:sonar.qualitygate.timeout=300
@@ -141,6 +189,12 @@ jobs:
         run: |
           $sourceRoot = (Get-Content -LiteralPath TestResults/windows/windows-workspace.txt -Raw).Trim()
           ./scripts/Normalize-CoveragePaths.ps1 -ResultsDirectory TestResults/windows -SourceRoot $sourceRoot -TargetRoot $env:GITHUB_WORKSPACE
+
+      - name: Download deployment coverage for Sonar
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: deployment-coverage
+          path: TestResults
 
       - name: Verify coverage reports
         shell: pwsh

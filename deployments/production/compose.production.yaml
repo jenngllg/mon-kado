@@ -1,0 +1,41 @@
+# Applied after compose.yaml. No builds or direct API/database host ports.
+x-small-pool: &small-pool
+  ConnectionStrings__PostgreSql: >-
+    Host=postgres;Port=5432;Database=${POSTGRES_DB:?Set POSTGRES_DB};Username=${POSTGRES_USER:?Set POSTGRES_USER};Password=${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD};SSL Mode=Disable;GSS Encryption Mode=Disable;Include Error Detail=false;Maximum Pool Size=12
+services:
+  migrations:
+    image: ${API_IMAGE:?Set a digest-pinned API_IMAGE}
+    cgroup_parent: monkado.slice
+    environment:
+      <<: *small-pool
+      ReverseProxy__KnownNetworks__0: ${EDGE_NETWORK_CIDR:-172.30.0.0/24}
+      DOTNET_GCHeapHardLimit: "0x10000000"
+  api:
+    image: ${API_IMAGE:?Set a digest-pinned API_IMAGE}
+    build: !reset null
+    cgroup_parent: monkado.slice
+    environment:
+      <<: *small-pool
+      DOTNET_GCHeapHardLimit: "0x10000000"
+  worker:
+    image: ${WORKER_IMAGE:?Set a digest-pinned WORKER_IMAGE}
+    build: !reset null
+    cgroup_parent: monkado.slice
+    environment:
+      <<: *small-pool
+      DOTNET_GCHeapHardLimit: "0x0C000000"
+  postgres:
+    cgroup_parent: monkado.slice
+    command:
+      - postgres
+      - -c
+      - shared_buffers=64MB
+      - -c
+      - max_connections=40
+      - -c
+      - work_mem=2MB
+  caddy:
+    cgroup_parent: monkado.slice
+    ports: !override
+      - "80:80"
+      - "443:443"

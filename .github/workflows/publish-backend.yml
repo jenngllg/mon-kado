@@ -1,0 +1,102 @@
+name: Publish approved backend
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backend-production-publication
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/develop'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production
+    permissions:
+      actions: read
+      contents: write
+      packages: write
+    steps:
+      - name: Check out approved revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Require production protection and green checks for this exact revision
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'jenngllg/mon-kado'
+          gh api "repos/$GITHUB_REPOSITORY/environments/production" \
+            --jq '.protection_rules | any(.type == "required_reviewers" and (.reviewers | length > 0))' | grep -x true
+          for workflow in ci.yml containers.yml; do
+            gh api "repos/$GITHUB_REPOSITORY/actions/workflows/$workflow/runs?head_sha=$GITHUB_SHA&branch=develop&per_page=100" \
+              --jq '[.workflow_runs[] | select(.event == "push" or .event == "workflow_dispatch")] | sort_by(.run_number) | last | .conclusion' \
+              | grep -x success
+          done
+
+      - name: Build release images on GitHub, never on the VPS
+        shell: bash
+        run: |
+          set -euo pipefail
+          for component in api worker; do
+            docker build --pull --target "$component" \
+              --label "org.opencontainers.image.source=https://github.com/$GITHUB_REPOSITORY" \
+              --label "org.opencontainers.image.revision=$GITHUB_SHA" \
+              -t "ghcr.io/jenngllg/mon-kado-$component:$GITHUB_SHA" .
+          done
+
+      - name: Scan API release image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ghcr.io/jenngllg/mon-kado-api:${{ github.sha }}
+          format: table
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+
+      - name: Scan Worker release image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ghcr.io/jenngllg/mon-kado-worker:${{ github.sha }}
+          format: table
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+
+      - name: Publish immutable image references
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s' "$GH_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          trap 'docker logout ghcr.io' EXIT
+          for component in api worker; do
+            image="ghcr.io/jenngllg/mon-kado-$component:$GITHUB_SHA"
+            docker push "$image"
+            docker inspect "$image" --format '{{index .RepoDigests 0}}' > "$RUNNER_TEMP/$component.digest"
+          done
+          configuration_hash=$(python3 deployments/production/release_manifest.py hash)
+          jq -n --arg revision "$GITHUB_SHA" --arg configurationHash "$configuration_hash" \
+            --arg apiImage "$(cat "$RUNNER_TEMP/api.digest")" \
+            --arg workerImage "$(cat "$RUNNER_TEMP/worker.digest")" \
+            '{schemaVersion: 1, revision: $revision, configurationHash: $configurationHash, apiImage: $apiImage, workerImage: $workerImage}' \
+            > "$RUNNER_TEMP/backend-manifest.json"
+          # The release body is the sole promotion pointer; update it only after both pushes succeed.
+          if gh release view backend-production --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release edit backend-production --repo "$GITHUB_REPOSITORY" \
+              --notes-file "$RUNNER_TEMP/backend-manifest.json" --latest=false
+          else
+            gh release create backend-production --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+              --title 'Approved backend production images' --notes-file "$RUNNER_TEMP/backend-manifest.json" --latest=false
+          fi
+          echo 'Images published. This job does not confirm a successful VPS rollout.' >> "$GITHUB_STEP_SUMMARY"
