@@ -1,0 +1,11 @@
+[Unit]
+Description=Check the approved MonKado frontend every five minutes
+
+[Timer]
+OnBootSec=5min
+OnUnitInactiveSec=5min
+Unit=monkado-frontend.service
+
+[Install]
+WantedBy=timers.target
+

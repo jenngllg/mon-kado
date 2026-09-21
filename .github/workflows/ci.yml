@@ -25,6 +25,34 @@ env:
     Host=127.0.0.1;Port=1;Database=mon_kado;Username=mon_kado;Timeout=1;Command Timeout=1;Pooling=false;SSL Mode=Disable
 
 jobs:
+  frontend_publication:
+    name: Static frontend publication
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Test publication trust boundary and recovery without production access
+        env:
+          PYTHONPATH: src/Operations.Frontend
+          COVERAGE_RCFILE: src/Operations.Frontend/.coveragerc
+        run: |
+          python3 -m pip install --only-binary :all: 'coverage==7.10.7'
+          python3 -m coverage run --branch --source=src/Operations.Frontend -m unittest discover -s tests/Deployment.FrontendTests
+          python3 -m coverage report --fail-under=100
+          python3 -m coverage xml -o TestResults/frontend-publication-coverage.xml
+      - name: Verify frontend routing through real Caddy TLS
+        env:
+          MONKADO_FRONTEND_DOCKER_TESTS: "1"
+        run: python3 tests/Deployment.FrontendTests/test_frontend_http.py
+      - name: Upload frontend publication coverage
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: frontend-publication-coverage
+          path: TestResults/frontend-publication-coverage.xml
+          if-no-files-found: error
+          retention-days: 3
   security_proxy:
     name: HTTPS and proxy security
     runs-on: ubuntu-latest
@@ -137,7 +165,7 @@ jobs:
 
   quality:
     name: quality
-    needs: [windows_export_coverage, deployment_configuration, security_proxy]
+    needs: [windows_export_coverage, deployment_configuration, security_proxy, frontend_publication]
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -187,7 +215,7 @@ jobs:
           /d:sonar.token="$SONAR_TOKEN"
           /d:sonar.host.url="https://sonarcloud.io"
           /d:sonar.cs.opencover.reportsPaths="**/coverage.opencover.xml"
-          /d:sonar.python.coverage.reportPaths="TestResults/deployment-coverage.xml,TestResults/security-coverage.xml"
+          /d:sonar.python.coverage.reportPaths="TestResults/deployment-coverage.xml,TestResults/security-coverage.xml,TestResults/frontend-publication-coverage.xml"
           /d:sonar.test.inclusions="tests/**,deployments/production/test_*.py,deployments/production/verify_compose.py"
           /d:sonar.exclusions="src/**/Migrations/**"
           /d:sonar.qualitygate.wait=true
@@ -231,6 +259,12 @@ jobs:
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: security-coverage
+          path: TestResults
+
+      - name: Download frontend publication coverage for Sonar
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: frontend-publication-coverage
           path: TestResults
 
       - name: Verify coverage reports
