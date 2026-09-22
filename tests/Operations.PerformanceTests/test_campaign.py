@@ -11,6 +11,24 @@ import test_policy
 
 
 class CampaignTests(unittest.TestCase):
+    def test_failed_supplement_preserves_partial_measurements_in_failed_report(self):
+        with tempfile.TemporaryDirectory() as root:
+            bench = self.prepare(root, test_policy.PolicyTests.points())
+            generator = Mock(returncode=0)
+            generator.poll.side_effect = [None, 0]
+            evidence = {"passed": False, "error": "IMAGE_CASE_FAILED_PIXELS_GIFT",
+                        "details": {"concurrency": 2, "completed": [{"valid": True}]}}
+            supplement = Mock(returncode=1)
+            supplement.poll.return_value = 1
+            supplement.communicate.return_value = (json.dumps(evidence), None)
+            health = {"qualified": True, "oom": 0, "restarts": 0, "alive": True}
+            with patch.object(bench, "generators", return_value=[generator]), patch.object(bench, "inspect_health", return_value=health):
+                with patch("runtime.subprocess.Popen", return_value=supplement):
+                    result = bench.run("images")
+            self.assertEqual("failed", result["verdict"])
+            self.assertEqual("SUPPLEMENT_FAILED", result["stopReason"])
+            self.assertEqual(evidence, result["supplement"])
+
     def test_sixty_second_error_window_aborts_without_waiting_in_test(self):
         with tempfile.TemporaryDirectory() as root:
             points = test_policy.PolicyTests.points()
