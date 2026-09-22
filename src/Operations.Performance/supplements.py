@@ -18,6 +18,8 @@ from seed import png
 
 ORIGIN = "https://mk816.test"
 SHARE = "X-MonKado-Share-Token"
+CSRF_PATH = "/security/csrf-token"
+JSON_CONTENT = "application/json"
 
 
 class ImageCaseFailure(PerformanceError):
@@ -38,25 +40,29 @@ class Client:
         self.token = None
         self.csrf = None
         self.expires = 0
+        context = ssl.create_default_context(cafile="/fixture/ca.crt")
+        context.minimum_version = ssl.TLSVersion.TLSv1_2
+        context.verify_mode = ssl.CERT_REQUIRED
+        context.check_hostname = True
         self.opener = urllib.request.build_opener(
-            urllib.request.HTTPSHandler(context=ssl.create_default_context(cafile="/fixture/ca.crt")),
+            urllib.request.HTTPSHandler(context=context),
             urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()), NoRedirect())
-        self.csrf = self.json_request("GET", "/security/csrf-token")[0]["token"]
+        self.csrf = self.json_request("GET", CSRF_PATH)[0]["token"]
         auth, _ = self.json_request("POST", "/api/v1/auth/sessions",
                                     {"email": account["email"], "password": password, "rememberMe": False})
         self.set_auth(auth)
-        self.csrf = self.json_request("GET", "/security/csrf-token")[0]["token"]
+        self.csrf = self.json_request("GET", CSRF_PATH)[0]["token"]
 
     def set_auth(self, auth):
         self.token = auth["accessToken"]
         self.expires = time.monotonic() + auth["expiresIn"] - 60
 
     def request(self, method, path, body=None, headers=None):
-        require(path.startswith("/api/v1/") or path == "/security/csrf-token", "UNSAFE_PATH")
+        require(path.startswith("/api/v1/") or path == CSRF_PATH, "UNSAFE_PATH")
         if self.token and time.monotonic() >= self.expires and path != "/api/v1/auth/sessions/refresh":
             auth, _ = self.json_request("POST", "/api/v1/auth/sessions/refresh")
             self.set_auth(auth)
-            self.csrf = self.json_request("GET", "/security/csrf-token")[0]["token"]
+            self.csrf = self.json_request("GET", CSRF_PATH)[0]["token"]
         request_headers = {"Origin": ORIGIN, **(headers or {})}
         if self.token:
             request_headers["Authorization"] = "Bearer " + self.token
@@ -75,7 +81,7 @@ class Client:
 
     def json_request(self, method, path, body=None, headers=None, expected=(200,)):
         data = None if body is None else json.dumps(body).encode()
-        code, content, response_headers, _ = self.request(method, path, data, {"Content-Type": "application/json", **(headers or {})})
+        code, content, response_headers, _ = self.request(method, path, data, {"Content-Type": JSON_CONTENT, **(headers or {})})
         require(code in expected, "UNEXPECTED_HTTP_STATUS")
         return json.loads(content) if content else None, response_headers
 
@@ -180,7 +186,7 @@ def concurrency(clients):
     original_tag = headers["ETag"]
     updates = parallel([lambda name=name: owner.request("PUT", target,
         json.dumps({"name": name, "note": None, "url": None, "price": 25, "quantity": 10}).encode(),
-        {"Content-Type": "application/json", "If-Match": original_tag}) for name in ("Concurrent A", "Concurrent B")])
+        {"Content-Type": JSON_CONTENT, "If-Match": original_tag}) for name in ("Concurrent A", "Concurrent B")])
     require(sorted(item[0] for item in updates) == [200, 412], "ETAG_CONCURRENCY")
     persisted, _ = owner.json_request("GET", target)
     require(persisted["name"] in ("Concurrent A", "Concurrent B"), "UPDATE_NOT_PERSISTED")
@@ -191,7 +197,7 @@ def concurrency(clients):
         client.json_request("POST", public + "/participants", {}, proof, expected=(201,))
     reservation = public + "/wishes/" + wishlist["wishes"][19] + "/reservations/current"
     reserved = parallel([lambda client=client: client.request("PUT", reservation,
-        b'{"quantity":10}', {**proof, "Content-Type": "application/json"}) for client in (first, second)])
+        b'{"quantity":10}', {**proof, "Content-Type": JSON_CONTENT}) for client in (first, second)])
     require(sorted(item[0] for item in reserved) == [201, 409], "RESERVATION_CONCURRENCY")
     return [{"etagConflict": True, "reservationConflict": True, "valid": True}]
 

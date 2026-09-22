@@ -350,6 +350,7 @@ jobs:
           /d:sonar.host.url="https://sonarcloud.io"
           /d:sonar.cs.opencover.reportsPaths="**/coverage.opencover.xml"
           /d:sonar.python.coverage.reportPaths="TestResults/deployment-coverage.xml,TestResults/security-coverage.xml,TestResults/frontend-publication-coverage.xml,TestResults/monitoring-coverage.xml,TestResults/backup-coverage.xml,TestResults/performance-coverage.xml"
+          /d:sonar.python.version="3.13"
           /d:sonar.javascript.lcov.reportPaths="TestResults/performance.lcov"
           /d:sonar.test.inclusions="tests/**,deployments/production/test_*.py,deployments/production/verify_compose.py"
           /d:sonar.exclusions="src/**/Migrations/**"

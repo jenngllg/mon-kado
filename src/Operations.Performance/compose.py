@@ -1,6 +1,8 @@
 """Generate a private Compose document, independent of the real deployment."""
 from policy import LABEL, run_id
 
+ORIGIN = "https://mk816.test"
+
 
 def configuration(identifier, api_image, worker_image, password, jwt, subnet, parent=None):
     run_id(identifier)
@@ -9,7 +11,7 @@ def configuration(identifier, api_image, worker_image, password, jwt, subnet, pa
     database = identifier.replace("-", "_")
     connection = (f"Host=postgres;Database={database};Username=fixture;Password={password};"
                   "SSL Mode=Disable;GSS Encryption Mode=Disable;Include Error Detail=false;Maximum Pool Size=12")
-    security = {"read_only": True, "tmpfs": ["/tmp:size=64m,mode=1777"],
+    security = {"read_only": True, "tmpfs": ["/run/monkado:size=64m,mode=0700,uid=1654,gid=1654"],
                 "cap_drop": ["ALL"], "security_opt": ["no-new-privileges:true"],
                 "restart": "no", "labels": labels, "cgroup_parent": parent,
                 "logging": {"driver": "local", "options": {"max-size": "10m", "max-file": "3"}}}
@@ -20,13 +22,13 @@ def configuration(identifier, api_image, worker_image, password, jwt, subnet, pa
     volumes = ["keys:/var/lib/mon-kado/data-protection-keys", "images:/var/lib/mon-kado/gift-images",
                "exports:/var/lib/mon-kado/personal-data-exports"]
     api_environment = {**common, "ASPNETCORE_ENVIRONMENT": "Production", "ASPNETCORE_HTTP_PORTS": "8080",
-                       "DOTNET_BUNDLE_EXTRACT_BASE_DIR": "/tmp/dotnet-bundle",
+                       "DOTNET_BUNDLE_EXTRACT_BASE_DIR": "/run/monkado/dotnet-bundle",
                        "Jwt__SigningKey": jwt, "AllowedHosts": "mk816.test",
-                       "WebSecurity__AllowedOrigins__0": "https://mk816.test",
-                       "WishlistSharing__FrontendOrigin": "https://mk816.test",
+                       "WebSecurity__AllowedOrigins__0": ORIGIN,
+                       "WishlistSharing__FrontendOrigin": ORIGIN,
                        "GoogleAuthentication__Enabled": "false", "ReverseProxy__KnownNetworks__0": subnet,
                        "DOTNET_GCHeapHardLimit": "0x10000000", "Observability__Enabled": "true",
-                       "Observability__Directory": "/tmp/observability", "Observability__Version": "local"}
+                       "Observability__Directory": "/run/monkado/observability", "Observability__Version": "local"}
     services = {
         "postgres": {"image": "postgres:18.6-alpine", "labels": labels, "cgroup_parent": parent,
                      "shm_size": "128m", "logging": security["logging"],
@@ -40,9 +42,9 @@ def configuration(identifier, api_image, worker_image, password, jwt, subnet, pa
                 "networks": ["backend", "edge"], "volumes": volumes},
         "worker": {**security, "image": worker_image,
                    "environment": {**common, "DOTNET_ENVIRONMENT": "Local", "AuthenticationEmail__Provider": "Disabled",
-                                   "AuthenticationEmail__FrontendOrigin": "https://mk816.test",
+                                   "AuthenticationEmail__FrontendOrigin": ORIGIN,
                                    "DOTNET_GCHeapHardLimit": "0x0C000000",
-                                   "Observability__Enabled": "true", "Observability__Directory": "/tmp/observability",
+                                   "Observability__Enabled": "true", "Observability__Directory": "/run/monkado/observability",
                                    "Observability__Version": "local"},
                    "networks": ["backend"], "volumes": volumes},
         "caddy": {**security, "image": "caddy:2.11.4-alpine", "read_only": False, "cap_add": ["NET_BIND_SERVICE"],

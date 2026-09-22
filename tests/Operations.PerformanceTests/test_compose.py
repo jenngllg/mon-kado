@@ -20,3 +20,5 @@ class ComposeTests(unittest.TestCase):
         self.assertEqual("Disabled", cfg["services"]["worker"]["environment"]["AuthenticationEmail__Provider"])
         self.assertNotIn("GeneralRateLimit__PermitLimit", cfg["services"]["api"]["environment"])
         self.assertNotIn("build", cfg["services"]["api"])
+        self.assertEqual(["/run/monkado:size=64m,mode=0700,uid=1654,gid=1654"], cfg["services"]["api"]["tmpfs"])
+        self.assertEqual("/run/monkado/observability", cfg["services"]["worker"]["environment"]["Observability__Directory"])

@@ -19,8 +19,7 @@ const families = readOnly
     ? ['lists', 'lists', 'lists', 'lists', 'wishes', 'wishes', 'wishes', 'shared', 'shared', 'shared']
     : ['lists', 'lists', 'lists', 'wishes', 'wishes', 'shared', 'shared', 'shared', 'update', 'reservation'];
 const warmup = profile === 'smoke' ? 0 : 180;
-const measureSeconds = profile === 'smoke' ? 30 : (profile === 'exports' ? 1500 :
-    (['quotas', 'concurrency'].includes(profile) ? 180 : 900));
+const measureSeconds = {smoke: 30, exports: 1500, quotas: 180, concurrency: 180}[profile] ?? 900;
 const stages = profile === 'stress'
     ? [{target: 5, duration: '300s'}, {target: 10, duration: '300s'}, {target: 20, duration: '300s'}, {target: 5, duration: '300s'}]
     : [{target: 10, duration: measureSeconds + 's'}];
@@ -31,12 +30,12 @@ const scenarios = profile === 'stress' ? {traffic: {
     stages: [{target: 10, duration: warmup + 's'}, ...stages.flatMap(stage =>
         [{target: stage.target, duration: '0s'}, stage])],
 }} : {traffic: {...executor, executor: 'constant-arrival-rate',
-    rate: 10, duration: (warmup + parseInt(stages[0].duration)) + 's'}};
+    rate: 10, duration: (warmup + Number.parseInt(stages[0].duration)) + 's'}};
 const thresholds = {
     setup_failures: ['count==0'], dropped_iterations: ['count==0'],
     'business_failure{phase:measure}': ['rate<0.01'],
 };
-if (profile !== 'stress') {
+if (!['smoke', 'stress'].includes(profile)) {
     for (const family of new Set(families)) {
         thresholds['business_ms{phase:measure,family:' + family + '}'] =
             ['p(95)<' + (['update', 'reservation'].includes(family) ? '1000' : '500')];
@@ -49,13 +48,13 @@ export const options = {
     thresholds,
 };
 
-function request(actor, method, path, body, expected, name, extra = {}, multipart = false) {
+function request(actor, method, path, body, expected, name, {headers: extra = {}, multipart = false} = {}) {
     const headers = {Origin: origin, ...extra};
     if (actor.token) headers.Authorization = 'Bearer ' + actor.token;
     if (actor.csrf) headers['X-CSRF-TOKEN'] = actor.csrf;
     if (!multipart) headers['Content-Type'] = 'application/json';
-    const response = http.request(method, origin + path,
-        body === null ? null : (multipart ? body : JSON.stringify(body)),
+    const payload = body === null || multipart ? body : JSON.stringify(body);
+    const response = http.request(method, origin + path, payload,
         {headers, jar: actor.jar, redirects: 0, timeout: '15s', tags: {name},
             responseCallback: http.expectedStatuses(...expected)});
     return response;
@@ -101,12 +100,12 @@ export function setup() {
         const before = must(request(actor, 'GET', wish, null, [200], 'wish-get'), [200], 'wish-get');
         const after = must(request(actor, 'PUT', wish + '/image',
             {image: http.file(image, 'fixture.png', 'image/png')}, [200], 'gift-image',
-            {'If-Match': before.headers.Etag}, true), [200], 'gift-image');
+            {headers: {'If-Match': before.headers.Etag}, multipart: true}), [200], 'gift-image');
         actor.etag = after.headers.Etag;
         const current = must(request(actor, 'GET', '/api/v1/auth/sessions/current', null, [200], 'current'), [200], 'current');
         must(request(actor, 'PUT', '/api/v1/members/current/profile/image',
             {image: http.file(image, 'fixture.png', 'image/png')}, [200], 'profile-image',
-            {'If-Match': current.headers.Etag}, true), [200], 'profile-image');
+            {headers: {'If-Match': current.headers.Etag}, multipart: true}), [200], 'profile-image');
     }
     for (let index = 0; index < actors.length; index++) {
         const actor = actors[index];
@@ -115,9 +114,9 @@ export function setup() {
         actor.reservedWish = owner.lists[0].wishes[1];
         const path = '/api/v1/shared-wishlists/' + owner.share.id;
         const proof = {'X-MonKado-Share-Token': owner.share.secret};
-        must(request(actor, 'POST', path + '/participants', {}, [201, 200], 'join', proof), [201, 200], 'join');
+        must(request(actor, 'POST', path + '/participants', {}, [201, 200], 'join', {headers: proof}), [201, 200], 'join');
         const reserved = must(request(actor, 'PUT', path + '/wishes/' + actor.reservedWish + '/reservations/current',
-            {quantity: 1}, [201], 'reserve', proof), [201], 'reserve');
+            {quantity: 1}, [201], 'reserve', {headers: proof}), [201], 'reserve');
         actor.reservationTag = reserved.headers.Etag;
         actor.reserved = true;
         actor.cookies = actor.jar.cookiesForURL(origin);
@@ -141,21 +140,7 @@ function session(data) {
     return actor;
 }
 
-export function business(data) {
-    const iteration = exec.scenario.iterationInTest;
-    const planned = profile === 'stress' ? 1200 : measureSeconds;
-    if (iteration >= warmup + planned) return;
-    const user = session(data);
-    const family = families[iteration % 10];
-    const phase = iteration < warmup ? 'warmup' : 'measure';
-    const measuredIndex = iteration - warmup;
-    let stage = 0;
-    if (profile === 'stress') {
-        for (const boundary of [150, 450, 1050]) {
-            if (measuredIndex >= boundary) stage++;
-        }
-    }
-    const tags = {family, phase, stage: String(stage)};
+function planRequest(user, family) {
     const list = user.lists[0];
     let path = '/api/v1/wishlists';
     let method = 'GET';
@@ -186,14 +171,16 @@ export function business(data) {
             expected = [201];
         }
     }
-    const response = request(user, method, path, body, expected, family, headers);
+    return {method, path, body, expected, headers};
+}
+
+function validateResponse(user, family, body, expected, response) {
     const result = response.status === 204 ? null : json(response);
     let valid = expected.includes(response.status);
     if (valid && family === 'lists') valid = Array.isArray(result) && result.length === 5;
-    if (valid && family === 'wishes') valid = Array.isArray(result?.wishes) && result.wishes.length === 20;
-    if (valid && family === 'shared') valid = Array.isArray(result?.wishes) && result.wishes.length === 20;
+    if (valid && ['wishes', 'shared'].includes(family)) valid = Array.isArray(result?.wishes) && result.wishes.length === 20;
     if (valid && family === 'update') {
-        valid = result?.id === list.wishes[0] && result.name === body.name;
+        valid = result?.id === user.lists[0].wishes[0] && result.name === body.name;
         user.etag = response.headers.Etag;
     }
     if (valid && family === 'reservation') {
@@ -201,6 +188,27 @@ export function business(data) {
         user.reserved = response.status !== 204;
         user.reservationTag = response.headers.Etag;
     }
+    return valid;
+}
+
+export function business(data) {
+    const iteration = exec.scenario.iterationInTest;
+    const planned = profile === 'stress' ? 1200 : measureSeconds;
+    if (iteration >= warmup + planned) return;
+    const user = session(data);
+    const family = families[iteration % 10];
+    const phase = iteration < warmup ? 'warmup' : 'measure';
+    const measuredIndex = iteration - warmup;
+    let stage = 0;
+    if (profile === 'stress') {
+        for (const boundary of [150, 450, 1050]) {
+            if (measuredIndex >= boundary) stage++;
+        }
+    }
+    const tags = {family, phase, stage: String(stage)};
+    const {method, path, body, expected, headers} = planRequest(user, family);
+    const response = request(user, method, path, body, expected, family, {headers});
+    const valid = validateResponse(user, family, body, expected, response);
     outcome.add(valid ? 1 : 0, tags);
     failures.add(!valid, tags);
     status.add(response.status, tags);

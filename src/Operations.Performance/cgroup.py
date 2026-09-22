@@ -29,13 +29,13 @@ def operate(action, identifier, root=Path("/host-cgroup"), driver="cgroupfs"):
     memory = int((group / "memory.max").read_text())
     swap = int((group / "memory.swap.max").read_text())
     cpu = (group / "cpu.max").read_text().strip()
-    events = dict(line.split() for line in (group / "memory.events").read_text().splitlines())
+    events = {line.split()[0]: line.split()[1] for line in (group / "memory.events").read_text().splitlines()}
     return {"qualified": memory == MEMORY and swap == 0 and cpu == "100000 100000",
             "memoryMax": memory, "swapMax": swap, "cpuMax": cpu,
             "memoryCurrent": int((group / "memory.current").read_text()),
             "memoryPeak": int((group / "memory.peak").read_text()),
             "oom": int(events.get("oom_kill", 0)),
-            "cpu": dict(line.split() for line in (group / "cpu.stat").read_text().splitlines())}
+            "cpu": {line.split()[0]: line.split()[1] for line in (group / "cpu.stat").read_text().splitlines()}}
 
 
 if __name__ == "__main__":

@@ -90,7 +90,8 @@ class PolicyTests(unittest.TestCase):
         for point in points:
             if point["metric"] == "business_ms":
                 point["value"] = 2000
-        self.assertEqual("failed", verdict(points, "smoke", health)["verdict"])
+        self.assertEqual("passed", verdict(points, "smoke", health)["verdict"])
+        self.assertEqual("failed", verdict(points * 30, "nominal", health)["verdict"])
         self.assertFalse(verdict(points, "stress", health)["latencyTargetsMet"])
         for point in points:
             point["phase"] = "warmup"

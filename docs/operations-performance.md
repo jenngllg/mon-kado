@@ -54,7 +54,8 @@ published. HTTPS verifies the run-specific Caddy CA. No production credentials,
 real data, backup repository or production volumes are mounted.
 
 Docker uses bounded local JSON logs as in deployment. Observability remains enabled;
-its rolling private snapshots live in the disposable `/tmp` tmpfs rather than the
+its rolling private snapshots live in the disposable, UID-1654-only
+`/run/monkado` tmpfs rather than the
 VPS monitoring directory. This local storage difference is not an I/O performance
 qualification of the VPS disk.
 
@@ -70,6 +71,8 @@ runner removes inherited permissions on the new run directory and grants access
 only to the current owner and SYSTEM. CodeQL alerts 19 and 20 (the same moved finding) were reviewed and classified
 as "used in tests" with the repository owner's approval: these disposable fixture
 credentials are intentionally not production secrets. No scanning rule is disabled.
+The non-secret Caddy configuration alone is group-readable (0640); Caddy receives
+that host group explicitly. It never mounts the fixture credential files.
 
 ## Additional profiles
 
@@ -78,7 +81,7 @@ campaigns simultaneously when comparing measurements.
 
 | Profile | Behavior |
 |---|---|
-| smoke | 30 seconds of the nominal request mix; functional CI check, not hardware qualification |
+| smoke | 30 seconds of the nominal request mix; functional CI check, latencies diagnostic only, not hardware qualification |
 | nominal | 3-minute warmup and 15-minute measured nominal load |
 | images | Read traffic plus gift/profile uploads: 2 MP, near 10 MiB, 40 MP; one then two concurrent uploads per case |
 | exports | Read traffic for 25 minutes plus one export followed by two fresh exports; 10-minute deadline each; ZIP CRC, image presence and member identity checked |

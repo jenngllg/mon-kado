@@ -19,6 +19,8 @@ from policy import K6_IMAGE, LABEL, PYTHON_IMAGE, PerformanceError, require, run
 from seed import dataset, png
 from reporting import markdown, resources
 
+SUPPLEMENT_PROFILES = ("images", "exports", "quotas", "concurrency")
+
 
 def command(arguments, *, data=None, timeout=180):
     try:
@@ -49,6 +51,22 @@ def generator_user():
     return "0" if sys.platform == "win32" else str(os.getuid())
 
 
+def check_error_window(recent, observed_since, now):
+    if observed_since is not None and now - observed_since >= 60 and recent:
+        require(sum(value == 0 for _, value in recent) / len(recent) <= .05, "ERROR_WINDOW_EXCEEDED")
+
+
+def supplement_result(process, result):
+    if process is not None and process.poll() is not None and result is None:
+        result = json.loads(process.communicate(timeout=5)[0])
+    return result
+
+
+def validate_supplement(process, result):
+    if result is not None:
+        require(process.returncode == 0 and result.get("passed") is True, "SUPPLEMENT_FAILED")
+
+
 class Bench:
     def __init__(self, source, identifier):
         self.source = Path(source).resolve()
@@ -61,10 +79,10 @@ class Bench:
         self.stage = "preflight"
 
     def local_only(self):
-        endpoint = command(["docker", "context", "inspect", "--format", "{{.Endpoints.docker.Host}}"])
-        require(endpoint.startswith(("npipe://", "unix://")), "REMOTE_DOCKER_REFUSED")
-        require(command(["docker", "info", "--format", "{{.OSType}}/{{.CgroupVersion}}"]) == "linux/2", "LINUX_CGROUP_V2_REQUIRED")
         require(not os.environ.get("DOCKER_HOST") and not os.environ.get("DOCKER_CONTEXT"), "DOCKER_OVERRIDE_REFUSED")
+        endpoint = command(["docker", "context", "inspect", "--format", "{{.Endpoints.docker.Host}}"])
+        require(endpoint.startswith("unix:///") or re.fullmatch(r"npipe:/{4}[.?]/pipe/[A-Za-z0-9_.-]+", endpoint), "REMOTE_DOCKER_REFUSED")
+        require(command(["docker", "info", "--format", "{{.OSType}}/{{.CgroupVersion}}"]) == "linux/2", "LINUX_CGROUP_V2_REQUIRED")
         self.driver = command(["docker", "info", "--format", "{{.CgroupDriver}}"])
         require(self.driver in ("cgroupfs", "systemd"), "CGROUP_DRIVER_UNSUPPORTED")
 
@@ -127,14 +145,15 @@ class Bench:
         api = command(["docker", "image", "inspect", "mon-kado-api:mk816", "--format", "{{.Id}}"])
         worker = command(["docker", "image", "inspect", "mon-kado-worker:mk816", "--format", "{{.Id}}"])
         cfg = configuration(self.identifier, api, worker, password, jwt, subnet, self.parent)
+        cfg["services"]["caddy"]["group_add"] = [str(self.directory.stat().st_gid)]
         private_write(self.directory / "compose.json", json.dumps(cfg))
         caddy = (self.source / "deployments" / "caddy" / "Caddyfile").read_text()
         require(caddy.count("{$API_HOST} {") == 1, "CADDY_TEMPLATE_CHANGED")
         caddy = caddy.replace("{$API_HOST} {", "mk816.test {\n    tls internal", 1)
         private_write(self.directory / "Caddyfile", caddy)
-        # This public configuration is the only bind mount exposed to Caddy's root UID.
-        # Fixture credentials remain 0600 and generators use their host owner's UID.
-        os.chmod(self.directory / "Caddyfile", 0o644)
+        # Share only this non-secret config with Caddy through the host owner group.
+        # The enclosing directory stays private; fixture credentials remain 0600.
+        os.chmod(self.directory / "Caddyfile", 0o640)
         private_write(self.directory / "metadata.json", json.dumps({
             "schemaVersion": 1, "runId": self.identifier, "api": api, "worker": worker, "k6": K6_IMAGE,
             "revision": command(["git", "-C", str(self.source), "rev-parse", "HEAD"]),
@@ -235,83 +254,58 @@ class Bench:
             processes.append(subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL))
         return processes
 
-    def run(self, profile):
-        self.stage = "measure"
-        require(self.inspect_health()["qualified"], "EFFECTIVE_LIMITS_REQUIRED")
-        processes = self.generators(profile)
-        samples = []
+    def read_available_points(self, positions):
         points = []
-        positions = [0] * 10
-        recent = []
-        observed_since = None
-        supplement = None
-        supplemental_result = None
-        stop_reason = None
-        failed_since = None
-        maximum = time.monotonic() + 2400
-        try:
-            while any(process.poll() is None for process in processes):
-                for shard in range(10):
-                    path = self.directory / f"metrics-{shard}.jsonl"
-                    with path.open(encoding="utf-8") as stream:
-                        stream.seek(positions[shard])
-                        while True:
-                            before = stream.tell()
-                            line = stream.readline()
-                            if not line.endswith("\n"):
-                                stream.seek(before)
-                                break
-                            raw = json.loads(line)
-                            point = safe_point(raw)
-                            if point is not None:
-                                points.append(point)
-                                if point["metric"] == "business_ok":
-                                    moment = datetime.fromisoformat(raw["data"]["time"].replace("Z", "+00:00")).timestamp()
-                                    recent.append((moment, point["value"]))
-                                    if observed_since is None:
-                                        observed_since = moment
-                        positions[shard] = stream.tell()
-                now = datetime.now(timezone.utc).timestamp()
-                recent = [(moment, value) for moment, value in recent if now - moment <= 60]
-                if observed_since is not None and now - observed_since >= 60 and recent:
-                    require(sum(value == 0 for _, value in recent) / len(recent) <= .05, "ERROR_WINDOW_EXCEEDED")
-                if profile in ("images", "exports", "quotas", "concurrency") and supplement is None and any(point["phase"] == "measure" for point in points):
-                    supplement = subprocess.Popen([
-                        "docker", "run", "--name", f"{self.identifier}-supplement",
-                        "--user", generator_user(),
-                        "--label", f"{LABEL}={self.identifier}", "--network", f"{self.identifier}_edge",
-                        "--read-only", "--cap-drop", "ALL", "--security-opt", "no-new-privileges:true",
-                        "--memory", "384m", "--memory-swap", "384m", "-e", "PYTHONDONTWRITEBYTECODE=1",
-                        "--mount", f"type=bind,source={self.code},target=/code,readonly",
-                        "--mount", f"type=bind,source={self.directory},target=/fixture,readonly",
-                        PYTHON_IMAGE, "python", "/code/supplements.py", profile],
-                        stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
-                if supplement is not None and supplement.poll() is not None and supplemental_result is None:
-                    supplemental_result = json.loads(supplement.communicate(timeout=5)[0])
-                    require(supplement.returncode == 0 and supplemental_result.get("passed") is True, "SUPPLEMENT_FAILED")
-                health = dict(self.inspect_health())
-                health["observedAt"] = datetime.now(timezone.utc).isoformat()
-                health["phase"] = "measure" if any(point["phase"] == "measure" for point in points) else "warmup"
-                samples.append(health)
-                require(health["qualified"], "EFFECTIVE_LIMITS_LOST")
-                require(health["oom"] == 0 and health["restarts"] == 0, "RESOURCE_FAILURE")
-                if health["alive"]:
-                    failed_since = None
-                elif failed_since is None:
-                    failed_since = time.monotonic()
-                require(failed_since is None or time.monotonic() - failed_since < 30, "SERVICE_UNAVAILABLE")
-                require(time.monotonic() < maximum, "CAMPAIGN_TIMEOUT")
-                time.sleep(5)
-        except (PerformanceError, OSError, ValueError, KeyboardInterrupt) as error:
-            stop_reason = str(error) if isinstance(error, PerformanceError) else "CAMPAIGN_INTERRUPTED"
-        finally:
-            for shard, process in enumerate(processes):
-                if process.poll() is None:
-                    command(["docker", "stop", "--time", "5", f"{self.identifier}-k6-{shard}"])
-                    process.wait(timeout=30)
-            if supplement is not None and supplement.poll() is None:
-                command(["docker", "stop", "--time", "5", f"{self.identifier}-supplement"])
-                supplement.wait(timeout=30)
+        for shard in range(10):
+            with (self.directory / f"metrics-{shard}.jsonl").open(encoding="utf-8") as stream:
+                stream.seek(positions[shard])
+                while True:
+                    before = stream.tell()
+                    line = stream.readline()
+                    if not line.endswith("\n"):
+                        stream.seek(before)
+                        break
+                    point = safe_point(json.loads(line))
+                    if point is not None:
+                        points.append(point)
+                positions[shard] = stream.tell()
+        return points
+
+    def start_supplement(self, profile):
+        return subprocess.Popen([
+            "docker", "run", "--name", f"{self.identifier}-supplement",
+            "--user", generator_user(),
+            "--label", f"{LABEL}={self.identifier}", "--network", f"{self.identifier}_edge",
+            "--read-only", "--cap-drop", "ALL", "--security-opt", "no-new-privileges:true",
+            "--memory", "384m", "--memory-swap", "384m", "-e", "PYTHONDONTWRITEBYTECODE=1",
+            "--mount", f"type=bind,source={self.code},target=/code,readonly",
+            "--mount", f"type=bind,source={self.directory},target=/fixture,readonly",
+            PYTHON_IMAGE, "python", "/code/supplements.py", profile],
+            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+
+    def sample_health(self, measured, failed_since):
+        health = dict(self.inspect_health())
+        health["observedAt"] = datetime.now(timezone.utc).isoformat()
+        health["phase"] = "measure" if measured else "warmup"
+        require(health["qualified"], "EFFECTIVE_LIMITS_LOST")
+        require(health["oom"] == 0 and health["restarts"] == 0, "RESOURCE_FAILURE")
+        if health["alive"]:
+            failed_since = None
+        elif failed_since is None:
+            failed_since = time.monotonic()
+        require(failed_since is None or time.monotonic() - failed_since < 30, "SERVICE_UNAVAILABLE")
+        return health, failed_since
+
+    def stop_processes(self, processes, supplement):
+        for shard, process in enumerate(processes):
+            if process.poll() is None:
+                command(["docker", "stop", "--time", "5", f"{self.identifier}-k6-{shard}"])
+                process.wait(timeout=30)
+        if supplement is not None and supplement.poll() is None:
+            command(["docker", "stop", "--time", "5", f"{self.identifier}-supplement"])
+            supplement.wait(timeout=30)
+
+    def sanitize_metrics(self, stop_reason):
         points = []
         for shard in range(10):
             path = self.directory / f"metrics-{shard}.jsonl"
@@ -327,6 +321,9 @@ class Bench:
                     sanitized.append(json.dumps(point))
             path.write_text("\n".join(sanitized), encoding="utf-8")
             os.chmod(path, 0o600)
+        return points, stop_reason
+
+    def write_report(self, profile, processes, points, samples, stop_reason, supplemental_result):
         health = self.inspect_health()
         report = verdict(points, profile, health)
         report["generatorExitCodes"] = [process.returncode for process in processes]
@@ -334,7 +331,7 @@ class Bench:
             report["verdict"] = "failed"
         report["stopReason"] = stop_reason
         report["supplement"] = supplemental_result
-        if stop_reason or (profile in ("images", "exports", "quotas", "concurrency") and not supplemental_result):
+        if stop_reason or (profile in SUPPLEMENT_PROFILES and not supplemental_result):
             report["verdict"] = "failed" if stop_reason else "incomplete"
         report["metadata"] = json.loads((self.directory / "metadata.json").read_text())
         report["auxiliaryRequests"] = sum(point["value"] for point in points if point["metric"] == "auxiliary_requests")
@@ -349,6 +346,49 @@ class Bench:
         private_write(self.directory / "report.json", json.dumps(report, indent=2))
         private_write(self.directory / "report.md", markdown(report))
         return report
+
+
+    def run(self, profile):
+        self.stage = "measure"
+        require(self.inspect_health()["qualified"], "EFFECTIVE_LIMITS_REQUIRED")
+        processes = self.generators(profile)
+        samples = []
+        positions = [0] * 10
+        recent = []
+        observed_since = None
+        measured = False
+        supplement = None
+        supplemental_result = None
+        stop_reason = None
+        failed_since = None
+        maximum = time.monotonic() + 2400
+        try:
+            while any(process.poll() is None for process in processes):
+                points = self.read_available_points(positions)
+                outcomes = [point for point in points if point["metric"] == "business_ok"]
+                recent.extend((point["timestamp"], point["value"]) for point in outcomes)
+                if observed_since is None and recent:
+                    observed_since = recent[0][0]
+                now = datetime.now(timezone.utc).timestamp()
+                recent = [(moment, value) for moment, value in recent if now - moment <= 60]
+                check_error_window(recent, observed_since, now)
+                measured = measured or any(point["phase"] == "measure" for point in outcomes)
+                if profile in SUPPLEMENT_PROFILES and supplement is None and measured:
+                    supplement = self.start_supplement(profile)
+                supplemental_result = supplement_result(supplement, supplemental_result)
+                validate_supplement(supplement, supplemental_result)
+                health, failed_since = self.sample_health(measured, failed_since)
+                samples.append(health)
+                require(time.monotonic() < maximum, "CAMPAIGN_TIMEOUT")
+                time.sleep(5)
+            supplemental_result = supplement_result(supplement, supplemental_result)
+            validate_supplement(supplement, supplemental_result)
+        except (PerformanceError, OSError, ValueError, KeyboardInterrupt) as error:
+            stop_reason = str(error) if isinstance(error, PerformanceError) else "CAMPAIGN_INTERRUPTED"
+        finally:
+            self.stop_processes(processes, supplement)
+        points, stop_reason = self.sanitize_metrics(stop_reason)
+        return self.write_report(profile, processes, points, samples, stop_reason, supplemental_result)
 
     def failure_diagnostics(self):
         """Preserve only fixed fields and known exception categories, never log text."""

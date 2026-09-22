@@ -1,0 +1,326 @@
+{
+  "schemaVersion": 1,
+  "status": "in-progress",
+  "date": "2026-09-22",
+  "scope": "Local Docker only. No production performance guarantee.",
+  "campaigns": [
+    {
+      "schemaVersion": 1,
+      "profile": "nominal",
+      "verdict": "passed",
+      "expectedRequests": 9000,
+      "completedRequests": 9000,
+      "unexpectedErrors": 0,
+      "rateLimited": 0,
+      "droppedIterations": 0,
+      "families": {
+        "lists": {
+          "count": 2700,
+          "expected": 2700,
+          "p50": 4.524979500000001,
+          "p95": 6.814283600000001,
+          "p99": 8.195001760000004
+        },
+        "wishes": {
+          "count": 1800,
+          "expected": 1800,
+          "p50": 6.332928000000001,
+          "p95": 9.36969115,
+          "p99": 11.970235689999997
+        },
+        "shared": {
+          "count": 2700,
+          "expected": 2700,
+          "p50": 11.264693999999999,
+          "p95": 18.75814845000004,
+          "p99": 30.184634220000053
+        },
+        "update": {
+          "count": 900,
+          "expected": 900,
+          "p50": 11.433135,
+          "p95": 20.431777849999992,
+          "p99": 25.095341379999997
+        },
+        "reservation": {
+          "count": 900,
+          "expected": 900,
+          "p50": 15.6932795,
+          "p95": 24.32360689999999,
+          "p99": 102.43227378999995
+        }
+      },
+      "infrastructure": {
+        "qualified": true,
+        "memoryMax": 805306368,
+        "swapMax": 0,
+        "cpuMax": "100000 100000",
+        "memoryCurrent": 457539584,
+        "memoryPeak": 485109760,
+        "oom": 0,
+        "cpu": {
+          "usage_usec": "203809429",
+          "user_usec": "140005948",
+          "system_usec": "63803480",
+          "nice_usec": "0",
+          "nr_periods": "10010",
+          "nr_throttled": "704",
+          "throttled_usec": "426681130",
+          "nr_bursts": "0",
+          "burst_usec": "0"
+        },
+        "restarts": 0,
+        "alive": true
+      },
+      "latencyTargetsMet": true,
+      "productionQualification": false,
+      "stopReason": null,
+      "supplement": null,
+      "metadata": {
+        "schemaVersion": 1,
+        "runId": "mk816-9dbd70d0d1e8",
+        "api": "sha256:836e2c45334b4fd6e3770f233eb275208eee080c324a9e313e66aa2a3f212bf1",
+        "worker": "sha256:dc96b9dee019eaa9c31537f586fcb93fcd7b7e0bdef33749d7fe0311ff6b1ffa",
+        "k6": "grafana/k6:2.3.0@sha256:9c2dee7f8ed74d317e4027c06a10f169b625638189de8d4555d0b3486a5aeb34",
+        "revision": "8a8e070a26a509eeefc29f06319f8c252b786e1e",
+        "dirty": true,
+        "host": "Docker Desktop;cpus=12;memory=8286515200",
+        "dataset": {
+          "members": 100,
+          "lists": 500,
+          "wishes": 10000,
+          "images": 200
+        },
+        "workerEnvironment": "Local",
+        "externalProviders": false
+      },
+      "qualificationNote": "Development nominal run before final harness reporting and Caddy-template reuse. Backend Release sources unchanged; final nominal rerun pending."
+    },
+    {
+      "schemaVersion": 1,
+      "profile": "smoke",
+      "verdict": "passed",
+      "expectedRequests": 300,
+      "completedRequests": 300,
+      "unexpectedErrors": 0,
+      "rateLimited": 0,
+      "droppedIterations": 0,
+      "families": {
+        "lists": {
+          "count": 90,
+          "expected": 90,
+          "p50": 4.5376415,
+          "p95": 201.20202875,
+          "p99": 204.47678367
+        },
+        "wishes": {
+          "count": 60,
+          "expected": 60,
+          "p50": 8.8039375,
+          "p95": 106.93878194999999,
+          "p99": 132.1423640299998
+        },
+        "shared": {
+          "count": 90,
+          "expected": 90,
+          "p50": 20.074367000000002,
+          "p95": 198.36975585000002,
+          "p99": 202.81689261000002
+        },
+        "update": {
+          "count": 30,
+          "expected": 30,
+          "p50": 14.372916499999999,
+          "p95": 299.5656808,
+          "p99": 301.02531202
+        },
+        "reservation": {
+          "count": 30,
+          "expected": 30,
+          "p50": 93.114722,
+          "p95": 291.85994225,
+          "p99": 294.34020791
+        }
+      },
+      "infrastructure": {
+        "qualified": true,
+        "memoryMax": 805306368,
+        "swapMax": 0,
+        "cpuMax": "100000 100000",
+        "memoryCurrent": 457011200,
+        "memoryPeak": 468725760,
+        "oom": 0,
+        "cpu": {
+          "usage_usec": "74472023",
+          "user_usec": "64450225",
+          "system_usec": "10021797",
+          "nice_usec": "0",
+          "nr_periods": "1022",
+          "nr_throttled": "695",
+          "throttled_usec": "437183626",
+          "nr_bursts": "0",
+          "burst_usec": "0"
+        },
+        "restarts": 0,
+        "alive": true
+      },
+      "latencyTargetsMet": true,
+      "productionQualification": false,
+      "stopReason": null,
+      "supplement": null,
+      "metadata": {
+        "schemaVersion": 1,
+        "runId": "mk816-9c217c9417bf",
+        "api": "sha256:836e2c45334b4fd6e3770f233eb275208eee080c324a9e313e66aa2a3f212bf1",
+        "worker": "sha256:dc96b9dee019eaa9c31537f586fcb93fcd7b7e0bdef33749d7fe0311ff6b1ffa",
+        "k6": "grafana/k6:2.3.0@sha256:9c2dee7f8ed74d317e4027c06a10f169b625638189de8d4555d0b3486a5aeb34",
+        "revision": "8a8e070a26a509eeefc29f06319f8c252b786e1e",
+        "dirty": true,
+        "host": "Docker Desktop;cpus=12;memory=8286515200",
+        "dataset": {
+          "members": 100,
+          "lists": 500,
+          "wishes": 10000,
+          "images": 200
+        },
+        "workerEnvironment": "Local",
+        "externalProviders": false
+      },
+      "dataInvariants": {
+        "members": 100,
+        "lists": 500,
+        "wishes": 10000,
+        "images": 200,
+        "overReserved": 0
+      },
+      "qualificationNote": "Functional smoke with production Caddy template; not a VPS throughput qualification."
+    },
+    {
+      "schemaVersion": 1,
+      "profile": "images",
+      "verdict": "failed",
+      "expectedRequests": 9000,
+      "completedRequests": 185,
+      "unexpectedErrors": 35,
+      "rateLimited": 0,
+      "droppedIterations": 0,
+      "families": {
+        "lists": {
+          "count": 80,
+          "expected": 3600,
+          "p50": 5.3914075,
+          "p95": 92.28905465000001,
+          "p99": 92.68957988
+        },
+        "wishes": {
+          "count": 40,
+          "expected": 2700,
+          "p50": 6.832053500000001,
+          "p95": 10.781725399999997,
+          "p99": 11.70080017
+        },
+        "shared": {
+          "count": 30,
+          "expected": 2700,
+          "p50": 14.1001935,
+          "p95": 25.10800165,
+          "p99": 25.476728780000002
+        }
+      },
+      "infrastructure": {
+        "qualified": true,
+        "memoryMax": 805306368,
+        "swapMax": 0,
+        "cpuMax": "100000 100000",
+        "memoryCurrent": 173666304,
+        "memoryPeak": 805306368,
+        "oom": 1,
+        "cpu": {
+          "usage_usec": "97795523",
+          "user_usec": "78154600",
+          "system_usec": "19640923",
+          "nice_usec": "0",
+          "nr_periods": "2508",
+          "nr_throttled": "720",
+          "throttled_usec": "427859900",
+          "nr_bursts": "0",
+          "burst_usec": "0"
+        },
+        "restarts": 0,
+        "alive": false,
+        "images": {
+          "api": "sha256:60efe8c3f73e752da513acda56afeeb0cd94e5d980fe36c4c8b923fb2f9ae3b9",
+          "worker": "sha256:9414c23acb4d076531a4c914e59b9b66122fb63bd860eea42a9975adf4893691",
+          "postgres": "sha256:c293117fcecda7344b5480222e813b9f673d7abd69b1dd95eff239b768b04f59",
+          "caddy": "sha256:af555904a0961945f16bb323a501457b13a4f7e9bde969b145b97da80b38ecbe"
+        }
+      },
+      "stages": [
+        {
+          "index": 0,
+          "seconds": 900,
+          "requestedPerSecond": 10,
+          "completedRequests": 185,
+          "deliveredPerScheduledSecond": 0.20555555555555555,
+          "unexpectedErrors": 35
+        }
+      ],
+      "latencyTargetsMet": true,
+      "productionQualification": false,
+      "generatorExitCodes": [
+        105,
+        105,
+        105,
+        105,
+        105,
+        105,
+        105,
+        105,
+        105,
+        105
+      ],
+      "stopReason": "SUPPLEMENT_FAILED",
+      "supplement": {
+        "profile": "images",
+        "passed": false,
+        "error": "IMAGE_CASE_FAILED_PIXELS_GIFT"
+      },
+      "metadata": {
+        "schemaVersion": 1,
+        "runId": "mk816-38be832056ae",
+        "api": "sha256:60efe8c3f73e752da513acda56afeeb0cd94e5d980fe36c4c8b923fb2f9ae3b9",
+        "worker": "sha256:9414c23acb4d076531a4c914e59b9b66122fb63bd860eea42a9975adf4893691",
+        "k6": "grafana/k6:2.3.0@sha256:9c2dee7f8ed74d317e4027c06a10f169b625638189de8d4555d0b3486a5aeb34",
+        "revision": "0df15206ac3cc3a12c1332e5455549da5b25f2f7",
+        "dirty": false,
+        "host": "Docker Desktop;cpus=12;memory=8286515200",
+        "dataset": {
+          "members": 100,
+          "lists": 500,
+          "wishes": 10000,
+          "images": 200
+        },
+        "workerEnvironment": "Local",
+        "externalProviders": false
+      },
+      "auxiliaryRequests": 1000,
+      "harness": {
+        "cgroup.py": "25ff25c4e5e2b8ee47b2cacf5c6c72ae5c6817e863646e0038c6e3da679d716b",
+        "compose.py": "bd59237f1131dd6fdab0213077b10b18ab49d40c0d23ccc9f9f8e90011aaa727",
+        "performance_cli.py": "8d925b8913dca49b38d6c59e70172349607971287678680348f6533784d44140",
+        "policy.py": "b9b5e3b55669b25b3c22d42fecae0824253d9bb9c80f701b7c21b4516747668d",
+        "runtime.py": "f3a618e88aeffd1901853613846e07d5b14f4e9a0509c043f2160a3691e1c11c",
+        "scenarios.js": "fd37ae7e2746d76fb45f498a1ed94aec45e1c9ad97701b27348a635c4a4b02b2",
+        "seed.py": "06f7749e59ebbf0348c8dabbafb89049697b5ea6dac98844fbac9ea25b2df544",
+        "supplements.py": "5c8ab9fb039a127f2916f6722926b0df88925d6948eb958b67011395abdd1990"
+      },
+      "dataInvariants": {
+        "members": 100,
+        "lists": 500,
+        "wishes": 10000,
+        "images": 202,
+        "overReserved": 0
+      }
+    }
+  ]
+}

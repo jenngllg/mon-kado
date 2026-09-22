@@ -134,7 +134,7 @@ class RuntimeTests(unittest.TestCase):
 
     def test_remote_docker_and_unsupported_cgroup_are_refused(self):
         bench = Bench(".", "mk816-012345abcdef")
-        for endpoint in ("ssh://server", "tcp://server:2375"):
+        for endpoint in ("ssh://server", "tcp://server:2375", "npipe:////remote-server/pipe/docker_engine", "unix://remote/path"):
             with patch("runtime.command", return_value=endpoint), self.assertRaisesRegex(PerformanceError, "REMOTE_DOCKER"):
                 bench.local_only()
         with patch("runtime.command", side_effect=["unix:///var/run/docker.sock", "linux/1"]):
@@ -145,7 +145,7 @@ class RuntimeTests(unittest.TestCase):
                 with self.assertRaisesRegex(PerformanceError, "DOCKER_OVERRIDE"):
                     bench.local_only()
         with patch.dict("os.environ", {"DOCKER_HOST": "", "DOCKER_CONTEXT": ""}):
-            with patch("runtime.command", side_effect=["npipe://docker", "linux/2", "cgroupfs"]):
+            with patch("runtime.command", side_effect=["npipe:////./pipe/docker_engine", "linux/2", "cgroupfs"]):
                 bench.local_only()
 
     def test_owned_containers_reject_any_other_label(self):
