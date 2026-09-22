@@ -25,6 +25,7 @@ def markdown(report):
              f"Host: {metadata.get('host', 'unknown')}. Worker: Local; external providers disabled.",
              f"Memory limit: {infrastructure.get('memoryMax')} bytes; swap: {infrastructure.get('swapMax')}; CPU quota: {infrastructure.get('cpuMax')}.",
              f"Requests: {report['completedRequests']}/{report['expectedRequests']}; auxiliary requests: {report['auxiliaryRequests']}.",
+             f"Observed completion rate: {report.get('observedRequestsPerSecond')} requests/second over {report.get('observedCompletionSpanSeconds')} seconds.",
              f"Unexpected errors: {report['unexpectedErrors']}; 429: {report['rateLimited']}; dropped iterations: {report['droppedIterations']}.",
              f"OOM kills: {infrastructure.get('oom')}; restarts: {infrastructure.get('restarts')}.",
              f"Stop reason: {report['stopReason'] or 'none'}.", "",

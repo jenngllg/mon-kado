@@ -69,6 +69,7 @@ def safe_point(record):
     require(phase in ("warmup", "measure", "prepare"), "INVALID_PHASE")
     require(stage in ("0", "1", "2", "3"), "INVALID_STAGE")
     timestamp = datetime.fromisoformat(data["time"].replace("Z", "+00:00")).timestamp() if "time" in data else None
+    require(metric != "business_ok" or timestamp is not None, "MISSING_SAMPLE_TIME")
     return {"metric": metric, "value": value, "family": family, "phase": phase, "stage": stage, "timestamp": timestamp}
 
 
@@ -85,7 +86,7 @@ def verdict(points, profile, infrastructure):
     dropped = sum(point["value"] for point in measured if point["metric"] == "dropped_iterations")
     families = family_results(measured, profile, expected)
     errors = sum(value != 1 for value in outcomes)
-    complete = (len(outcomes) == expected and len(statuses) == expected
+    complete = (len(outcomes) == expected and len(statuses) == expected and len(times) == expected and observed_span > 0
                 and all(value["count"] >= value["expected"] * .99 for value in families.values()))
     latency_ok = all(value["p95"] is not None and value["p95"] < (1000 if family in ("update", "reservation") else 500)
                      for family, value in families.items())

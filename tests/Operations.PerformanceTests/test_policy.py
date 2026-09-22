@@ -51,6 +51,8 @@ class PolicyTests(unittest.TestCase):
                 safe_point({"type": "Point", "metric": "business_ms", "data": {"value": 1, "tags": tags}})
         with self.assertRaises(PerformanceError):
             safe_point({"type": "Point", "metric": "business_ms"})
+        with self.assertRaisesRegex(PerformanceError, "MISSING_SAMPLE_TIME"):
+            safe_point({"type": "Point", "metric": "business_ok", "data": {"value": 1}})
 
     @staticmethod
     def points():
@@ -58,7 +60,8 @@ class PolicyTests(unittest.TestCase):
         for family, weight in zip(FAMILIES, WEIGHTS):
             for _ in range(weight * 30):
                 for metric, value in (("business_ms", 25), ("business_ok", 1), ("business_status", 200)):
-                    points.append({"metric": metric, "value": value, "family": family, "phase": "measure"})
+                    points.append({"metric": metric, "value": value, "family": family, "phase": "measure",
+                                   "timestamp": (len(points) // 3) / 10})
         return points
 
     def test_complete_success_requires_work_and_verified_limits(self):
@@ -69,6 +72,8 @@ class PolicyTests(unittest.TestCase):
         self.assertEqual(300, result["completedRequests"])
         self.assertEqual(90, result["families"]["lists"]["count"])
         self.assertEqual("incomplete", verdict([], "smoke", health)["verdict"])
+        missing_time = [{**point, "timestamp": None} for point in self.points()]
+        self.assertEqual("incomplete", verdict(missing_time, "smoke", health)["verdict"])
         self.assertNotIn("update", verdict([], "images", health)["families"])
         self.assertEqual("failed", verdict(self.points(), "smoke", {})["verdict"])
         self.assertEqual("failed", verdict(self.points(), "smoke", {**health, "alive": False})["verdict"])
