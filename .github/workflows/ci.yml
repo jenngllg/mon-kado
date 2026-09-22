@@ -25,6 +25,62 @@ env:
     Host=127.0.0.1;Port=1;Database=mon_kado;Username=mon_kado;Timeout=1;Command Timeout=1;Pooling=false;SSL Mode=Disable
 
 jobs:
+  performance:
+    name: Isolated k6 smoke and harness coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.13'
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '24.19.0'
+      - name: Test deterministic orchestration without external services
+        env:
+          PYTHONPATH: src/Operations.Performance
+          COVERAGE_RCFILE: src/Operations.Performance/.coveragerc
+        run: |
+          python -m pip install --only-binary :all: coverage==7.10.7
+          python -m coverage run -m unittest discover -s tests/Operations.PerformanceTests
+          python -m coverage report
+          python -m coverage xml -o TestResults/performance-coverage.xml
+      - name: Cover the real k6 script through simulated HTTP contracts
+        run: >-
+          node --experimental-vm-modules --test --experimental-test-coverage
+          --test-coverage-lines=100 --test-coverage-branches=100 --test-coverage-functions=100
+          --test-coverage-include='**/src/Operations.Performance/scenarios.js'
+          --test-reporter=lcov --test-reporter-destination=TestResults/performance.lcov
+          tests/Operations.PerformanceTests/test_scenarios.mjs
+      - name: Upload deterministic performance coverage
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: performance-coverage
+          path: |
+            TestResults/performance-coverage.xml
+            TestResults/performance.lcov
+          if-no-files-found: error
+          retention-days: 3
+      - name: Allocate a disposable run identifier
+        run: |
+          docker pull grafana/k6:2.3.0@sha256:9c2dee7f8ed74d317e4027c06a10f169b625638189de8d4555d0b3486a5aeb34
+          echo "PERFORMANCE_RUN_ID=mk816-$(openssl rand -hex 6)" >> "$GITHUB_ENV"
+      - name: Exercise real TLS and database without external connectivity
+        run: python src/Operations.Performance/performance_cli.py run --profile smoke --run-id "$PERFORMANCE_RUN_ID"
+      - name: Upload only sanitized performance evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: performance-smoke-evidence
+          path: TestResults/performance/*/report.*
+          if-no-files-found: ignore
+          retention-days: 3
+      - name: Remove only this run's disposable resources
+        if: always() && env.PERFORMANCE_RUN_ID != ''
+        run: python src/Operations.Performance/performance_cli.py cleanup --run-id "$PERFORMANCE_RUN_ID"
   local_monitoring:
     name: Local monitoring without provider access
     runs-on: ubuntu-latest
@@ -243,7 +299,7 @@ jobs:
 
   quality:
     name: quality
-    needs: [windows_export_coverage, deployment_configuration, security_proxy, frontend_publication, local_monitoring, backup_configuration]
+    needs: [windows_export_coverage, deployment_configuration, security_proxy, frontend_publication, local_monitoring, backup_configuration, performance]
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -293,7 +349,8 @@ jobs:
           /d:sonar.token="$SONAR_TOKEN"
           /d:sonar.host.url="https://sonarcloud.io"
           /d:sonar.cs.opencover.reportsPaths="**/coverage.opencover.xml"
-          /d:sonar.python.coverage.reportPaths="TestResults/deployment-coverage.xml,TestResults/security-coverage.xml,TestResults/frontend-publication-coverage.xml,TestResults/monitoring-coverage.xml,TestResults/backup-coverage.xml"
+          /d:sonar.python.coverage.reportPaths="TestResults/deployment-coverage.xml,TestResults/security-coverage.xml,TestResults/frontend-publication-coverage.xml,TestResults/monitoring-coverage.xml,TestResults/backup-coverage.xml,TestResults/performance-coverage.xml"
+          /d:sonar.javascript.lcov.reportPaths="TestResults/performance.lcov"
           /d:sonar.test.inclusions="tests/**,deployments/production/test_*.py,deployments/production/verify_compose.py"
           /d:sonar.exclusions="src/**/Migrations/**"
           /d:sonar.qualitygate.wait=true
@@ -360,6 +417,12 @@ jobs:
       - name: Verify coverage reports
         shell: pwsh
         run: ./scripts/Verify-Coverage.ps1 -ResultsDirectory TestResults
+
+      - name: Download performance harness coverage for Sonar
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: performance-coverage
+          path: TestResults
 
       - name: Upload coverage diagnostics
         if: failure()
