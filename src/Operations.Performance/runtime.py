@@ -403,7 +403,8 @@ class Bench:
                     '{"running":{{.State.Running}},"oom":{{.State.OOMKilled}},"exitCode":{{.State.ExitCode}}}', identifier]))
                 logs = command(["docker", "logs", "--tail", "100", identifier])
                 state["categories"] = [name for name in ("OptionsValidationException", "OutOfMemoryException", "UnauthorizedAccessException",
-                    "NpgsqlException", "SocketException", "FileNotFoundException") if name in logs]
+                    "NpgsqlException", "SocketException", "FileNotFoundException", "permission denied",
+                    "operation not permitted", "unrecognized directive", "no such file or directory") if name in logs]
                 output[service] = state
             except (PerformanceError, ValueError, OSError):
                 output[service] = {"diagnosticsUnavailable": True}
