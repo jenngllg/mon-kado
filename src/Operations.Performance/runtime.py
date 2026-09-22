@@ -145,15 +145,11 @@ class Bench:
         api = command(["docker", "image", "inspect", "mon-kado-api:mk816", "--format", "{{.Id}}"])
         worker = command(["docker", "image", "inspect", "mon-kado-worker:mk816", "--format", "{{.Id}}"])
         cfg = configuration(self.identifier, api, worker, password, jwt, subnet, self.parent)
-        cfg["services"]["caddy"]["group_add"] = [str(self.directory.stat().st_gid)]
         private_write(self.directory / "compose.json", json.dumps(cfg))
         caddy = (self.source / "deployments" / "caddy" / "Caddyfile").read_text()
         require(caddy.count("{$API_HOST} {") == 1, "CADDY_TEMPLATE_CHANGED")
         caddy = caddy.replace("{$API_HOST} {", "mk816.test {\n    tls internal", 1)
         private_write(self.directory / "Caddyfile", caddy)
-        # Share only this non-secret config with Caddy through the host owner group.
-        # The enclosing directory stays private; fixture credentials remain 0600.
-        os.chmod(self.directory / "Caddyfile", 0o640)
         private_write(self.directory / "metadata.json", json.dumps({
             "schemaVersion": 1, "runId": self.identifier, "api": api, "worker": worker, "k6": K6_IMAGE,
             "revision": command(["git", "-C", str(self.source), "rev-parse", "HEAD"]),
@@ -178,6 +174,11 @@ class Bench:
         query, accounts = dataset(self.identifier, fixture_password, secrets.token_bytes(16))
         self.sql(query)
         self.stage = "services"
+        # Docker copies this private file as the container's root owner. No host
+        # group/world permissions or DAC-bypass capabilities are necessary.
+        self.compose("create", "caddy")
+        caddy = self.compose("ps", "-aq", "caddy")
+        command(["docker", "cp", str(self.directory / "Caddyfile"), f"{caddy}:/etc/caddy/Caddyfile"])
         self.compose("up", "-d", "api", "worker", "caddy")
         # Let the application generate its own Data Protection material and TLS CA.
         deadline = time.monotonic() + 120

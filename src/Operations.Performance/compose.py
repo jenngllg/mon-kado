@@ -49,7 +49,7 @@ def configuration(identifier, api_image, worker_image, password, jwt, subnet, pa
                    "networks": ["backend"], "volumes": volumes},
         "caddy": {**security, "image": "caddy:2.11.4-alpine", "read_only": False, "cap_add": ["NET_BIND_SERVICE"],
                   "networks": {"edge": {"aliases": ["mk816.test"]}},
-                  "volumes": ["./Caddyfile:/etc/caddy/Caddyfile:ro", "caddy:/data", "caddy_config:/config"]},
+                  "volumes": ["caddy:/data", "caddy_config:/config"]},
     }
     return {"name": identifier, "services": services,
             "networks": {"backend": {"internal": True, "labels": labels},

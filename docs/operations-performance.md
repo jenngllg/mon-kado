@@ -71,8 +71,8 @@ runner removes inherited permissions on the new run directory and grants access
 only to the current owner and SYSTEM. CodeQL alerts 19 and 20 (the same moved finding) were reviewed and classified
 as "used in tests" with the repository owner's approval: these disposable fixture
 credentials are intentionally not production secrets. No scanning rule is disabled.
-The non-secret Caddy configuration alone is group-readable (0640); Caddy receives
-that host group explicitly. It never mounts the fixture credential files.
+The non-secret Caddy configuration is copied into its stopped container as a
+root-owned private file. It never mounts the fixture credential files.
 
 ## Additional profiles
 
