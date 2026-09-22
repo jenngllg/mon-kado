@@ -19,6 +19,11 @@ SETTINGS = Path("/etc/monkado-backup")
 DEPLOYMENT = Path("/var/lib/monkado-deployment")
 PRODUCTION_ENV = Path("/etc/monkado/production.env")
 SERVICES = ("api", "worker", "caddy")
+CURRENT_ENV_NAME = "current.env"
+RCLONE_CONFIG_NAME = "rclone.conf"
+MAINTENANCE_NAME = "maintenance.json"
+CANDIDATE_NAME = "capture.new"
+PREVIOUS_NAME = "pending.previous"
 
 
 def utcnow():
@@ -82,7 +87,7 @@ class Operations:
         """Pin Compose to the installed root-owned configuration and current images."""
         return self.run([
             "docker", "compose", "--project-name", "mon-kado", "--project-directory", str(ROOT),
-            "--env-file", str(PRODUCTION_ENV), "--env-file", str(DEPLOYMENT / "current.env"),
+            "--env-file", str(PRODUCTION_ENV), "--env-file", str(DEPLOYMENT / CURRENT_ENV_NAME),
             "-f", str(ROOT / "compose.yaml"), "-f", str(ROOT / "deployments/production/compose.production.yaml"),
             *arguments,
         ])
@@ -107,7 +112,7 @@ class Operations:
 
     def restic(self, *arguments, cwd=None):
         """Use a dedicated repository and credential files, without secret arguments."""
-        for name in ("password", "rclone.conf", "repository"):
+        for name in ("password", RCLONE_CONFIG_NAME, "repository"):
             private_file(SETTINGS / name)
         repository = (SETTINGS / "repository").read_text().strip()
         if repository != "rclone:monkado:MonKado-backups/production-v1":
@@ -116,11 +121,11 @@ class Operations:
                          "--password-file", str(SETTINGS / "password"), "--cache-dir", str(STATE / "cache"),
                          "-o", "rclone.args=serve restic --stdio --drive-use-trash=false", *arguments],
                         timeout=3600, cwd=cwd,
-                        extra_env={"RCLONE_CONFIG": str(SETTINGS / "rclone.conf"), "GOMEMLIMIT": "128MiB", "GOMAXPROCS": "2"})
+                        extra_env={"RCLONE_CONFIG": str(SETTINGS / RCLONE_CONFIG_NAME), "GOMEMLIMIT": "128MiB", "GOMAXPROCS": "2"})
 
     def recover(self):
         """Restart only services stopped by this tool, including after termination."""
-        marker = STATE / "maintenance.json"
+        marker = STATE / MAINTENANCE_NAME
         if not marker.exists():
             return
         if json.loads(marker.read_text()) != {"services": list(SERVICES)}:
@@ -154,13 +159,13 @@ class Operations:
                 raise BackupError("DEPLOYMENT_INCOMPLETE")
             self.recover()
             self.recover_capture()
-            candidate = STATE / "capture.new"
+            candidate = STATE / CANDIDATE_NAME
             # A completed capture may survive a failed restart or interrupted promotion.
             # Require its explicit transfer before another maintenance can replace it.
             if (candidate / "manifest.json").exists():
                 raise BackupError("INTERRUPTED_CAPTURE_REQUIRES_TRANSFER")
             private_file(PRODUCTION_ENV)
-            release_metadata((DEPLOYMENT / "current.env").read_text())
+            release_metadata((DEPLOYMENT / CURRENT_ENV_NAME).read_text())
             for service in SERVICES:
                 self.container(service)
             postgres = self.container("postgres")
@@ -176,7 +181,7 @@ class Operations:
             if candidate.exists():
                 self.remove_capture(candidate)
             candidate.mkdir(mode=0o700)
-            atomic_json(STATE / "maintenance.json", {"services": list(SERVICES)})
+            atomic_json(STATE / MAINTENANCE_NAME, {"services": list(SERVICES)})
             try:
                 self.compose("stop", "--timeout", "60", "caddy", "api", "worker")
                 for service in SERVICES:
@@ -193,7 +198,7 @@ class Operations:
                     destination.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
                     shutil.copyfile(ROOT / name, destination)
                 shutil.copyfile(PRODUCTION_ENV, candidate / "configuration/production.env")
-                shutil.copyfile(DEPLOYMENT / "current.env", candidate / "configuration/current.env")
+                shutil.copyfile(DEPLOYMENT / CURRENT_ENV_NAME, candidate / "configuration/current.env")
                 pg_image_id = self.inspect(postgres, "{{.Image}}")
                 pg_digest = self.inspect(pg_image_id, "{{index .RepoDigests 0}}")
                 version = self.run(["docker", "exec", postgres, "sh", "-c",
@@ -204,20 +209,20 @@ class Operations:
                 self.recover()
             pending = STATE / "pending"
             if pending.exists():
-                pending.rename(STATE / "pending.previous")
+                pending.rename(STATE / PREVIOUS_NAME)
             candidate.rename(pending)
             self.recover_capture()
             self.update(lastCapture=created, captureBytes=sum(x.stat().st_size for x in pending.rglob("*") if x.is_file()))
 
     def remove_capture(self, path):
         """Delete only explicitly owned staging directories; never Docker volumes."""
-        if path not in (STATE / "pending", STATE / "capture.new", STATE / "pending.previous") or path.is_symlink():
+        if path not in (STATE / "pending", STATE / CANDIDATE_NAME, STATE / PREVIOUS_NAME) or path.is_symlink():
             raise BackupError("UNSAFE_CLEANUP_TARGET")
         shutil.rmtree(path)
 
     def recover_capture(self):
         """Preserve the previous valid capture across interruption of directory promotion."""
-        previous = STATE / "pending.previous"
+        previous = STATE / PREVIOUS_NAME
         if not previous.exists():
             return
         pending = STATE / "pending"
@@ -234,8 +239,8 @@ class Operations:
         manifest = verify_manifest(pending)
         for attempt in range(3):
             try:
-                private_file(SETTINGS / "rclone.conf")
-                quota = json.loads(self.run(["rclone", "--config", str(SETTINGS / "rclone.conf"),
+                private_file(SETTINGS / RCLONE_CONFIG_NAME)
+                quota = json.loads(self.run(["rclone", "--config", str(SETTINGS / RCLONE_CONFIG_NAME),
                                              "about", "monkado:", "--json"]))
                 required = sum(item["bytes"] for item in manifest["files"].values()) + 512 * 1024 * 1024
                 if not isinstance(quota.get("free"), int) or quota["free"] < required:
@@ -270,12 +275,12 @@ class Operations:
     def resume_capture(self):
         """Promote a validated interrupted capture without stopping application services."""
         with lock(DEPLOYMENT / "backup-coordination.lock"), lock(DEPLOYMENT / "deploy.lock"):
-            if (STATE / "maintenance.json").exists() or (DEPLOYMENT / "in-progress.env").exists():
+            if (STATE / MAINTENANCE_NAME).exists() or (DEPLOYMENT / "in-progress.env").exists():
                 raise BackupError("RECOVERY_REQUIRED_BEFORE_TRANSFER")
             self.recover_capture()
             pending = STATE / "pending"
             if not pending.exists():
-                candidate = STATE / "capture.new"
+                candidate = STATE / CANDIDATE_NAME
                 if not candidate.exists():
                     return False
                 manifest = verify_manifest(candidate)

@@ -8,6 +8,8 @@ from pathlib import Path
 from .capture import verify_manifest
 from .policy import BackupError, snapshot_id
 
+RESTORE_LABEL = "monkado.restore=true"
+
 
 class Restore:
     """Create new resources only; never start application workers or use production secrets."""
@@ -42,14 +44,14 @@ class Restore:
         # Pull before creating any resources; subsequent helpers cannot contact the network.
         self.run(["docker", "pull", image])
         for volume in names:
-            self.run(["docker", "volume", "create", "--label", "monkado.restore=true", volume])
-        self.run(["docker", "network", "create", "--internal", "--label", "monkado.restore=true", name])
+            self.run(["docker", "volume", "create", "--label", RESTORE_LABEL, volume])
+        self.run(["docker", "network", "create", "--internal", "--label", RESTORE_LABEL, name])
         with tempfile.TemporaryDirectory(prefix="monkado-restore-") as temporary:
             environment = Path(temporary) / "database.env"
             environment.write_text("POSTGRES_DB=mon_kado\nPOSTGRES_USER=mon_kado\nPOSTGRES_PASSWORD=" + secrets.token_hex(32) + "\n")
             environment.chmod(0o600)
             self.run(["docker", "run", "-d", "--name", name + "-postgres", "--network", name,
-                      "--label", "monkado.restore=true", "--env-file", str(environment),
+                      "--label", RESTORE_LABEL, "--env-file", str(environment),
                       "--mount", "type=volume,src=" + names[0] + ",dst=/var/lib/postgresql",
                       "--health-cmd", "pg_isready -h 127.0.0.1 -U mon_kado -d mon_kado", "--health-interval", "1s",
                       "--health-retries", "60", image])

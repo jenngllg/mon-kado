@@ -59,7 +59,7 @@ class CaptureTests(unittest.TestCase):
         for change in ({"schemaVersion": True}, {"schemaVersion": 3}, {"extra": 1},
                        {"caddyImage": None}, {"caddyImage": "caddy:latest"},
                        {"postgresImage": None}, {"postgresImage": "postgres:latest"},
-                       {"postgresVersion": None}, {"postgresVersion": "17.1"}, {"release": {}}):
+                       {"postgresVersion": None}, {"postgresVersion": "17.1"}, {"postgresVersion": "18.\u0666"}, {"release": {}}):
             with self.subTest(change=change):
                 (self.root / "manifest.json").write_text(json.dumps({**self.value, **change}))
                 with self.assertRaises(BackupError):
@@ -70,7 +70,8 @@ class CaptureTests(unittest.TestCase):
 
     def test_create_rejects_incompatible_database(self):
         # Arrange / Act / Assert
-        for image, version in (("postgres:18", "18.6"), ("postgres@sha256:" + "d" * 64, "17.1")):
+        for image, version in (("postgres:18", "18.6"), ("postgres@sha256:" + "d" * 64, "17.1"),
+                               ("postgres@sha256:" + "d" * 64, "18.\u0666")):
             with self.subTest(version=version), self.assertRaises(BackupError):
                 create_manifest(self.root, self.value["createdAt"], image, version, self.value["caddyImage"])
 

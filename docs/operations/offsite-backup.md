@@ -238,7 +238,7 @@ claiming the newer configuration inventory is protected in production.
 
 The offline Python suite passed 83 tests (three opt-in tests were skipped and
 passed separately), covering all backup source files including provisioning,
-authorization, diagnostic and exercise entry points: 782/782 statements and
+authorization, diagnostic and exercise entry points: 790/790 statements and
 246/246 branches, both 100%. This run had no network and was limited to 192 MiB,
 no swap and half a CPU. It validates the local processing budget, not peak VPS
 consumption during an actual Drive upload. The separate real PostgreSQL Docker

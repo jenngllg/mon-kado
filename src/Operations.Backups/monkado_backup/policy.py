@@ -68,7 +68,7 @@ def image_reference(value, component):
 def release_metadata(text):
     """Parse the deployed pointer as data, never as shell instructions."""
     try:
-        values = dict(line.split("=", 1) for line in text.splitlines())
+        values = {key: value for key, value in (line.split("=", 1) for line in text.splitlines())}
         if set(values) != {"API_IMAGE", "WORKER_IMAGE", "RELEASE_REVISION"}:
             raise ValueError()
         if not re.fullmatch(r"[0-9a-f]{40}", values["RELEASE_REVISION"]):

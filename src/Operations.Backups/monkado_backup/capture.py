@@ -14,6 +14,8 @@ from .policy import BackupError, FILES, LEGACY_FILES, HASH, release_metadata, ti
 IMAGE_NAME = re.compile(r"(?P<a>[0-9a-f]{2})/(?P<b>[0-9a-f]{2})/(?P=a)(?P=b)[0-9a-f]{28}\.(webp|pending)")
 # The repository also contains revocation records, not only key-{guid}.xml.
 KEY_NAME = re.compile(r"[A-Za-z0-9_-]+\.xml")
+MANIFEST_NAME = "manifest.json"
+RELEASE_PATH = "configuration/current.env"
 
 
 def regular(path):
@@ -71,7 +73,7 @@ def entries(root):
         if path.is_dir():
             continue
         relative = path.relative_to(root).as_posix()
-        if relative == "manifest.json":
+        if relative == MANIFEST_NAME:
             continue
         result[relative] = {"sha256": digest(path), "bytes": path.stat().st_size}
     return result
@@ -79,7 +81,7 @@ def entries(root):
 
 def validate_shape(paths, schema_version=2):
     """Prevent a restored archive from injecting extra configuration or secrets."""
-    required = {"postgres.dump", "configuration/production.env", "configuration/current.env"}
+    required = {"postgres.dump", "configuration/production.env", RELEASE_PATH}
     required.update("configuration/" + name for name in (LEGACY_FILES if schema_version == 1 else FILES))
     if not required.issubset(paths):
         raise BackupError("INCOMPLETE_CAPTURE")
@@ -101,7 +103,7 @@ def create_manifest(root, created_at, postgres_image, postgres_version, caddy_im
     timestamp(created_at)
     if not re.fullmatch(r"postgres@sha256:" + HASH, postgres_image):
         raise BackupError("INVALID_POSTGRES_IMAGE")
-    if not re.fullmatch(r"18\.[0-9]+", postgres_version):
+    if not re.fullmatch(r"18\.\d+", postgres_version, flags=re.ASCII):
         raise BackupError("UNSUPPORTED_POSTGRES_VERSION")
     if not isinstance(caddy_image, str) or not re.fullmatch(r"caddy@sha256:" + HASH, caddy_image):
         raise BackupError("INVALID_CADDY_IMAGE")
@@ -113,17 +115,17 @@ def create_manifest(root, created_at, postgres_image, postgres_version, caddy_im
         "postgresImage": postgres_image,
         "postgresVersion": postgres_version,
         "caddyImage": caddy_image,
-        "release": release_metadata((root / "configuration/current.env").read_text()),
+        "release": release_metadata((root / RELEASE_PATH).read_text()),
         "files": inventory,
     }
-    atomic_json(root / "manifest.json", value)
+    atomic_json(root / MANIFEST_NAME, value)
     return value
 
 
 def verify_manifest(root):
     """Verify every byte and reject unexpected files before a restore can run."""
-    regular(root / "manifest.json")
-    value = json.loads((root / "manifest.json").read_text())
+    regular(root / MANIFEST_NAME)
+    value = json.loads((root / MANIFEST_NAME).read_text())
     if not isinstance(value, dict) or type(value.get("schemaVersion")) is not int or value["schemaVersion"] not in (1, 2):
         raise BackupError("INVALID_MANIFEST")
     fields = {"schemaVersion", "createdAt", "postgresImage", "postgresVersion", "release", "files"}
@@ -137,13 +139,13 @@ def verify_manifest(root):
     timestamp(value["createdAt"])
     if not isinstance(value["postgresImage"], str) or not re.fullmatch(r"postgres@sha256:" + HASH, value["postgresImage"]):
         raise BackupError("INVALID_POSTGRES_IMAGE")
-    if not isinstance(value["postgresVersion"], str) or not re.fullmatch(r"18\.[0-9]+", value["postgresVersion"]):
+    if not isinstance(value["postgresVersion"], str) or not re.fullmatch(r"18\.\d+", value["postgresVersion"], flags=re.ASCII):
         raise BackupError("UNSUPPORTED_POSTGRES_VERSION")
     inventory = entries(root)
     validate_shape(inventory, value["schemaVersion"])
     if inventory != value["files"]:
         raise BackupError("CAPTURE_INTEGRITY_FAILED")
-    release = release_metadata((root / "configuration/current.env").read_text())
+    release = release_metadata((root / RELEASE_PATH).read_text())
     if value["release"] != release:
         raise BackupError("RELEASE_MISMATCH")
     return value
