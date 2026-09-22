@@ -1,0 +1,10 @@
+[Unit]
+Description=Verify encrypted MonKado backup packs weekly
+
+[Timer]
+OnCalendar=Sun *-*-* 07:00:00 Europe/Paris
+Persistent=true
+Unit=monkado-backup-check.service
+
+[Install]
+WantedBy=timers.target
