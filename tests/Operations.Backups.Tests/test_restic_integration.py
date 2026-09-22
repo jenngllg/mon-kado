@@ -43,11 +43,12 @@ class ResticIntegrationTests(unittest.TestCase):
             self.assertEqual(0, repeated["data_added"])
             self.assertEqual(manifest, verify_manifest(root / "restored"))
             self.assertEqual(manifest, json.loads(command(prefix + ["dump", identifier, "manifest.json"])))
-            original_secret = password.read_text()
-            password.write_text(secrets.token_hex(32))
+            wrong_password = root / "wrong-password"
+            wrong_password.write_text(secrets.token_hex(32))
+            wrong_password.chmod(0o600)
+            wrong_prefix = [*prefix[:-1], str(wrong_password)]
             with self.assertRaisesRegex(BackupError, "COMMAND_FAILED"):
-                command(prefix + ["snapshots", "--json"])
-            password.write_text(original_secret)
+                command(wrong_prefix + ["snapshots", "--json"])
             pack = next(path for path in (root / "repository/data").rglob("*") if path.is_file())
             with pack.open("r+b") as stream:
                 original = stream.read(1)
