@@ -9,6 +9,7 @@ import sys
 import time
 import urllib.error
 import urllib.request
+from urllib.parse import urlsplit
 import zipfile
 from pathlib import Path
 
@@ -78,7 +79,6 @@ def parallel(actions):
 
 
 def image_check(client, kind, fixture):
-    member = client.account["memberId"]
     wishlist = client.account["lists"][4]
     wish = wishlist["wishes"][0]
     source = "/api/v1/auth/sessions/current" if kind == "profile" else f"/api/v1/wishlists/{wishlist['id']}/wishes/{wish}"
@@ -87,10 +87,13 @@ def image_check(client, kind, fixture):
     boundary = "MK816ImageBoundary"
     data = (f"--{boundary}\r\nContent-Disposition: form-data; name=\"image\"; filename=\"synthetic.png\"\r\nContent-Type: image/png\r\n\r\n".encode()
             + fixture + f"\r\n--{boundary}--\r\n".encode())
-    code, _, _, elapsed = client.request("PUT", target, data,
+    code, uploaded, _, elapsed = client.request("PUT", target, data,
                                          {"If-Match": headers["ETag"], "Content-Type": f"multipart/form-data; boundary={boundary}"})
     require(code == 200, "IMAGE_UPLOAD_FAILED")
-    download = f"/api/v1/members/{member}/profile/image" if kind == "profile" else target
+    location = json.loads(uploaded)["profileImageUrl" if kind == "profile" else "imageUrl"]
+    parsed = urlsplit(location)
+    require((not parsed.scheme and not parsed.netloc) or (parsed.scheme == "https" and parsed.netloc == "mk816.test"), "IMAGE_ORIGIN_REFUSED")
+    download = parsed.path + "?" + parsed.query
     code, content, _, _ = client.request("GET", download)
     require(code == 200 and content[:4] == b"RIFF" and content[8:12] == b"WEBP", "IMAGE_INVALID")
     repeated = client.request("GET", download)
@@ -102,10 +105,13 @@ def images(clients):
     results = []
     for name, fixture in (("normal", png()), ("bytes", png(1800, 1900, compression=0)), ("pixels", png(8000, 5000))):
         for kind in ("gift", "profile"):
-            single = image_check(clients[0], kind, fixture)
-            results.append({**single, "case": name, "concurrency": 1})
-            for result in parallel([lambda client=client: image_check(client, kind, fixture) for client in clients[:2]]):
-                results.append({**result, "case": name, "concurrency": 2})
+            try:
+                single = image_check(clients[0], kind, fixture)
+                results.append({**single, "case": name, "concurrency": 1})
+                for result in parallel([lambda client=client: image_check(client, kind, fixture) for client in clients[:2]]):
+                    results.append({**result, "case": name, "concurrency": 2})
+            except PerformanceError:
+                raise PerformanceError("IMAGE_CASE_FAILED_" + name.upper() + "_" + kind.upper()) from None
     return results
 
 
@@ -195,8 +201,9 @@ def main():
             raise PerformanceError("INVALID_SUPPLEMENT")
         print(json.dumps({"profile": profile, "passed": True, "results": results}))
         return 0
-    except (PerformanceError, OSError, ValueError, KeyError, zipfile.BadZipFile):
-        print(json.dumps({"profile": profile, "passed": False, "error": "SUPPLEMENT_FAILED"}))
+    except (PerformanceError, OSError, ValueError, KeyError, zipfile.BadZipFile) as error:
+        code = str(error) if isinstance(error, PerformanceError) else "SUPPLEMENT_FAILED"
+        print(json.dumps({"profile": profile, "passed": False, "error": code}))
         return 1
 
 

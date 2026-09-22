@@ -68,19 +68,24 @@ class SupplementsTests(unittest.TestCase):
         client = Mock(account=account())
         client.json_request.return_value = ({}, {"ETag": '"1"'})
         webp = b"RIFF0000WEBPsynthetic"
+        uploaded = b'{"imageUrl":"/api/v1/wishes/image?token=synthetic","profileImageUrl":"https://mk816.test/api/v1/members/image?imageId=synthetic"}'
         for kind in ("gift", "profile"):
-            client.request.side_effect = [(200, b"", {}, 2), (200, webp, {}, 1), (200, webp, {}, 1)]
+            client.request.side_effect = [(200, uploaded, {}, 2), (200, webp, {}, 1), (200, webp, {}, 1)]
             self.assertTrue(image_check(client, kind, b"png")["valid"])
         for responses, code in (
             ([(500, b"", {}, 1)], "IMAGE_UPLOAD_FAILED"),
-            ([(200, b"", {}, 1), (200, b"bad", {}, 1)], "IMAGE_INVALID"),
-            ([(200, b"", {}, 1), (200, webp, {}, 1), (200, b"different", {}, 1)], "IMAGE_CHANGED"),
+            ([(200, uploaded, {}, 1), (200, b"bad", {}, 1)], "IMAGE_INVALID"),
+            ([(200, uploaded, {}, 1), (200, webp, {}, 1), (200, b"different", {}, 1)], "IMAGE_CHANGED"),
+            ([(200, b'{"imageUrl":"https://external.invalid/image"}', {}, 1)], "IMAGE_ORIGIN_REFUSED"),
         ):
             client.request.side_effect = responses
             with self.assertRaisesRegex(PerformanceError, code):
                 image_check(client, "gift", b"png")
         with patch("supplements.png", return_value=b"fixture"), patch("supplements.image_check", return_value={"valid": True}):
             self.assertEqual(18, len(images([client, client])))
+        with patch("supplements.png", return_value=b"fixture"), patch("supplements.image_check", side_effect=PerformanceError("IMAGE_UPLOAD_FAILED")):
+            with self.assertRaisesRegex(PerformanceError, "IMAGE_CASE_FAILED_NORMAL_GIFT"):
+                images([client, client])
         self.assertEqual([1, 2], parallel([lambda: 1, lambda: 2]))
 
     def archive(self, member="member-0", image=True, data=True):
@@ -181,3 +186,7 @@ class SupplementsTests(unittest.TestCase):
             with contextlib.redirect_stdout(io.StringIO()), self.assertRaises(SystemExit) as exited:
                 runpy.run_module("supplements", run_name="__main__")
         self.assertEqual(1, exited.exception.code)
+        with patch("sys.argv", ["supplements", "images"]), patch("supplements.Path.read_text", return_value=fixture):
+            with patch("supplements.Client", side_effect=OSError("not-for-output")), contextlib.redirect_stdout(io.StringIO()) as output:
+                self.assertEqual(1, main())
+            self.assertNotIn("not-for-output", output.getvalue())

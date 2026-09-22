@@ -5,7 +5,7 @@ import secrets
 from pathlib import Path
 
 from policy import PROFILES, PerformanceError
-from runtime import Bench
+from runtime import Bench, private_write
 
 
 def main():
@@ -30,7 +30,11 @@ def main():
         return 0 if report["verdict"] == "passed" else 1
     except (PerformanceError, OSError, ValueError, KeyboardInterrupt) as error:
         code = str(error) if isinstance(error, PerformanceError) else "CAMPAIGN_NOT_QUALIFIED"
-        print(json.dumps({"runId": identifier, "verdict": "incomplete", "stage": bench.stage, "error": code}), flush=True)
+        failure = {"schemaVersion": 1, "runId": identifier, "verdict": "incomplete", "stage": bench.stage, "error": code,
+                   "diagnostics": bench.failure_diagnostics()}
+        print(json.dumps(failure), flush=True)
+        if bench.cg_created and not (bench.directory / "report.json").exists():
+            private_write(bench.directory / "report.json", json.dumps(failure, indent=2))
         return 1
 
 

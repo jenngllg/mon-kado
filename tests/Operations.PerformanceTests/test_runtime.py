@@ -6,7 +6,7 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 
 from policy import LABEL, PerformanceError
-from runtime import Bench, command, private_write
+from runtime import Bench, command, private_write, protect_directory
 
 
 class RuntimeTests(unittest.TestCase):
@@ -121,6 +121,16 @@ class RuntimeTests(unittest.TestCase):
             with self.assertRaises(FileExistsError):
                 private_write(path, "replace")
 
+    def test_windows_acl_grants_only_current_owner_and_system(self):
+        with patch("runtime.sys.platform", "win32"):
+            with patch("runtime.command", side_effect=['"fixture-user","S-1-5-21-123"', ""]) as execute:
+                protect_directory(Path("private-run"))
+                self.assertIn("*S-1-5-21-123:(OI)(CI)F", execute.call_args.args[0])
+                self.assertIn("/inheritance:r", execute.call_args.args[0])
+            with patch("runtime.command", return_value='"fixture-user","unknown"'):
+                with self.assertRaisesRegex(PerformanceError, "OWNER_ID_UNAVAILABLE"):
+                    protect_directory(Path("private-run"))
+
     def test_remote_docker_and_unsupported_cgroup_are_refused(self):
         bench = Bench(".", "mk816-012345abcdef")
         for endpoint in ("ssh://server", "tcp://server:2375"):
@@ -164,7 +174,7 @@ class RuntimeTests(unittest.TestCase):
 
     def test_health_verifies_parent_and_published_ports(self):
         bench = Bench(".", "mk816-012345abcdef")
-        state = {"state": "running", "oom": False, "restarts": 0, "parent": bench.identifier, "ports": {}}
+        state = {"image": "sha256:test", "state": "running", "oom": False, "restarts": 0, "parent": bench.identifier, "ports": {}}
         with patch.object(bench, "group", return_value={"qualified": True, "oom": 0}), patch.object(bench, "compose", return_value="owned"):
             with patch("runtime.command", return_value=json.dumps(state)):
                 self.assertTrue(bench.inspect_health()["alive"])
@@ -210,3 +220,15 @@ class RuntimeTests(unittest.TestCase):
             with patch("runtime.command", side_effect=["foreign", json.dumps({LABEL: "other"})]):
                 with self.assertRaisesRegex(PerformanceError, "OWNERSHIP_MISMATCH"):
                     bench.cleanup()
+
+    def test_failure_diagnostics_strip_all_log_content_except_known_categories(self):
+        bench = Bench(".", "mk816-012345abcdef")
+        self.assertEqual({}, bench.failure_diagnostics())
+        bench.cg_created = True
+        with patch.object(bench, "compose", return_value="owned"):
+            with patch("runtime.command", side_effect=['{"running":false,"oom":true,"exitCode":137}', "private-value OutOfMemoryException"] * 4):
+                report = bench.failure_diagnostics()
+                self.assertNotIn("private-value", json.dumps(report))
+                self.assertEqual(["OutOfMemoryException"], report["api"]["categories"])
+            with patch("runtime.command", side_effect=PerformanceError("COMMAND_FAILED")):
+                self.assertTrue(bench.failure_diagnostics()["api"]["diagnosticsUnavailable"])

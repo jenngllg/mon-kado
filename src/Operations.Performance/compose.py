@@ -29,6 +29,7 @@ def configuration(identifier, api_image, worker_image, password, jwt, subnet, pa
                        "Observability__Directory": "/tmp/observability", "Observability__Version": "local"}
     services = {
         "postgres": {"image": "postgres:18.6-alpine", "labels": labels, "cgroup_parent": parent,
+                     "shm_size": "128m", "logging": security["logging"],
                      "environment": {"POSTGRES_USER": "fixture", "POSTGRES_PASSWORD": password, "POSTGRES_DB": database},
                      "volumes": ["postgres:/var/lib/postgresql"], "networks": ["backend"],
                      "command": ["postgres", "-c", "shared_buffers=64MB", "-c", "max_connections=40", "-c", "work_mem=2MB"],

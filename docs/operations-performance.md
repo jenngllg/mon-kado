@@ -53,12 +53,23 @@ qualified. Google is disabled. All runtime networks are internal; no host ports 
 published. HTTPS verifies the run-specific Caddy CA. No production credentials,
 real data, backup repository or production volumes are mounted.
 
+Docker uses bounded local JSON logs as in deployment. Observability remains enabled;
+its rolling private snapshots live in the disposable `/tmp` tmpfs rather than the
+VPS monitoring directory. This local storage difference is not an I/O performance
+qualification of the VPS disk.
+
 Preparation creates a fresh marked database with 100 members, 500 lists and 10,000
 wishes, then uses real HTTP login, CSRF, sharing and upload contracts to initialize
 100 gift images, 100 profile images, participations and reservations. Passwords,
 JWT signing material and share proofs are disposable and stay in private local
 files/memory. Login and refresh behavior is not bypassed. Long scenarios renew
 tokens with the original application lifetime.
+
+On POSIX the run directory is 0700 and credential files are 0600. On Windows the
+runner removes inherited permissions on the new run directory and grants access
+only to the current owner and SYSTEM. CodeQL alert 19 was reviewed and classified
+as "used in tests" with the repository owner's approval: these disposable fixture
+credentials are intentionally not production secrets. No scanning rule is disabled.
 
 ## Additional profiles
 

@@ -7,6 +7,9 @@ import secrets
 import hashlib
 import shutil
 import subprocess
+import csv
+import re
+import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -30,6 +33,14 @@ def private_write(path, content):
     with path.open("x", encoding="utf-8") as stream:
         os.chmod(path, 0o600)
         stream.write(content)
+
+
+def protect_directory(path):
+    """Use an owner-only Windows ACL; POSIX chmod alone does not protect NTFS files."""
+    if sys.platform == "win32":
+        identity = next(csv.reader([command(["whoami", "/user", "/fo", "csv", "/nh"])]))[-1]
+        require(re.fullmatch(r"S-1-[0-9-]+", identity) is not None, "OWNER_ID_UNAVAILABLE")
+        command(["icacls", str(path), "/inheritance:r", "/grant:r", "*" + identity + ":(OI)(CI)F", "*S-1-5-18:(OI)(CI)F"])
 
 
 class Bench:
@@ -87,6 +98,7 @@ class Bench:
             existing_names = command(["docker", kind, "ls", *( ["-a"] if kind == "container" else []), "-q", "--filter", "name=" + self.identifier])
             require(not existing_names, "DOCKER_RESOURCES_ALREADY_EXIST")
         self.directory.mkdir(mode=0o700, parents=True)
+        protect_directory(self.directory)
         self.code.mkdir(mode=0o700)
         for path in self.source_code.iterdir():
             if path.suffix in (".py", ".js"):
@@ -161,17 +173,20 @@ class Bench:
         cg = self.group("status")
         restarts = 0
         alive = True
+        images = {}
         for service in ("api", "worker", "postgres", "caddy"):
             identifier = self.compose("ps", "-aq", service)
             require(bool(identifier), "CONTAINER_MISSING")
             state = json.loads(command(["docker", "inspect", "--format",
-                                        '{"state":{{json .State.Status}},"oom":{{.State.OOMKilled}},"restarts":{{.RestartCount}},"parent":{{json .HostConfig.CgroupParent}},"ports":{{json .HostConfig.PortBindings}}}', identifier]))
+                                        '{"image":{{json .Image}},"state":{{json .State.Status}},"oom":{{.State.OOMKilled}},"restarts":{{.RestartCount}},"parent":{{json .HostConfig.CgroupParent}},"ports":{{json .HostConfig.PortBindings}}}', identifier]))
             require(state["parent"] == self.parent and not state["ports"], "ISOLATION_MISMATCH")
             restarts += state["restarts"]
             alive = alive and state["state"] == "running"
-            cg["oom"] += int(state["oom"])
+            cg["oom"] = max(cg["oom"], int(state["oom"]))
+            images[service] = state["image"]
         cg["restarts"] = restarts
         cg["alive"] = alive
+        cg["images"] = images
         try:
             self.compose("exec", "-T", "-e", "SSL_CERT_FILE=/data/caddy/pki/authorities/local/root.crt", "caddy", "wget", "-T", "3",
                          "-qO", "/dev/null", "https://mk816.test/readiness", timeout=10)
@@ -328,9 +343,26 @@ class Bench:
                                   for name, item in report["families"].items()))
         return report
 
+    def failure_diagnostics(self):
+        """Preserve only fixed fields and known exception categories, never log text."""
+        output = {}
+        if not self.cg_created:
+            return output
+        for service in ("api", "worker", "postgres", "caddy"):
+            try:
+                identifier = self.compose("ps", "-aq", service)
+                state = json.loads(command(["docker", "inspect", "--format",
+                    '{"running":{{.State.Running}},"oom":{{.State.OOMKilled}},"exitCode":{{.State.ExitCode}}}', identifier]))
+                logs = command(["docker", "logs", "--tail", "100", identifier])
+                state["categories"] = [name for name in ("OptionsValidationException", "OutOfMemoryException", "UnauthorizedAccessException",
+                    "NpgsqlException", "SocketException", "FileNotFoundException") if name in logs]
+                output[service] = state
+            except (PerformanceError, ValueError, OSError):
+                output[service] = {"diagnosticsUnavailable": True}
+        return output
+
     def cleanup(self):
         self.local_only()
-        self.owned_containers()
         for kind in ("container", "volume", "network"):
             args = ["docker", kind, "ls", "-q", "--filter", f"label={LABEL}={self.identifier}"]
             if kind == "container":
