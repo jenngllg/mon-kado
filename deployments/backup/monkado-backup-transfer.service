@@ -1,0 +1,17 @@
+[Unit]
+Description=Resume MonKado encrypted backup transfer without maintenance
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+UMask=0077
+Environment=PYTHONPATH=/opt/monkado-backup
+ExecStart=/usr/bin/python3 -m monkado_backup.cli resume
+TimeoutStartSec=4h
+Nice=15
+IOSchedulingClass=idle
+MemoryMax=192M
+MemorySwapMax=0
+CPUQuota=50%
