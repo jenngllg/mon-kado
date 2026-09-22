@@ -5,7 +5,7 @@ import secrets
 from pathlib import Path
 
 from policy import PROFILES, PerformanceError
-from runtime import Bench, private_write
+from runtime import Bench, private_write, keep_awake
 
 
 def main():
@@ -24,8 +24,9 @@ def main():
             print(json.dumps({"runId": identifier, "cleaned": True}))
             return 0
         print(json.dumps({"runId": identifier, "profile": args.profile}), flush=True)
-        bench.create()
-        report = bench.run(args.profile)
+        with keep_awake():
+            bench.create()
+            report = bench.run(args.profile)
         print(json.dumps({"runId": identifier, "verdict": report["verdict"]}), flush=True)
         return 0 if report["verdict"] == "passed" else 1
     except (PerformanceError, OSError, ValueError, KeyboardInterrupt) as error:

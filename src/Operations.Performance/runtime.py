@@ -11,6 +11,8 @@ import csv
 import re
 import sys
 import time
+import ctypes
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -20,6 +22,19 @@ from seed import dataset, png
 from reporting import markdown, resources
 
 SUPPLEMENT_PROFILES = ("images", "exports", "quotas", "concurrency")
+
+
+@contextmanager
+def keep_awake():
+    """Prevent idle Windows sleep for this process, without changing power settings."""
+    windows = sys.platform == "win32"
+    if windows:
+        require(bool(ctypes.windll.kernel32.SetThreadExecutionState(0x80000001)), "WAKE_LOCK_UNAVAILABLE")
+    try:
+        yield
+    finally:
+        if windows:
+            ctypes.windll.kernel32.SetThreadExecutionState(0x80000000)
 
 
 def command(arguments, *, data=None, timeout=180, include_stderr=False):
@@ -404,7 +419,8 @@ class Bench:
                 logs = command(["docker", "logs", "--tail", "100", identifier], include_stderr=True)
                 state["categories"] = [name for name in ("OptionsValidationException", "OutOfMemoryException", "UnauthorizedAccessException",
                     "NpgsqlException", "SocketException", "FileNotFoundException", "permission denied",
-                    "operation not permitted", "unrecognized directive", "no such file or directory") if name in logs]
+                    "operation not permitted", "unrecognized directive", "no such file or directory",
+                    "/etc/caddy/Caddyfile", "/data/caddy", "/config/caddy", "/tmp", "frontend") if name in logs]
                 output[service] = state
             except (PerformanceError, ValueError, OSError):
                 output[service] = {"diagnosticsUnavailable": True}

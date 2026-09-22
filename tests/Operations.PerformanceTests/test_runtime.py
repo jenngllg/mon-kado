@@ -6,10 +6,23 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 
 from policy import LABEL, PerformanceError
-from runtime import Bench, command, private_write, protect_directory, generator_user
+from runtime import Bench, command, private_write, protect_directory, generator_user, keep_awake
 
 
 class RuntimeTests(unittest.TestCase):
+    def test_windows_wake_lock_is_temporary_and_released_on_failure(self):
+        with patch("runtime.sys.platform", "win32"), patch("runtime.ctypes.windll", create=True) as native:
+            native.kernel32.SetThreadExecutionState.return_value = 1
+            with self.assertRaisesRegex(ValueError, "interrupted"):
+                with keep_awake():
+                    raise ValueError("interrupted")
+            self.assertEqual([(0x80000001,), (0x80000000,)],
+                             [call.args for call in native.kernel32.SetThreadExecutionState.call_args_list])
+            native.kernel32.SetThreadExecutionState.return_value = 0
+            with self.assertRaisesRegex(PerformanceError, "WAKE_LOCK_UNAVAILABLE"):
+                with keep_awake():
+                    self.fail("The campaign must not start without a wake lock")
+
     def fixture_source(self, root):
         bench = Bench(root, "mk816-012345abcdef")
         bench.source_code.mkdir(parents=True)
