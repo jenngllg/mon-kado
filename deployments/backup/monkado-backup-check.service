@@ -1,0 +1,15 @@
+[Unit]
+Description=Read and verify all encrypted MonKado backup data
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+UMask=0077
+Environment=PYTHONPATH=/opt/monkado-backup
+ExecStart=/usr/bin/python3 -m monkado_backup.cli check
+TimeoutStartSec=4h
+Nice=15
+MemoryMax=192M
+CPUQuota=50%

@@ -117,6 +117,47 @@ jobs:
           path: TestResults/security-coverage.xml
           if-no-files-found: error
           retention-days: 3
+
+  backup_configuration:
+    name: Backup and restoration tooling
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Validate shell entrypoints
+        run: |
+          bash -n deployments/backup/install.sh deployments/backup/monkado-backup deployments/backup/monkado-guarded-deploy
+          shellcheck deployments/backup/install.sh deployments/backup/monkado-backup deployments/backup/monkado-guarded-deploy
+      - name: Build isolated backup test tools
+        run: docker build -t monkado-backup-tests -f tests/Operations.Backups.Tests/Dockerfile .
+      - name: Test orchestration and real encrypted local repository
+        run: >-
+          docker run --rm --network none -v "$PWD:/workspace" -w /workspace
+          monkado-backup-tests sh -c
+          'python -m coverage run --branch --source=src/Operations.Backups -m unittest discover -s tests/Operations.Backups.Tests
+          && python -m coverage report --fail-under=100
+          && python -m coverage xml -o TestResults/backup-coverage.xml'
+      - name: Upload backup coverage
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: backup-coverage
+          path: TestResults/backup-coverage.xml
+          if-no-files-found: error
+          retention-days: 3
+      - name: Verify private installer and lock preservation
+        run: >-
+          docker run --rm --network none -v "$PWD:/workspace:ro"
+          -e MONKADO_BACKUP_INSTALL_TESTS=1 monkado-backup-tests
+          python -m unittest discover -s tests/Operations.Backups.Tests -p test_install_sandbox.py
+      - name: Exercise PostgreSQL restoration in fresh local Docker volumes
+        run: >-
+          docker run --rm -v "$PWD:/workspace" -v /var/run/docker.sock:/var/run/docker.sock
+          -e MONKADO_BACKUP_DOCKER_TESTS=1 monkado-backup-tests
+          python -m unittest discover -s tests/Operations.Backups.Tests -p test_postgres_integration.py
+
   deployment_configuration:
     name: Deployment configuration
     runs-on: ubuntu-latest
@@ -202,7 +243,7 @@ jobs:
 
   quality:
     name: quality
-    needs: [windows_export_coverage, deployment_configuration, security_proxy, frontend_publication, local_monitoring]
+    needs: [windows_export_coverage, deployment_configuration, security_proxy, frontend_publication, local_monitoring, backup_configuration]
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -252,7 +293,7 @@ jobs:
           /d:sonar.token="$SONAR_TOKEN"
           /d:sonar.host.url="https://sonarcloud.io"
           /d:sonar.cs.opencover.reportsPaths="**/coverage.opencover.xml"
-          /d:sonar.python.coverage.reportPaths="TestResults/deployment-coverage.xml,TestResults/security-coverage.xml,TestResults/frontend-publication-coverage.xml,TestResults/monitoring-coverage.xml"
+          /d:sonar.python.coverage.reportPaths="TestResults/deployment-coverage.xml,TestResults/security-coverage.xml,TestResults/frontend-publication-coverage.xml,TestResults/monitoring-coverage.xml,TestResults/backup-coverage.xml"
           /d:sonar.test.inclusions="tests/**,deployments/production/test_*.py,deployments/production/verify_compose.py"
           /d:sonar.exclusions="src/**/Migrations/**"
           /d:sonar.qualitygate.wait=true
@@ -308,6 +349,12 @@ jobs:
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: monitoring-coverage
+          path: TestResults
+
+      - name: Download backup coverage for Sonar
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: backup-coverage
           path: TestResults
 
       - name: Verify coverage reports

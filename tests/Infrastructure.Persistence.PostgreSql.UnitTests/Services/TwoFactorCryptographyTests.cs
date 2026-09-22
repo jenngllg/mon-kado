@@ -25,6 +25,69 @@ public class TwoFactorCryptographyTests
     }
 
     [Fact]
+    public void UnprotectSecret_WhenKeyRingIsRestoredToNewDirectory_PreservesAuthenticator()
+    {
+        // Arrange
+        var root = Directory.CreateTempSubdirectory("monkado-key-restore-");
+        var original = root.CreateSubdirectory("original");
+        var restored = root.CreateSubdirectory("restored");
+        var memberId = Guid.CreateVersion7();
+        var credentialId = Guid.CreateVersion7();
+        var clock = new FixedTimeProvider(DateTimeOffset.FromUnixTimeSeconds(59));
+
+        try
+        {
+            var originalProvider = DataProtectionProvider.Create(
+                original,
+                options => options.SetApplicationName("JennGllg.Fr.MonKado.Back"));
+            var originalCryptography = new TwoFactorCryptography(
+                originalProvider,
+                clock);
+            var protectedSecret = originalCryptography.ProtectSecret(
+                memberId,
+                credentialId,
+                RfcSecret);
+            var keyFiles = original.GetFiles("*.xml");
+            Assert.NotEmpty(keyFiles);
+
+            foreach (var keyFile in keyFiles)
+                keyFile.CopyTo(Path.Combine(
+                    restored.FullName,
+                    keyFile.Name));
+
+            original.Delete(true);
+
+            // Act
+            var restoredProvider = DataProtectionProvider.Create(
+                restored,
+                options => options.SetApplicationName("JennGllg.Fr.MonKado.Back"));
+            var restoredCryptography = new TwoFactorCryptography(
+                restoredProvider,
+                clock);
+            var secret = restoredCryptography.UnprotectSecret(
+                memberId,
+                credentialId,
+                protectedSecret);
+            var timeStep = restoredCryptography.VerifyCode(
+                secret,
+                "287082",
+                null);
+
+            // Assert
+            Assert.Equal(
+                RfcSecret,
+                secret);
+            Assert.Equal(
+                1L,
+                timeStep);
+        }
+        finally
+        {
+            root.Delete(true);
+        }
+    }
+
+    [Fact]
     public void ProtectSecret_WhenKeyRingFails_ReturnsSanitizedUnavailable()
     {
         // Arrange
