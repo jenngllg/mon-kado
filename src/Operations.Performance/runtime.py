@@ -12,6 +12,8 @@ import re
 import sys
 import time
 import ctypes
+import io
+import tarfile
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
@@ -39,11 +41,28 @@ def keep_awake():
 
 def command(arguments, *, data=None, timeout=180, include_stderr=False):
     try:
-        result = subprocess.run(arguments, input=data, capture_output=True, text=True, timeout=timeout, check=False)
+        result = subprocess.run(arguments, input=data, capture_output=True, text=not isinstance(data, bytes), timeout=timeout, check=False)
     except (OSError, subprocess.TimeoutExpired):
         raise PerformanceError("COMMAND_UNAVAILABLE") from None
     require(result.returncode == 0, "COMMAND_FAILED")
-    return (result.stdout + result.stderr if include_stderr else result.stdout).strip()
+    output = result.stdout + result.stderr if include_stderr else result.stdout
+    if isinstance(output, bytes):
+        output = output.decode("utf-8", errors="replace")
+    return output.strip()
+
+
+def copy_caddy_configuration(path, container):
+    """Explicit tar ownership avoids inheriting host IDs or NTFS mode emulation."""
+    content = path.read_bytes()
+    archive = io.BytesIO()
+    with tarfile.open(fileobj=archive, mode="w") as bundle:
+        member = tarfile.TarInfo("Caddyfile")
+        member.uid = 0
+        member.gid = 0
+        member.mode = 0o600
+        member.size = len(content)
+        bundle.addfile(member, io.BytesIO(content))
+    command(["docker", "cp", "--archive", "-", container + ":/etc/caddy"], data=archive.getvalue())
 
 
 def private_write(path, content):
@@ -193,7 +212,7 @@ class Bench:
         # group/world permissions or DAC-bypass capabilities are necessary.
         self.compose("create", "caddy")
         caddy = self.compose("ps", "-aq", "caddy")
-        command(["docker", "cp", str(self.directory / "Caddyfile"), f"{caddy}:/etc/caddy/Caddyfile"])
+        copy_caddy_configuration(self.directory / "Caddyfile", caddy)
         self.compose("up", "-d", "api", "worker", "caddy")
         # Let the application generate its own Data Protection material and TLS CA.
         deadline = time.monotonic() + 120

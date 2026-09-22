@@ -1,4 +1,6 @@
 import json
+import io
+import tarfile
 import subprocess
 import tempfile
 import unittest
@@ -6,10 +8,22 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 
 from policy import LABEL, PerformanceError
-from runtime import Bench, command, private_write, protect_directory, generator_user, keep_awake
+from runtime import Bench, command, private_write, protect_directory, generator_user, keep_awake, copy_caddy_configuration
 
 
 class RuntimeTests(unittest.TestCase):
+    def test_caddy_copy_fixes_container_ownership_and_mode_without_host_permissions(self):
+        with tempfile.TemporaryDirectory() as root:
+            path = Path(root) / "Caddyfile"
+            path.write_text("mk816.test { tls internal }")
+            with patch("runtime.command") as execute:
+                copy_caddy_configuration(path, "owned-caddy")
+            self.assertEqual(["docker", "cp", "--archive", "-", "owned-caddy:/etc/caddy"], execute.call_args.args[0])
+            with tarfile.open(fileobj=io.BytesIO(execute.call_args.kwargs["data"])) as bundle:
+                entry = bundle.getmember("Caddyfile")
+                self.assertEqual((0, 0, 0o600), (entry.uid, entry.gid, entry.mode))
+                self.assertEqual(path.read_bytes(), bundle.extractfile(entry).read())
+
     def test_windows_wake_lock_is_temporary_and_released_on_failure(self):
         with patch("runtime.sys.platform", "win32"), patch("runtime.ctypes.windll", create=True) as native:
             native.kernel32.SetThreadExecutionState.return_value = 1
@@ -115,6 +129,10 @@ class RuntimeTests(unittest.TestCase):
                     bench.verify_data()
 
     def test_command_captures_output_and_never_echoes_credentials(self):
+        binary = subprocess.CompletedProcess([], 0, b"ok", b"")
+        with patch("runtime.subprocess.run", return_value=binary) as execute:
+            self.assertEqual("ok", command(["docker", "cp"], data=b"archive"))
+            self.assertFalse(execute.call_args.kwargs["text"])
         result = subprocess.CompletedProcess([], 0, " ok \n", "secret")
         with patch("runtime.subprocess.run", return_value=result) as execute:
             self.assertEqual("ok", command(["docker", "version"], data="private"))
