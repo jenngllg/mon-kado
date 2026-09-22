@@ -20,6 +20,13 @@ ORIGIN = "https://mk816.test"
 SHARE = "X-MonKado-Share-Token"
 
 
+class ImageCaseFailure(PerformanceError):
+    """Carry only completed public measurements when the next image case fails."""
+    def __init__(self, name, kind, concurrency_count, results):
+        super().__init__("IMAGE_CASE_FAILED_" + name.upper() + "_" + kind.upper())
+        self.details = {"case": name, "kind": kind, "concurrency": concurrency_count, "completed": list(results)}
+
+
 class NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
         raise PerformanceError("REDIRECT_REFUSED")
@@ -105,13 +112,15 @@ def images(clients):
     results = []
     for name, fixture in (("normal", png()), ("bytes", png(1800, 1900, compression=0)), ("pixels", png(8000, 5000))):
         for kind in ("gift", "profile"):
+            concurrency_count = 1
             try:
                 single = image_check(clients[0], kind, fixture)
                 results.append({**single, "case": name, "concurrency": 1})
+                concurrency_count = 2
                 for result in parallel([lambda client=client: image_check(client, kind, fixture) for client in clients[:2]]):
                     results.append({**result, "case": name, "concurrency": 2})
             except PerformanceError:
-                raise PerformanceError("IMAGE_CASE_FAILED_" + name.upper() + "_" + kind.upper()) from None
+                raise ImageCaseFailure(name, kind, concurrency_count, results) from None
     return results
 
 
@@ -133,7 +142,10 @@ def export_check(client):
         data_files = [name for name in names if name.endswith(".json")]
         require(len(data_files) == 1, "EXPORT_DATA_MISSING")
         data = json.loads(archive.read(data_files[0]))
-        require(client.account["memberId"] in json.dumps(data), "EXPORT_WRONG_MEMBER")
+        require(data.get("schemaVersion") == 1 and data.get("account", {}).get("profile", {}).get("id") == client.account["memberId"], "EXPORT_WRONG_MEMBER")
+        require(len(data.get("wishlists", [])) == 5 and len(data.get("wishes", [])) == 100, "EXPORT_DATA_INCOMPLETE")
+        image_paths = [data["account"]["profile"].get("imagePath"), *[wish.get("imagePath") for wish in data["wishes"]]]
+        require(all(path in names for path in image_paths if path is not None), "EXPORT_IMAGES_MISSING")
     return {"milliseconds": (time.monotonic() - started) * 1000, "bytes": len(content), "valid": True}
 
 
@@ -203,7 +215,7 @@ def main():
         return 0
     except (PerformanceError, OSError, ValueError, KeyError, zipfile.BadZipFile) as error:
         code = str(error) if isinstance(error, PerformanceError) else "SUPPLEMENT_FAILED"
-        print(json.dumps({"profile": profile, "passed": False, "error": code}))
+        print(json.dumps({"profile": profile, "passed": False, "error": code, "details": getattr(error, "details", None)}))
         return 1
 
 

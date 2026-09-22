@@ -94,7 +94,8 @@ class SupplementsTests(unittest.TestCase):
             if image:
                 archive.writestr("images/gift.webp", "image")
             if data:
-                archive.writestr("data.json", json.dumps({"member": member}))
+                archive.writestr("data.json", json.dumps({"schemaVersion": 1, "account": {"profile": {"id": member, "imagePath": "images/gift.webp"}},
+                                                        "wishlists": [{}] * 5, "wishes": [{}] * 100}))
         return buffer.getvalue()
 
     def export_client(self, content):

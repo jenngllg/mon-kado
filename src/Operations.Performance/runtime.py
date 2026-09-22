@@ -17,6 +17,7 @@ from pathlib import Path
 from compose import configuration
 from policy import K6_IMAGE, LABEL, PYTHON_IMAGE, PerformanceError, require, run_id, safe_point, verdict
 from seed import dataset, png
+from reporting import markdown, resources
 
 
 def command(arguments, *, data=None, timeout=180):
@@ -41,6 +42,11 @@ def protect_directory(path):
         identity = next(csv.reader([command(["whoami", "/user", "/fo", "csv", "/nh"])]))[-1]
         require(re.fullmatch(r"S-1-[0-9-]+", identity) is not None, "OWNER_ID_UNAVAILABLE")
         command(["icacls", str(path), "/inheritance:r", "/grant:r", "*" + identity + ":(OI)(CI)F", "*S-1-5-18:(OI)(CI)F"])
+
+
+def generator_user():
+    """Read owner-only fixtures without restoring DAC-bypass container capabilities."""
+    return "0" if sys.platform == "win32" else str(os.getuid())
 
 
 class Bench:
@@ -126,6 +132,9 @@ class Bench:
         require(caddy.count("{$API_HOST} {") == 1, "CADDY_TEMPLATE_CHANGED")
         caddy = caddy.replace("{$API_HOST} {", "mk816.test {\n    tls internal", 1)
         private_write(self.directory / "Caddyfile", caddy)
+        # This public configuration is the only bind mount exposed to Caddy's root UID.
+        # Fixture credentials remain 0600 and generators use their host owner's UID.
+        os.chmod(self.directory / "Caddyfile", 0o644)
         private_write(self.directory / "metadata.json", json.dumps({
             "schemaVersion": 1, "runId": self.identifier, "api": api, "worker": worker, "k6": K6_IMAGE,
             "revision": command(["git", "-C", str(self.source), "rev-parse", "HEAD"]),
@@ -214,7 +223,7 @@ class Bench:
             output = self.directory / f"metrics-{shard}.jsonl"
             private_write(output, "")
             args = ["docker", "run", "--name", f"{self.identifier}-k6-{shard}",
-                    "--user", "0",
+                    "--user", generator_user(),
                     "--label", f"{LABEL}={self.identifier}", "--network", f"{self.identifier}_edge",
                     "--read-only", "--cap-drop", "ALL", "--security-opt", "no-new-privileges:true",
                     "--tmpfs", "/tmp:rw,noexec,nosuid,size=32m", "--memory", "192m", "--memory-swap", "192m",
@@ -269,6 +278,7 @@ class Bench:
                 if profile in ("images", "exports", "quotas", "concurrency") and supplement is None and any(point["phase"] == "measure" for point in points):
                     supplement = subprocess.Popen([
                         "docker", "run", "--name", f"{self.identifier}-supplement",
+                        "--user", generator_user(),
                         "--label", f"{LABEL}={self.identifier}", "--network", f"{self.identifier}_edge",
                         "--read-only", "--cap-drop", "ALL", "--security-opt", "no-new-privileges:true",
                         "--memory", "384m", "--memory-swap", "384m", "-e", "PYTHONDONTWRITEBYTECODE=1",
@@ -279,8 +289,9 @@ class Bench:
                 if supplement is not None and supplement.poll() is not None and supplemental_result is None:
                     supplemental_result = json.loads(supplement.communicate(timeout=5)[0])
                     require(supplement.returncode == 0 and supplemental_result.get("passed") is True, "SUPPLEMENT_FAILED")
-                health = self.inspect_health()
+                health = dict(self.inspect_health())
                 health["observedAt"] = datetime.now(timezone.utc).isoformat()
+                health["phase"] = "measure" if any(point["phase"] == "measure" for point in points) else "warmup"
                 samples.append(health)
                 require(health["qualified"], "EFFECTIVE_LIMITS_LOST")
                 require(health["oom"] == 0 and health["restarts"] == 0, "RESOURCE_FAILURE")
@@ -334,13 +345,9 @@ class Bench:
             report["dataInvariants"] = {"verified": False}
             report["verdict"] = "failed"
         report["resourceSamples"] = samples
+        report["resourceSummary"] = resources(samples)
         private_write(self.directory / "report.json", json.dumps(report, indent=2))
-        private_write(self.directory / "report.md", "# MK-816 local load test\n\n"
-                      + f"Profile: {profile}. Verdict: **{report['verdict']}**.\n\n"
-                      + "This is an isolated local result, not a DigitalOcean throughput guarantee.\n\n"
-                      + "| Family | Count | p50 ms | p95 ms | p99 ms |\n|---|---:|---:|---:|---:|\n"
-                      + "\n".join(f"| {name} | {item['count']} | {item['p50']} | {item['p95']} | {item['p99']} |"
-                                  for name, item in report["families"].items()))
+        private_write(self.directory / "report.md", markdown(report))
         return report
 
     def failure_diagnostics(self):

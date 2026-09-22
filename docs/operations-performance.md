@@ -67,7 +67,7 @@ tokens with the original application lifetime.
 
 On POSIX the run directory is 0700 and credential files are 0600. On Windows the
 runner removes inherited permissions on the new run directory and grants access
-only to the current owner and SYSTEM. CodeQL alert 19 was reviewed and classified
+only to the current owner and SYSTEM. CodeQL alerts 19 and 20 (the same moved finding) were reviewed and classified
 as "used in tests" with the repository owner's approval: these disposable fixture
 credentials are intentionally not production secrets. No scanning rule is disabled.
 

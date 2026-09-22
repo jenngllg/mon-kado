@@ -6,7 +6,7 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 
 from policy import LABEL, PerformanceError
-from runtime import Bench, command, private_write, protect_directory
+from runtime import Bench, command, private_write, protect_directory, generator_user
 
 
 class RuntimeTests(unittest.TestCase):
@@ -123,6 +123,7 @@ class RuntimeTests(unittest.TestCase):
 
     def test_windows_acl_grants_only_current_owner_and_system(self):
         with patch("runtime.sys.platform", "win32"):
+            self.assertEqual("0", generator_user())
             with patch("runtime.command", side_effect=['"fixture-user","S-1-5-21-123"', ""]) as execute:
                 protect_directory(Path("private-run"))
                 self.assertIn("*S-1-5-21-123:(OI)(CI)F", execute.call_args.args[0])
