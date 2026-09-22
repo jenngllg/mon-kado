@@ -12,3 +12,6 @@
 *.yml text eol=lf
 *.yaml text eol=lf
 deployments/production/** text eol=lf
+deployments/backup/** text eol=lf
+*.py text eol=lf
+*.toml text eol=lf

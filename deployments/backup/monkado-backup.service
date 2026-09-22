@@ -1,0 +1,20 @@
+[Unit]
+Description=Capture and encrypt MonKado offsite backup
+After=docker.service network-online.target monkado-backup-recovery.service
+Requires=docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+UMask=0077
+Environment=PYTHONPATH=/opt/monkado-backup
+ExecStart=/usr/bin/python3 -m monkado_backup.cli backup
+ExecStopPost=/usr/bin/python3 -m monkado_backup.cli recover
+TimeoutStartSec=4h
+TimeoutStopSec=5min
+Nice=15
+IOSchedulingClass=idle
+MemoryMax=192M
+MemorySwapMax=0
+CPUQuota=50%

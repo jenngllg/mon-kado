@@ -11,6 +11,10 @@ secrets=/etc/monkado/production.env
 install -d -m 0700 "$state"
 exec 9>"$state/deploy.lock"
 flock -n 9 || { echo 'Another deployment is running.' >&2; exit 1; }
+if [[ -e /var/lib/monkado-backup/maintenance.json ]]; then
+    echo 'Backup maintenance requires recovery before deployment.' >&2
+    exit 1
+fi
 temporary=$(mktemp -d "$state/attempt.XXXXXX")
 trap 'rm -f -- "$temporary/release.json" "$temporary/images.env"; rmdir -- "$temporary"' EXIT
 curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' \

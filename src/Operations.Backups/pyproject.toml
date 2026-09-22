@@ -1,0 +1,9 @@
+[project]
+name = "monkado-backup"
+version = "1.0.0"
+description = "MonKado encrypted backup and isolated recovery operations"
+requires-python = ">=3.12"
+dependencies = []
+
+[project.scripts]
+monkado-backup = "monkado_backup.cli:main"

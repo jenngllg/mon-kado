@@ -1,0 +1,103 @@
+"""Opt-in local Docker exercise. Never use production resources or credentials."""
+
+import os
+import asyncio
+import secrets
+import tempfile
+import unittest
+from pathlib import Path
+
+from fixtures import capture
+from monkado_backup.capture import create_manifest
+from monkado_backup.operations import Operations, command
+from monkado_backup.policy import BackupError
+from monkado_backup.restore import Restore
+
+
+async def wait_for_healthy(container):
+    """Wait for Docker's health event, including events already emitted since this start."""
+    started = command(["docker", "inspect", "--format", "{{.State.StartedAt}}", container]).strip()
+    process = await asyncio.create_subprocess_exec(
+        "docker", "events", "--since", started, "--filter", "container=" + container,
+        "--filter", "event=health_status", "--format", "{{.Status}}",
+        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL)
+    try:
+        async with asyncio.timeout(60):
+            while True:
+                event = await process.stdout.readline()
+                if b"health_status: healthy" in event:
+                    return
+                if not event:
+                    raise AssertionError("Docker health event stream ended before readiness")
+    finally:
+        process.terminate()
+        await process.wait()
+
+
+@unittest.skipUnless(os.environ.get("MONKADO_BACKUP_DOCKER_TESTS") == "1", "Explicit local Docker opt-in required")
+class PostgresIntegrationTests(unittest.TestCase):
+    def test_logical_dump_restores_into_new_isolated_volumes(self):
+        # Arrange
+        name = "monkado-restore-" + secrets.token_hex(8)
+        source = name + "-source"
+        image = "postgres:18.6-alpine"
+        command(["docker", "pull", image])
+        digest = command(["docker", "image", "inspect", "--format", "{{index .RepoDigests 0}}", image]).strip()
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            manifest = capture(root)
+            try:
+                # No published ports and no outbound network; trust applies only inside this disposable container.
+                command(["docker", "run", "-d", "--name", source, "--network", "none",
+                         "--label", "monkado.restore=true", "-e", "POSTGRES_HOST_AUTH_METHOD=trust",
+                         "--health-cmd", "pg_isready -h 127.0.0.1 -U postgres", "--health-interval", "1s", image])
+                # The temporary initialization server has no TCP listener; wait for the final server.
+                asyncio.run(wait_for_healthy(source))
+                command(["docker", "exec", source, "psql", "-U", "postgres", "-c",
+                         "CREATE TABLE backup_probe (id integer PRIMARY KEY, value text); "
+                         "INSERT INTO backup_probe VALUES (1, 'isolated-fixture');"])
+                with (root / "postgres.dump").open("wb") as dump:
+                    command(["docker", "exec", source, "pg_dump", "-U", "postgres", "-d", "postgres",
+                             "--format=custom", "--no-owner", "--no-acl"], output=dump)
+                create_manifest(root, manifest["createdAt"], digest, "18.6", manifest["caddyImage"])
+
+                # Act
+                result = Restore(Operations()).volumes(root, name)
+
+                # Assert
+                self.assertTrue(result["databaseStopped"])
+                self.assertEqual("false", command(["docker", "inspect", "--format", "{{.State.Running}}",
+                                                   name + "-postgres"]).strip())
+                command(["docker", "start", name + "-postgres"])
+                asyncio.run(wait_for_healthy(name + "-postgres"))
+                value = command(["docker", "exec", name + "-postgres", "psql", "-U", "mon_kado", "-d", "mon_kado",
+                                 "-Atc", "SELECT value FROM backup_probe WHERE id=1"]).strip()
+                self.assertEqual("isolated-fixture", value)
+                for folder, suffix in (("images", "images"), ("keys", "keys")):
+                    for relative, metadata in manifest["files"].items():
+                        if not relative.startswith(folder + "/"):
+                            continue
+                        mounted_file = "/restored/" + relative[len(folder) + 1:]
+                        restored_hash = command([
+                            "docker", "run", "--rm", "--network", "none", "--read-only", "--user", "1654:1654",
+                            "--mount", "type=volume,src=" + name + "-" + suffix + ",dst=/restored,readonly",
+                            "--entrypoint", "sha256sum", digest, mounted_file]).split()[0]
+                        self.assertEqual(metadata["sha256"], restored_hash)
+                with self.assertRaisesRegex(BackupError, "RESTORE_RESOURCES_EXIST"):
+                    Restore(Operations()).volumes(root, name)
+            finally:
+                # Only names generated by this test are eligible for cleanup; never enumerate other resources.
+                for container in (source, name + "-postgres"):
+                    try:
+                        command(["docker", "rm", "-f", "-v", container])
+                    except BackupError:
+                        pass
+                for suffix in ("postgres", "images", "keys"):
+                    try:
+                        command(["docker", "volume", "rm", name + "-" + suffix])
+                    except BackupError:
+                        pass
+                try:
+                    command(["docker", "network", "rm", name])
+                except BackupError:
+                    pass
