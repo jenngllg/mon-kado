@@ -89,7 +89,8 @@ def verdict(points, profile, infrastructure):
                 and all(value["count"] >= value["expected"] * .99 for value in families.values()))
     latency_ok = all(value["p95"] is not None and value["p95"] < (1000 if family in ("update", "reservation") else 500)
                      for family, value in families.items())
-    stable = infrastructure.get("qualified") is True and infrastructure.get("oom", 1) == 0 and infrastructure.get("restarts", 1) == 0
+    stable = (infrastructure.get("qualified") is True and infrastructure.get("alive") is True
+              and infrastructure.get("oom", 1) == 0 and infrastructure.get("restarts", 1) == 0)
     success = complete and stable and dropped == 0 and errors / max(1, len(outcomes)) < .01 and 429 not in statuses
     if profile not in ("smoke", "stress"):
         success = success and latency_ok

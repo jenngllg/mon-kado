@@ -62,7 +62,7 @@ class PolicyTests(unittest.TestCase):
         return points
 
     def test_complete_success_requires_work_and_verified_limits(self):
-        health = {"qualified": True, "oom": 0, "restarts": 0}
+        health = {"qualified": True, "alive": True, "oom": 0, "restarts": 0}
         result = verdict(self.points(), "smoke", health)
         self.assertEqual("passed", result["verdict"])
         self.assertFalse(result["productionQualification"])
@@ -71,6 +71,7 @@ class PolicyTests(unittest.TestCase):
         self.assertEqual("incomplete", verdict([], "smoke", health)["verdict"])
         self.assertNotIn("update", verdict([], "images", health)["families"])
         self.assertEqual("failed", verdict(self.points(), "smoke", {})["verdict"])
+        self.assertEqual("failed", verdict(self.points(), "smoke", {**health, "alive": False})["verdict"])
         for field in ("oom", "restarts"):
             self.assertEqual("failed", verdict(self.points(), "smoke", {**health, field: 1})["verdict"])
         points = self.points()
@@ -85,7 +86,7 @@ class PolicyTests(unittest.TestCase):
         self.assertEqual("failed", verdict(points, "smoke", health)["verdict"])
 
     def test_latency_failure_is_not_hidden_by_fast_errors_or_warmup(self):
-        health = {"qualified": True, "oom": 0, "restarts": 0}
+        health = {"qualified": True, "alive": True, "oom": 0, "restarts": 0}
         points = self.points()
         for point in points:
             if point["metric"] == "business_ms":
