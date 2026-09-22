@@ -22,13 +22,13 @@ from reporting import markdown, resources
 SUPPLEMENT_PROFILES = ("images", "exports", "quotas", "concurrency")
 
 
-def command(arguments, *, data=None, timeout=180):
+def command(arguments, *, data=None, timeout=180, include_stderr=False):
     try:
         result = subprocess.run(arguments, input=data, capture_output=True, text=True, timeout=timeout, check=False)
     except (OSError, subprocess.TimeoutExpired):
         raise PerformanceError("COMMAND_UNAVAILABLE") from None
     require(result.returncode == 0, "COMMAND_FAILED")
-    return result.stdout.strip()
+    return (result.stdout + result.stderr if include_stderr else result.stdout).strip()
 
 
 def private_write(path, content):
@@ -401,7 +401,7 @@ class Bench:
                 identifier = self.compose("ps", "-aq", service)
                 state = json.loads(command(["docker", "inspect", "--format",
                     '{"running":{{.State.Running}},"oom":{{.State.OOMKilled}},"exitCode":{{.State.ExitCode}}}', identifier]))
-                logs = command(["docker", "logs", "--tail", "100", identifier])
+                logs = command(["docker", "logs", "--tail", "100", identifier], include_stderr=True)
                 state["categories"] = [name for name in ("OptionsValidationException", "OutOfMemoryException", "UnauthorizedAccessException",
                     "NpgsqlException", "SocketException", "FileNotFoundException", "permission denied",
                     "operation not permitted", "unrecognized directive", "no such file or directory") if name in logs]

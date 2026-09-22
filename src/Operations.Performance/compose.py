@@ -15,7 +15,7 @@ def configuration(identifier, api_image, worker_image, password, jwt, subnet, pa
                 "cap_drop": ["ALL"], "security_opt": ["no-new-privileges:true"],
                 "restart": "no", "labels": labels, "cgroup_parent": parent,
                 "logging": {"driver": "local", "options": {"max-size": "10m", "max-file": "3"}}}
-    common = {"ConnectionStrings__PostgreSql": connection,
+    common = {"ConnectionStrings__PostgreSql": connection, "TMPDIR": "/run/monkado",
               "DataProtection__KeysPath": "/var/lib/mon-kado/data-protection-keys",
               "GiftImages__StoragePath": "/var/lib/mon-kado/gift-images",
               "PersonalDataExports__StoragePath": "/var/lib/mon-kado/personal-data-exports"}

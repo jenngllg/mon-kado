@@ -105,6 +105,7 @@ class RuntimeTests(unittest.TestCase):
         result = subprocess.CompletedProcess([], 0, " ok \n", "secret")
         with patch("runtime.subprocess.run", return_value=result) as execute:
             self.assertEqual("ok", command(["docker", "version"], data="private"))
+            self.assertEqual("ok \nsecret", command(["docker", "logs"], include_stderr=True))
             self.assertTrue(execute.call_args.kwargs["capture_output"])
         for error in (OSError("secret"), subprocess.TimeoutExpired("secret", 1)):
             with patch("runtime.subprocess.run", side_effect=error), self.assertRaisesRegex(PerformanceError, "^COMMAND_UNAVAILABLE$"):
