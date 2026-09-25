@@ -74,6 +74,10 @@ guard before operator recovery and a smaller response-header validation method.
 ASCII-only catalog/publication validation remains enforced and tested.
 Malformed JSON contracts also become sanitized smoke failures eligible for the
 same guarded rollback, rather than escaping the state machine as Python errors.
+An existing monitor OOM integration test failed intermittently in CI. Its test
+setup now waits for the exact container's Docker OOM event and stopped state
+before collecting observations; the real OOM assertion remains mandatory, with
+no retry, polling loop or arbitrary sleep.
 
 No VPS installation, smoke-account creation, production publication, real secret
 handoff/rotation, Google/Gmail/Drive access, merge, or paid option was performed.
