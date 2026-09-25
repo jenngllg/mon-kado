@@ -438,8 +438,7 @@ class Bench:
                 logs = command(["docker", "logs", "--tail", "100", identifier], include_stderr=True)
                 state["categories"] = [name for name in ("OptionsValidationException", "OutOfMemoryException", "UnauthorizedAccessException",
                     "NpgsqlException", "SocketException", "FileNotFoundException", "permission denied",
-                    "operation not permitted", "unrecognized directive", "no such file or directory",
-                    "/etc/caddy/Caddyfile", "/data/caddy", "/config/caddy", "/tmp", "frontend") if name in logs]
+                    "operation not permitted", "unrecognized directive", "no such file or directory") if name in logs]
                 output[service] = state
             except (PerformanceError, ValueError, OSError):
                 output[service] = {"diagnosticsUnavailable": True}
