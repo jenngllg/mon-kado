@@ -6,6 +6,9 @@ import re
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src/Operations.Deployment"))
+from release_catalog import fingerprint, validate_catalog
+
 FILES = (
     "compose.yaml",
     "deployments/caddy/Caddyfile",
@@ -29,6 +32,21 @@ FILES = (
     "src/Operations.Monitoring/monitor_provision.py",
     "src/Operations.Monitoring/monitor_runtime.py",
     "src/Operations.Monitoring/monitor_storage.py",
+    "src/Operations.Monitoring/monitor_deployment.py",
+    "src/Operations.Deployment/release_catalog.py",
+    "src/Operations.Deployment/deploy_policy.py",
+    "src/Operations.Deployment/deploy_storage.py",
+    "src/Operations.Deployment/deploy_engine.py",
+    "src/Operations.Deployment/deploy_cli.py",
+    "src/Operations.Deployment/deploy_process.py",
+    "src/Operations.Deployment/deploy_provision.py",
+    "src/Operations.Deployment/deploy_runtime.py",
+    "src/Operations.Deployment/smoke_functional.py",
+    "src/Operations.Deployment/smoke_http.py",
+    "src/Operations.Deployment/smoke_technical.py",
+    "deployments/production/monkado-deploy",
+    "deployments/production/monkado-deploy.service",
+    "deployments/production/monkado-deploy.timer",
 )
 REPOSITORY = "jenngllg/mon-kado"
 
@@ -46,9 +64,11 @@ def configuration_hash(root):
 def validate(value, expected_hash):
     """Reject unknown fields, mutable tags, other repositories and unsafe values."""
     fields = {"schemaVersion", "revision", "configurationHash", "apiImage", "workerImage"}
+    if isinstance(value, dict) and value.get("schemaVersion") == 2:
+        fields.update({"publicationId", "migrationCatalog", "migrationHash", "rollbackAllowed"})
     if not isinstance(value, dict) or set(value) != fields:
         raise ValueError("Unexpected manifest fields")
-    if type(value["schemaVersion"]) is not int or value["schemaVersion"] != 1:
+    if type(value["schemaVersion"]) is not int or value["schemaVersion"] not in (1, 2):
         raise ValueError("Unsupported manifest version")
     if not isinstance(value["revision"], str) or not re.fullmatch(r"[0-9a-f]{40}", value["revision"]):
         raise ValueError("Invalid revision")
@@ -58,7 +78,20 @@ def validate(value, expected_hash):
         pattern = rf"ghcr\.io/jenngllg/mon-kado-{component}@sha256:[0-9a-f]{{64}}"
         if not isinstance(value[key], str) or not re.fullmatch(pattern, value[key]):
             raise ValueError("Invalid immutable image reference")
+    if value["schemaVersion"] == 2:
+        validate_v2(value)
     return value
+
+
+def validate_v2(value):
+    """Bind a unique approval to a complete catalog and an explicit rollback declaration."""
+    if not isinstance(value["publicationId"], str) or not re.fullmatch(r"[1-9][0-9]{0,19}-[1-9][0-9]{0,5}", value["publicationId"]):
+        raise ValueError("Invalid publication identity")
+    if type(value["rollbackAllowed"]) is not bool:
+        raise ValueError("Invalid rollback declaration")
+    catalog = validate_catalog(value["migrationCatalog"])
+    if value["migrationHash"] != fingerprint(catalog):
+        raise ValueError("Migration catalog does not match its fingerprint")
 
 
 def from_release(release, expected_hash):
@@ -68,7 +101,7 @@ def from_release(release, expected_hash):
     if release.get("tag_name") != "backend-production" or release.get("draft") is not False or release.get("prerelease") is not False:
         raise ValueError("Not a published production release")
     body = release.get("body")
-    if not isinstance(body, str) or len(body) > 4096:
+    if not isinstance(body, str) or len(body) > 32768:
         raise ValueError("Invalid release body")
     return validate(json.loads(body), expected_hash)
 

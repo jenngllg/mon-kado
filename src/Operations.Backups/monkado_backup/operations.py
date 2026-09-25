@@ -10,7 +10,7 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
-from .capture import FILES, IMAGE_NAME, KEY_NAME, atomic_json, copy_files, create_manifest, verify_manifest
+from .capture import FILES, IMAGE_NAME, KEY_NAME, atomic_json, copy_files, copy_deployment_private, create_manifest, verify_manifest
 from .policy import BackupError, TAG, expired_snapshots, release_metadata, snapshot_id, status_health, timestamp, missed_capture
 
 ROOT = Path("/opt/monkado")
@@ -199,6 +199,7 @@ class Operations:
                     shutil.copyfile(ROOT / name, destination)
                 shutil.copyfile(PRODUCTION_ENV, candidate / "configuration/production.env")
                 shutil.copyfile(DEPLOYMENT / CURRENT_ENV_NAME, candidate / "configuration/current.env")
+                copy_deployment_private(PRODUCTION_ENV.parent, DEPLOYMENT, candidate / "configuration")
                 pg_image_id = self.inspect(postgres, "{{.Image}}")
                 pg_digest = self.inspect(pg_image_id, "{{index .RepoDigests 0}}")
                 version = self.run(["docker", "exec", postgres, "sh", "-c",

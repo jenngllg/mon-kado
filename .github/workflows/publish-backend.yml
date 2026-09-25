@@ -2,6 +2,12 @@ name: Publish approved backend
 
 on:
   workflow_dispatch:
+    inputs:
+      rollback_allowed:
+        description: 'Previous application remains compatible with files and data written by this release (unchanged schema only)'
+        required: true
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -75,6 +81,7 @@ jobs:
       - name: Publish immutable image references
         env:
           GH_TOKEN: ${{ github.token }}
+          ROLLBACK_ALLOWED: ${{ inputs.rollback_allowed }}
         shell: bash
         run: |
           set -euo pipefail
@@ -86,10 +93,17 @@ jobs:
             docker inspect "$image" --format '{{index .RepoDigests 0}}' > "$RUNNER_TEMP/$component.digest"
           done
           configuration_hash=$(python3 deployments/production/release_manifest.py hash)
+          python3 src/Operations.Deployment/release_catalog.py src/Infrastructure.Persistence.PostgreSql/Migrations \
+            > "$RUNNER_TEMP/migration-catalog.json"
+          migration_hash=$(PYTHONPATH=src/Operations.Deployment python3 -c 'import json,sys; from release_catalog import fingerprint; print(fingerprint(json.load(sys.stdin)))' < "$RUNNER_TEMP/migration-catalog.json")
           jq -n --arg revision "$GITHUB_SHA" --arg configurationHash "$configuration_hash" \
             --arg apiImage "$(cat "$RUNNER_TEMP/api.digest")" \
             --arg workerImage "$(cat "$RUNNER_TEMP/worker.digest")" \
-            '{schemaVersion: 1, revision: $revision, configurationHash: $configurationHash, apiImage: $apiImage, workerImage: $workerImage}' \
+            --arg publicationId "$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" \
+            --slurpfile migrationCatalog "$RUNNER_TEMP/migration-catalog.json" \
+            --arg migrationHash "$migration_hash" --argjson rollbackAllowed "$ROLLBACK_ALLOWED" \
+            '{schemaVersion: 2, revision: $revision, configurationHash: $configurationHash, apiImage: $apiImage, workerImage: $workerImage,
+              publicationId: $publicationId, migrationCatalog: $migrationCatalog[0], migrationHash: $migrationHash, rollbackAllowed: $rollbackAllowed}' \
             > "$RUNNER_TEMP/backend-manifest.json"
           # The release body is the sole promotion pointer; update it only after both pushes succeed.
           if gh release view backend-production --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then

@@ -7,6 +7,7 @@ from pathlib import Path
 import re
 import ssl
 import subprocess
+import monitor_deployment
 from zoneinfo import ZoneInfo
 
 from monitor_policy import SERVICES, age, require, timestamp, validate_snapshot
@@ -142,4 +143,8 @@ class Collector:
             result["backup"] = self.backup(now)
         except (OSError, ValueError, TypeError, KeyError, subprocess.SubprocessError):
             result["backup"] = None
+        try:
+            result["deployment"] = monitor_deployment.collect(self.root, self.runner, now)
+        except (OSError, ValueError, TypeError, KeyError, subprocess.SubprocessError):
+            result["deployment"] = None
         return result, samples, oom
