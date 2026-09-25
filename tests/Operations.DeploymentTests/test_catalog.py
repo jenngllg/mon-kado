@@ -48,6 +48,7 @@ class CatalogTests(unittest.TestCase):
                    base | {"modelHash": "wrong"}, base | {"migrations": None}, base | {"migrations": []},
                    base | {"migrations": [entry] * 201}, base | {"migrations": [entry, entry]}]
         for item in (None, {}, entry | {"extra": 1}, entry | {"id": None}, entry | {"id": "bad"},
+                     entry | {"id": "２０２６０１０１００００００_Initial"}, entry | {"id": "20260101000000_Éléphant"},
                      entry | {"sha256": None}, entry | {"sha256": "bad"}):
             invalid.append(base | {"migrations": [item]})
         for value in invalid:

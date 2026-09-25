@@ -85,7 +85,7 @@ def validate(value, expected_hash):
 
 def validate_v2(value):
     """Bind a unique approval to a complete catalog and an explicit rollback declaration."""
-    if not isinstance(value["publicationId"], str) or not re.fullmatch(r"[1-9][0-9]{0,19}-[1-9][0-9]{0,5}", value["publicationId"]):
+    if not isinstance(value["publicationId"], str) or not re.fullmatch(r"[1-9]\d{0,19}-[1-9]\d{0,5}", value["publicationId"], re.ASCII):
         raise ValueError("Invalid publication identity")
     if type(value["rollbackAllowed"]) is not bool:
         raise ValueError("Invalid rollback declaration")

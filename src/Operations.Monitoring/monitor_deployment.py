@@ -18,7 +18,7 @@ def collect(root, runner, now):
     require(error is None or isinstance(error, str))
     code, raw = runner(["systemctl", "show", "monkado-deploy.service", "-p", "ActiveState", "-p", "Result"])
     require(code == 0)
-    fields = dict(line.split("=", 1) for line in raw.splitlines())
+    fields = {key: value for key, value in (line.split("=", 1) for line in raw.splitlines())}
     require(set(fields) == {"ActiveState", "Result"})
     require(fields["ActiveState"] in {"active", "activating", "deactivating", "inactive", "failed"})
     active = fields["ActiveState"] in {"active", "activating", "deactivating"}

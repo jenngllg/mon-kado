@@ -30,7 +30,7 @@ class Engine:
         try:
             baseline = self.runtime.preflight(candidate, state["current"])
             policy = decision(state["current"], candidate, self.runtime.history())
-        except (DeploymentError, InterruptedError, OSError, ValueError, KeyError, TypeError) as error:
+        except (DeploymentError, OSError, ValueError, KeyError, TypeError) as error:
             code = error.code if isinstance(error, DeploymentError) else "PREFLIGHT_FAILED"
             state.update(candidate=candidate, previous=state["current"], phase="rejected", error=code,
                          rejectedPublication=candidate["publicationId"], startedAt=self.clock(), finishedAt=self.clock())

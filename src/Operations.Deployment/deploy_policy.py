@@ -27,7 +27,6 @@ def decision(current, candidate, history):
     require(candidate["schemaVersion"] == 2, "ADOPTION_REQUIRED")
     catalog = validate_catalog(candidate["migrationCatalog"])
     require(fingerprint(catalog) == candidate["migrationHash"])
-    expected = identifiers(catalog)
     if current is None:
         ensure(not history, "ADOPTION_REQUIRED")
         return {"migrate": True, "rollback": False}
@@ -56,7 +55,7 @@ def validate_state(value):
     require(isinstance(value["checks"], dict), "INVALID_DEPLOYMENT_STATE")
     require(set(value["checks"]).issubset({"technical", "functional", "frontend"}) and
             all(type(item) is bool for item in value["checks"].values()), "INVALID_DEPLOYMENT_STATE")
-    for name, pattern in (("error", r"[A-Z][A-Z0-9_]{0,79}"), ("rejectedPublication", r"[0-9]{1,20}-[0-9]{1,10}"),
+    for name, pattern in (("error", r"[A-Z][A-Z0-9_]{0,79}"), ("rejectedPublication", r"(?a:\d{1,20}-\d{1,10})"),
                           ("startedAt", r"[0-9T:+.Z-]{1,40}"), ("finishedAt", r"[0-9T:+.Z-]{1,40}")):
         require(value[name] is None or isinstance(value[name], str) and re.fullmatch(pattern, value[name]) is not None,
                 "INVALID_DEPLOYMENT_STATE")

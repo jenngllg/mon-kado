@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 
 HASH = r"[0-9a-f]{64}"
-MIGRATION = r"[0-9]{14}_[A-Za-z0-9_]+"
+MIGRATION = r"(?a:\d{14}_\w+)"
 
 
 def require(condition, code="INVALID_CATALOG"):

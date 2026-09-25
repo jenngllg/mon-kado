@@ -86,7 +86,7 @@ def adopt(catalog_path, store, runtime, expected_hash):
     """Establish a reviewed v1 baseline using exact installed images and matching EF history."""
     ensure(not (STATE / "in-progress.env").exists(), "RECOVERY_REQUIRED")
     ensure(not (STATE / "status.json").exists(), "ALREADY_ADOPTED")
-    values = dict(line.split("=", 1) for line in private_read(STATE / "current.env").decode().splitlines())
+    values = {key: value for key, value in (line.split("=", 1) for line in private_read(STATE / "current.env").decode().splitlines())}
     ensure(set(values) == {"API_IMAGE", "WORKER_IMAGE", "RELEASE_REVISION"}, "INVALID_LEGACY_POINTER")
     catalog = validate_catalog(json.loads(private_read(catalog_path, 32768)))
     value = validate({"schemaVersion": 2, "publicationId": "1-1", "configurationHash": expected_hash,
@@ -109,7 +109,9 @@ def recover(action, publication, store, runtime):
     """Require an exact failed publication and a selected recovery action, never resume migrations."""
     state = store.load()
     candidate = state["candidate"]
-    ensure(candidate is not None and candidate["publicationId"] == publication, "RECOVERY_ID_MISMATCH")
+    if candidate is None:
+        raise DeploymentError("RECOVERY_ID_MISMATCH")
+    ensure(candidate["publicationId"] == publication, "RECOVERY_ID_MISMATCH")
     ensure(state["phase"] not in ("idle", "succeeded", "acknowledged"), "RECOVERY_NOT_REQUIRED")
     runtime.restore_baseline(state["baseline"])
     if action == "rollback":
@@ -203,7 +205,7 @@ def main(arguments):
     try:
         print(json.dumps(execute(arguments), sort_keys=True))
         return 0
-    except (DeploymentError, OSError, ValueError, KeyError, TypeError, InterruptedError) as error:
+    except (DeploymentError, OSError, ValueError, KeyError, TypeError) as error:
         code = error.code if isinstance(error, DeploymentError) else "DEPLOYMENT_OPERATION_FAILED"
         print(json.dumps({"event": "deployment_failed", "code": code}))
         return 1

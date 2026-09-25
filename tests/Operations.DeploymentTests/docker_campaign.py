@@ -22,7 +22,7 @@ from deploy_engine import Engine
 from deploy_policy import DeploymentError, initial_state
 from deploy_runtime import Runtime
 from deploy_storage import Store, atomic_write
-from release_catalog import fingerprint, generate, identifiers
+from release_catalog import fingerprint, generate
 from smoke_functional import FunctionalSmoke
 from smoke_http import Client, LocalHttps
 

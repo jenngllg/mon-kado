@@ -119,6 +119,12 @@ class CliTests(unittest.TestCase):
         self.assertEqual("acknowledged", value["phase"])
         self.assertEqual("456-1", value["rejectedPublication"])
 
+    def test_recovery_without_candidate_refuses_before_external_effects(self):
+        self.store.save(initial_state())
+        with self.assertRaisesRegex(DeploymentError, "RECOVERY_ID_MISMATCH"):
+            cli.recover("accept", "456-1", self.store, self.runtime)
+        self.assertEqual([], self.runtime.mock_calls)
+
     def test_cli_status_check_config_and_validation(self):
         self.store.save(self.state)
         self.assertEqual("succeeded", cli.execute(["status"])["phase"])

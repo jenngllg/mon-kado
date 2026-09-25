@@ -35,6 +35,13 @@ def archive_for(value, directory=False):
 
 
 class ProcessTests(unittest.TestCase):
+    def test_docker_uses_explicit_local_socket_not_the_operators_saved_context(self):
+        with patch("deploy_process.subprocess.run", return_value=Mock(returncode=0)) as process:
+            self.assertEqual(b"", command(["docker", "version"]))
+        self.assertEqual(["docker", "--host", "unix:///var/run/docker.sock", "version"], process.call_args.args[0])
+        self.assertNotIn("DOCKER_CONTEXT", process.call_args.kwargs["env"])
+        self.assertNotIn("DOCKER_HOST", process.call_args.kwargs["env"])
+
     def test_real_bounded_subprocess_and_sanitized_errors(self):
         self.assertEqual(b"ok\n", command(["/bin/echo", "ok"]))
         for arguments, maximum, timeout in ((["/bin/false"], 100, 1), (["/bin/echo", "sensitive"], 1, 1),

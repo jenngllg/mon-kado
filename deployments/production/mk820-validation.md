@@ -40,7 +40,9 @@ unchanged to hide an intermittent failure.
 
 ## Deterministic and quality checks
 
-- Deployment tooling: 65 tests; 100% line and branch coverage.
+- Deployment tooling: 67 tests, 100% line and branch coverage; final review adds
+  regression tests for explicit local Docker socket selection and recovery
+  without an approved candidate.
 - Release-manifest validation: 10 tests; 100% line and branch coverage (two
   installed-entrypoint tests are separately enabled in a disposable container).
 - Backup suite: 88 discovered, 85 executed; 100% line and branch coverage. The
@@ -65,6 +67,11 @@ Corrections include persisting the frontend/infrastructure baseline for recovery
 comparing historical infrastructure restart counters rather than requiring zero,
 blocking repeated preflight account attempts, bounded telemetry/body reads, and
 an explicit healthy rebaseline after a reviewed configuration reinstall.
+The final review also pins the Docker CLI to the local Unix socket: clearing
+environment overrides alone does not exclude an operator's saved Docker context.
+Sonar findings were corrected without suppressions, including an explicit null
+guard before operator recovery and a smaller response-header validation method.
+ASCII-only catalog/publication validation remains enforced and tested.
 
 No VPS installation, smoke-account creation, production publication, real secret
 handoff/rotation, Google/Gmail/Drive access, merge, or paid option was performed.

@@ -14,7 +14,7 @@ from time import monotonic, sleep
 from deploy_policy import DeploymentError, dotenv, ensure
 from deploy_process import command
 from deploy_storage import atomic_write, private_read
-from release_catalog import validate_catalog
+from release_catalog import MIGRATION, validate_catalog
 from smoke_functional import FunctionalSmoke, credentials
 from smoke_http import Client
 import smoke_technical
@@ -155,7 +155,7 @@ class Runtime:
                         'exec psql -X -U "$POSTGRES_USER" -d "$POSTGRES_DB" -At -v ON_ERROR_STOP=1 -c "$1"',
                         "monkado-history", sql]).decode()
         result = raw.splitlines()
-        ensure(len(result) <= 200 and all(re.fullmatch(r"[0-9]{14}_[A-Za-z0-9_]+", item) for item in result)
+        ensure(len(result) <= 200 and all(re.fullmatch(MIGRATION, item) for item in result)
                and result == sorted(set(result)), "DATABASE_HISTORY_INVALID")
         return result
 

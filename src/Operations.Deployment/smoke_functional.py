@@ -4,7 +4,7 @@ import json
 import re
 import uuid
 
-from deploy_policy import DeploymentError, ensure
+from deploy_policy import ensure
 from deploy_storage import atomic_write, private_read, sync_directory
 
 LISTS = "/api/v1/wishlists"

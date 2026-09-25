@@ -35,7 +35,7 @@ class ManifestTests(unittest.TestCase):
         value = self.value | {"schemaVersion": 2, "publicationId": "123456-1", "migrationCatalog": catalog,
                               "migrationHash": manifest.fingerprint(catalog), "rollbackAllowed": True}
         self.assertEqual(value, manifest.validate(value, "b" * 64))
-        for change in ({"publicationId": None}, {"publicationId": "unsafe"}, {"rollbackAllowed": 1},
+        for change in ({"publicationId": None}, {"publicationId": "unsafe"}, {"publicationId": "1２-1"}, {"rollbackAllowed": 1},
                        {"migrationHash": "b" * 64}, {"migrationCatalog": {}}, {"extra": True}):
             with self.subTest(change=change), self.assertRaises(ValueError):
                 manifest.validate(value | change, "b" * 64)

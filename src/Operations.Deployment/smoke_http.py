@@ -69,21 +69,24 @@ class Client:
             response = connection.getresponse()
             raw = response.read(MAXIMUM_BODY + 1)
             ensure(len(raw) <= MAXIMUM_BODY, "SMOKE_RESPONSE_TOO_LARGE")
-            pairs = response.getheaders()
-            response_headers = {}
-            for name, value in pairs:
-                key = name.lower()
-                if key == "set-cookie" and host == API_HOST:
-                    self.accept_cookies(value)
-                elif key in response_headers:
-                    ensure(response_headers[key] == value, "CONFLICTING_RESPONSE_HEADERS")
-                else:
-                    response_headers[key] = value
-            return response.status, response_headers, raw
+            return response.status, self.response_headers(response.getheaders(), host), raw
         except (OSError, http.client.HTTPException):
             raise DeploymentError("SMOKE_CONNECTION_FAILED") from None
         finally:
             connection.close()
+
+    def response_headers(self, pairs, host):
+        """Preserve matching headers, rejecting ambiguity and retaining only API cookies."""
+        result = {}
+        for name, value in pairs:
+            key = name.lower()
+            if key == "set-cookie" and host == API_HOST:
+                self.accept_cookies(value)
+            elif key in result:
+                ensure(result[key] == value, "CONFLICTING_RESPONSE_HEADERS")
+            else:
+                result[key] = value
+        return result
 
     def accept_cookies(self, header):
         """Only retain the API's secure host-only session cookies in memory."""
@@ -107,7 +110,7 @@ class Client:
         ensure(response_headers.get("content-type", "").startswith("application/json"), "SMOKE_CONTRACT_FAILED")
         try:
             return json.loads(raw), response_headers
-        except (ValueError, UnicodeError):
+        except ValueError:
             raise DeploymentError("SMOKE_CONTRACT_FAILED") from None
 
     def clear(self):
