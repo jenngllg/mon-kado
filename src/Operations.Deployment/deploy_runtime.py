@@ -224,11 +224,14 @@ class Runtime:
                 if error.code in ("CONTAINER_UNSTABLE", "INFRASTRUCTURE_CHANGED"):
                     raise
                 healthy = 0
-            except (OSError, ValueError, KeyError, TypeError):
+            except (OSError, ValueError, KeyError, TypeError, AttributeError):
                 healthy = 0
             self.pause(5)
         ensure(healthy == 3, "TECHNICAL_SMOKE_TIMEOUT")
-        FunctionalSmoke(self.clients(), credentials(self.settings / "deployment-smoke.json"),
-                        self.state / "smoke-journal.json").run()
-        self.technical_sample(release)
+        try:
+            FunctionalSmoke(self.clients(), credentials(self.settings / "deployment-smoke.json"),
+                            self.state / "smoke-journal.json").run()
+            self.technical_sample(release)
+        except (OSError, ValueError, KeyError, TypeError, AttributeError):
+            raise DeploymentError("SMOKE_CONTRACT_FAILED") from None
         return {"technical": True, "functional": True, "frontend": self.frontend_marker is not None}

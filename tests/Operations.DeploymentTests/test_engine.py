@@ -118,11 +118,13 @@ class EngineTests(unittest.TestCase):
         self.runtime.preflight.assert_called_once()
 
     def test_malformed_preflight_result_is_safely_rejected(self):
-        self.runtime.preflight.side_effect = ValueError("private diagnostic")
-        with self.assertRaisesRegex(DeploymentError, "^PREFLIGHT_FAILED$"):
-            self.engine.deploy(self.candidate)
-        self.assertEqual("rejected", self.state["phase"])
-        self.runtime.stop.assert_not_called()
+        for failure in (ValueError("private diagnostic"), AttributeError("private diagnostic")):
+            self.state.update(phase="succeeded", rejectedPublication=None)
+            self.runtime.preflight.side_effect = failure
+            with self.subTest(failure=type(failure).__name__), self.assertRaisesRegex(DeploymentError, "^PREFLIGHT_FAILED$"):
+                self.engine.deploy(self.candidate)
+            self.assertEqual("rejected", self.state["phase"])
+            self.runtime.stop.assert_not_called()
 
     def test_failed_smoke_restores_previous_and_preserves_rejected_publication(self):
         self.runtime.smoke.side_effect = [DeploymentError("SMOKE_FAILED"), {"technical": True}]

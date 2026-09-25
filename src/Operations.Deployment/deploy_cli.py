@@ -205,7 +205,7 @@ def main(arguments):
     try:
         print(json.dumps(execute(arguments), sort_keys=True))
         return 0
-    except (DeploymentError, OSError, ValueError, KeyError, TypeError) as error:
+    except (DeploymentError, OSError, ValueError, KeyError, TypeError, AttributeError) as error:
         code = error.code if isinstance(error, DeploymentError) else "DEPLOYMENT_OPERATION_FAILED"
         print(json.dumps({"event": "deployment_failed", "code": code}))
         return 1

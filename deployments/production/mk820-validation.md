@@ -40,7 +40,7 @@ unchanged to hide an intermittent failure.
 
 ## Deterministic and quality checks
 
-- Deployment tooling: 67 tests, 100% line and branch coverage; final review adds
+- Deployment tooling: 68 tests, 100% line and branch coverage; final review adds
   regression tests for explicit local Docker socket selection and recovery
   without an approved candidate.
 - Release-manifest validation: 10 tests; 100% line and branch coverage (two
@@ -72,6 +72,8 @@ environment overrides alone does not exclude an operator's saved Docker context.
 Sonar findings were corrected without suppressions, including an explicit null
 guard before operator recovery and a smaller response-header validation method.
 ASCII-only catalog/publication validation remains enforced and tested.
+Malformed JSON contracts also become sanitized smoke failures eligible for the
+same guarded rollback, rather than escaping the state machine as Python errors.
 
 No VPS installation, smoke-account creation, production publication, real secret
 handoff/rotation, Google/Gmail/Drive access, merge, or paid option was performed.

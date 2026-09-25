@@ -185,7 +185,7 @@ class CliTests(unittest.TestCase):
             cli.rebaseline(self.store, self.runtime, "c" * 64)
 
     def test_main_hides_errors_and_entrypoint_reports_readonly_status(self):
-        for failure in (DeploymentError("TEST_FAILED"), ValueError("sensitive")):
+        for failure in (DeploymentError("TEST_FAILED"), ValueError("sensitive"), AttributeError("sensitive")):
             output = io.StringIO()
             with patch.object(cli, "execute", side_effect=failure), contextlib.redirect_stdout(output):
                 self.assertEqual(1, cli.main(["deploy"]))

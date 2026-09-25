@@ -17,7 +17,7 @@ from deploy_runtime import Runtime, timestamp
 from deploy_storage import atomic_write
 from release_catalog import identifiers
 from test_engine import release
-from test_functional_smoke import ACCOUNT
+from test_functional_smoke import ACCOUNT, Api
 
 
 def archive_for(value, directory=False):
@@ -187,7 +187,7 @@ class RuntimeTests(unittest.TestCase):
         elapsed = [0]
         self.runtime.clock = lambda: elapsed[0]
         self.runtime.pause = lambda seconds: elapsed.__setitem__(0, elapsed[0] + seconds)
-        with patch.object(self.runtime, "technical_sample", side_effect=[DeploymentError("WARMING_UP"), ValueError(), None, None, None, None]), \
+        with patch.object(self.runtime, "technical_sample", side_effect=[DeploymentError("WARMING_UP"), AttributeError("private"), ValueError(), None, None, None, None]), \
              patch("deploy_runtime.credentials", return_value=ACCOUNT), patch("deploy_runtime.FunctionalSmoke") as smoke:
             self.assertTrue(self.runtime.smoke(self.release)["functional"])
             smoke.return_value.run.assert_called_once()
@@ -197,6 +197,17 @@ class RuntimeTests(unittest.TestCase):
         with patch.object(self.runtime, "technical_sample", side_effect=OSError()):
             with self.assertRaisesRegex(DeploymentError, "TECHNICAL_SMOKE_TIMEOUT"):
                 self.runtime.smoke(self.release)
+
+    def test_malformed_functional_identity_becomes_sanitized_smoke_failure(self):
+        client = Api()
+        client.identity = []
+        self.clients.return_value = client
+        self.runtime.pause = lambda seconds: None
+        with patch.object(self.runtime, "technical_sample"), patch("deploy_runtime.credentials", return_value=ACCOUNT):
+            with self.assertRaisesRegex(DeploymentError, "^SMOKE_CONTRACT_FAILED$"):
+                self.runtime.smoke(self.release)
+        self.assertIsNone(client.token)
+        self.assertFalse((self.root / "smoke-journal.json").exists())
 
 
 if __name__ == "__main__":
