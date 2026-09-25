@@ -1,5 +1,12 @@
 # syntax=docker/dockerfile:1.7
 
+# Python 3.13 slim, pinned by digest.
+FROM python@sha256:8d9d0b8bcf6506481eae4907c18f5e3e7902e629f5f6d684f9e7c32e85e3ddf0 AS migration-catalog
+WORKDIR /catalog
+COPY src/Operations.Deployment/release_catalog.py ./
+COPY src/Infrastructure.Persistence.PostgreSql/Migrations/ ./migrations/
+RUN python release_catalog.py migrations > migration-catalog.json
+
 FROM mcr.microsoft.com/dotnet/sdk:10.0.401-noble AS build
 WORKDIR /src
 
@@ -63,6 +70,7 @@ ENV ASPNETCORE_HTTP_PORTS=8080 \
 EXPOSE 8080
 COPY --from=build /out/api/ ./
 COPY --from=migrations-build --chmod=0555 /out/migrations/efbundle ./efbundle
+COPY --from=migration-catalog /catalog/migration-catalog.json ./migration-catalog.json
 COPY --from=build --chown=$APP_UID:$APP_UID /out/data-protection-keys/ /var/lib/mon-kado/data-protection-keys/
 COPY --from=build --chown=$APP_UID:$APP_UID /out/gift-images/ /var/lib/mon-kado/gift-images/
 COPY --from=build --chown=$APP_UID:$APP_UID --chmod=0700 /out/personal-data-exports/ /var/lib/mon-kado/personal-data-exports/

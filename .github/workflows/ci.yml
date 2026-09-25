@@ -217,7 +217,7 @@ jobs:
   deployment_configuration:
     name: Deployment configuration
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -233,11 +233,17 @@ jobs:
           PYTHONPATH=deployments/production python3 -m coverage run --branch --source=release_manifest -m unittest discover -s deployments/production -p 'test_*.py'
           python3 -m coverage report --fail-under=100
           python3 -m coverage xml -o TestResults/deployment-coverage.xml
+      - name: Verify deployment orchestration and private storage with full branch coverage
+        run: |
+          docker run --rm -v "$PWD:/workspace" -w /workspace \
+            -e PYTHONPATH=src/Operations.Deployment -e COVERAGE_RCFILE=src/Operations.Deployment/.coveragerc \
+            python:3.13-slim@sha256:8d9d0b8bcf6506481eae4907c18f5e3e7902e629f5f6d684f9e7c32e85e3ddf0 \
+            sh -c 'python -m pip install --only-binary :all: coverage==7.10.7 && python -m coverage run -m unittest discover -s tests/Operations.DeploymentTests && python -m coverage report && python -m coverage xml -o TestResults/deployment-orchestration-coverage.xml'
       - name: Upload deployment coverage
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: deployment-coverage
-          path: TestResults/deployment-coverage.xml
+          path: TestResults/deployment*-coverage.xml
           if-no-files-found: error
           retention-days: 3
       - name: Test deployment failure handling in a disposable container
@@ -261,6 +267,33 @@ jobs:
           export JWT_SIGNING_KEY API_IMAGE WORKER_IMAGE RELEASE_REVISION
           docker compose -f compose.yaml -f deployments/production/compose.production.yaml config --format json \
             | python3 deployments/production/verify_compose.py
+
+  deployment_campaign:
+    name: Isolated deployment and rollback
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build the reviewed application and disposable test toolbox
+        run: |
+          docker build --target api --label "org.opencontainers.image.revision=$GITHUB_SHA" -t mon-kado-api:mk820 .
+          docker build --target worker --label "org.opencontainers.image.revision=$GITHUB_SHA" -t mon-kado-worker:mk820 .
+          docker build -f tests/Operations.DeploymentTests/Dockerfile -t monkado-deployment-tests tests/Operations.DeploymentTests
+          docker pull postgres:18.6-alpine
+          docker pull caddy:2.11.4-alpine
+      - name: Verify actual HTTPS rollout, rollback, persistence and migration refusal
+        env:
+          MK820_DOCKER_CAMPAIGN: "1"
+        run: python3 tests/Operations.DeploymentTests/run_docker_campaign.py
+      - name: Upload allowlisted deployment evidence only
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: deployment-campaign
+          path: TestResults/mk820-docker-campaign.jsonl
+          retention-days: 3
 
   windows_export_coverage:
     name: Windows export storage coverage
@@ -299,7 +332,7 @@ jobs:
 
   quality:
     name: quality
-    needs: [windows_export_coverage, deployment_configuration, security_proxy, frontend_publication, local_monitoring, backup_configuration, performance]
+    needs: [windows_export_coverage, deployment_configuration, deployment_campaign, security_proxy, frontend_publication, local_monitoring, backup_configuration, performance]
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -349,7 +382,7 @@ jobs:
           /d:sonar.token="$SONAR_TOKEN"
           /d:sonar.host.url="https://sonarcloud.io"
           /d:sonar.cs.opencover.reportsPaths="**/coverage.opencover.xml"
-          /d:sonar.python.coverage.reportPaths="TestResults/deployment-coverage.xml,TestResults/security-coverage.xml,TestResults/frontend-publication-coverage.xml,TestResults/monitoring-coverage.xml,TestResults/backup-coverage.xml,TestResults/performance-coverage.xml"
+          /d:sonar.python.coverage.reportPaths="TestResults/deployment-coverage.xml,TestResults/deployment-orchestration-coverage.xml,TestResults/security-coverage.xml,TestResults/frontend-publication-coverage.xml,TestResults/monitoring-coverage.xml,TestResults/backup-coverage.xml,TestResults/performance-coverage.xml"
           /d:sonar.python.version="3.13"
           /d:sonar.javascript.lcov.reportPaths="TestResults/performance.lcov"
           /d:sonar.test.inclusions="tests/**,deployments/production/test_*.py,deployments/production/verify_compose.py"

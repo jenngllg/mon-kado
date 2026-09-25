@@ -15,7 +15,7 @@ LEGACY_FILES = (
     "deployments/production/release_manifest.py",
     "deployments/production/monkado.slice",
 )
-FILES = LEGACY_FILES + (
+PREVIOUS_FILES = LEGACY_FILES + (
     "deployments/frontend/frontend.caddy",
     "deployments/frontend/monkado-frontend.service",
     "deployments/frontend/monkado-frontend.timer",
@@ -32,6 +32,23 @@ FILES = LEGACY_FILES + (
     "src/Operations.Monitoring/monitor_provision.py",
     "src/Operations.Monitoring/monitor_runtime.py",
     "src/Operations.Monitoring/monitor_storage.py",
+)
+FILES = PREVIOUS_FILES + (
+    "src/Operations.Monitoring/monitor_deployment.py",
+    "src/Operations.Deployment/release_catalog.py",
+    "src/Operations.Deployment/deploy_policy.py",
+    "src/Operations.Deployment/deploy_storage.py",
+    "src/Operations.Deployment/deploy_engine.py",
+    "src/Operations.Deployment/deploy_cli.py",
+    "src/Operations.Deployment/deploy_process.py",
+    "src/Operations.Deployment/deploy_provision.py",
+    "src/Operations.Deployment/deploy_runtime.py",
+    "src/Operations.Deployment/smoke_functional.py",
+    "src/Operations.Deployment/smoke_http.py",
+    "src/Operations.Deployment/smoke_technical.py",
+    "deployments/production/monkado-deploy",
+    "deployments/production/monkado-deploy.service",
+    "deployments/production/monkado-deploy.timer",
 )
 
 

@@ -137,6 +137,9 @@ def evaluate(observation, history, now, options):
     decisions.update(snapshot_decisions(observation, history, now, options, suppressed))
     decisions.update(http_decisions(observation["snapshots"].get("api"), history, now, options, suppressed))
     decisions.update(backup_decisions(observation.get("backup"), now, options))
+    # Import here because the read-only adapter shares the primitive validators above.
+    from monitor_deployment import decisions as deployment_decisions
+    decisions.update(deployment_decisions(observation.get("deployment")))
     for host, expiry in observation["certificates"].items():
         require(host in ("api", "frontend"))
         decisions[host + ".certificate"] = None if expiry is None else timestamp(expiry) - now < timedelta(days=options["certificateDays"])

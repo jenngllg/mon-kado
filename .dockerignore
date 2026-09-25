@@ -12,6 +12,8 @@
 **/production.env
 **/rclone.conf
 **/monitoring-gmail.json
+**/deployment-smoke.json
+**/smoke-journal.json
 **/secrets.json
 **/client_secret_*.json
 **/*.pfx

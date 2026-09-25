@@ -27,6 +27,9 @@ class CollectorTests(unittest.TestCase):
         self.collector = collect.Collector(self.root, self.cgroup, self.run_command, self.probe)
         backup = self.root / "monkado-backup"
         backup.mkdir()
+        deployment = self.root / "monkado-deployment"
+        deployment.mkdir()
+        atomic_json(deployment / "status.json", {"schemaVersion": 1, "phase": "succeeded", "error": None})
         atomic_json(backup / "status.json", {"lastCapture": NOW.isoformat(), "lastRemoteCapture": NOW.isoformat(),
                                             "lastIntegrityCheck": NOW.isoformat(), "error": None})
         for service in ("api", "worker"):
@@ -37,6 +40,8 @@ class CollectorTests(unittest.TestCase):
     def run_command(self, arguments):
         self.calls.append(arguments)
         if arguments[0] == "systemctl":
+            if arguments[1] == "show":
+                return 0, "ActiveState=inactive\nResult=success\n"
             return self.active, ""
         return 0, json.dumps(self.container)
 

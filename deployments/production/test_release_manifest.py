@@ -29,6 +29,17 @@ class ManifestTests(unittest.TestCase):
     def test_valid_contract(self):
         self.assertEqual(self.value, manifest.validate(self.value, "b" * 64))
 
+    def test_v2_binds_unique_approval_and_complete_migration_catalog(self):
+        catalog = {"schemaVersion": 1, "modelHash": "a" * 64,
+                   "migrations": [{"id": "20260101000000_Initial", "sha256": "c" * 64}]}
+        value = self.value | {"schemaVersion": 2, "publicationId": "123456-1", "migrationCatalog": catalog,
+                              "migrationHash": manifest.fingerprint(catalog), "rollbackAllowed": True}
+        self.assertEqual(value, manifest.validate(value, "b" * 64))
+        for change in ({"publicationId": None}, {"publicationId": "unsafe"}, {"publicationId": "1２-1"}, {"rollbackAllowed": 1},
+                       {"migrationHash": "b" * 64}, {"migrationCatalog": {}}, {"extra": True}):
+            with self.subTest(change=change), self.assertRaises(ValueError):
+                manifest.validate(value | change, "b" * 64)
+
     def test_invalid_fields(self):
         for value in (None, [], {}, {**self.value, "command": "whoami"}):
             with self.subTest(value=value), self.assertRaises(ValueError):

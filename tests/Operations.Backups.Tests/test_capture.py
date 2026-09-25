@@ -8,8 +8,8 @@ from pathlib import Path
 from unittest.mock import patch
 
 from fixtures import capture
-from monkado_backup.capture import IMAGE_NAME, KEY_NAME, atomic_json, copy_files, create_manifest, entries, regular, validate_shape, verify_manifest
-from monkado_backup.policy import BackupError, FILES, LEGACY_FILES
+from monkado_backup.capture import IMAGE_NAME, KEY_NAME, atomic_json, copy_files, copy_deployment_private, create_manifest, entries, regular, validate_shape, verify_manifest
+from monkado_backup.policy import BackupError, FILES, LEGACY_FILES, PREVIOUS_FILES
 
 
 class CaptureTests(unittest.TestCase):
@@ -56,7 +56,7 @@ class CaptureTests(unittest.TestCase):
 
     def test_manifest_contract_is_strict(self):
         # Arrange / Act / Assert
-        for change in ({"schemaVersion": True}, {"schemaVersion": 3}, {"extra": 1},
+        for change in ({"schemaVersion": True}, {"schemaVersion": 4}, {"extra": 1},
                        {"caddyImage": None}, {"caddyImage": "caddy:latest"},
                        {"postgresImage": None}, {"postgresImage": "postgres:latest"},
                        {"postgresVersion": None}, {"postgresVersion": "17.1"}, {"postgresVersion": "18.\u0666"}, {"release": {}}):
@@ -97,6 +97,37 @@ class CaptureTests(unittest.TestCase):
         # Act / Assert
         with self.assertRaisesRegex(BackupError, "INCOMPLETE_CAPTURE"):
             verify_manifest(self.root)
+
+    def test_v2_capture_remains_readable_without_deployment_modules(self):
+        for name in set(FILES) - set(PREVIOUS_FILES):
+            (self.root / "configuration" / name).unlink()
+        value = self.value | {"schemaVersion": 2, "files": entries(self.root)}
+        atomic_json(self.root / "manifest.json", value)
+        self.assertEqual(value, verify_manifest(self.root))
+
+    def test_deployment_credentials_are_private_and_only_allowed_in_v3(self):
+        private = self.root / "private"
+        private.mkdir()
+        target = self.root / "configuration"
+        copy_deployment_private(private, private, target)
+        secret = private / "deployment-smoke.json"
+        secret.write_text("synthetic credential fixture")
+        secret.chmod(0o600)
+        (private / "status.json").write_text("deployment fixture")
+        (private / "status.json").chmod(0o600)
+        copy_deployment_private(private, private, target)
+        self.assertEqual(0o600, (target / secret.name).stat().st_mode & 0o777)
+        secret.chmod(0o644)
+        with self.assertRaisesRegex(BackupError, "UNSAFE_DEPLOYMENT_FILE"):
+            copy_deployment_private(private, private, target)
+        secret.unlink()
+        secret.symlink_to(private / "missing")
+        with self.assertRaisesRegex(BackupError, "UNSAFE_FILE"):
+            copy_deployment_private(private, private, target)
+        paths = set(self.value["files"]) | {"configuration/deployment-smoke.json", "configuration/deployment-status.json"}
+        validate_shape(paths, 3)
+        with self.assertRaisesRegex(BackupError, "UNEXPECTED_CAPTURE_FILE"):
+            validate_shape(paths, 2)
 
     def test_copies_shards_and_pending_but_not_temporary_files(self):
         # Arrange
