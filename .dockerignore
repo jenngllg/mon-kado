@@ -27,3 +27,5 @@ Dockerfile*
 LICENSE
 README.md
 tests
+# Local benchmark tooling is not application runtime content.
+src/Operations.Performance

@@ -56,7 +56,9 @@ class MonitorContainerTests(unittest.TestCase):
         from test_monitor_policy import NOW
         created = subprocess.run(["docker", "create", "--network", "none", "--memory", "32m", "--memory-swap", "32m",
                                   "--pids-limit", "32", "--cap-drop", "ALL", "--security-opt", "no-new-privileges",
-                                  "--read-only", IMAGE, "python", "-c", "bytearray(128 * 1024 * 1024)"],
+                                  "--read-only", IMAGE, "python", "-c",
+                                  "payload = bytearray(128 * 1024 * 1024)\n"
+                                  "payload[::4096] = b'x' * (len(payload) // 4096)"],
                                  capture_output=True, check=True, timeout=15)
         container = created.stdout.decode().strip()
         self.assertRegex(container, r"^[0-9a-f]{64}$")
