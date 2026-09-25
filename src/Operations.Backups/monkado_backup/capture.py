@@ -9,7 +9,7 @@ import stat
 import tempfile
 from pathlib import Path
 
-from .policy import BackupError, FILES, LEGACY_FILES, HASH, release_metadata, timestamp
+from .policy import BackupError, FILES, LEGACY_FILES, PREVIOUS_FILES, HASH, release_metadata, timestamp
 
 IMAGE_NAME = re.compile(r"(?P<a>[0-9a-f]{2})/(?P<b>[0-9a-f]{2})/(?P=a)(?P=b)[0-9a-f]{28}\.(webp|pending)")
 # The repository also contains revocation records, not only key-{guid}.xml.
@@ -79,14 +79,17 @@ def entries(root):
     return result
 
 
-def validate_shape(paths, schema_version=2):
+def validate_shape(paths, schema_version=3):
     """Prevent a restored archive from injecting extra configuration or secrets."""
     required = {"postgres.dump", "configuration/production.env", RELEASE_PATH}
-    required.update("configuration/" + name for name in (LEGACY_FILES if schema_version == 1 else FILES))
+    configuration = {1: LEGACY_FILES, 2: PREVIOUS_FILES, 3: FILES}[schema_version]
+    required.update("configuration/" + name for name in configuration)
     if not required.issubset(paths):
         raise BackupError("INCOMPLETE_CAPTURE")
     for name in paths:
         if name in required:
+            continue
+        if schema_version == 3 and name in {"configuration/deployment-smoke.json", "configuration/deployment-status.json"}:
             continue
         parent, _, filename = name.rpartition("/")
         if name.startswith("images/") and IMAGE_NAME.fullmatch(name[len("images/"):]):
@@ -110,7 +113,7 @@ def create_manifest(root, created_at, postgres_image, postgres_version, caddy_im
     inventory = entries(root)
     validate_shape(inventory)
     value = {
-        "schemaVersion": 2,
+        "schemaVersion": 3,
         "createdAt": created_at,
         "postgresImage": postgres_image,
         "postgresVersion": postgres_version,
@@ -126,14 +129,14 @@ def verify_manifest(root):
     """Verify every byte and reject unexpected files before a restore can run."""
     regular(root / MANIFEST_NAME)
     value = json.loads((root / MANIFEST_NAME).read_text())
-    if not isinstance(value, dict) or type(value.get("schemaVersion")) is not int or value["schemaVersion"] not in (1, 2):
+    if not isinstance(value, dict) or type(value.get("schemaVersion")) is not int or value["schemaVersion"] not in (1, 2, 3):
         raise BackupError("INVALID_MANIFEST")
     fields = {"schemaVersion", "createdAt", "postgresImage", "postgresVersion", "release", "files"}
-    if value["schemaVersion"] == 2:
+    if value["schemaVersion"] >= 2:
         fields.add("caddyImage")
     if set(value) != fields:
         raise BackupError("INVALID_MANIFEST")
-    if value["schemaVersion"] == 2 and (not isinstance(value["caddyImage"], str) or
+    if value["schemaVersion"] >= 2 and (not isinstance(value["caddyImage"], str) or
                                        not re.fullmatch(r"caddy@sha256:" + HASH, value["caddyImage"])):
         raise BackupError("INVALID_CADDY_IMAGE")
     timestamp(value["createdAt"])
@@ -149,3 +152,18 @@ def verify_manifest(root):
     if value["release"] != release:
         raise BackupError("RELEASE_MISMATCH")
     return value
+
+
+def copy_deployment_private(settings, state, configuration):
+    """Include only explicit deployment credentials/state, inside the encrypted capture."""
+    for source, name in ((settings / "deployment-smoke.json", "deployment-smoke.json"),
+                         (state / "status.json", "deployment-status.json")):
+        if not source.exists() and not source.is_symlink():
+            continue
+        regular(source)
+        metadata = source.stat()
+        if metadata.st_uid != 0 or metadata.st_gid != 0 or stat.S_IMODE(metadata.st_mode) != 0o600:
+            raise BackupError("UNSAFE_DEPLOYMENT_FILE")
+        target = configuration / name
+        shutil.copyfile(source, target)
+        target.chmod(0o600)

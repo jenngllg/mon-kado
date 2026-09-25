@@ -52,6 +52,47 @@ class ContractTests(unittest.TestCase):
         # Assert
         self.assertEqual(self.manifest, result)
 
+    def test_version_two_binds_google_setting_and_requires_all_legal_pages(self):
+        # Arrange
+        for name in contract.LEGAL_PAGES:
+            (self.dist / name).write_text("<h1>Approved synthetic document</h1>")
+        # Act / Assert
+        for enabled in (False, True):
+            output = self.root / str(enabled)
+            manifest = contract.package_build(self.dist, output, "a" * 40, "b" * 40, "c" * 64, enabled)
+            self.assertEqual(2, manifest["schemaVersion"])
+            self.assertIs(enabled, manifest["googleEnabled"])
+            self.assertEqual(manifest, contract.validate(manifest, "c" * 64, "b" * 40))
+            target = self.root / ("extracted-" + str(enabled))
+            contract.extract(output / "frontend.tar.gz", target, manifest)
+            self.assertIs(enabled, json.loads((target / "release.json").read_text())["googleEnabled"])
+            for name in contract.LEGAL_PAGES:
+                self.assertEqual((self.dist / name).read_bytes(), (target / name).read_bytes())
+            for invalid in (None, 0, 1, "true"):
+                with self.assertRaises(ValueError):
+                    contract.validate(manifest | {"googleEnabled": invalid}, "c" * 64, "b" * 40)
+
+    def test_version_two_rejects_missing_documents_and_non_boolean_configuration(self):
+        # Arrange / Act / Assert
+        for enabled in (False, True, 0, "false"):
+            with self.assertRaises(ValueError):
+                contract.package_build(self.dist, self.root / "invalid", "a" * 40, "b" * 40, "c" * 64, enabled)
+        with self.assertRaises(ValueError):
+            contract.release_marker("a" * 40, 1)
+        manifest = self.manifest | {"schemaVersion": 2, "googleEnabled": False}
+        with self.assertRaises(ValueError):
+            contract.extract(self.output / "frontend.tar.gz", self.root / "missing-legal", manifest)
+        self.assertFalse((self.root / "missing-legal").exists())
+
+    def test_marker_rejects_integer_boolean_and_unapproved_google_activation(self):
+        # Arrange / Act / Assert
+        for enabled in (0, True):
+            marker = {"revision": "a" * 40, "apiOrigin": contract.API_ORIGIN, "googleEnabled": enabled}
+            archive, manifest = self.write_archive([("index.html", tarfile.REGTYPE, b"document"),
+                                                    ("release.json", tarfile.REGTYPE, json.dumps(marker).encode())])
+            with self.assertRaises(ValueError):
+                contract.extract(archive, self.root / ("marker-" + str(enabled)), manifest)
+
     def test_manifest_rejects_wrong_types_identity_and_configuration(self):
         # Arrange / Act / Assert
         invalid = {"schemaVersion": [True, "1", 2], "revision": [None, "develop", "a" * 40 + "\n"],

@@ -7,6 +7,7 @@ from pathlib import Path
 import re
 import ssl
 import subprocess
+import monitor_deployment
 from zoneinfo import ZoneInfo
 
 from monitor_policy import SERVICES, age, require, timestamp, validate_snapshot
@@ -43,7 +44,7 @@ def https(service, path):
         if service == "frontend" and path == "/release.json" and healthy:
             marker = json.loads(body)
             healthy = (isinstance(marker, dict) and re.fullmatch(r"[0-9a-f]{40}", str(marker.get("revision", ""))) is not None
-                       and marker.get("apiOrigin") == "https://api.monkado.fr" and marker.get("googleEnabled") is False)
+                       and marker.get("apiOrigin") == "https://api.monkado.fr" and type(marker.get("googleEnabled")) is bool)
         return not healthy, expires
     finally:
         connection.close()
@@ -142,4 +143,8 @@ class Collector:
             result["backup"] = self.backup(now)
         except (OSError, ValueError, TypeError, KeyError, subprocess.SubprocessError):
             result["backup"] = None
+        try:
+            result["deployment"] = monitor_deployment.collect(self.root, self.runner, now)
+        except (OSError, ValueError, TypeError, KeyError, subprocess.SubprocessError):
+            result["deployment"] = None
         return result, samples, oom

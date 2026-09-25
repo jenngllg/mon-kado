@@ -58,7 +58,7 @@ class DeploymentTests(unittest.TestCase):
         self.assertEqual("installed", result)
         self.assertEqual("unchanged", repeated)
         self.assertEqual("a" * 40, runtime.current_revision(self.releases))
-        self.health.assert_called_once_with("a" * 40, ["assets/main-abcdefgh.js"])
+        self.health.assert_called_once_with("a" * 40, ["assets/main-abcdefgh.js"], False)
         self.assertFalse(self.operation.journal.exists())
         self.assertEqual("healthy", json.loads(self.operation.status_file.read_text())["state"])
         self.assertEqual(0o600, self.operation.status_file.stat().st_mode & 0o777)
@@ -82,6 +82,19 @@ class DeploymentTests(unittest.TestCase):
         self.assertEqual("installed", self.operation.deploy(retry=True))
         self.assertEqual("d" * 40, runtime.current_revision(self.releases))
         self.assertEqual("installed", self.operation.deploy(approved=self.build("e" * 40)))
+
+    def test_version_two_smoke_checks_legal_documents_and_google_setting(self):
+        # Arrange
+        for name in contract.LEGAL_PAGES:
+            (self.dist / name).write_text("<h1>Synthetic legal page</h1>")
+        output = self.root / "google-package"
+        self.approved = contract.package_build(self.dist, output, "d" * 40, "b" * 40, "c" * 64, True)
+        self.packages[contract.archive_url(self.approved)] = output / "frontend.tar.gz"
+        # Act
+        result = self.operation.deploy()
+        # Assert
+        self.assertEqual("installed", result)
+        self.health.assert_called_once_with("d" * 40, ["assets/main-abcdefgh.js", "legal-notice", "privacy-policy", "terms-of-use"], True)
 
     def test_failed_first_publication_removes_pointer(self):
         # Arrange

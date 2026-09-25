@@ -13,7 +13,8 @@ only with explicit authorization; a merge alone never publishes a build.
 
 The workflow uses the backend revision from the explicit `backend-production`
 release, checks the public deployed OpenAPI contract and packages a Vite build
-with `VITE_API_BASE_URL=https://api.monkado.fr` and Google disabled. The backend
+with the public API origin and Google flag reviewed in the frontend's versioned
+`publication.json` (Google remains disabled until its approved smoke test). The backend
 hosting changes must therefore be merged, installed and published first.
 
 Archives and manifests are published under immutable `frontend-<commit>` releases.
@@ -23,7 +24,10 @@ releases require investigation, never an overwrite. The server only reads fixed
 GitHub repositories over HTTPS, validates the configuration hash and active
 backend revision, and never executes anything downloaded with a release.
 
-Archives are restricted to index.html, release.json and flat assets. The compressed
+Archives are restricted to index.html, release.json, the three named legal HTML
+documents and flat assets. Manifest v2 requires all three documents and binds an
+explicit boolean `googleEnabled` to the release marker. Legacy v1 remains readable
+with Google disabled; do not rewrite existing immutable releases. The compressed
 limit is 50 MiB and the extracted limit is 200 MiB, with a 10,000-member cap.
 Links, duplicate paths, source maps, private paths and unexpected files are refused.
 Allow an additional 64 MiB of free space beyond the archive and extraction limits.
@@ -102,6 +106,12 @@ owner list management and guest participation/reservation. Browser traces must
 not capture real tokens or personal data. Local fakes do not prove real cookie
 behavior. No load test, provider activation or real secret rotation is included.
 
-Google remains disabled pending its separately approved smoke test. Unfinished
-legal pages and account-deletion screens are not published as substitutes here;
-technical deployment does not complete MK-810 or authorize general public opening.
+Google remains disabled pending its separately approved smoke test. MK-828 adds
+the private MFA/export/deletion frontend flows and native static legal routes;
+the frontend publication guard refuses draft legal documents. Its operator
+approval checklist is `deployments/publication-readiness.md` in the frontend repo.
+Install and publish this backend revision before attempting manifest-v2 frontend
+publication; the workflow consumes tools from `backend-production`, not develop.
+Reinstall the reviewed Caddy configuration through normal fingerprint validation,
+without altering MK-813 backup units, locks or credentials. Technical deployment
+does not by itself complete legal review or authorize general public opening.

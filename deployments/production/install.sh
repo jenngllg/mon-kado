@@ -31,6 +31,12 @@ flock -n 8 || { echo 'A backup operation holds the coordination lock.' >&2; exit
 exec 9>/var/lib/monkado-deployment/deploy.lock
 flock -n 9 || { echo 'A deployment holds the configuration lock.' >&2; exit 1; }
 install -d -m 0755 /opt/monkado/deployments/caddy /opt/monkado/deployments/production
+install -d -m 0755 /opt/monkado/src/Operations.Deployment
+for module in release_catalog deploy_policy deploy_storage deploy_engine deploy_cli deploy_process deploy_provision deploy_runtime smoke_functional smoke_http smoke_technical; do
+    install -m 0644 "$source_root/src/Operations.Deployment/$module.py" "/opt/monkado/src/Operations.Deployment/$module.py"
+done
+install -m 0755 "$source_root/deployments/production/monkado-deploy" /usr/local/sbin/monkado-deploy
+install -m 0644 "$source_root/deployments/production/monkado-deploy" /opt/monkado/deployments/production/monkado-deploy
 install -d -m 0755 /opt/monkado/deployments/frontend /opt/monkado/src/Operations.Frontend
 install -d -m 0755 /var/lib/monkado-frontend /var/lib/monkado-frontend/releases
 install -d -m 0700 /etc/monkado /var/lib/monkado-deployment
@@ -55,8 +61,9 @@ for unit in monkado-frontend.service monkado-frontend.timer; do
 done
 for unit in monkado.slice monkado-deploy.service monkado-deploy.timer; do
     install -m 0644 "$source_root/deployments/production/$unit" "/etc/systemd/system/$unit"
+    install -m 0644 "$source_root/deployments/production/$unit" "/opt/monkado/deployments/production/$unit"
 done
-for file in monitor_cli.py monitor_collect.py monitor_gmail.py monitor_policy.py monitor_provision.py monitor_runtime.py monitor_storage.py; do
+for file in monitor_cli.py monitor_collect.py monitor_deployment.py monitor_gmail.py monitor_policy.py monitor_provision.py monitor_runtime.py monitor_storage.py; do
     install -m 0644 "$source_root/src/Operations.Monitoring/$file" "/opt/monkado/src/Operations.Monitoring/$file"
 done
 for unit in monkado-monitor.service monkado-monitor.timer; do
@@ -73,6 +80,7 @@ echo 'Deployment code installed. Timer remains stopped; no application has been 
 echo 'Configure /etc/monkado/production.env (root:root, 0600), approve a publication,'
 echo 'then run: sudo systemctl start monkado-deploy.service'
 echo 'Enable the timer only after a successful first rollout and review.'
+echo 'MK-820: provision the dedicated smoke account and explicitly adopt the verified current release before enabling deployment.'
 echo 'Frontend publication remains stopped. Review DNS, HTTPS and the approved frontend release before enabling its timer.'
 echo 'Monitoring remains stopped. Existing monitoring settings, credentials and backup units have not been replaced.'
 echo 'Review the monitoring runbook, complete the explicitly approved email test, then enable the monitor timer manually.'

@@ -1,6 +1,7 @@
 """Opt-in disposable resource exercise: no network, host state, Docker socket or provider secrets."""
 
 from datetime import timedelta
+from concurrent.futures import ThreadPoolExecutor
 import json
 import os
 from pathlib import Path
@@ -56,13 +57,32 @@ class MonitorContainerTests(unittest.TestCase):
         from test_monitor_policy import NOW
         created = subprocess.run(["docker", "create", "--network", "none", "--memory", "32m", "--memory-swap", "32m",
                                   "--pids-limit", "32", "--cap-drop", "ALL", "--security-opt", "no-new-privileges",
-                                  "--read-only", IMAGE, "python", "-c", "bytearray(128 * 1024 * 1024)"],
+                                  "--read-only", IMAGE, "python", "-c",
+                                  "payload = bytearray(128 * 1024 * 1024)\n"
+                                  "payload[::4096] = b'x' * (len(payload) // 4096)"],
                                  capture_output=True, check=True, timeout=15)
         container = created.stdout.decode().strip()
         self.assertRegex(container, r"^[0-9a-f]{64}$")
         try:
             # Act
-            subprocess.run(["docker", "start", "--attach", container], capture_output=True, check=False, timeout=30)
+            created_at = subprocess.run(["docker", "inspect", "--format", "{{.Created}}", container],
+                                        capture_output=True, text=True, check=True, timeout=5).stdout.strip()
+            # Attach EOF is not a barrier for the daemon's independent OOM/exit events.
+            # Replay events for this exact container so subscription setup cannot miss a fast OOM.
+            with ThreadPoolExecutor(max_workers=1) as listener:
+                events = subprocess.Popen(["docker", "events", "--since", created_at, "--filter", "container=" + container,
+                                           "--filter", "event=oom", "--format", "{{.Action}}"],
+                                          stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+                try:
+                    event = listener.submit(events.stdout.readline)
+                    subprocess.run(["docker", "start", "--attach", container], capture_output=True, check=False, timeout=30)
+                    exited = subprocess.run(["docker", "wait", container], capture_output=True, text=True, check=True, timeout=30)
+                    self.assertEqual("137", exited.stdout.strip(), "The disposable process must really be killed by the memory limit")
+                    self.assertEqual("oom", event.result(timeout=10).strip(), "Docker must acknowledge the OOM before collection")
+                finally:
+                    events.terminate()
+                    events.wait(timeout=5)
+                    events.stdout.close()
             def runner(arguments):
                 # Only substitute the owned disposable container; inspect's fixed field allowlist is unchanged.
                 inspected = subprocess.run(arguments[:-1] + [container], capture_output=True, check=True, timeout=5)
