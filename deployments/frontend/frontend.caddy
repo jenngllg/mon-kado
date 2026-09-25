@@ -24,6 +24,13 @@
 		@unsupported not method GET HEAD
 		respond @unsupported 405
 
+		# Exact documents remain available without JavaScript or the API.
+		@legal path /legal-notice /privacy-policy /terms-of-use
+		handle @legal {
+			rewrite * {path}.html
+			file_server
+		}
+
 		@immutable {
 			path_regexp fingerprint ^/assets/[A-Za-z0-9._-]+-[A-Za-z0-9_-]{8,}\.(js|css|woff2?|ttf|png|webp|jpe?g|svg|ico|avif)$
 			file {path}

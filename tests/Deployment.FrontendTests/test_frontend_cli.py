@@ -29,6 +29,17 @@ class CliTests(unittest.TestCase):
                 runpy.run_path(cli.__file__, run_name="__main__")
             self.assertEqual(0, exited.exception.code)
 
+    def test_version_two_packaging_passes_explicit_boolean(self):
+        # Arrange
+        arguments = ["package", "--dist", "build", "--output", "output", "--revision", "a" * 40,
+                     "--backend-revision", "b" * 40, "--configuration-hash", "c" * 64]
+        # Act / Assert
+        for value in ("true", "false"):
+            with patch.object(cli.contract, "package_build") as package, contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(0, cli.main(arguments + ["--google-enabled", value]))
+                package.assert_called_once_with(Path("build"), Path("output"), "a" * 40, "b" * 40, "c" * 64,
+                                                google_enabled=value == "true")
+
     def test_privileged_deploy_and_explicit_rollback(self):
         # Arrange
         with tempfile.TemporaryDirectory() as directory:
@@ -117,6 +128,15 @@ class TransportTests(unittest.TestCase):
             run.return_value.stdout = b"{}"
             with self.assertRaises(ValueError):
                 runtime.probe("a" * 40, [])
+
+    def test_smoke_requires_the_approved_google_value(self):
+        # Arrange
+        marker = {"revision": "a" * 40, "apiOrigin": "https://api.monkado.fr", "googleEnabled": True}
+        with patch.object(runtime.subprocess, "run", return_value=Mock(stdout=json.dumps(marker).encode())):
+            # Act / Assert
+            runtime.probe("a" * 40, [], True)
+            with self.assertRaises(ValueError):
+                runtime.probe("a" * 40, [], False)
 
 
 if __name__ == "__main__":

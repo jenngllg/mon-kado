@@ -32,6 +32,8 @@ class FrontendHttpTests(unittest.TestCase):
             (current / "index.html").write_text("<!doctype html><html lang=fr><title>MonKado fixture</title><body>fixture-app</body></html>")
             (current / "assets/main-abcdefgh.js").write_text("// synthetic fixture")
             (current / "release.json").write_text('{"revision":"fixture"}')
+            for page in ("legal-notice", "privacy-policy", "terms-of-use"):
+                (current / (page + ".html")).write_text("<h1>" + page + "</h1>")
             server = """import http.server
 class Handler(http.server.BaseHTTPRequestHandler):
  def do_GET(self):
@@ -106,6 +108,12 @@ server.serve_forever()
                     self.assertEqual(308, status)
                     self.assertEqual("https://www.localhost/login", headers["Location"])
                     self.assertEqual(b"api-fixture", request("api.localhost", "/readiness")[2])
+                    docker("stop", api)
+                    for page in ("legal-notice", "privacy-policy", "terms-of-use"):
+                        status, headers, body = request("www.localhost", "/" + page)
+                        self.assertEqual(200, status)
+                        self.assertEqual(("<h1>" + page + "</h1>").encode(), body)
+                        self.assertEqual("no-store", headers["Cache-Control"])
                 self.assertEqual({}, json.loads(docker("inspect", "--format", "{{json .HostConfig.PortBindings}}", api)))
             finally:
                 for container in (edge, api):
