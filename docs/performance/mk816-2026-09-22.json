@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "status": "in-progress",
-  "date": "2026-09-22",
+  "status": "complete-with-incomplete-profile",
+  "date": "2026-09-25",
   "scope": "Local Docker only. No production performance guarantee.",
   "campaigns": [
     {
@@ -94,7 +94,7 @@
         "workerEnvironment": "Local",
         "externalProviders": false
       },
-      "qualificationNote": "Development nominal run before final harness reporting and Caddy-template reuse. Backend Release sources unchanged; final nominal rerun pending."
+      "qualificationNote": "Development-only preliminary result; superseded by the final nominal campaign below."
     },
     {
       "schemaVersion": 1,
@@ -321,6 +321,92 @@
         "images": 202,
         "overReserved": 0
       }
+    },
+    {
+      "schemaVersion": 1,
+      "profile": "exports",
+      "runId": "mk816-56ffe99c0f1f",
+      "verdict": "passed",
+      "expectedRequests": 15000,
+      "completedRequests": 15000,
+      "unexpectedErrors": 0,
+      "rateLimited": 0,
+      "droppedIterations": 0,
+      "supplement": {
+        "profile": "exports",
+        "passed": true,
+        "results": [
+          {"concurrency": 1, "milliseconds": 10215.03, "bytes": 6134, "valid": true},
+          {"concurrency": 2, "milliseconds": 10063.76, "bytes": 6112, "valid": true},
+          {"concurrency": 2, "milliseconds": 20104.37, "bytes": 6120, "valid": true}
+        ]
+      },
+      "qualificationNote": "15,000 background reads and three validated ZIP exports; remote evidence retained in the local report."
+    },
+    {
+      "schemaVersion": 1,
+      "profile": "quotas",
+      "runId": "mk816-1ceb993cafe3",
+      "verdict": "passed",
+      "expectedRequests": 1800,
+      "completedRequests": 1800,
+      "unexpectedErrors": 0,
+      "rateLimited": 0,
+      "droppedIterations": 0,
+      "supplement": {"profile": "quotas", "passed": true, "results": [{"limited": true, "retryAfter": 60, "recovered": true}]},
+      "qualificationNote": "Single-IP limiter probe returned 429 with Retry-After 60 and recovered; probe is separate from nominal error counts."
+    },
+    {
+      "schemaVersion": 1,
+      "profile": "concurrency",
+      "runId": "mk816-67463034f4d7",
+      "verdict": "passed",
+      "expectedRequests": 1800,
+      "completedRequests": 1800,
+      "unexpectedErrors": 0,
+      "rateLimited": 0,
+      "droppedIterations": 0,
+      "qualificationNote": "Competing stale-ETag update and full-capacity reservation produced the expected conflicts and persisted invariants."
+    },
+    {
+      "schemaVersion": 1,
+      "profile": "nominal",
+      "runId": "mk816-6d8a33857780",
+      "verdict": "passed",
+      "expectedRequests": 9000,
+      "completedRequests": 9000,
+      "unexpectedErrors": 0,
+      "rateLimited": 0,
+      "droppedIterations": 0,
+      "observedRequestsPerSecond": 11.0053,
+      "families": {
+        "lists": {"count": 2700, "p50": 5.2679, "p95": 7.1775, "p99": 8.7153},
+        "wishes": {"count": 1800, "p50": 7.3759, "p95": 9.4002, "p99": 10.8496},
+        "shared": {"count": 2700, "p50": 14.9943, "p95": 26.8130, "p99": 68.2708},
+        "update": {"count": 900, "p50": 15.5060, "p95": 27.4778, "p99": 833.3965},
+        "reservation": {"count": 900, "p50": 20.1120, "p95": 37.7113, "p99": 486.2654}
+      },
+      "resourceSummary": {"meanMeasuredCpuPercentOfOneCore": 13.3025, "memoryPeakBytesIncludingSetup": 502784000, "resourceSampleCount": 125},
+      "qualificationNote": "Final harness run with the production Caddy template and exact 768 MiB/one-CPU cgroup."
+    },
+    {
+      "schemaVersion": 1,
+      "profile": "stress",
+      "runId": "mk816-d2e1b82807f2",
+      "verdict": "incomplete",
+      "expectedRequests": 12000,
+      "completedRequests": 11998,
+      "unexpectedErrors": 0,
+      "rateLimited": 0,
+      "droppedIterations": 0,
+      "stages": [
+        {"requestedPerSecond": 5, "completedRequests": 1500},
+        {"requestedPerSecond": 10, "completedRequests": 3000},
+        {"requestedPerSecond": 20, "completedRequests": 6000},
+        {"requestedPerSecond": 5, "completedRequests": 1498}
+      ],
+      "infrastructure": {"memoryPeakBytesIncludingSetup": 495534080, "oom": 0, "restarts": 0, "alive": true},
+      "qualificationNote": "Two terminal iterations were absent; per policy this exploratory campaign is incomplete, not passed."
     }
   ]
 }
