@@ -44,7 +44,7 @@ def https(service, path):
         if service == "frontend" and path == "/release.json" and healthy:
             marker = json.loads(body)
             healthy = (isinstance(marker, dict) and re.fullmatch(r"[0-9a-f]{40}", str(marker.get("revision", ""))) is not None
-                       and marker.get("apiOrigin") == "https://api.monkado.fr" and marker.get("googleEnabled") is False)
+                       and marker.get("apiOrigin") == "https://api.monkado.fr" and type(marker.get("googleEnabled")) is bool)
         return not healthy, expires
     finally:
         connection.close()

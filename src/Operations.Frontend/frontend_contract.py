@@ -16,6 +16,7 @@ MARKER = "release.json"
 SHA = r"[0-9a-f]{40}"
 DIGEST = r"[0-9a-f]{64}"
 FIELDS = {"schemaVersion", "revision", "backendRevision", "configurationHash", "apiOrigin", "archiveSha256"}
+LEGAL_PAGES = {"legal-notice.html", "privacy-policy.html", "terms-of-use.html"}
 ASSET = re.compile(r"assets/[A-Za-z0-9_-][A-Za-z0-9._-]*\.(?:js|css|woff2?|ttf|png|webp|jpe?g|svg|ico|avif)")
 
 
@@ -32,8 +33,11 @@ def matches(pattern, value):
 
 def validate(value, configuration_hash, backend_revision):
     """Bind the static release to the reviewed host configuration and active backend."""
-    require(isinstance(value, dict) and set(value) == FIELDS)
-    require(type(value["schemaVersion"]) is int and value["schemaVersion"] == 1)
+    require(isinstance(value, dict))
+    version = value.get("schemaVersion")
+    require(type(version) is int and version in (1, 2))
+    require(set(value) == (FIELDS if version == 1 else FIELDS | {"googleEnabled"}))
+    require(type(value.get("googleEnabled", False)) is bool)
     require(matches(SHA, value["revision"]) and matches(SHA, value["backendRevision"]))
     require(matches(DIGEST, value["configurationHash"]) and matches(DIGEST, value["archiveSha256"]))
     require(value["configurationHash"] == configuration_hash)
@@ -65,8 +69,14 @@ def file_digest(path):
 
 
 def allowed_file(name):
-    """Only built entrypoint, revision marker and flat static assets can be served."""
-    return name in {ENTRYPOINT, MARKER} or ASSET.fullmatch(name) is not None
+    """Allow exactly the public documents, revision marker and flat static assets."""
+    return name in {ENTRYPOINT, MARKER} | LEGAL_PAGES or ASSET.fullmatch(name) is not None
+
+
+def release_marker(revision, google_enabled=False):
+    """Build the exact public marker without accepting integer booleans."""
+    require(type(google_enabled) is bool)
+    return {"revision": revision, "apiOrigin": API_ORIGIN, "googleEnabled": google_enabled}
 
 
 def extract(archive, destination, manifest):
@@ -88,6 +98,7 @@ def extract(archive, destination, manifest):
             seen.add(entry.name.casefold())
             entries.append(entry)
         require(ENTRYPOINT in seen and MARKER in seen)
+        require(manifest["schemaVersion"] == 1 or LEGAL_PAGES <= seen)
         destination.mkdir(mode=0o755)
         for entry in entries:
             target = destination / entry.name
@@ -97,13 +108,15 @@ def extract(archive, destination, manifest):
                     output.write(chunk)
             target.chmod(0o644)
         marker = json.loads((destination / MARKER).read_text(encoding="utf-8"))
-        require(marker == {"revision": manifest["revision"], "apiOrigin": API_ORIGIN, "googleEnabled": False})
+        require(isinstance(marker, dict) and type(marker.get("googleEnabled")) is bool)
+        require(marker == release_marker(manifest["revision"], manifest.get("googleEnabled", False)))
 
 
-def package_build(dist, output, revision, backend_revision, configuration_hash):
+def package_build(dist, output, revision, backend_revision, configuration_hash, google_enabled=None):
     """Package only a reviewed Vite build, without inheriting environment secrets."""
     require(matches(SHA, revision) and matches(SHA, backend_revision))
     require(matches(DIGEST, configuration_hash))
+    require(google_enabled is None or type(google_enabled) is bool)
     require(dist.is_dir() and not dist.is_symlink())
     require(not output.exists())
     files = sorted(path for path in dist.rglob("*") if not path.is_dir() or path.is_symlink())
@@ -112,10 +125,11 @@ def package_build(dist, output, revision, backend_revision, configuration_hash):
         require(path.is_file() and not path.is_symlink())
         require(allowed_file(path.relative_to(dist).as_posix()) and path.name != MARKER)
     require((dist / ENTRYPOINT).is_file())
+    require(google_enabled is None or all((dist / name).is_file() for name in LEGAL_PAGES))
     require(sum(path.stat().st_size for path in files) < MAX_EXTRACTED)
     output.mkdir(parents=True)
     marker = output / MARKER
-    marker.write_text(json.dumps({"revision": revision, "apiOrigin": API_ORIGIN, "googleEnabled": False}), encoding="utf-8")
+    marker.write_text(json.dumps(release_marker(revision, google_enabled is True)), encoding="utf-8")
     archive = output / "frontend.tar.gz"
     with archive.open("xb") as raw, gzip.GzipFile(fileobj=raw, mode="wb", filename="", mtime=0) as compressed:
         with tarfile.open(fileobj=compressed, mode="w", format=tarfile.PAX_FORMAT) as package:
@@ -126,6 +140,8 @@ def package_build(dist, output, revision, backend_revision, configuration_hash):
     result = {"schemaVersion": 1, "revision": revision, "backendRevision": backend_revision,
               "configurationHash": configuration_hash, "apiOrigin": API_ORIGIN,
               "archiveSha256": file_digest(archive)}
+    if google_enabled is not None:
+        result.update(schemaVersion=2, googleEnabled=google_enabled)
     (output / "manifest.json").write_text(json.dumps(result, sort_keys=True), encoding="utf-8")
     return result
 

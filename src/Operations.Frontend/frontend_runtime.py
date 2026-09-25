@@ -120,7 +120,7 @@ def backend_revision(deployment):
     return revisions[0]
 
 
-def probe(revision, assets):
+def probe(revision, assets, google_enabled=False):
     """Check this VPS through its public TLS names, with bounded outputs and no cookies."""
     checks = ["https://www.monkado.fr/release.json", "https://www.monkado.fr/", contract.API_ORIGIN + "/readiness"]
     checks.extend("https://www.monkado.fr/" + asset for asset in assets)
@@ -130,7 +130,9 @@ def probe(revision, assets):
              "--resolve", "www.monkado.fr:443:127.0.0.1", "--resolve", "api.monkado.fr:443:127.0.0.1", url],
             check=True, capture_output=True, timeout=20)
         if index == 0:
-            contract.require(json.loads(result.stdout) == {"revision": revision, "apiOrigin": contract.API_ORIGIN, "googleEnabled": False})
+            marker = json.loads(result.stdout)
+            contract.require(isinstance(marker, dict) and type(marker.get("googleEnabled")) is bool)
+            contract.require(marker == contract.release_marker(revision, google_enabled))
 
 
 def prune(releases, retained):
@@ -236,7 +238,8 @@ class Deployment:
                     switch(self.releases, revision)
                     assets = sorted(path.relative_to(target).as_posix() for path in (target / "assets").glob("*")
                                     if path.suffix in {".js", ".css"})
-                    self.health(revision, assets)
+                    documents = sorted(Path(name).stem for name in contract.LEGAL_PAGES) if manifest["schemaVersion"] == 2 else []
+                    self.health(revision, assets + documents, manifest.get("googleEnabled", False))
                 except Exception:
                     self.recover()
                     raise

@@ -21,6 +21,7 @@ def parser():
     package = operations.add_parser("package")
     for name in ("dist", "output", "revision", "backend-revision", "configuration-hash"):
         package.add_argument("--" + name, required=True)
+    package.add_argument("--google-enabled", choices=("true", "false"))
     deploy = operations.add_parser("deploy")
     deploy.add_argument("--retry", action="store_true")
     rollback = operations.add_parser("rollback")
@@ -34,8 +35,9 @@ def main(arguments):
     options = parser().parse_args(arguments)
     try:
         if options.operation == "package":
+            settings = {} if options.google_enabled is None else {"google_enabled": options.google_enabled == "true"}
             contract.package_build(Path(options.dist), Path(options.output), options.revision,
-                                   options.backend_revision, options.configuration_hash)
+                                   options.backend_revision, options.configuration_hash, **settings)
             print('{"state":"packaged"}')
             return 0
         contract.require(os.geteuid() == 0)

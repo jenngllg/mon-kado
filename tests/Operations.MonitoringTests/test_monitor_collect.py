@@ -196,6 +196,8 @@ class TransportTests(unittest.TestCase):
         for service, status, body, bad in (
                 ("api", 200, b"ok", False), ("api", 503, b"unavailable", True),
                 ("frontend", 200, json.dumps({"revision": "a" * 40, "apiOrigin": "https://api.monkado.fr", "googleEnabled": False}).encode(), False),
+                ("frontend", 200, json.dumps({"revision": "a" * 40, "apiOrigin": "https://api.monkado.fr", "googleEnabled": True}).encode(), False),
+                ("frontend", 200, json.dumps({"revision": "a" * 40, "apiOrigin": "https://api.monkado.fr", "googleEnabled": 1}).encode(), True),
                 ("frontend", 200, b"{}", True)):
             connection = Mock()
             connection.sock.getpeercert.return_value = {"notAfter": "Dec 21 12:00:00 2026 GMT"}
