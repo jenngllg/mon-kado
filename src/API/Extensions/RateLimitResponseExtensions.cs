@@ -11,17 +11,17 @@ public static class RateLimitResponseExtensions
 {
     /// <summary>Writes a non-cacheable bounded error without recording caller data.</summary>
     /// <param name="context">The rejected request.</param>
-    /// <param name="lease">The rejected quota lease.</param>
+    /// <param name="lease">The rejected quota lease, or null after an admission timeout.</param>
     /// <param name="cancellationToken">The request cancellation token.</param>
     /// <returns>The asynchronous response write.</returns>
     public static async Task WriteRejectionAsync(
         HttpContext context,
-        RateLimitLease lease,
+        RateLimitLease? lease,
         CancellationToken cancellationToken)
     {
         var retryAfter = TimeSpan.FromMinutes(1);
 
-        if (lease.TryGetMetadata(
+        if (lease is not null && lease.TryGetMetadata(
             MetadataName.RetryAfter,
             out var metadata))
             retryAfter = metadata;

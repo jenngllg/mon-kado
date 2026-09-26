@@ -88,6 +88,8 @@ public static class ApiInjectionConfiguration
             .ValidateOnStart();
         // Partition state and timers must be shared for the entire host lifetime.
         services.AddSingleton<IGeneralRequestLimiter, GeneralRequestLimiter>();
+        // Both upload endpoints must share one native-image allocation budget.
+        services.AddSingleton<IImageProcessingLimiter, ImageProcessingLimiter>();
 
         return services;
     }
