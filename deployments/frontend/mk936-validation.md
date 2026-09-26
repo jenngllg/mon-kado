@@ -1,7 +1,9 @@
 # MK-936 local validation — 2026-09-26
 
 Implementation tested: `12d01ce8a62f6274636c5ac8b48a3f5134bb2deb`.
-This report is added separately; CI repeats the checks against its exact checkout.
+The final review additionally bounds the entrypoint before parsing it into memory;
+the same deterministic suite and HTTPS campaign were rerun successfully (6.049 seconds).
+CI repeats the checks against its exact checkout, including that guard.
 No C# application, frontend UI, business contract, migration, quota or production
 secret is changed. The full existing multi-platform quality gate remains mandatory.
 
@@ -68,6 +70,7 @@ successful state committed before journal removal. Regression fixes:
 3. Preserve and latch corrupt recovery journals instead of retrying every timer tick.
 4. Include failed systemd outcomes in monitoring even when older metadata says healthy.
 5. Reload durable recovery state before recording an outer publication failure.
+6. Reject an oversized entrypoint before parsing it under the service's memory limit.
 
 Local test failures during implementation were fixed in code/fixtures, not retried
 unchanged: backup schema expectations, monitoring healthy fixtures and one test

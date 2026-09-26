@@ -112,6 +112,11 @@ class ProbeTests(unittest.TestCase):
         # Act / Assert
         with self.assertRaises(ValueError):
             probe.probe(self.revision, self.root, runner=self.runner)
+        self.runner.reset_mock()
+        (self.root / "index.html").write_bytes(b"x" * (probe.MAX_BODY + 1))
+        with self.assertRaises(ValueError):
+            probe.probe(self.revision, self.root, runner=self.runner)
+        self.runner.assert_not_called()
 
     def test_missing_external_inline_and_wrong_type_entrypoints_fail(self):
         # Arrange / Act / Assert

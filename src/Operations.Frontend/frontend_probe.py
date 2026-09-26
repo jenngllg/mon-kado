@@ -101,6 +101,7 @@ def probe(revision, directory, google_enabled=False, runner=subprocess.run, cloc
                         if path.suffix in {".js", ".css"}))
     files.extend(sorted(name for name in contract.LEGAL_PAGES if (directory / name).is_file()))
     contract.require(any(name.endswith(".js") for name in files))
+    contract.require((directory / "index.html").stat().st_size <= MAX_BODY)
     entrypoint = Entrypoint()
     entrypoint.feed((directory / "index.html").read_text(encoding="utf-8"))
     contract.require(entrypoint.scripts > 0 and entrypoint.references <= set(files))
