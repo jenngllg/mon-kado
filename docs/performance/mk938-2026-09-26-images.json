@@ -1,0 +1,100 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-09-26",
+  "campaigns": [
+    {
+      "runId": "mk816-e5cfcac066e5",
+      "profile": "images",
+      "revision": "68b25f034bbec5b219a8cd1bd5a4052158397fb8",
+      "dirty": false,
+      "images": {
+        "api": "sha256:d32000c871245d36b3050bed77391077e0e40751940c885e42bbc316bc0cb702",
+        "worker": "sha256:c6010872a648257aae98a5307720017634f1ecb18f876e9839253accc34f7363",
+        "postgres": "sha256:c293117fcecda7344b5480222e813b9f673d7abd69b1dd95eff239b768b04f59",
+        "caddy": "sha256:af555904a0961945f16bb323a501457b13a4f7e9bde969b145b97da80b38ecbe"
+      },
+      "host": "Docker Desktop;cpus=12;memory=8286515200",
+      "dataset": {
+        "members": 100,
+        "lists": 500,
+        "wishes": 10000,
+        "images": 200
+      },
+      "workerEnvironment": "Local",
+      "externalProviders": false,
+      "verdict": "failed",
+      "expectedRequests": 9000,
+      "completedRequests": 163,
+      "unexpectedErrors": 33,
+      "rateLimited": 0,
+      "droppedIterations": 0,
+      "memoryMax": 805306368,
+      "swapMax": 0,
+      "cpuMax": "100000 100000",
+      "terminalCgroupPeakBytes": 805306368,
+      "sampledSummaryPeakBytes": 729153536,
+      "oom": 1,
+      "restarts": 0,
+      "stopReason": "SUPPLEMENT_FAILED",
+      "failedImageCase": "pixels",
+      "failedImageKind": "gift",
+      "failedConcurrency": 1,
+      "completedImageChecks": 12,
+      "dataInvariants": {
+        "members": 100,
+        "lists": 500,
+        "wishes": 10000,
+        "images": 202,
+        "overReserved": 0
+      },
+      "productionQualification": false
+    },
+    {
+      "runId": "mk816-dc1785cd62cf",
+      "profile": "images",
+      "revision": "2e318fd5bff1c8ef5386d6f730ac84b56cdf2d63",
+      "dirty": false,
+      "images": {
+        "api": "sha256:3783d621b17dc6ad215fd3556fae4a8b03d620242a501829cd3630b7f0534fa0",
+        "worker": "sha256:97908638c786ea85009062c91b04a6a1100be3dd35b9fe2cce82396f2519e598",
+        "postgres": "sha256:c293117fcecda7344b5480222e813b9f673d7abd69b1dd95eff239b768b04f59",
+        "caddy": "sha256:af555904a0961945f16bb323a501457b13a4f7e9bde969b145b97da80b38ecbe"
+      },
+      "host": "Docker Desktop;cpus=12;memory=8286515200",
+      "dataset": {
+        "members": 100,
+        "lists": 500,
+        "wishes": 10000,
+        "images": 200
+      },
+      "workerEnvironment": "Local",
+      "externalProviders": false,
+      "verdict": "failed",
+      "expectedRequests": 9000,
+      "completedRequests": 113,
+      "unexpectedErrors": 43,
+      "rateLimited": 0,
+      "droppedIterations": 0,
+      "memoryMax": 805306368,
+      "swapMax": 0,
+      "cpuMax": "100000 100000",
+      "terminalCgroupPeakBytes": 805310464,
+      "sampledSummaryPeakBytes": 670277632,
+      "oom": 1,
+      "restarts": 0,
+      "stopReason": "SUPPLEMENT_FAILED",
+      "failedImageCase": "pixels",
+      "failedImageKind": "gift",
+      "failedConcurrency": 1,
+      "completedImageChecks": 12,
+      "dataInvariants": {
+        "members": 100,
+        "lists": 500,
+        "wishes": 10000,
+        "images": 202,
+        "overReserved": 0
+      },
+      "productionQualification": false
+    }
+  ]
+}

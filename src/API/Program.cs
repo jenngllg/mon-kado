@@ -49,6 +49,7 @@ app.UseWebSecurity();
 app.UseMiddleware<GeneralRateLimitMiddleware>();
 app.UseMiddleware<GiftImageRateLimitIdentityMiddleware>();
 app.UseRateLimiter();
+app.UseMiddleware<ImageProcessingLimitMiddleware>();
 app.UseRequestBodyLimits();
 app.UseJwtAuthentication();
 

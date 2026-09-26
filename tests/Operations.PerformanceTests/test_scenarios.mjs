@@ -74,11 +74,12 @@ async function harness(profile = 'smoke') {
     return {api: module.namespace, points, calls, clock, control, execution, http};
 }
 
-test('setup uses real session, CSRF, image and sharing contracts without a remote URL', async () => {
+test('setup uses real session, CSRF and sharing contracts without repeating image preparation', async () => {
     const h = await harness();
     const actors = h.api.setup();
     assert.equal(10, actors.length);
-    assert.equal(100, h.calls.filter(call => call.method).length);
+    assert.equal(70, h.calls.filter(call => call.method).length);
+    assert.equal(0, h.calls.filter(call => call.method === 'PUT' && call.url.endsWith('/image')).length);
     assert.ok(h.calls.filter(call => call.url).every(call => call.url.startsWith('https://mk816.test/')));
     assert.equal(false, h.api.options.insecureSkipTLSVerify);
     assert.equal(0, h.api.options.maxRedirects);
@@ -118,6 +119,27 @@ test('profiles retain bounded VUs, exact rates and separate warmup from measurem
             }
         }
     }
+});
+
+test('stress keeps its last scheduled arrival before the executor deadline without extra traffic', async () => {
+    const h = await harness('stress');
+    const stages = JSON.parse(JSON.stringify(h.api.options.scenarios.traffic.stages));
+    assert.deepEqual(stages, [
+        {target: 10, duration: '180s'},
+        {target: 5, duration: '0s'}, {target: 5, duration: '300s'},
+        {target: 10, duration: '0s'}, {target: 10, duration: '300s'},
+        {target: 20, duration: '0s'}, {target: 20, duration: '300s'},
+        {target: 5, duration: '0s'}, {target: 5, duration: '300s'},
+        {target: 0, duration: '0s'}, {target: 0, duration: '1s'},
+    ]);
+    const actors = h.api.setup();
+    h.execution.scenario.iterationInTest = 1379;
+    h.api.business(actors);
+    assert.equal('3', h.points.filter(point => point.metric === 'business_ok').at(-1).tags.stage);
+    const before = h.calls.length;
+    h.execution.scenario.iterationInTest = 1380;
+    h.api.business(actors);
+    assert.equal(before, h.calls.length);
 });
 
 test('unexpected status and invalid successful payloads cannot produce fast passing measurements', async () => {

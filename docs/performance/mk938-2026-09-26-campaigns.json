@@ -1,0 +1,1415 @@
+{
+  "schemaVersion": 1,
+  "audit": "MK-938",
+  "date": "2026-09-26",
+  "productionQualification": false,
+  "overallAssessment": "not-qualified",
+  "allProfilesExecuted": true,
+  "originalReportsRewritten": false,
+  "clockProbe": {
+    "network": "none",
+    "monotonicSeconds": 50.00007653600187,
+    "wallClockSeconds": 51.684444427490234,
+    "differenceSeconds": 1.684367891488364,
+    "hostClockChanged": false,
+    "retrospectiveRescaling": false
+  },
+  "limitations": [
+    "Concurrent 40 MP PNG gift uploads still cause an OOM; later 40 MP profile cases were not reached.",
+    "Timestamp-derived rates and CPU means are timing-limited. Latency and complete functional responses do not establish qualified throughput.",
+    "The historical nominal and exports passed verdicts are preserved below, but rejected for throughput qualification after review.",
+    "A one-second zero-arrival tail fixes the final stress arrival race; no measured rate, duration, threshold or request count is relaxed.",
+    "No production deployment, provider activation, real secret access, paid service or automatic merge."
+  ],
+  "campaigns": [
+    {
+      "auditAssessment": "passed-functional-only",
+      "throughputQualificationRequired": false,
+      "sourceReportExcerpt": {
+        "schemaVersion": 1,
+        "profile": "smoke",
+        "verdict": "passed",
+        "expectedRequests": 300,
+        "completedRequests": 300,
+        "unexpectedErrors": 0,
+        "observedCompletionSpanSeconds": 29.754940032958984,
+        "observedRequestsPerSecond": 10.048751557516276,
+        "rateLimited": 0,
+        "droppedIterations": 0,
+        "families": {
+          "lists": {
+            "count": 90,
+            "expected": 90,
+            "p50": 4.2724174999999995,
+            "p95": 101.70475124999997,
+            "p99": 213.61790829999995
+          },
+          "wishes": {
+            "count": 60,
+            "expected": 60,
+            "p50": 6.53974,
+            "p95": 8.845286799999997,
+            "p99": 52.32334950999983
+          },
+          "shared": {
+            "count": 90,
+            "expected": 90,
+            "p50": 14.127661,
+            "p95": 89.44982845,
+            "p99": 93.78208049
+          },
+          "update": {
+            "count": 30,
+            "expected": 30,
+            "p50": 13.960429,
+            "p95": 16.20979355,
+            "p99": 35.73707545000002
+          },
+          "reservation": {
+            "count": 30,
+            "expected": 30,
+            "p50": 19.366799,
+            "p95": 89.98863775,
+            "p99": 90.03499216
+          }
+        },
+        "infrastructure": {
+          "qualified": true,
+          "memoryMax": 805306368,
+          "swapMax": 0,
+          "cpuMax": "100000 100000",
+          "memoryCurrent": 581001216,
+          "memoryPeak": 588214272,
+          "oom": 0,
+          "cpu": {
+            "usage_usec": "69949420",
+            "user_usec": "60100024",
+            "system_usec": "9849395",
+            "nice_usec": "0",
+            "nr_periods": "998",
+            "nr_throttled": "626",
+            "throttled_usec": "397057744",
+            "nr_bursts": "0",
+            "burst_usec": "0"
+          },
+          "restarts": 0,
+          "alive": true,
+          "images": {
+            "api": "sha256:3783d621b17dc6ad215fd3556fae4a8b03d620242a501829cd3630b7f0534fa0",
+            "worker": "sha256:97908638c786ea85009062c91b04a6a1100be3dd35b9fe2cce82396f2519e598",
+            "postgres": "sha256:c293117fcecda7344b5480222e813b9f673d7abd69b1dd95eff239b768b04f59",
+            "caddy": "sha256:af555904a0961945f16bb323a501457b13a4f7e9bde969b145b97da80b38ecbe"
+          }
+        },
+        "stages": [
+          {
+            "index": 0,
+            "seconds": 30,
+            "requestedPerSecond": 10,
+            "completedRequests": 300,
+            "deliveredPerScheduledSecond": 10,
+            "unexpectedErrors": 0
+          }
+        ],
+        "latencyTargetsMet": true,
+        "throughputTargetsMet": null,
+        "generatorExitCodes": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "stopReason": null,
+        "supplement": null,
+        "metadata": {
+          "schemaVersion": 1,
+          "runId": "mk816-c52cca985cbd",
+          "api": "sha256:3783d621b17dc6ad215fd3556fae4a8b03d620242a501829cd3630b7f0534fa0",
+          "worker": "sha256:97908638c786ea85009062c91b04a6a1100be3dd35b9fe2cce82396f2519e598",
+          "k6": "grafana/k6:2.3.0@sha256:9c2dee7f8ed74d317e4027c06a10f169b625638189de8d4555d0b3486a5aeb34",
+          "revision": "8669ddb75b6930eca2e42f413ddfa40478764b57",
+          "dirty": false,
+          "host": "Docker Desktop;cpus=12;memory=8286515200",
+          "dataset": {
+            "members": 100,
+            "lists": 500,
+            "wishes": 10000,
+            "images": 200
+          },
+          "workerEnvironment": "Local",
+          "externalProviders": false
+        },
+        "auxiliaryRequests": 1000,
+        "harness": {
+          "cgroup.py": "81db87fd119e899d2db503ad8f63bd17f9ac23927c24cb39d8d75dbb873a7d18",
+          "compose.py": "6de5ff2369fafde8cbf76bd365d435b4280894b70e7074fef7e6b6184423bed0",
+          "performance_cli.py": "9f97cb9cc412a706a7d5d13185d24725fcb2653e4a265b5ca08afd4f20ea286b",
+          "policy.py": "8cf3d11b170c358827cd67314862cc51f3350ee121d52f30ca79b415f4d82e3d",
+          "reporting.py": "e9b9975827e3340a7b211bd6353ba6d040baf5b70628c9b3e0ac98ae8ba56556",
+          "runtime.py": "44b905c08d642112503f4818aa92a26e703c440096bacf42259a45e768deadbe",
+          "scenarios.js": "42148f840fa8652d9466c16493b0d468684f84f85e6331585c5e360796be1343",
+          "seed.py": "06f7749e59ebbf0348c8dabbafb89049697b5ea6dac98844fbac9ea25b2df544",
+          "supplements.py": "ca5ffff68d483431270549948c416a7c4cc768bba9549193138e00c9cde67079"
+        },
+        "dataInvariants": {
+          "members": 100,
+          "lists": 500,
+          "wishes": 10000,
+          "images": 200,
+          "overReserved": 0
+        },
+        "resourceSummary": {
+          "meanMeasuredCpuPercentOfOneCore": 29.984124956905003,
+          "memoryPeakBytesIncludingSetup": 588214272,
+          "resourceSampleCount": 10
+        }
+      }
+    },
+    {
+      "auditAssessment": "not-qualified-timing",
+      "throughputQualificationRequired": true,
+      "sourceReportExcerpt": {
+        "schemaVersion": 1,
+        "profile": "nominal",
+        "verdict": "passed",
+        "expectedRequests": 9000,
+        "completedRequests": 9000,
+        "unexpectedErrors": 0,
+        "observedCompletionSpanSeconds": 923.3555309772491,
+        "observedRequestsPerSecond": 9.745975085540186,
+        "rateLimited": 0,
+        "droppedIterations": 0,
+        "families": {
+          "lists": {
+            "count": 2700,
+            "expected": 2700,
+            "p50": 4.497285,
+            "p95": 6.176469750000001,
+            "p99": 7.53165519
+          },
+          "wishes": {
+            "count": 1800,
+            "expected": 1800,
+            "p50": 6.6040635000000005,
+            "p95": 9.0889885,
+            "p99": 10.862477199999999
+          },
+          "shared": {
+            "count": 2700,
+            "expected": 2700,
+            "p50": 13.449856,
+            "p95": 18.712813500000003,
+            "p99": 121.02103478000068
+          },
+          "update": {
+            "count": 900,
+            "expected": 900,
+            "p50": 13.772270500000001,
+            "p95": 19.019683549999996,
+            "p99": 89.69950444999998
+          },
+          "reservation": {
+            "count": 900,
+            "expected": 900,
+            "p50": 18.665018500000002,
+            "p95": 100.5274542,
+            "p99": 106.57096530999999
+          }
+        },
+        "infrastructure": {
+          "qualified": true,
+          "memoryMax": 805306368,
+          "swapMax": 0,
+          "cpuMax": "100000 100000",
+          "memoryCurrent": 478945280,
+          "memoryPeak": 502181888,
+          "oom": 0,
+          "cpu": {
+            "usage_usec": "187973552",
+            "user_usec": "129411613",
+            "system_usec": "58561938",
+            "nice_usec": "0",
+            "nr_periods": "9691",
+            "nr_throttled": "714",
+            "throttled_usec": "419891576",
+            "nr_bursts": "0",
+            "burst_usec": "0"
+          },
+          "restarts": 0,
+          "alive": true,
+          "images": {
+            "api": "sha256:3783d621b17dc6ad215fd3556fae4a8b03d620242a501829cd3630b7f0534fa0",
+            "worker": "sha256:97908638c786ea85009062c91b04a6a1100be3dd35b9fe2cce82396f2519e598",
+            "postgres": "sha256:c293117fcecda7344b5480222e813b9f673d7abd69b1dd95eff239b768b04f59",
+            "caddy": "sha256:af555904a0961945f16bb323a501457b13a4f7e9bde969b145b97da80b38ecbe"
+          }
+        },
+        "stages": [
+          {
+            "index": 0,
+            "seconds": 900,
+            "requestedPerSecond": 10,
+            "completedRequests": 9000,
+            "deliveredPerScheduledSecond": 10,
+            "unexpectedErrors": 0
+          }
+        ],
+        "latencyTargetsMet": true,
+        "throughputTargetsMet": null,
+        "generatorExitCodes": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "stopReason": null,
+        "supplement": null,
+        "metadata": {
+          "schemaVersion": 1,
+          "runId": "mk816-a09f98141ffd",
+          "api": "sha256:3783d621b17dc6ad215fd3556fae4a8b03d620242a501829cd3630b7f0534fa0",
+          "worker": "sha256:97908638c786ea85009062c91b04a6a1100be3dd35b9fe2cce82396f2519e598",
+          "k6": "grafana/k6:2.3.0@sha256:9c2dee7f8ed74d317e4027c06a10f169b625638189de8d4555d0b3486a5aeb34",
+          "revision": "32034caf75cdfcb0019d839350c9735dc1fa7fd3",
+          "dirty": false,
+          "host": "Docker Desktop;cpus=12;memory=8286515200",
+          "dataset": {
+            "members": 100,
+            "lists": 500,
+            "wishes": 10000,
+            "images": 200
+          },
+          "workerEnvironment": "Local",
+          "externalProviders": false
+        },
+        "auxiliaryRequests": 1140,
+        "harness": {
+          "cgroup.py": "81db87fd119e899d2db503ad8f63bd17f9ac23927c24cb39d8d75dbb873a7d18",
+          "compose.py": "6de5ff2369fafde8cbf76bd365d435b4280894b70e7074fef7e6b6184423bed0",
+          "performance_cli.py": "9f97cb9cc412a706a7d5d13185d24725fcb2653e4a265b5ca08afd4f20ea286b",
+          "policy.py": "8cf3d11b170c358827cd67314862cc51f3350ee121d52f30ca79b415f4d82e3d",
+          "reporting.py": "e9b9975827e3340a7b211bd6353ba6d040baf5b70628c9b3e0ac98ae8ba56556",
+          "runtime.py": "44b905c08d642112503f4818aa92a26e703c440096bacf42259a45e768deadbe",
+          "scenarios.js": "42148f840fa8652d9466c16493b0d468684f84f85e6331585c5e360796be1343",
+          "seed.py": "06f7749e59ebbf0348c8dabbafb89049697b5ea6dac98844fbac9ea25b2df544",
+          "supplements.py": "ca5ffff68d483431270549948c416a7c4cc768bba9549193138e00c9cde67079"
+        },
+        "dataInvariants": {
+          "members": 100,
+          "lists": 500,
+          "wishes": 10000,
+          "images": 200,
+          "overReserved": 0
+        },
+        "resourceSummary": {
+          "meanMeasuredCpuPercentOfOneCore": 10.714022561913383,
+          "memoryPeakBytesIncludingSetup": 502181888,
+          "resourceSampleCount": 144
+        }
+      }
+    },
+    {
+      "auditAssessment": "not-qualified-timing",
+      "throughputQualificationRequired": true,
+      "sourceReportExcerpt": {
+        "schemaVersion": 1,
+        "profile": "exports",
+        "verdict": "passed",
+        "expectedRequests": 15000,
+        "completedRequests": 15000,
+        "unexpectedErrors": 0,
+        "observedCompletionSpanSeconds": 1542.241240978241,
+        "observedRequestsPerSecond": 9.725456434095978,
+        "rateLimited": 0,
+        "droppedIterations": 0,
+        "families": {
+          "lists": {
+            "count": 6000,
+            "expected": 6000,
+            "p50": 4.178646499999999,
+            "p95": 5.60271375,
+            "p99": 6.734348820000001
+          },
+          "wishes": {
+            "count": 4500,
+            "expected": 4500,
+            "p50": 5.8419815,
+            "p95": 7.651610350000001,
+            "p99": 9.950983380000022
+          },
+          "shared": {
+            "count": 4500,
+            "expected": 4500,
+            "p50": 12.0377765,
+            "p95": 17.43233765,
+            "p99": 23.245726880000046
+          }
+        },
+        "infrastructure": {
+          "qualified": true,
+          "memoryMax": 805306368,
+          "swapMax": 0,
+          "cpuMax": "100000 100000",
+          "memoryCurrent": 470065152,
+          "memoryPeak": 484184064,
+          "oom": 0,
+          "cpu": {
+            "usage_usec": "240113445",
+            "user_usec": "163387559",
+            "system_usec": "76725886",
+            "nice_usec": "0",
+            "nr_periods": "15401",
+            "nr_throttled": "679",
+            "throttled_usec": "420162751",
+            "nr_bursts": "0",
+            "burst_usec": "0"
+          },
+          "restarts": 0,
+          "alive": true,
+          "images": {
+            "api": "sha256:3783d621b17dc6ad215fd3556fae4a8b03d620242a501829cd3630b7f0534fa0",
+            "worker": "sha256:97908638c786ea85009062c91b04a6a1100be3dd35b9fe2cce82396f2519e598",
+            "postgres": "sha256:c293117fcecda7344b5480222e813b9f673d7abd69b1dd95eff239b768b04f59",
+            "caddy": "sha256:af555904a0961945f16bb323a501457b13a4f7e9bde969b145b97da80b38ecbe"
+          }
+        },
+        "stages": [
+          {
+            "index": 0,
+            "seconds": 1500,
+            "requestedPerSecond": 10,
+            "completedRequests": 15000,
+            "deliveredPerScheduledSecond": 10,
+            "unexpectedErrors": 0
+          }
+        ],
+        "latencyTargetsMet": true,
+        "throughputTargetsMet": null,
+        "generatorExitCodes": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "stopReason": null,
+        "supplement": {
+          "profile": "exports",
+          "passed": true,
+          "results": [
+            {
+              "milliseconds": 2166.7343769950094,
+              "bytes": 6138,
+              "valid": true,
+              "concurrency": 1
+            },
+            {
+              "milliseconds": 20106.025297005544,
+              "bytes": 6106,
+              "valid": true,
+              "concurrency": 2
+            },
+            {
+              "milliseconds": 10065.674700003,
+              "bytes": 6117,
+              "valid": true,
+              "concurrency": 2
+            }
+          ]
+        },
+        "metadata": {
+          "schemaVersion": 1,
+          "runId": "mk816-ee404495e4e4",
+          "api": "sha256:3783d621b17dc6ad215fd3556fae4a8b03d620242a501829cd3630b7f0534fa0",
+          "worker": "sha256:97908638c786ea85009062c91b04a6a1100be3dd35b9fe2cce82396f2519e598",
+          "k6": "grafana/k6:2.3.0@sha256:9c2dee7f8ed74d317e4027c06a10f169b625638189de8d4555d0b3486a5aeb34",
+          "revision": "32034caf75cdfcb0019d839350c9735dc1fa7fd3",
+          "dirty": false,
+          "host": "Docker Desktop;cpus=12;memory=8286515200",
+          "dataset": {
+            "members": 100,
+            "lists": 500,
+            "wishes": 10000,
+            "images": 200
+          },
+          "workerEnvironment": "Local",
+          "externalProviders": false
+        },
+        "auxiliaryRequests": 1280,
+        "harness": {
+          "cgroup.py": "81db87fd119e899d2db503ad8f63bd17f9ac23927c24cb39d8d75dbb873a7d18",
+          "compose.py": "6de5ff2369fafde8cbf76bd365d435b4280894b70e7074fef7e6b6184423bed0",
+          "performance_cli.py": "9f97cb9cc412a706a7d5d13185d24725fcb2653e4a265b5ca08afd4f20ea286b",
+          "policy.py": "8cf3d11b170c358827cd67314862cc51f3350ee121d52f30ca79b415f4d82e3d",
+          "reporting.py": "e9b9975827e3340a7b211bd6353ba6d040baf5b70628c9b3e0ac98ae8ba56556",
+          "runtime.py": "44b905c08d642112503f4818aa92a26e703c440096bacf42259a45e768deadbe",
+          "scenarios.js": "42148f840fa8652d9466c16493b0d468684f84f85e6331585c5e360796be1343",
+          "seed.py": "06f7749e59ebbf0348c8dabbafb89049697b5ea6dac98844fbac9ea25b2df544",
+          "supplements.py": "ca5ffff68d483431270549948c416a7c4cc768bba9549193138e00c9cde67079"
+        },
+        "dataInvariants": {
+          "members": 100,
+          "lists": 500,
+          "wishes": 10000,
+          "images": 200,
+          "overReserved": 0
+        },
+        "resourceSummary": {
+          "meanMeasuredCpuPercentOfOneCore": 9.872979260401737,
+          "memoryPeakBytesIncludingSetup": 484184064,
+          "resourceSampleCount": 221
+        }
+      }
+    },
+    {
+      "auditAssessment": "not-qualified-timing",
+      "throughputQualificationRequired": true,
+      "sourceReportExcerpt": {
+        "schemaVersion": 1,
+        "profile": "concurrency",
+        "verdict": "failed",
+        "expectedRequests": 1800,
+        "completedRequests": 1800,
+        "unexpectedErrors": 0,
+        "observedCompletionSpanSeconds": 184.72912907600403,
+        "observedRequestsPerSecond": 9.738583238054614,
+        "rateLimited": 0,
+        "droppedIterations": 0,
+        "families": {
+          "lists": {
+            "count": 720,
+            "expected": 720,
+            "p50": 4.6006225,
+            "p95": 6.417829899999998,
+            "p99": 8.194266419999996
+          },
+          "wishes": {
+            "count": 540,
+            "expected": 540,
+            "p50": 6.445367,
+            "p95": 9.304909049999997,
+            "p99": 16.624863300000023
+          },
+          "shared": {
+            "count": 540,
+            "expected": 540,
+            "p50": 14.860782,
+            "p95": 20.031749899999998,
+            "p99": 23.578659250000015
+          }
+        },
+        "infrastructure": {
+          "qualified": true,
+          "memoryMax": 805306368,
+          "swapMax": 0,
+          "cpuMax": "100000 100000",
+          "memoryCurrent": 481210368,
+          "memoryPeak": 535453696,
+          "oom": 0,
+          "cpu": {
+            "usage_usec": "105150325",
+            "user_usec": "81397910",
+            "system_usec": "23752414",
+            "nice_usec": "0",
+            "nr_periods": "3847",
+            "nr_throttled": "652",
+            "throttled_usec": "397248233",
+            "nr_bursts": "0",
+            "burst_usec": "0"
+          },
+          "restarts": 0,
+          "alive": true,
+          "images": {
+            "api": "sha256:876e3a2da48c5d7780de1e3ab82aa48a29b0869f9783b208916e24f459debebc",
+            "worker": "sha256:46228f78f96e778775d81400e2472dba0b1e7d216648c7451ca1bd61d9a14ae2",
+            "postgres": "sha256:c293117fcecda7344b5480222e813b9f673d7abd69b1dd95eff239b768b04f59",
+            "caddy": "sha256:af555904a0961945f16bb323a501457b13a4f7e9bde969b145b97da80b38ecbe"
+          }
+        },
+        "stages": [
+          {
+            "index": 0,
+            "seconds": 180,
+            "requestedPerSecond": 10,
+            "completedRequests": 1800,
+            "deliveredPerScheduledSecond": 10,
+            "observedCompletionSpanSeconds": 184.72912907600403,
+            "observedRequestsPerSecond": 9.738583238054614,
+            "throughputTargetMet": false,
+            "unexpectedErrors": 0
+          }
+        ],
+        "latencyTargetsMet": true,
+        "throughputTargetsMet": false,
+        "generatorExitCodes": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "stopReason": null,
+        "supplement": {
+          "profile": "concurrency",
+          "passed": true,
+          "results": [
+            {
+              "etagConflict": true,
+              "reservationConflict": true,
+              "valid": true
+            }
+          ]
+        },
+        "metadata": {
+          "schemaVersion": 1,
+          "runId": "mk816-675a029dcdde",
+          "api": "sha256:876e3a2da48c5d7780de1e3ab82aa48a29b0869f9783b208916e24f459debebc",
+          "worker": "sha256:46228f78f96e778775d81400e2472dba0b1e7d216648c7451ca1bd61d9a14ae2",
+          "k6": "grafana/k6:2.3.0@sha256:9c2dee7f8ed74d317e4027c06a10f169b625638189de8d4555d0b3486a5aeb34",
+          "revision": "d8c5d88c1d8795e75a1e76300fc9acda0a68f9ce",
+          "dirty": false,
+          "host": "Docker Desktop;cpus=12;memory=8286515200",
+          "dataset": {
+            "members": 100,
+            "lists": 500,
+            "wishes": 10000,
+            "images": 200
+          },
+          "workerEnvironment": "Local",
+          "externalProviders": false
+        },
+        "auxiliaryRequests": 1000,
+        "harness": {
+          "cgroup.py": "81db87fd119e899d2db503ad8f63bd17f9ac23927c24cb39d8d75dbb873a7d18",
+          "compose.py": "6de5ff2369fafde8cbf76bd365d435b4280894b70e7074fef7e6b6184423bed0",
+          "performance_cli.py": "9f97cb9cc412a706a7d5d13185d24725fcb2653e4a265b5ca08afd4f20ea286b",
+          "policy.py": "85c501c61cfee1dcb64ae1c589da02f05b9635d1b9c4583b0fd3f4080a53d031",
+          "reporting.py": "dd17465b1d2d8665fad2893bb5c00f39f123db43e9661c6c82ad4cd3af71a362",
+          "runtime.py": "44b905c08d642112503f4818aa92a26e703c440096bacf42259a45e768deadbe",
+          "scenarios.js": "42148f840fa8652d9466c16493b0d468684f84f85e6331585c5e360796be1343",
+          "seed.py": "06f7749e59ebbf0348c8dabbafb89049697b5ea6dac98844fbac9ea25b2df544",
+          "supplements.py": "ca5ffff68d483431270549948c416a7c4cc768bba9549193138e00c9cde67079"
+        },
+        "dataInvariants": {
+          "members": 100,
+          "lists": 500,
+          "wishes": 10000,
+          "images": 200,
+          "overReserved": 0
+        },
+        "resourceSummary": {
+          "meanMeasuredCpuPercentOfOneCore": 10.299789027179672,
+          "memoryPeakBytesIncludingSetup": 535453696,
+          "resourceSampleCount": 52
+        }
+      }
+    },
+    {
+      "auditAssessment": "not-qualified-timing",
+      "throughputQualificationRequired": true,
+      "sourceReportExcerpt": {
+        "schemaVersion": 1,
+        "profile": "quotas",
+        "verdict": "failed",
+        "expectedRequests": 1800,
+        "completedRequests": 1800,
+        "unexpectedErrors": 0,
+        "observedCompletionSpanSeconds": 184.6038258075714,
+        "observedRequestsPerSecond": 9.745193481933867,
+        "rateLimited": 0,
+        "droppedIterations": 0,
+        "families": {
+          "lists": {
+            "count": 720,
+            "expected": 720,
+            "p50": 4.3885985000000005,
+            "p95": 6.04053745,
+            "p99": 6.853508749999998
+          },
+          "wishes": {
+            "count": 540,
+            "expected": 540,
+            "p50": 6.5110695,
+            "p95": 9.00661085,
+            "p99": 104.02048053000001
+          },
+          "shared": {
+            "count": 540,
+            "expected": 540,
+            "p50": 14.9820905,
+            "p95": 27.899525999997397,
+            "p99": 88.86874881
+          }
+        },
+        "infrastructure": {
+          "qualified": true,
+          "memoryMax": 805306368,
+          "swapMax": 0,
+          "cpuMax": "100000 100000",
+          "memoryCurrent": 475693056,
+          "memoryPeak": 504700928,
+          "oom": 0,
+          "cpu": {
+            "usage_usec": "109495969",
+            "user_usec": "85884527",
+            "system_usec": "23611441",
+            "nice_usec": "0",
+            "nr_periods": "3795",
+            "nr_throttled": "673",
+            "throttled_usec": "419651354",
+            "nr_bursts": "0",
+            "burst_usec": "0"
+          },
+          "restarts": 0,
+          "alive": true,
+          "images": {
+            "api": "sha256:876e3a2da48c5d7780de1e3ab82aa48a29b0869f9783b208916e24f459debebc",
+            "worker": "sha256:46228f78f96e778775d81400e2472dba0b1e7d216648c7451ca1bd61d9a14ae2",
+            "postgres": "sha256:c293117fcecda7344b5480222e813b9f673d7abd69b1dd95eff239b768b04f59",
+            "caddy": "sha256:af555904a0961945f16bb323a501457b13a4f7e9bde969b145b97da80b38ecbe"
+          }
+        },
+        "stages": [
+          {
+            "index": 0,
+            "seconds": 180,
+            "requestedPerSecond": 10,
+            "completedRequests": 1800,
+            "deliveredPerScheduledSecond": 10,
+            "observedCompletionSpanSeconds": 184.6038258075714,
+            "observedRequestsPerSecond": 9.745193481933867,
+            "throughputTargetMet": false,
+            "unexpectedErrors": 0
+          }
+        ],
+        "latencyTargetsMet": true,
+        "throughputTargetsMet": false,
+        "generatorExitCodes": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "stopReason": null,
+        "supplement": {
+          "profile": "quotas",
+          "passed": true,
+          "results": [
+            {
+              "limited": true,
+              "retryAfter": 60,
+              "recovered": true
+            }
+          ]
+        },
+        "metadata": {
+          "schemaVersion": 1,
+          "runId": "mk816-5d1e24137b32",
+          "api": "sha256:876e3a2da48c5d7780de1e3ab82aa48a29b0869f9783b208916e24f459debebc",
+          "worker": "sha256:46228f78f96e778775d81400e2472dba0b1e7d216648c7451ca1bd61d9a14ae2",
+          "k6": "grafana/k6:2.3.0@sha256:9c2dee7f8ed74d317e4027c06a10f169b625638189de8d4555d0b3486a5aeb34",
+          "revision": "488e0b26d54aa26d835d6fda77921bc573fa1d8b",
+          "dirty": false,
+          "host": "Docker Desktop;cpus=12;memory=8286515200",
+          "dataset": {
+            "members": 100,
+            "lists": 500,
+            "wishes": 10000,
+            "images": 200
+          },
+          "workerEnvironment": "Local",
+          "externalProviders": false
+        },
+        "auxiliaryRequests": 1000,
+        "harness": {
+          "cgroup.py": "81db87fd119e899d2db503ad8f63bd17f9ac23927c24cb39d8d75dbb873a7d18",
+          "compose.py": "6de5ff2369fafde8cbf76bd365d435b4280894b70e7074fef7e6b6184423bed0",
+          "performance_cli.py": "9f97cb9cc412a706a7d5d13185d24725fcb2653e4a265b5ca08afd4f20ea286b",
+          "policy.py": "5116f9af803fdf38325a7244ea77077393dce96076e5a8501d9b3465e7402be9",
+          "reporting.py": "29d2051d51b47562ceb4aad72147adde945621fdfeb9c46da26f86d7603500be",
+          "runtime.py": "44b905c08d642112503f4818aa92a26e703c440096bacf42259a45e768deadbe",
+          "scenarios.js": "42148f840fa8652d9466c16493b0d468684f84f85e6331585c5e360796be1343",
+          "seed.py": "06f7749e59ebbf0348c8dabbafb89049697b5ea6dac98844fbac9ea25b2df544",
+          "supplements.py": "ca5ffff68d483431270549948c416a7c4cc768bba9549193138e00c9cde67079"
+        },
+        "dataInvariants": {
+          "members": 100,
+          "lists": 500,
+          "wishes": 10000,
+          "images": 200,
+          "overReserved": 0
+        },
+        "resourceSummary": {
+          "meanMeasuredCpuPercentOfOneCore": 11.741994240997185,
+          "memoryPeakBytesIncludingSetup": 504700928,
+          "resourceSampleCount": 52
+        }
+      }
+    },
+    {
+      "auditAssessment": "incomplete-request-count",
+      "throughputQualificationRequired": true,
+      "sourceReportExcerpt": {
+        "schemaVersion": 1,
+        "profile": "stress",
+        "verdict": "incomplete",
+        "expectedRequests": 12000,
+        "completedRequests": 11994,
+        "unexpectedErrors": 0,
+        "observedCompletionSpanSeconds": 1236.183711051941,
+        "observedRequestsPerSecond": 9.701632445710239,
+        "rateLimited": 0,
+        "droppedIterations": 0,
+        "families": {
+          "lists": {
+            "count": 3600,
+            "expected": 3600,
+            "p50": 4.253811000000001,
+            "p95": 5.88569125,
+            "p99": 7.814577420000025
+          },
+          "wishes": {
+            "count": 2400,
+            "expected": 2400,
+            "p50": 6.318986499999999,
+            "p95": 8.6512869,
+            "p99": 10.312899150000034
+          },
+          "shared": {
+            "count": 3600,
+            "expected": 3600,
+            "p50": 13.1113725,
+            "p95": 21.670054400000005,
+            "p99": 82.67920426000008
+          },
+          "update": {
+            "count": 1200,
+            "expected": 1200,
+            "p50": 13.746462999999999,
+            "p95": 22.910953349999993,
+            "p99": 90.67716317
+          },
+          "reservation": {
+            "count": 1194,
+            "expected": 1200,
+            "p50": 90.73372,
+            "p95": 101.4096847,
+            "p99": 144.27943483999996
+          }
+        },
+        "infrastructure": {
+          "qualified": true,
+          "memoryMax": 805306368,
+          "swapMax": 0,
+          "cpuMax": "100000 100000",
+          "memoryCurrent": 468606976,
+          "memoryPeak": 492507136,
+          "oom": 0,
+          "cpu": {
+            "usage_usec": "223664315",
+            "user_usec": "153978090",
+            "system_usec": "69686225",
+            "nice_usec": "0",
+            "nr_periods": "12149",
+            "nr_throttled": "864",
+            "throttled_usec": "464445189",
+            "nr_bursts": "0",
+            "burst_usec": "0"
+          },
+          "restarts": 0,
+          "alive": true,
+          "images": {
+            "api": "sha256:876e3a2da48c5d7780de1e3ab82aa48a29b0869f9783b208916e24f459debebc",
+            "worker": "sha256:46228f78f96e778775d81400e2472dba0b1e7d216648c7451ca1bd61d9a14ae2",
+            "postgres": "sha256:c293117fcecda7344b5480222e813b9f673d7abd69b1dd95eff239b768b04f59",
+            "caddy": "sha256:af555904a0961945f16bb323a501457b13a4f7e9bde969b145b97da80b38ecbe"
+          }
+        },
+        "stages": [
+          {
+            "index": 0,
+            "seconds": 300,
+            "requestedPerSecond": 5,
+            "completedRequests": 1500,
+            "deliveredPerScheduledSecond": 5,
+            "observedCompletionSpanSeconds": 307.5433919429779,
+            "observedRequestsPerSecond": 4.874108952657751,
+            "throughputTargetMet": false,
+            "unexpectedErrors": 0
+          },
+          {
+            "index": 1,
+            "seconds": 300,
+            "requestedPerSecond": 10,
+            "completedRequests": 3000,
+            "deliveredPerScheduledSecond": 10,
+            "observedCompletionSpanSeconds": 308.7547719478607,
+            "observedRequestsPerSecond": 9.713210199408481,
+            "throughputTargetMet": false,
+            "unexpectedErrors": 0
+          },
+          {
+            "index": 2,
+            "seconds": 300,
+            "requestedPerSecond": 20,
+            "completedRequests": 6000,
+            "deliveredPerScheduledSecond": 20,
+            "observedCompletionSpanSeconds": 309.35281705856323,
+            "observedRequestsPerSecond": 19.392097531357976,
+            "throughputTargetMet": false,
+            "unexpectedErrors": 0
+          },
+          {
+            "index": 3,
+            "seconds": 300,
+            "requestedPerSecond": 5,
+            "completedRequests": 1494,
+            "deliveredPerScheduledSecond": 4.98,
+            "observedCompletionSpanSeconds": 307.9318070411682,
+            "observedRequestsPerSecond": 4.848476077693387,
+            "throughputTargetMet": false,
+            "unexpectedErrors": 0
+          }
+        ],
+        "latencyTargetsMet": true,
+        "throughputTargetsMet": false,
+        "generatorExitCodes": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "stopReason": null,
+        "supplement": null,
+        "metadata": {
+          "schemaVersion": 1,
+          "runId": "mk816-4d41ec27d56b",
+          "api": "sha256:876e3a2da48c5d7780de1e3ab82aa48a29b0869f9783b208916e24f459debebc",
+          "worker": "sha256:46228f78f96e778775d81400e2472dba0b1e7d216648c7451ca1bd61d9a14ae2",
+          "k6": "grafana/k6:2.3.0@sha256:9c2dee7f8ed74d317e4027c06a10f169b625638189de8d4555d0b3486a5aeb34",
+          "revision": "488e0b26d54aa26d835d6fda77921bc573fa1d8b",
+          "dirty": false,
+          "host": "Docker Desktop;cpus=12;memory=8286515200",
+          "dataset": {
+            "members": 100,
+            "lists": 500,
+            "wishes": 10000,
+            "images": 200
+          },
+          "workerEnvironment": "Local",
+          "externalProviders": false
+        },
+        "auxiliaryRequests": 1140,
+        "harness": {
+          "cgroup.py": "81db87fd119e899d2db503ad8f63bd17f9ac23927c24cb39d8d75dbb873a7d18",
+          "compose.py": "6de5ff2369fafde8cbf76bd365d435b4280894b70e7074fef7e6b6184423bed0",
+          "performance_cli.py": "9f97cb9cc412a706a7d5d13185d24725fcb2653e4a265b5ca08afd4f20ea286b",
+          "policy.py": "5116f9af803fdf38325a7244ea77077393dce96076e5a8501d9b3465e7402be9",
+          "reporting.py": "29d2051d51b47562ceb4aad72147adde945621fdfeb9c46da26f86d7603500be",
+          "runtime.py": "44b905c08d642112503f4818aa92a26e703c440096bacf42259a45e768deadbe",
+          "scenarios.js": "42148f840fa8652d9466c16493b0d468684f84f85e6331585c5e360796be1343",
+          "seed.py": "06f7749e59ebbf0348c8dabbafb89049697b5ea6dac98844fbac9ea25b2df544",
+          "supplements.py": "ca5ffff68d483431270549948c416a7c4cc768bba9549193138e00c9cde67079"
+        },
+        "dataInvariants": {
+          "members": 100,
+          "lists": 500,
+          "wishes": 10000,
+          "images": 200,
+          "overReserved": 0
+        },
+        "resourceSummary": {
+          "meanMeasuredCpuPercentOfOneCore": 10.831316753944314,
+          "memoryPeakBytesIncludingSetup": 492507136,
+          "resourceSampleCount": 182
+        }
+      }
+    },
+    {
+      "auditAssessment": "failed-concurrent-image-oom",
+      "throughputQualificationRequired": true,
+      "sourceReportExcerpt": {
+        "schemaVersion": 1,
+        "profile": "images",
+        "verdict": "failed",
+        "expectedRequests": 9000,
+        "completedRequests": 114,
+        "unexpectedErrors": 24,
+        "observedCompletionSpanSeconds": 13.15781283378601,
+        "observedRequestsPerSecond": 8.58805345747463,
+        "rateLimited": 0,
+        "droppedIterations": 0,
+        "families": {
+          "lists": {
+            "count": 40,
+            "expected": 3600,
+            "p50": 4.1959040000000005,
+            "p95": 5.381236399999997,
+            "p99": 6.6463166
+          },
+          "wishes": {
+            "count": 30,
+            "expected": 2700,
+            "p50": 6.537986999999999,
+            "p95": 88.36354545,
+            "p99": 89.20524306
+          },
+          "shared": {
+            "count": 20,
+            "expected": 2700,
+            "p50": 13.5020835,
+            "p95": 93.85497735,
+            "p99": 95.71898906999999
+          }
+        },
+        "infrastructure": {
+          "qualified": true,
+          "memoryMax": 805306368,
+          "swapMax": 0,
+          "cpuMax": "100000 100000",
+          "memoryCurrent": 178438144,
+          "memoryPeak": 805306368,
+          "oom": 1,
+          "cpu": {
+            "usage_usec": "91043925",
+            "user_usec": "73222218",
+            "system_usec": "17821707",
+            "nice_usec": "0",
+            "nr_periods": "2314",
+            "nr_throttled": "701",
+            "throttled_usec": "408858947",
+            "nr_bursts": "0",
+            "burst_usec": "0"
+          },
+          "restarts": 0,
+          "alive": false,
+          "images": {
+            "api": "sha256:876e3a2da48c5d7780de1e3ab82aa48a29b0869f9783b208916e24f459debebc",
+            "worker": "sha256:46228f78f96e778775d81400e2472dba0b1e7d216648c7451ca1bd61d9a14ae2",
+            "postgres": "sha256:c293117fcecda7344b5480222e813b9f673d7abd69b1dd95eff239b768b04f59",
+            "caddy": "sha256:af555904a0961945f16bb323a501457b13a4f7e9bde969b145b97da80b38ecbe"
+          }
+        },
+        "stages": [
+          {
+            "index": 0,
+            "seconds": 900,
+            "requestedPerSecond": 10,
+            "completedRequests": 114,
+            "deliveredPerScheduledSecond": 0.12666666666666668,
+            "observedCompletionSpanSeconds": 13.15781283378601,
+            "observedRequestsPerSecond": 8.58805345747463,
+            "throughputTargetMet": false,
+            "unexpectedErrors": 24
+          }
+        ],
+        "latencyTargetsMet": true,
+        "throughputTargetsMet": false,
+        "generatorExitCodes": [
+          105,
+          105,
+          105,
+          105,
+          105,
+          105,
+          105,
+          105,
+          105,
+          105
+        ],
+        "stopReason": "SUPPLEMENT_FAILED",
+        "supplement": {
+          "profile": "images",
+          "passed": false,
+          "error": "IMAGE_CASE_FAILED_PIXELS_GIFT",
+          "details": {
+            "case": "pixels",
+            "kind": "gift",
+            "concurrency": 2,
+            "completed": [
+              {
+                "kind": "gift",
+                "inputBytes": 8807,
+                "outputBytes": 4164,
+                "milliseconds": 249.3261929921573,
+                "valid": true,
+                "case": "normal",
+                "concurrency": 1
+              },
+              {
+                "kind": "gift",
+                "inputBytes": 8807,
+                "outputBytes": 4164,
+                "milliseconds": 350.2156809990993,
+                "valid": true,
+                "case": "normal",
+                "concurrency": 2
+              },
+              {
+                "kind": "gift",
+                "inputBytes": 8807,
+                "outputBytes": 4164,
+                "milliseconds": 367.70426300063264,
+                "valid": true,
+                "case": "normal",
+                "concurrency": 2
+              },
+              {
+                "kind": "profile",
+                "inputBytes": 8807,
+                "outputBytes": 932,
+                "milliseconds": 167.7311030070996,
+                "valid": true,
+                "case": "normal",
+                "concurrency": 1
+              },
+              {
+                "kind": "profile",
+                "inputBytes": 8807,
+                "outputBytes": 932,
+                "milliseconds": 30.90972700738348,
+                "valid": true,
+                "case": "normal",
+                "concurrency": 2
+              },
+              {
+                "kind": "profile",
+                "inputBytes": 8807,
+                "outputBytes": 932,
+                "milliseconds": 75.90755699493457,
+                "valid": true,
+                "case": "normal",
+                "concurrency": 2
+              },
+              {
+                "kind": "gift",
+                "inputBytes": 10262753,
+                "outputBytes": 4892,
+                "milliseconds": 866.3314629957313,
+                "valid": true,
+                "case": "bytes",
+                "concurrency": 1
+              },
+              {
+                "kind": "gift",
+                "inputBytes": 10262753,
+                "outputBytes": 4892,
+                "milliseconds": 1062.0183739956701,
+                "valid": true,
+                "case": "bytes",
+                "concurrency": 2
+              },
+              {
+                "kind": "gift",
+                "inputBytes": 10262753,
+                "outputBytes": 4892,
+                "milliseconds": 1052.4624819954624,
+                "valid": true,
+                "case": "bytes",
+                "concurrency": 2
+              },
+              {
+                "kind": "profile",
+                "inputBytes": 10262753,
+                "outputBytes": 1020,
+                "milliseconds": 194.2509689979488,
+                "valid": true,
+                "case": "bytes",
+                "concurrency": 1
+              },
+              {
+                "kind": "profile",
+                "inputBytes": 10262753,
+                "outputBytes": 1020,
+                "milliseconds": 426.0802130011143,
+                "valid": true,
+                "case": "bytes",
+                "concurrency": 2
+              },
+              {
+                "kind": "profile",
+                "inputBytes": 10262753,
+                "outputBytes": 1020,
+                "milliseconds": 441.53879200166557,
+                "valid": true,
+                "case": "bytes",
+                "concurrency": 2
+              },
+              {
+                "kind": "gift",
+                "inputBytes": 126820,
+                "outputBytes": 3436,
+                "milliseconds": 672.1993070095778,
+                "valid": true,
+                "case": "pixels",
+                "concurrency": 1
+              }
+            ]
+          }
+        },
+        "metadata": {
+          "schemaVersion": 1,
+          "runId": "mk816-456f07d79b15",
+          "api": "sha256:876e3a2da48c5d7780de1e3ab82aa48a29b0869f9783b208916e24f459debebc",
+          "worker": "sha256:46228f78f96e778775d81400e2472dba0b1e7d216648c7451ca1bd61d9a14ae2",
+          "k6": "grafana/k6:2.3.0@sha256:9c2dee7f8ed74d317e4027c06a10f169b625638189de8d4555d0b3486a5aeb34",
+          "revision": "488e0b26d54aa26d835d6fda77921bc573fa1d8b",
+          "dirty": false,
+          "host": "Docker Desktop;cpus=12;memory=8286515200",
+          "dataset": {
+            "members": 100,
+            "lists": 500,
+            "wishes": 10000,
+            "images": 200
+          },
+          "workerEnvironment": "Local",
+          "externalProviders": false
+        },
+        "auxiliaryRequests": 1000,
+        "harness": {
+          "cgroup.py": "81db87fd119e899d2db503ad8f63bd17f9ac23927c24cb39d8d75dbb873a7d18",
+          "compose.py": "6de5ff2369fafde8cbf76bd365d435b4280894b70e7074fef7e6b6184423bed0",
+          "performance_cli.py": "9f97cb9cc412a706a7d5d13185d24725fcb2653e4a265b5ca08afd4f20ea286b",
+          "policy.py": "5116f9af803fdf38325a7244ea77077393dce96076e5a8501d9b3465e7402be9",
+          "reporting.py": "29d2051d51b47562ceb4aad72147adde945621fdfeb9c46da26f86d7603500be",
+          "runtime.py": "44b905c08d642112503f4818aa92a26e703c440096bacf42259a45e768deadbe",
+          "scenarios.js": "42148f840fa8652d9466c16493b0d468684f84f85e6331585c5e360796be1343",
+          "seed.py": "06f7749e59ebbf0348c8dabbafb89049697b5ea6dac98844fbac9ea25b2df544",
+          "supplements.py": "ca5ffff68d483431270549948c416a7c4cc768bba9549193138e00c9cde67079"
+        },
+        "dataInvariants": {
+          "members": 100,
+          "lists": 500,
+          "wishes": 10000,
+          "images": 202,
+          "overReserved": 0
+        },
+        "resourceSummary": {
+          "meanMeasuredCpuPercentOfOneCore": null,
+          "memoryPeakBytesIncludingSetup": 805306368,
+          "resourceSampleCount": 30
+        }
+      }
+    },
+    {
+      "auditAssessment": "not-qualified-timing",
+      "throughputQualificationRequired": true,
+      "sourceReportExcerpt": {
+        "schemaVersion": 1,
+        "profile": "stress",
+        "verdict": "failed",
+        "expectedRequests": 12000,
+        "completedRequests": 12000,
+        "unexpectedErrors": 0,
+        "observedCompletionSpanSeconds": 1216.299241065979,
+        "observedRequestsPerSecond": 9.865170999764773,
+        "rateLimited": 0,
+        "droppedIterations": 0,
+        "families": {
+          "lists": {
+            "count": 3600,
+            "expected": 3600,
+            "p50": 4.37655,
+            "p95": 6.0478569,
+            "p99": 7.243569060000002
+          },
+          "wishes": {
+            "count": 2400,
+            "expected": 2400,
+            "p50": 6.245598,
+            "p95": 8.499504700000001,
+            "p99": 11.014952730000038
+          },
+          "shared": {
+            "count": 3600,
+            "expected": 3600,
+            "p50": 13.629809999999999,
+            "p95": 31.736796250000125,
+            "p99": 85.32920764000002
+          },
+          "update": {
+            "count": 1200,
+            "expected": 1200,
+            "p50": 14.044986999999999,
+            "p95": 79.73199329999998,
+            "p99": 84.72715035
+          },
+          "reservation": {
+            "count": 1200,
+            "expected": 1200,
+            "p50": 84.077713,
+            "p95": 98.40011095,
+            "p99": 104.68154616999999
+          }
+        },
+        "infrastructure": {
+          "qualified": true,
+          "memoryMax": 805306368,
+          "swapMax": 0,
+          "cpuMax": "100000 100000",
+          "memoryCurrent": 502423552,
+          "memoryPeak": 524025856,
+          "oom": 0,
+          "cpu": {
+            "usage_usec": "230013174",
+            "user_usec": "156323837",
+            "system_usec": "73689337",
+            "nice_usec": "0",
+            "nr_periods": "12047",
+            "nr_throttled": "965",
+            "throttled_usec": "484345156",
+            "nr_bursts": "0",
+            "burst_usec": "0"
+          },
+          "restarts": 0,
+          "alive": true,
+          "images": {
+            "api": "sha256:876e3a2da48c5d7780de1e3ab82aa48a29b0869f9783b208916e24f459debebc",
+            "worker": "sha256:46228f78f96e778775d81400e2472dba0b1e7d216648c7451ca1bd61d9a14ae2",
+            "postgres": "sha256:c293117fcecda7344b5480222e813b9f673d7abd69b1dd95eff239b768b04f59",
+            "caddy": "sha256:af555904a0961945f16bb323a501457b13a4f7e9bde969b145b97da80b38ecbe"
+          }
+        },
+        "stages": [
+          {
+            "index": 0,
+            "seconds": 300,
+            "requestedPerSecond": 5,
+            "completedRequests": 1500,
+            "deliveredPerScheduledSecond": 5,
+            "observedCompletionSpanSeconds": 305.65342903137207,
+            "observedRequestsPerSecond": 4.904247286707664,
+            "throughputTargetMet": false,
+            "unexpectedErrors": 0
+          },
+          {
+            "index": 1,
+            "seconds": 300,
+            "requestedPerSecond": 10,
+            "completedRequests": 3000,
+            "deliveredPerScheduledSecond": 10,
+            "observedCompletionSpanSeconds": 303.31362795829773,
+            "observedRequestsPerSecond": 9.887455503358819,
+            "throughputTargetMet": false,
+            "unexpectedErrors": 0
+          },
+          {
+            "index": 2,
+            "seconds": 300,
+            "requestedPerSecond": 20,
+            "completedRequests": 6000,
+            "deliveredPerScheduledSecond": 20,
+            "observedCompletionSpanSeconds": 303.0675208568573,
+            "observedRequestsPerSecond": 19.79426889110102,
+            "throughputTargetMet": false,
+            "unexpectedErrors": 0
+          },
+          {
+            "index": 3,
+            "seconds": 300,
+            "requestedPerSecond": 5,
+            "completedRequests": 1500,
+            "deliveredPerScheduledSecond": 5,
+            "observedCompletionSpanSeconds": 301.3569059371948,
+            "observedRequestsPerSecond": 4.97416840453095,
+            "throughputTargetMet": false,
+            "unexpectedErrors": 0
+          }
+        ],
+        "latencyTargetsMet": true,
+        "throughputTargetsMet": false,
+        "generatorExitCodes": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "stopReason": null,
+        "supplement": null,
+        "metadata": {
+          "schemaVersion": 1,
+          "runId": "mk816-6ea0e1988baf",
+          "api": "sha256:876e3a2da48c5d7780de1e3ab82aa48a29b0869f9783b208916e24f459debebc",
+          "worker": "sha256:46228f78f96e778775d81400e2472dba0b1e7d216648c7451ca1bd61d9a14ae2",
+          "k6": "grafana/k6:2.3.0@sha256:9c2dee7f8ed74d317e4027c06a10f169b625638189de8d4555d0b3486a5aeb34",
+          "revision": "9ca12892b5ed028b659de2d4315765f84056c00f",
+          "dirty": false,
+          "host": "Docker Desktop;cpus=12;memory=8286515200",
+          "dataset": {
+            "members": 100,
+            "lists": 500,
+            "wishes": 10000,
+            "images": 200
+          },
+          "workerEnvironment": "Local",
+          "externalProviders": false
+        },
+        "auxiliaryRequests": 1140,
+        "harness": {
+          "cgroup.py": "81db87fd119e899d2db503ad8f63bd17f9ac23927c24cb39d8d75dbb873a7d18",
+          "compose.py": "6de5ff2369fafde8cbf76bd365d435b4280894b70e7074fef7e6b6184423bed0",
+          "performance_cli.py": "9f97cb9cc412a706a7d5d13185d24725fcb2653e4a265b5ca08afd4f20ea286b",
+          "policy.py": "5116f9af803fdf38325a7244ea77077393dce96076e5a8501d9b3465e7402be9",
+          "reporting.py": "29d2051d51b47562ceb4aad72147adde945621fdfeb9c46da26f86d7603500be",
+          "runtime.py": "44b905c08d642112503f4818aa92a26e703c440096bacf42259a45e768deadbe",
+          "scenarios.js": "f66b3c6cb9b99169b24d36ddbce8e92bc72ba410697ebf6860d6b2e09f07c96a",
+          "seed.py": "06f7749e59ebbf0348c8dabbafb89049697b5ea6dac98844fbac9ea25b2df544",
+          "supplements.py": "ca5ffff68d483431270549948c416a7c4cc768bba9549193138e00c9cde67079"
+        },
+        "dataInvariants": {
+          "members": 100,
+          "lists": 500,
+          "wishes": 10000,
+          "images": 200,
+          "overReserved": 0
+        },
+        "resourceSummary": {
+          "meanMeasuredCpuPercentOfOneCore": 11.34376969544849,
+          "memoryPeakBytesIncludingSetup": 524025856,
+          "resourceSampleCount": 178
+        }
+      }
+    }
+  ],
+  "evidenceFormat": "Allowlisted report excerpts; full sanitized local source reports are retained unchanged."
+}
