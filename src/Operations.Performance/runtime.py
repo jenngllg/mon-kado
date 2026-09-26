@@ -230,7 +230,22 @@ class Bench:
         for shard in range(10):
             private_write(self.directory / f"fixtures-{shard}.json",
                           json.dumps({"accounts": accounts[shard * 10:(shard + 1) * 10], "password": fixture_password}))
+        self.stage = "prepare-images"
+        self.prepare_images(subnet)
         return self.group("status")
+
+    def prepare_images(self, subnet):
+        """Use ten distinct local IPs, sequentially, before any measured generator."""
+        network = ipaddress.ip_network(subnet)
+        for shard in range(10):
+            command(["docker", "run", "--rm", "--name", f"{self.identifier}-prepare-{shard}",
+                     "--user", generator_user(), "--label", f"{LABEL}={self.identifier}",
+                     "--network", f"{self.identifier}_edge", "--ip", str(network[100 + shard]),
+                     "--read-only", "--cap-drop", "ALL", "--security-opt", "no-new-privileges:true",
+                     "--memory", "128m", "--memory-swap", "128m", "-e", "PYTHONDONTWRITEBYTECODE=1",
+                     "--mount", f"type=bind,source={self.code},target=/code,readonly",
+                     "--mount", f"type=bind,source={self.directory},target=/fixture,readonly",
+                     PYTHON_IMAGE, "python", "/code/supplements.py", "prepare", str(shard)])
 
     def inspect_health(self):
         cg = self.group("status")

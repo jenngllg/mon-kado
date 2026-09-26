@@ -74,11 +74,12 @@ async function harness(profile = 'smoke') {
     return {api: module.namespace, points, calls, clock, control, execution, http};
 }
 
-test('setup uses real session, CSRF, image and sharing contracts without a remote URL', async () => {
+test('setup uses real session, CSRF and sharing contracts without repeating image preparation', async () => {
     const h = await harness();
     const actors = h.api.setup();
     assert.equal(10, actors.length);
-    assert.equal(100, h.calls.filter(call => call.method).length);
+    assert.equal(70, h.calls.filter(call => call.method).length);
+    assert.equal(0, h.calls.filter(call => call.method === 'PUT' && call.url.endsWith('/image')).length);
     assert.ok(h.calls.filter(call => call.url).every(call => call.url.startsWith('https://mk816.test/')));
     assert.equal(false, h.api.options.insecureSkipTLSVerify);
     assert.equal(0, h.api.options.maxRedirects);

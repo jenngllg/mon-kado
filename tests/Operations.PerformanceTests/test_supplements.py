@@ -9,7 +9,7 @@ from unittest.mock import Mock, patch
 
 from policy import PerformanceError
 from supplements import (Client, NoRedirect, concurrency, export_check, exports, image_check,
-                         images, main, parallel, quotas)
+                         images, main, parallel, quotas, prepare_images)
 
 
 def account(index=0):
@@ -18,6 +18,32 @@ def account(index=0):
 
 
 class SupplementsTests(unittest.TestCase):
+    def test_preparation_serializes_twenty_verified_images_and_never_retries(self):
+        fixture = json.dumps({"accounts": [account(index) for index in range(10)], "password": "synthetic"})
+        with patch("supplements.Path.read_text", return_value=fixture) as read:
+            with patch("supplements.Client") as client, patch("supplements.image_check") as image:
+                self.assertEqual([{"preparedImages": 20}], prepare_images(9))
+                self.assertEqual(10, client.call_count)
+                self.assertEqual(20, image.call_count)
+                self.assertEqual(["gift", "profile"] * 10, [call.args[1] for call in image.call_args_list])
+                self.assertTrue(all(call.kwargs == {"list_index": 0} for call in image.call_args_list))
+                read.assert_called_once()
+            with patch("supplements.Client"), patch("supplements.image_check", side_effect=PerformanceError("IMAGE_UPLOAD_FAILED")) as image:
+                with self.assertRaisesRegex(PerformanceError, "IMAGE_UPLOAD_FAILED"):
+                    prepare_images(0)
+                image.assert_called_once()
+        for shard in (-1, 10):
+            with self.assertRaisesRegex(PerformanceError, "INVALID_PREPARATION_SHARD"):
+                prepare_images(shard)
+        with patch("supplements.Path.read_text", return_value='{"accounts":[]}'):
+            with self.assertRaisesRegex(PerformanceError, "INVALID_PREPARATION_ACCOUNTS"):
+                prepare_images(0)
+        with patch("sys.argv", ["supplements", "prepare", "9"]), patch("supplements.Path.read_text", return_value=fixture):
+            with patch("supplements.prepare_images", return_value=[{"preparedImages": 20}]) as prepare:
+                with contextlib.redirect_stdout(io.StringIO()):
+                    self.assertEqual(0, main())
+                prepare.assert_called_once_with(9)
+
     def client(self):
         replies = [({"token": "csrf"}, {}), ({"accessToken": "synthetic", "expiresIn": 900}, {}), ({"token": "bound"}, {})]
         with patch("supplements.ssl.create_default_context"), patch("supplements.urllib.request.build_opener"):

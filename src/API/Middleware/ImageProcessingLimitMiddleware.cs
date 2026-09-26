@@ -7,7 +7,7 @@ namespace JennGllg.Fr.MonKado.Back.Api.Middleware;
 
 /// <summary>Admits uploads after Bearer validation and before any body buffering.</summary>
 /// <param name="next">The next request delegate.</param>
-/// <param name="limiter">The shared gift and profile admission limiter.</param>
+/// <param name="limiter">The shared upload and merchant-preview admission limiter.</param>
 public class ImageProcessingLimitMiddleware(
     RequestDelegate next,
     IImageProcessingLimiter limiter)
@@ -22,7 +22,8 @@ public class ImageProcessingLimitMiddleware(
             .PolicyName;
 
         if (policyName is not (AuthenticationRateLimitingExtensions.GiftImageUploadPolicy or
-            AuthenticationRateLimitingExtensions.ProfileImageUploadPolicy) ||
+            AuthenticationRateLimitingExtensions.ProfileImageUploadPolicy or
+            AuthenticationRateLimitingExtensions.WishImportPreviewPolicy) ||
             context.User.Identity?.IsAuthenticated != true)
         {
             await next(context);

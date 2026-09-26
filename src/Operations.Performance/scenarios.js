@@ -7,7 +7,6 @@ import { Counter, Trend, Rate } from 'k6/metrics';
 const origin = 'https://mk816.test';
 const profile = __ENV.PROFILE;
 const fixture = JSON.parse(open('/fixture/fixtures-' + __ENV.SHARD + '.json'));
-const image = open('/fixture/image.png', 'b');
 const duration = new Trend('business_ms', true);
 const outcome = new Counter('business_ok');
 const failures = new Rate('business_failure');
@@ -51,12 +50,12 @@ export const options = {
     thresholds,
 };
 
-function request(actor, method, path, body, expected, name, {headers: extra = {}, multipart = false} = {}) {
+function request(actor, method, path, body, expected, name, {headers: extra = {}} = {}) {
     const headers = {Origin: origin, ...extra};
     if (actor.token) headers.Authorization = 'Bearer ' + actor.token;
     if (actor.csrf) headers['X-CSRF-TOKEN'] = actor.csrf;
-    if (!multipart) headers['Content-Type'] = 'application/json';
-    const payload = body === null || multipart ? body : JSON.stringify(body);
+    headers['Content-Type'] = 'application/json';
+    const payload = body === null ? null : JSON.stringify(body);
     const response = http.request(method, origin + path, payload,
         {headers, jar: actor.jar, redirects: 0, timeout: '15s', tags: {name},
             responseCallback: http.expectedStatuses(...expected)});
@@ -101,14 +100,10 @@ export function setup() {
         actor.share = {id: share.id, secret: share.shareUrl.split('#')[1]};
         const wish = path + '/wishes/' + list.wishes[0];
         const before = must(request(actor, 'GET', wish, null, [200], 'wish-get'), [200], 'wish-get');
-        const after = must(request(actor, 'PUT', wish + '/image',
-            {image: http.file(image, 'fixture.png', 'image/png')}, [200], 'gift-image',
-            {headers: {'If-Match': before.headers.Etag}, multipart: true}), [200], 'gift-image');
-        actor.etag = after.headers.Etag;
-        const current = must(request(actor, 'GET', '/api/v1/auth/sessions/current', null, [200], 'current'), [200], 'current');
-        must(request(actor, 'PUT', '/api/v1/members/current/profile/image',
-            {image: http.file(image, 'fixture.png', 'image/png')}, [200], 'profile-image',
-            {headers: {'If-Match': current.headers.Etag}, multipart: true}), [200], 'profile-image');
+        // The orchestrator has already uploaded and verified all 200 images
+        // sequentially, before generators start. Preparation never competes
+        // for the API's intentionally bounded image admission queue.
+        actor.etag = before.headers.Etag;
     }
     for (let index = 0; index < actors.length; index++) {
         const actor = actors[index];

@@ -2,7 +2,7 @@ using System.Threading.RateLimiting;
 
 namespace JennGllg.Fr.MonKado.Back.Api.Abstractions;
 
-/// <summary>Shares bounded admission across gift and profile image uploads.</summary>
+/// <summary>Shares bounded admission across gift, profile and merchant-preview image processing.</summary>
 public interface IImageProcessingLimiter
 {
     /// <summary>Waits briefly for exclusive admission before the upload body is read.</summary>

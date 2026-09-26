@@ -82,6 +82,7 @@ public class ImageProcessingLimitMiddlewareTests
     [Theory]
     [InlineData(AuthenticationRateLimitingExtensions.GiftImageUploadPolicy, false)]
     [InlineData(AuthenticationRateLimitingExtensions.ProfileImageUploadPolicy, true)]
+    [InlineData(AuthenticationRateLimitingExtensions.WishImportPreviewPolicy, false)]
     public async Task InvokeAsync_WhenAdmitted_ReleasesPermitEvenAfterFailure(
         string policy,
         bool fail)

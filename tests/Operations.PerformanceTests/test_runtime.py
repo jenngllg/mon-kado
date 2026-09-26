@@ -12,6 +12,26 @@ from runtime import Bench, command, private_write, protect_directory, generator_
 
 
 class RuntimeTests(unittest.TestCase):
+    def test_image_preparation_is_serial_local_bounded_and_stops_on_first_failure(self):
+        bench = Bench(".", "mk816-012345abcdef")
+        with patch("runtime.command") as execute, patch("runtime.generator_user", return_value="1000"):
+            bench.prepare_images("10.240.0.0/24")
+        calls = [call.args[0] for call in execute.call_args_list]
+        self.assertEqual(10, len(calls))
+        self.assertEqual([f"10.240.0.{100 + shard}" for shard in range(10)],
+                         [args[args.index("--ip") + 1] for args in calls])
+        for shard, args in enumerate(calls):
+            self.assertEqual(["prepare", str(shard)], args[-2:])
+            self.assertEqual("mk816-012345abcdef_edge", args[args.index("--network") + 1])
+            self.assertEqual("128m", args[args.index("--memory-swap") + 1])
+            self.assertEqual("ALL", args[args.index("--cap-drop") + 1])
+            self.assertNotIn("--publish", args)
+            self.assertIn(f"{LABEL}=mk816-012345abcdef", args)
+        with patch("runtime.command", side_effect=PerformanceError("COMMAND_FAILED")) as execute:
+            with self.assertRaisesRegex(PerformanceError, "COMMAND_FAILED"):
+                bench.prepare_images("10.240.0.0/24")
+            execute.assert_called_once()
+
     def test_caddy_copy_fixes_container_ownership_and_mode_without_host_permissions(self):
         with tempfile.TemporaryDirectory() as root:
             path = Path(root) / "Caddyfile"

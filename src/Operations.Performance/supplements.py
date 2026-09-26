@@ -91,8 +91,8 @@ def parallel(actions):
         return list(pool.map(lambda action: action(), actions))
 
 
-def image_check(client, kind, fixture):
-    wishlist = client.account["lists"][4]
+def image_check(client, kind, fixture, list_index=4):
+    wishlist = client.account["lists"][list_index]
     wish = wishlist["wishes"][0]
     source = "/api/v1/auth/sessions/current" if kind == "profile" else f"/api/v1/wishlists/{wishlist['id']}/wishes/{wish}"
     _, headers = client.json_request("GET", source)
@@ -202,12 +202,27 @@ def concurrency(clients):
     return [{"etagConflict": True, "reservationConflict": True, "valid": True}]
 
 
+def prepare_images(shard):
+    """Initialize one shard sequentially through real HTTP, never retry rejections."""
+    require(0 <= shard < 10, "INVALID_PREPARATION_SHARD")
+    fixture = json.loads(Path(f"/fixture/fixtures-{shard}.json").read_text())
+    require(len(fixture["accounts"]) == 10, "INVALID_PREPARATION_ACCOUNTS")
+    image = png(128, 128)
+    for account in fixture["accounts"]:
+        client = Client(account, fixture["password"])
+        for kind in ("gift", "profile"):
+            image_check(client, kind, image, list_index=0)
+    return [{"preparedImages": 20}]
+
+
 def main():
     fixture = json.loads(Path("/fixture/fixtures-0.json").read_text())
     profile = sys.argv[1]
     try:
-        clients = [Client(account, fixture["password"]) for account in fixture["accounts"][7:10]]
-        if profile == "images":
+        clients = [] if profile == "prepare" else [Client(account, fixture["password"]) for account in fixture["accounts"][7:10]]
+        if profile == "prepare":
+            results = prepare_images(int(sys.argv[2]))
+        elif profile == "images":
             results = images(clients[1:])
         elif profile == "exports":
             results = exports(clients)
