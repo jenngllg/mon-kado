@@ -1,5 +1,20 @@
 # Local performance qualification (MK-816)
 
+## Latest release-quality evidence
+
+Read the [MK-938 campaign review](performance/mk938-2026-09-26.md) before
+interpreting older passing reports. It preserves a concurrent 40 MP PNG OOM
+under the unchanged 768 MiB budget and a directly observed Docker clock
+discrepancy. Complete counts alone do not qualify the requested throughput;
+every measured performance stage must meet its observed-rate requirement.
+The short CI smoke is explicitly functional, not a shared-runner performance
+reference. Do not rescale historical timestamps or relax thresholds to pass.
+
+The stress executor includes a one-second zero-arrival tail after its four
+measured 300-second stages, avoiding a race at the final scheduled arrival.
+This tail adds no business requests or extra measured stage; all 12,000
+operations and the existing in-flight grace period remain required.
+
 This harness sends traffic only to a disposable Docker deployment. It cannot
 qualify production hardware, Internet latency, frontend rendering, Gmail,
 Google, backup overlap or deployment overlap. It never connects to the VPS.
