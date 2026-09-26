@@ -23,6 +23,8 @@ def markdown(report):
     metadata = report["metadata"]
     lines = ["# MK-816 local load test", "",
              f"Profile: {report['profile']}. Verdict: **{report['verdict']}**.", "",
+             f"Qualification scope: {report.get('qualificationScope', 'legacy report')}.",
+             "The functional smoke is not a performance qualification; shared-runner throughput and latency remain diagnostic.", "",
              "This is an isolated local result, not a DigitalOcean throughput guarantee.", "",
              f"Revision: `{metadata.get('revision', 'unknown')}`. Run: `{metadata.get('runId', 'unknown')}`.",
              f"Host: {metadata.get('host', 'unknown')}. Worker: Local; external providers disabled.",

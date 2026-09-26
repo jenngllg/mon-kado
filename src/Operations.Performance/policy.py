@@ -94,11 +94,16 @@ def verdict(points, profile, infrastructure):
               and infrastructure.get("oom", 1) == 0 and infrastructure.get("restarts", 1) == 0)
     stage_results = stage_summaries(measured, stages)
     throughput_ok = all(stage["throughputTargetMet"] for stage in stage_results)
-    success = complete and stable and throughput_ok and dropped == 0 and errors / max(1, len(outcomes)) < .01 and 429 not in statuses
+    performance_scope = profile != "smoke"
+    success = complete and stable and dropped == 0 and errors / max(1, len(outcomes)) < .01 and 429 not in statuses
+    if performance_scope:
+        success = success and throughput_ok
     if profile not in ("smoke", "stress"):
         success = success and latency_ok
     failed_verdict = "failed" if complete else "incomplete"
     return {"schemaVersion": 1, "profile": profile,
+            "qualificationScope": "local-performance" if performance_scope else "functional-smoke",
+            "throughputQualificationRequired": performance_scope,
             "verdict": "passed" if success else failed_verdict,
             "expectedRequests": expected, "completedRequests": len(outcomes), "unexpectedErrors": errors,
             "observedCompletionSpanSeconds": observed_span, "observedRequestsPerSecond": observed_rate,

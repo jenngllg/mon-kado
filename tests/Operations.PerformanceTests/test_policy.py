@@ -106,16 +106,19 @@ class PolicyTests(unittest.TestCase):
     def test_complete_counts_do_not_hide_a_lower_observed_rate(self):
         # Arrange
         health = {"qualified": True, "alive": True, "oom": 0, "restarts": 0}
-        points = [{**point, "timestamp": point["timestamp"] * 1.03} for point in self.points()]
+        points = [{**point, "timestamp": (index // 3) / 10 * 1.03}
+                  for index, point in enumerate(self.points() * 30)]
 
         # Act
-        result = verdict(points, "smoke", health)
+        result = verdict(points, "nominal", health)
 
         # Assert
-        self.assertEqual(300, result["completedRequests"])
+        self.assertEqual(9000, result["completedRequests"])
         self.assertEqual(0, result["unexpectedErrors"])
         self.assertTrue(result["latencyTargetsMet"])
         self.assertFalse(result["throughputTargetsMet"])
+        self.assertTrue(result["throughputQualificationRequired"])
+        self.assertEqual("local-performance", result["qualificationScope"])
         self.assertLess(result["stages"][0]["observedRequestsPerSecond"], 10)
         self.assertEqual("failed", result["verdict"])
 
@@ -124,14 +127,30 @@ class PolicyTests(unittest.TestCase):
             with self.subTest(stretch=stretch):
                 # Arrange
                 health = {"qualified": True, "alive": True, "oom": 0, "restarts": 0}
-                points = [{**point, "timestamp": point["timestamp"] * stretch} for point in self.points()]
+                points = [{**point, "timestamp": (index // 3) / 10 * stretch}
+                          for index, point in enumerate(self.points() * 30)]
 
                 # Act
-                result = verdict(points, "smoke", health)
+                result = verdict(points, "nominal", health)
 
                 # Assert
                 self.assertEqual(expected, result["throughputTargetsMet"])
                 self.assertEqual("passed" if expected else "failed", result["verdict"])
+
+    def test_functional_smoke_records_slow_throughput_without_qualifying_performance(self):
+        # Arrange
+        health = {"qualified": True, "alive": True, "oom": 0, "restarts": 0}
+        points = [{**point, "timestamp": point["timestamp"] * 1.1} for point in self.points()]
+
+        # Act
+        result = verdict(points, "smoke", health)
+
+        # Assert
+        self.assertEqual("passed", result["verdict"])
+        self.assertFalse(result["throughputTargetsMet"])
+        self.assertFalse(result["throughputQualificationRequired"])
+        self.assertFalse(result["productionQualification"])
+        self.assertEqual("functional-smoke", result["qualificationScope"])
 
     def test_zero_span_cannot_qualify_complete_work(self):
         # Arrange
