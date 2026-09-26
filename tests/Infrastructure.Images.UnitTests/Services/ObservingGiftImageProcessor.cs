@@ -24,6 +24,10 @@ public class ObservingGiftImageProcessor : GiftImageProcessor
     {
         get; private set;
     }
+    public bool SourcePixelsSharedBeforeDrawing
+    {
+        get; private set;
+    }
     public bool SourceResourcesDisposed =>
         _data?.Handle == IntPtr.Zero && _codec?.Handle == IntPtr.Zero && _source?.Handle == IntPtr.Zero;
     public bool NormalizedImageDisposed => _normalized?.Handle == IntPtr.Zero;
@@ -69,5 +73,16 @@ public class ObservingGiftImageProcessor : GiftImageProcessor
         ReleasedSourceBeforeEncoding = SourceResourcesDisposed;
 
         return FailEncoding ? null : base.Encode(image);
+    }
+
+    /// <inheritdoc />
+    protected override SKSurface? CreateSurface(SKImageInfo imageInfo)
+    {
+        var source = Assert.IsType<SKBitmap>(_source);
+        using var image = SKImage.FromBitmap(source);
+        using var pixels = image.PeekPixels();
+        SourcePixelsSharedBeforeDrawing = source.IsImmutable && source.GetPixels() == pixels.GetPixels();
+
+        return base.CreateSurface(imageInfo);
     }
 }

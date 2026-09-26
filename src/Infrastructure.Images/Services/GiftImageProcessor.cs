@@ -167,6 +167,8 @@ public class GiftImageProcessor : IGiftImageProcessor, IProfileImageProcessor
             throw new GiftImageInvalidException("The supplied gift image cannot be decoded.");
 
         cancellationToken.ThrowIfCancellationRequested();
+        // DrawBitmap creates an SKImage; immutable pixels can be shared instead of copied.
+        source.SetImmutable();
         var outputInfo = new SKImageInfo(
             outputWidth,
             outputHeight,

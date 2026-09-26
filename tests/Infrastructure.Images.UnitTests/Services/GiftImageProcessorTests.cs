@@ -56,6 +56,7 @@ public class GiftImageProcessorTests
             format == SKEncodedImageFormat.Png,
             processor.DecodedInfo.Width == 3201);
         Assert.True(processor.ReusedValidatedCodec);
+        Assert.True(processor.SourcePixelsSharedBeforeDrawing);
         Assert.True(processor.ReleasedSourceBeforeEncoding);
         Assert.True(processor.NormalizedImageDisposed);
         Assert.Equal(
