@@ -85,6 +85,35 @@ public class GiftImageProcessor : IGiftImageProcessor, IProfileImageProcessor
         if (IsAnimatedContainer(content.Span))
             throw new GiftImageUnsupportedFormatException();
 
+        // Release encoded input, codec and source pixels before WebP encoding.
+        using var image = Normalize(
+            content,
+            maximumEdgeLength,
+            cancellationToken);
+        using var encoded = Encode(image);
+
+        if (encoded is null)
+            throw new GiftImageInvalidException("The supplied gift image cannot be encoded.");
+
+        cancellationToken.ThrowIfCancellationRequested();
+        var normalizedContent = encoded.ToArray();
+        var contentHash = SHA256.HashData(normalizedContent);
+
+        return Task.FromResult(new ProcessedGiftImage(
+            normalizedContent,
+            contentHash));
+    }
+
+    /// <summary>Normalizes pixels while confining full-resolution allocations to decoding and drawing.</summary>
+    /// <param name="content">The validated image container.</param>
+    /// <param name="maximumEdgeLength">The maximum normalized edge length.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The normalized image, owned by the caller.</returns>
+    private SKImage Normalize(
+        ReadOnlyMemory<byte> content,
+        int maximumEdgeLength,
+        CancellationToken cancellationToken)
+    {
         using var data = SKData.CreateCopy(content.Span);
         using var codec = CreateCodec(data);
 
@@ -102,15 +131,9 @@ public class GiftImageProcessor : IGiftImageProcessor, IProfileImageProcessor
                 "The supplied gift image dimensions are invalid or too large.");
         }
 
-        using var source = Decode(data);
-
-        if (source is null)
-            throw new GiftImageInvalidException("The supplied gift image cannot be decoded.");
-
-        cancellationToken.ThrowIfCancellationRequested();
         var swapsEdges = SwapsEdges(codec.EncodedOrigin);
-        var orientedWidth = swapsEdges ? source.Height : source.Width;
-        var orientedHeight = swapsEdges ? source.Width : source.Height;
+        var orientedWidth = swapsEdges ? sourceInfo.Height : sourceInfo.Width;
+        var orientedHeight = swapsEdges ? sourceInfo.Width : sourceInfo.Height;
         var scale = Math.Min(
             1D,
             (double)maximumEdgeLength /
@@ -128,6 +151,22 @@ public class GiftImageProcessor : IGiftImageProcessor, IProfileImageProcessor
                 orientedHeight * scale,
                 MidpointRounding.AwayFromZero));
         using var colorSpace = SKColorSpace.CreateSrgb();
+        // The codec chooses a supported size; PNG may still require all source pixels.
+        var decodedSize = codec.GetScaledDimensions((float)scale);
+        var decodeInfo = new SKImageInfo(
+            decodedSize.Width,
+            decodedSize.Height,
+            SKColorType.Rgba8888,
+            SKAlphaType.Premul,
+            colorSpace);
+        using var source = Decode(
+            codec,
+            decodeInfo);
+
+        if (source is null)
+            throw new GiftImageInvalidException("The supplied gift image cannot be decoded.");
+
+        cancellationToken.ThrowIfCancellationRequested();
         var outputInfo = new SKImageInfo(
             outputWidth,
             outputHeight,
@@ -154,19 +193,8 @@ public class GiftImageProcessor : IGiftImageProcessor, IProfileImageProcessor
             new SKSamplingOptions(SKCubicResampler.Mitchell),
             null);
         canvas.Flush();
-        using var image = surface.Snapshot();
-        using var encoded = Encode(image);
 
-        if (encoded is null)
-            throw new GiftImageInvalidException("The supplied gift image cannot be encoded.");
-
-        cancellationToken.ThrowIfCancellationRequested();
-        var normalizedContent = encoded.ToArray();
-        var contentHash = SHA256.HashData(normalizedContent);
-
-        return Task.FromResult(new ProcessedGiftImage(
-            normalizedContent,
-            contentHash));
+        return surface.Snapshot();
     }
 
     /// <summary>
@@ -182,11 +210,17 @@ public class GiftImageProcessor : IGiftImageProcessor, IProfileImageProcessor
     /// <summary>
     /// Decodes validated image bytes into pixels.
     /// </summary>
-    /// <param name="data">The encoded image data.</param>
+    /// <param name="codec">The existing validated decoder.</param>
+    /// <param name="imageInfo">The supported decoded size and normalized pixel format.</param>
     /// <returns>The decoded bitmap, or <see langword="null" /> when decoding fails.</returns>
-    protected virtual SKBitmap? Decode(SKData data)
+    protected virtual SKBitmap? Decode(
+        SKCodec codec,
+        SKImageInfo imageInfo)
     {
-        return SKBitmap.Decode(data);
+
+        return SKBitmap.Decode(
+            codec,
+            imageInfo);
     }
 
     /// <summary>

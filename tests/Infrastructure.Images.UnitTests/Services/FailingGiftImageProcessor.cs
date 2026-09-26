@@ -19,11 +19,15 @@ public class FailingGiftImageProcessor(string failureStage) : GiftImageProcessor
     }
 
     /// <inheritdoc />
-    protected override SKBitmap? Decode(SKData data)
+    protected override SKBitmap? Decode(
+        SKCodec codec,
+        SKImageInfo imageInfo)
     {
         return failureStage == "decode"
             ? null
-            : base.Decode(data);
+            : base.Decode(
+                codec,
+                imageInfo);
     }
 
     /// <inheritdoc />

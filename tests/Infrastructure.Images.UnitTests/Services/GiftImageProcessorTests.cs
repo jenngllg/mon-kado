@@ -16,6 +16,105 @@ public class GiftImageProcessorTests
     private readonly GiftImageProcessor _processor = new();
 
     [Theory]
+    [InlineData(SKEncodedImageFormat.Jpeg, false)]
+    [InlineData(SKEncodedImageFormat.Webp, false)]
+    [InlineData(SKEncodedImageFormat.Png, false)]
+    [InlineData(SKEncodedImageFormat.Jpeg, true)]
+    [InlineData(SKEncodedImageFormat.Webp, true)]
+    [InlineData(SKEncodedImageFormat.Png, true)]
+    public async Task ProcessAsync_WhenCodecSupportsSampling_ReducesDecodedPixelsWithoutChangingOutputContract(
+        SKEncodedImageFormat format,
+        bool profile)
+    {
+        // Arrange
+        var content = CreateImage(
+            3201,
+            1703,
+            format,
+            SKColors.CornflowerBlue);
+        var processor = new ObservingGiftImageProcessor();
+        var maximumEdge = profile ? ProfileImageConstraints.MaximumOutputEdgeLength : GiftImageConstraints.MaximumOutputEdgeLength;
+
+        // Act
+        var result = profile
+            ? await ((IProfileImageProcessor)processor).ProcessAsync(
+                content,
+                TestContext.Current.CancellationToken)
+            : await processor.ProcessAsync(
+                content,
+                TestContext.Current.CancellationToken);
+
+        // Assert
+        using var normalized = SKBitmap.Decode(result.Content.ToArray());
+        Assert.Equal(
+            maximumEdge,
+            normalized.Width);
+        Assert.Equal(
+            (int)Math.Round(1703D * maximumEdge / 3201),
+            normalized.Height);
+        Assert.Equal(
+            format == SKEncodedImageFormat.Png,
+            processor.DecodedInfo.Width == 3201);
+        Assert.True(processor.ReusedValidatedCodec);
+        Assert.True(processor.ReleasedSourceBeforeEncoding);
+        Assert.True(processor.NormalizedImageDisposed);
+        Assert.Equal(
+            4,
+            processor.DecodedInfo.BytesPerPixel);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_WhenCanceledAfterDecoding_DisposesSourceResources()
+    {
+        // Arrange
+        using var cancellation = new CancellationTokenSource();
+        var processor = new ObservingGiftImageProcessor
+        {
+            AfterDecode = cancellation.Cancel
+        };
+        var content = CreateImage(
+            2,
+            2,
+            SKEncodedImageFormat.Png,
+            SKColors.Transparent);
+
+        // Act
+        var exception = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => processor.ProcessAsync(
+            content,
+            cancellation.Token));
+
+        // Assert
+        Assert.Equal(
+            cancellation.Token,
+            exception.CancellationToken);
+        Assert.True(processor.SourceResourcesDisposed);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_WhenEncodingFails_DisposesSourceAndNormalizedImage()
+    {
+        // Arrange
+        var processor = new ObservingGiftImageProcessor
+        {
+            FailEncoding = true
+        };
+        var content = CreateImage(
+            2,
+            2,
+            SKEncodedImageFormat.Png,
+            SKColors.Transparent);
+
+        // Act
+        await Assert.ThrowsAsync<GiftImageInvalidException>(() => processor.ProcessAsync(
+            content,
+            TestContext.Current.CancellationToken));
+
+        // Assert
+        Assert.True(processor.ReleasedSourceBeforeEncoding);
+        Assert.True(processor.NormalizedImageDisposed);
+    }
+
+    [Theory]
     [InlineData(2048, 1024, 512, 256)]
     [InlineData(1024, 2048, 256, 512)]
     [InlineData(100, 80, 100, 80)]
