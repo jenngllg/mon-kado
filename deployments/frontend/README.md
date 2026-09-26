@@ -1,4 +1,4 @@
-# Approved frontend hosting — MK-811
+# Approved frontend hosting — MK-811 / MK-936
 
 The static frontend uses the existing VPS and Caddy, not GitHub Pages. No extra
 subscription, Node process, new public port, SSH deployment key or production
@@ -68,29 +68,111 @@ lock order. Busy locks, an interrupted backend rollout, insufficient space or a
 bad download leave the current site unchanged. Failed checks after a switch restore
 the previous link. An interrupted switch is recovered before another release.
 
-Failed activated revisions are not automatically retried. Investigate the bounded
-systemd error first; `deploy --retry` is an explicit operator action after repair.
+Any failed attempt durably suspends publication, including failures before activation.
+Neither rebooting nor enabling the timer nor `deploy --retry` bypasses this suspension.
+Investigate the bounded status first. A restored working site does **not** turn a
+failed publication into a success. No-op timer runs revalidate the archive, installed
+files and HTTPS responses; an old revision marker is not proof of current health.
 Never print expanded Compose configuration, production.env, cookies or raw tokens.
 
 ## Return to a previous build
 
-Stop the frontend timer first to prevent the production pointer reapplying the
-newer version. Select a previously recorded exact commit, not a mutable branch:
+Select a previously successful exact commit, not a mutable branch. Rollback durably
+pauses publication **before** changing the site, even if the timer is enabled.
+Stopping the timer is optional operational hygiene, not the safety mechanism:
 
 ```sh
 sudo systemctl stop monkado-frontend.timer
 sudo python3 /opt/monkado/src/Operations.Frontend/frontend_cli.py rollback --revision <40-character-commit>
+sudo python3 /opt/monkado/src/Operations.Frontend/frontend_cli.py status
 ```
 
-Rollback downloads and verifies the approved archive again and must remain
+Rollback verifies the retained cached archive (or its immutable public source) and must remain
 compatible with the currently installed backend/configuration. It never rolls
-back PostgreSQL or backend containers. Reapprove the intended production pointer
-before re-enabling the timer. Record the incident and selected versions.
+back PostgreSQL or backend containers. A broken active site's HTTP response does
+not prevent manual rollback, but the restored site must pass all checks.
+Only the active plus two previous successful versions are retained. A failed
+candidate does not evict the fallback. Cleanup happens after final state persistence
+and journal removal; a cleanup failure still suspends further publication.
+
+Reapprove the intended production pointer through the protected frontend workflow,
+then authorize that exact manifest locally. Resume does **not** publish:
+
+```sh
+sudo python3 /opt/monkado/src/Operations.Frontend/frontend_cli.py pause
+sudo python3 /opt/monkado/src/Operations.Frontend/frontend_cli.py resume --revision <approved-40-character-commit>
+sudo systemctl start monkado-frontend.service
+sudo python3 /opt/monkado/src/Operations.Frontend/frontend_cli.py status
+```
+
+Resume rechecks the active installation and fully validates the currently approved
+candidate. If the remote manifest changes afterwards, publication fails closed and
+pauses again. Record the incident and versions; only re-enable the timer after review.
+
+### Interruption and failed recovery
+
+`status` exposes only schema version, phases, SHA identifiers, check booleans,
+UTC timestamp, a fixed error code and suspension/recovery flags. Its schema is 2.
+Legacy healthy metadata is unverified until fresh checks succeed; historical
+failures stay paused. `lastVerifiedRevision` is evidence, not current availability.
+
+The transition journal is committed before switching the symlink. After interruption,
+the next invocation performs one recovery and pauses without publishing again.
+A committed successful switch whose journal remains is reverified, not blindly
+reverted. Failed recovery keeps its journal and enters `recoveryRequired`; timers
+refuse further attempts. After investigation and repair, explicitly request:
+
+```sh
+sudo python3 /opt/monkado/src/Operations.Frontend/frontend_cli.py recover
+sudo python3 /opt/monkado/src/Operations.Frontend/frontend_cli.py status
+```
+
+Do not delete/edit operational state to force a retry. Without a previous release,
+recovery removes the candidate pointer and reports `unavailable` with
+`NO_PREVIOUS_RELEASE`. A rollback that cannot be verified remains an incident even
+when some requests succeed. Resume requires resolution of pending recovery first.
+
+### Compatibility and installation boundary
+
+The exact backend/configuration binding is deliberately unchanged. An old frontend
+is not automatically compatible with a new backend: an incompatible candidate **or
+fallback** blocks automatic publication. A coordinated upgrade therefore requires a
+separately reviewed release/recovery decision; do not edit immutable manifests,
+bypass hashes or roll back the database to work around this guard.
+
+MK-936 adds installed modules `frontend_state` and `frontend_probe`, changing the
+configuration fingerprint. It does not change Caddy/Compose routes, headers or
+network exposure. Reinstall through the reviewed production installer and publish
+the matching backend configuration first. Do not install during a deployment,
+capture or monitor check. The installer stops publication timers; enable them only
+after review. MK-820 baseline adoption and smoke-account prerequisites still apply.
+
+Upgrade reviewed backup tooling in the same approved maintenance window: capture
+schema **4** includes these modules; restore still accepts schemas 1–3 with their
+original inventories and hashes. Avoid captures between mismatched tool versions.
+Preserve backup credentials, keys, locks, retention and timers. This MR performs
+neither a production installation nor timer activation.
+
+### Checks and monitoring
+
+The bounded probe verifies certificates on local Caddy's production virtual hosts
+(no public DNS dependency, redirects, login, cookie or member-data requests). It
+compares served HTML, the exact Google/revision marker, JS/CSS and legal documents
+with the verified artifact, checks entrypoint references, MIME types, CSP/HSTS and
+cache policy, then the API's existing `/readiness`. Its total deadline is 120 seconds
+with per-request/body/header limits. It does not execute JavaScript or replace
+browser authentication acceptance.
+
+When frontend monitoring is explicitly enabled, MK-815 reads this state and exposes
+`frontend.deployment.failed`, `.recoveryRequired`, `.rollbackFailed` and unusable
+evidence (`.unavailable`). A deliberate healthy pause alone is not an incident;
+successful automatic rollback retains the failure. Notification credentials and
+settings are unchanged; frontend monitoring is not automatically enabled.
 
 Static release files contain no member data. They are reconstructible from public
 immutable releases; preserve the reviewed hosting configuration and release
 references when restoring the VPS. Do not alter MK-813 backup secrets, retention
-or timers to install the frontend. External notifications remain MK-815 work.
+or timers to install the frontend. External delivery uses the existing MK-815 channel.
 
 ## Browser acceptance before opening to users
 

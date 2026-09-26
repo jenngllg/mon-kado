@@ -2,6 +2,13 @@
 
 ## Activation status
 
+MK-936 capture schema **4** adds the two frontend release-safety modules to the
+reviewed configuration inventory. Restore accepts schemas 1, 2 and 3 with their
+original inventories; historical archives are not rewritten. During an approved
+deployment-code upgrade, reinstall the reviewed backup tooling before the next
+capture so its inventory matches the configuration fingerprint. This does not
+replace credentials, change retention, enable timers or create a remote backup.
+
 This runbook is not evidence that backups are active. Do not enable the nightly
 timer before a reviewed installation, a successful Drive capture, and an isolated
 restore using the Bitwarden recovery copy. Record the first unattended night and

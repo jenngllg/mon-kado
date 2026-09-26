@@ -50,13 +50,33 @@ class CliTests(unittest.TestCase):
                  patch.object(cli.subprocess, "run", return_value=Mock(stdout="c" * 64 + "\n")), \
                  patch.object(runtime, "Deployment") as deployment, contextlib.redirect_stdout(io.StringIO()):
                 deployment.return_value.deploy.return_value = "installed"
+                deployment.return_value.rollback.return_value = "installed"
                 # Act / Assert
                 self.assertEqual(0, cli.main(["deploy"]))
                 deployment.return_value.deploy.assert_called_with(retry=False)
                 self.assertEqual(0, cli.main(["deploy", "--retry"]))
                 deployment.return_value.deploy.assert_called_with(retry=True)
                 self.assertEqual(0, cli.main(["rollback", "--revision", "a" * 40]))
-                deployment.return_value.deploy.assert_called_with(approved={"fixture": True}, retry=True)
+                deployment.return_value.rollback.assert_called_with("a" * 40)
+
+    def test_pause_resume_recovery_and_busy_lock_commands(self):
+        # Arrange
+        with patch.object(cli.os, "geteuid", return_value=0), \
+             patch.object(cli.subprocess, "run", return_value=Mock(stdout="c" * 64)), \
+             patch.object(runtime, "locks"), patch.object(runtime, "Deployment") as deployment, \
+             contextlib.redirect_stdout(io.StringIO()) as output:
+            deployment.return_value.pause.return_value = "paused"
+            deployment.return_value.resume.return_value = "resumed"
+            # Act / Assert
+            self.assertEqual(0, cli.main(["pause"]))
+            deployment.return_value.pause.assert_called_once()
+            self.assertEqual(0, cli.main(["resume", "--revision", "a" * 40]))
+            deployment.return_value.resume.assert_called_once_with("a" * 40)
+            self.assertEqual(0, cli.main(["recover"]))
+            deployment.return_value.recover.assert_called_once()
+            deployment.return_value.deploy.side_effect = BlockingIOError()
+            self.assertEqual(0, cli.main(["deploy"]))
+            self.assertIn('"deferred"', output.getvalue())
 
     def test_status_is_bounded_and_failures_are_sanitized(self):
         # Arrange
@@ -65,7 +85,7 @@ class CliTests(unittest.TestCase):
             (state / "releases").mkdir()
             with patch.object(cli, "STATE", state), patch.object(cli.os, "geteuid", return_value=0):
                 # Act / Assert
-                for status in (None, {"state": "healthy"}, {"state": "private-canary"}):
+                for status in (None, {"state": "healthy"}, {"state": "failed"}):
                     if status is not None:
                         (state / "status.json").write_text(json.dumps(status))
                     with contextlib.redirect_stdout(io.StringIO()) as output:
@@ -112,32 +132,6 @@ class TransportTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 runtime.download("https://github.com/file", target, 1)
             self.assertEqual(30, build.return_value.open.call_args.kwargs["timeout"])
-
-    def test_smoke_uses_verified_tls_loopback_and_checks_exact_revision(self):
-        # Arrange
-        marker = {"revision": "a" * 40, "apiOrigin": "https://api.monkado.fr", "googleEnabled": False}
-        with patch.object(runtime.subprocess, "run", return_value=Mock(stdout=json.dumps(marker).encode())) as run:
-            # Act
-            runtime.probe("a" * 40, ["assets/main-abcdefgh.js"])
-            # Assert
-            self.assertEqual(4, run.call_count)
-            for call in run.call_args_list:
-                self.assertIn("www.monkado.fr:443:127.0.0.1", call.args[0])
-                self.assertNotIn("--insecure", call.args[0])
-                self.assertTrue(call.kwargs["check"])
-            run.return_value.stdout = b"{}"
-            with self.assertRaises(ValueError):
-                runtime.probe("a" * 40, [])
-
-    def test_smoke_requires_the_approved_google_value(self):
-        # Arrange
-        marker = {"revision": "a" * 40, "apiOrigin": "https://api.monkado.fr", "googleEnabled": True}
-        with patch.object(runtime.subprocess, "run", return_value=Mock(stdout=json.dumps(marker).encode())):
-            # Act / Assert
-            runtime.probe("a" * 40, [], True)
-            with self.assertRaises(ValueError):
-                runtime.probe("a" * 40, [], False)
-
 
 if __name__ == "__main__":
     unittest.main()

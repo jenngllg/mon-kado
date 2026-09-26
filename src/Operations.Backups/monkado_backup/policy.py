@@ -33,7 +33,7 @@ PREVIOUS_FILES = LEGACY_FILES + (
     "src/Operations.Monitoring/monitor_runtime.py",
     "src/Operations.Monitoring/monitor_storage.py",
 )
-FILES = PREVIOUS_FILES + (
+DEPLOYMENT_FILES = PREVIOUS_FILES + (
     "src/Operations.Monitoring/monitor_deployment.py",
     "src/Operations.Deployment/release_catalog.py",
     "src/Operations.Deployment/deploy_policy.py",
@@ -49,6 +49,10 @@ FILES = PREVIOUS_FILES + (
     "deployments/production/monkado-deploy",
     "deployments/production/monkado-deploy.service",
     "deployments/production/monkado-deploy.timer",
+)
+FILES = DEPLOYMENT_FILES + (
+    "src/Operations.Frontend/frontend_state.py",
+    "src/Operations.Frontend/frontend_probe.py",
 )
 
 

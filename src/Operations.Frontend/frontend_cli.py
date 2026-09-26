@@ -26,6 +26,10 @@ def parser():
     deploy.add_argument("--retry", action="store_true")
     rollback = operations.add_parser("rollback")
     rollback.add_argument("--revision", required=True)
+    resume = operations.add_parser("resume")
+    resume.add_argument("--revision", required=True)
+    operations.add_parser("pause")
+    operations.add_parser("recover")
     operations.add_parser("status")
     return command
 
@@ -43,10 +47,7 @@ def main(arguments):
         contract.require(os.geteuid() == 0)
         import frontend_runtime as runtime
         if options.operation == "status":
-            value = {"revision": runtime.current_revision(STATE / "releases"), "state": "not-installed"}
-            if (STATE / "status.json").exists():
-                status = json.loads((STATE / "status.json").read_text(encoding="utf-8"))
-                value["state"] = status.get("state") if status.get("state") in {"healthy", "failed"} else "unknown"
+            value = runtime.state_policy.read(STATE / "status.json", runtime.current_revision(STATE / "releases"))
             value["interrupted"] = (STATE / "transition.json").exists()
             print(json.dumps(value, sort_keys=True))
             return 0
@@ -56,12 +57,21 @@ def main(arguments):
         contract.require(contract.matches(contract.DIGEST, configuration_hash))
         deployment = runtime.Deployment(STATE, BACKEND_STATE, configuration_hash)
         if options.operation == "rollback":
-            contract.require(contract.matches(contract.SHA, options.revision))
-            manifest = json.loads((STATE / "manifests" / (options.revision + ".json")).read_text(encoding="utf-8"))
-            state = deployment.deploy(approved=manifest, retry=True)
+            state = deployment.rollback(options.revision)
+        elif options.operation == "pause":
+            state = deployment.pause()
+        elif options.operation == "resume":
+            state = deployment.resume(options.revision)
+        elif options.operation == "recover":
+            with runtime.locks(BACKEND_STATE):
+                deployment.recover()
+            state = "recovered"
         else:
             state = deployment.deploy(retry=options.retry)
         print(json.dumps({"state": state}))
+        return 0
+    except BlockingIOError:
+        print('{"state":"deferred"}')
         return 0
     except Exception:
         print('{"error":"FRONTEND_OPERATION_FAILED"}', file=sys.stderr)

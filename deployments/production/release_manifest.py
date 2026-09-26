@@ -22,6 +22,8 @@ FILES = (
     "src/Operations.Frontend/frontend_contract.py",
     "src/Operations.Frontend/frontend_runtime.py",
     "src/Operations.Frontend/frontend_cli.py",
+    "src/Operations.Frontend/frontend_state.py",
+    "src/Operations.Frontend/frontend_probe.py",
     "deployments/monitoring/monkado-monitor.service",
     "deployments/monitoring/monkado-monitor.timer",
     "deployments/monitoring/monitoring.json.example",

@@ -8,12 +8,13 @@ from pathlib import Path
 import re
 import shutil
 import ssl
-import subprocess
 import tempfile
 import urllib.parse
 import urllib.request
 
 import frontend_contract as contract
+import frontend_state as state_policy
+from frontend_probe import probe
 
 POINTER = f"https://api.github.com/repos/{contract.REPOSITORY}/releases/tags/frontend-production"
 ALLOWED_HOSTS = {"api.github.com", "github.com", "release-assets.githubusercontent.com", "objects.githubusercontent.com"}
@@ -120,21 +121,6 @@ def backend_revision(deployment):
     return revisions[0]
 
 
-def probe(revision, assets, google_enabled=False):
-    """Check this VPS through its public TLS names, with bounded outputs and no cookies."""
-    checks = ["https://www.monkado.fr/release.json", "https://www.monkado.fr/", contract.API_ORIGIN + "/readiness"]
-    checks.extend("https://www.monkado.fr/" + asset for asset in assets)
-    for index, url in enumerate(checks):
-        result = subprocess.run(
-            ["curl", "--fail", "--silent", "--show-error", "--max-time", "15", "--max-filesize", "20971520",
-             "--resolve", "www.monkado.fr:443:127.0.0.1", "--resolve", "api.monkado.fr:443:127.0.0.1", url],
-            check=True, capture_output=True, timeout=20)
-        if index == 0:
-            marker = json.loads(result.stdout)
-            contract.require(isinstance(marker, dict) and type(marker.get("googleEnabled")) is bool)
-            contract.require(marker == contract.release_marker(revision, google_enabled))
-
-
 def prune(releases, retained):
     """Retain active plus two previous releases; never enumerate unrelated paths for deletion."""
     candidates = [path for path in releases.iterdir()
@@ -160,70 +146,219 @@ def fingerprints(directory):
 class Deployment:
     """Coordinate an immutable static release and recover interrupted pointer changes."""
 
-    def __init__(self, root, deployment, configuration_hash, transport=download, health=probe):
+    def __init__(self, root, deployment, configuration_hash, transport=download, health=probe, clock=state_policy.now):
         self.root = root
         self.releases = root / "releases"
         self.backend_state = deployment
         self.configuration_hash = configuration_hash
         self.transport = transport
         self.health = health
+        self.clock = clock
         self.journal = root / "transition.json"
         self.status_file = root / "status.json"
 
-    def complete(self, manifest, backend, previous):
-        """Record actual successful activation order, excluding failed staging attempts."""
+    def load(self):
+        """Conservatively read legacy evidence without trusting its healthy label."""
+        return state_policy.read(self.status_file, current_revision(self.releases))
+
+    def save(self, state, **changes):
+        """Commit a validated operational state before the next externally visible action."""
+        state.update(changes, updatedAt=self.clock())
+        atomic_json(self.status_file, state_policy.validate(state))
+
+    def approved(self, staging, backend):
+        """Resolve exactly the protected publication channel, without accepting alternate hosts."""
+        pointer = staging / "release.json"
+        self.transport(POINTER, pointer, 65536)
+        return contract.from_release(json.loads(pointer.read_text(encoding="utf-8")), self.configuration_hash, backend)
+
+    def manifest(self, revision, backend):
+        """Never use a retained rollback artifact against a different active backend."""
+        contract.require(contract.matches(contract.SHA, revision))
+        path = self.root / "manifests" / (revision + ".json")
+        contract.require(path.is_file() and not path.is_symlink() and path.stat().st_size <= 4096)
+        value = contract.validate(json.loads(path.read_text(encoding="utf-8")), self.configuration_hash, backend)
+        contract.require(value["revision"] == revision)
+        return value
+
+    def materialize(self, manifest, staging):
+        """Verify cached or downloaded archive bytes before trusting any installed directory."""
+        revision = manifest["revision"]
+        archives = self.root / "archives"
+        archives.mkdir(mode=0o700, exist_ok=True)
+        cached = archives / (revision + ".tar.gz")
+        archive = cached
+        if not cached.exists():
+            contract.require(not cached.is_symlink())
+            archive = staging / "frontend.tar.gz"
+            self.transport(contract.archive_url(manifest), archive, contract.MAX_COMPRESSED)
+        contract.require(archive.is_file() and not archive.is_symlink())
+        extracted = staging / "extracted"
+        contract.extract(archive, extracted, manifest)
+        if archive != cached:
+            archive.replace(cached)
+            cached.chmod(0o600)
+            sync_directory(archives)
+        return extracted
+
+    def verify(self, revision, backend):
+        """Check local immutable contents and the actual HTTPS response, including on no-op runs."""
+        manifest = self.manifest(revision, backend)
+        with tempfile.TemporaryDirectory(prefix="verify-", dir=self.root) as temporary:
+            extracted = self.materialize(manifest, Path(temporary))
+            target = self.releases / revision
+            contract.require(fingerprints(target) == fingerprints(extracted))
+            self.health(revision, target, manifest.get("googleEnabled", False))
+        return manifest
+
+    def history(self):
+        """Read only bounded canonical successful-release identifiers, never linked metadata."""
         history_path = self.root / "history.json"
         history = []
+        contract.require(not history_path.is_symlink())
         if history_path.exists():
+            contract.require(history_path.is_file() and history_path.stat().st_size <= 4096)
             history = json.loads(history_path.read_text(encoding="utf-8"))
             contract.require(isinstance(history, list) and len(history) <= 3)
             contract.require(all(contract.matches(contract.SHA, item) for item in history))
+        return history
+
+    def complete(self, manifest, backend, previous):
+        """Record actual successful activation order, excluding failed staging attempts."""
+        history = self.history()
         retained = list(dict.fromkeys(item for item in [manifest["revision"], previous, *history] if item is not None))[:3]
-        atomic_json(history_path, retained)
-        atomic_json(self.status_file, {"state": "healthy", "revision": manifest["revision"], "backendRevision": backend,
-                                      "archiveSha256": manifest["archiveSha256"]})
+        atomic_json(self.root / "history.json", retained)
+        return retained
+
+    def finish(self, state, manifest, backend, previous, paused=False):
+        """Commit success before journal removal and prune only after recovery is unnecessary."""
+        retained = self.complete(manifest, backend, previous)
+        self.save(state, phase="healthy", revision=manifest["revision"], lastVerifiedRevision=manifest["revision"],
+                  candidateRevision=manifest["revision"], error=None, paused=paused, resumeDigest=None,
+                  checks={"files": True, "https": True})
+        self.journal.unlink(missing_ok=True)
+        sync_directory(self.root)
         prune(self.releases, retained)
+        for revision in list((self.root / "archives").iterdir()):
+            if revision.name.endswith(".tar.gz") and contract.matches(contract.SHA, revision.name[:-7]) and revision.name[:-7] not in retained:
+                contract.require(revision.is_file() and not revision.is_symlink())
+                revision.unlink()
 
     def recover(self):
-        """Restore the previous pointer before doing anything with another approved release."""
+        """Recover once, verifying the restored version and keeping any uncertainty durable."""
         if not self.journal.exists():
             return
-        transition = json.loads(self.journal.read_text(encoding="utf-8"))
-        contract.require(set(transition) == {"previous", "revision"})
-        contract.require(contract.matches(contract.SHA, transition["revision"]))
-        switch(self.releases, transition["previous"])
-        atomic_json(self.status_file, {"state": "failed", "failedRevision": transition["revision"], "error": "ROLLOUT_INTERRUPTED"})
-        self.journal.unlink()
-        sync_directory(self.root)
+        state = self.load()
+        committed_revision = state["revision"] if state["phase"] == "healthy" else None
+        self.save(state, phase="recovering", paused=True, resumeDigest=None, error="ROLLOUT_INTERRUPTED")
+        try:
+            contract.require(not self.journal.is_symlink() and self.journal.stat().st_size <= 4096)
+            transition = json.loads(self.journal.read_text(encoding="utf-8"))
+            contract.require(set(transition) == {"previous", "revision"})
+            contract.require(contract.matches(contract.SHA, transition["revision"]))
+            previous = transition["previous"]
+            contract.require(previous is None or contract.matches(contract.SHA, previous))
+            self.save(state, candidateRevision=transition["revision"])
+            backend = backend_revision(self.backend_state)
+            if committed_revision == transition["revision"]:
+                contract.require(current_revision(self.releases) == transition["revision"])
+                manifest = self.verify(transition["revision"], backend)
+                self.finish(state, manifest, backend, previous, paused=True)
+                return
+            if previous is not None:
+                self.manifest(previous, backend)
+            switch(self.releases, previous)
+            if previous is not None:
+                self.verify(previous, backend)
+            self.save(state, phase="rolledBack" if previous else "unavailable", revision=previous,
+                      lastVerifiedRevision=previous, checks={"files": True, "https": True} if previous else {},
+                      error="PUBLICATION_FAILED" if previous else "NO_PREVIOUS_RELEASE")
+            self.journal.unlink()
+            sync_directory(self.root)
+        except Exception:
+            self.save(state, phase="recoveryRequired", error="ROLLBACK_FAILED", checks={})
+            raise
+
+    def pause(self):
+        """Persist a manual suspension independently of timer enablement or process lifetime."""
+        with locks(self.backend_state):
+            state = self.load()
+            self.save(state, paused=True, resumeDigest=None)
+        return "paused"
+
+    def resume(self, revision):
+        """Authorize exactly one presently approved manifest after checking the active installation."""
+        contract.require(contract.matches(contract.SHA, revision))
+        with locks(self.backend_state):
+            contract.require(not self.journal.exists())
+            state = self.load()
+            contract.require(state["phase"] not in {"activating", "recovering", "recoveryRequired"})
+            backend = backend_revision(self.backend_state)
+            active = current_revision(self.releases)
+            if active is not None:
+                self.verify(active, backend)
+            with tempfile.TemporaryDirectory(prefix="resume-", dir=self.root) as temporary:
+                staging = Path(temporary)
+                manifest = self.approved(staging, backend)
+                contract.require(manifest["revision"] == revision)
+                self.materialize(manifest, staging)
+            self.save(state, phase="failed" if state["error"] else "legacy", paused=False,
+                      resumeDigest=state_policy.resume_digest(manifest))
+        return "resumed"
+
+    def rollback(self, revision):
+        """Freeze automatic publication before validating any manually chosen rollback target."""
+        contract.require(contract.matches(contract.SHA, revision))
+        with locks(self.backend_state):
+            state = self.load()
+            self.save(state, paused=True, resumeDigest=None)
+            contract.require(not self.journal.exists())
+            backend = backend_revision(self.backend_state)
+            manifest = self.manifest(revision, backend)
+            contract.require(revision in self.history())
+            return self.attempt(state, manifest, backend, stay_paused=True)
 
     def deploy(self, approved=None, retry=False):
-        """Install only after complete capture verification; restore the old site on failed smoke checks."""
+        """A timer cannot resume failed releases, even with the historical retry switch."""
         with locks(self.backend_state):
-            self.recover()
-            backend = backend_revision(self.backend_state)
+            state = self.load()
+            if self.journal.exists():
+                if state["phase"] == "recoveryRequired":
+                    return "paused"
+                self.recover()
+                return "recovered"
+            if state["phase"] in {"preparing", "activating", "recovering"}:
+                self.save(state, phase="failed", paused=True, resumeDigest=None, error="ROLLOUT_INTERRUPTED")
+            if state["paused"]:
+                return "paused"
+            try:
+                backend = backend_revision(self.backend_state)
+                with tempfile.TemporaryDirectory(prefix="resolve-", dir=self.root) as temporary:
+                    manifest = self.approved(Path(temporary), backend) if approved is None else contract.validate(approved, self.configuration_hash, backend)
+                contract.require(state["resumeDigest"] is None or state["resumeDigest"] == state_policy.resume_digest(manifest))
+                return self.attempt(state, manifest, backend)
+            except Exception:
+                state = self.load()
+                if not self.journal.exists() and state["phase"] not in {"rolledBack", "unavailable"}:
+                    self.save(state, phase="failed", paused=True, resumeDigest=None, error="PUBLICATION_FAILED", checks={})
+                raise
+
+    def attempt(self, state, manifest, backend, stay_paused=False):
+        """Perform one immutable switch, retaining a verified fallback and durable recovery intent."""
+        revision = manifest["revision"]
+        previous = current_revision(self.releases)
+        self.save(state, phase="preparing", candidateRevision=revision, resumeDigest=None, checks={})
+        try:
             with tempfile.TemporaryDirectory(prefix="attempt-", dir=self.root) as temporary:
-                staging = Path(temporary)
-                if approved is None:
-                    pointer = staging / "release.json"
-                    self.transport(POINTER, pointer, 65536)
-                    manifest = contract.from_release(json.loads(pointer.read_text(encoding="utf-8")), self.configuration_hash, backend)
-                else:
-                    manifest = contract.validate(approved, self.configuration_hash, backend)
-                revision = manifest["revision"]
-                previous = current_revision(self.releases)
-                if previous == revision:
-                    local_manifest = json.loads((self.root / "manifests" / (revision + ".json")).read_text(encoding="utf-8"))
-                    contract.require(local_manifest == manifest)
-                    self.complete(manifest, backend, previous)
-                    return "unchanged"
-                if self.status_file.exists():
-                    status = json.loads(self.status_file.read_text(encoding="utf-8"))
-                    contract.require(retry or status.get("failedRevision") != revision)
                 contract.require(shutil.disk_usage(self.root).free >= contract.MAX_COMPRESSED + contract.MAX_EXTRACTED + DISK_RESERVE)
-                archive = staging / "frontend.tar.gz"
-                self.transport(contract.archive_url(manifest), archive, contract.MAX_COMPRESSED)
-                extracted = staging / "extracted"
-                contract.extract(archive, extracted, manifest)
+                if previous is not None:
+                    # A deliberate rollback must not depend on the broken site's HTTP health.
+                    old = self.manifest(previous, backend) if stay_paused and previous != revision else self.verify(previous, backend)
+                    contract.require(previous != revision or old == manifest)
+                if previous == revision:
+                    self.finish(state, manifest, backend, previous, stay_paused)
+                    return "unchanged"
+                extracted = self.materialize(manifest, Path(temporary))
                 target = self.releases / revision
                 if target.exists() or target.is_symlink():
                     contract.require(fingerprints(target) == fingerprints(extracted))
@@ -234,16 +369,14 @@ class Deployment:
                 manifests.mkdir(mode=0o700, exist_ok=True)
                 atomic_json(manifests / (revision + ".json"), manifest)
                 atomic_json(self.journal, {"previous": previous, "revision": revision})
-                try:
-                    switch(self.releases, revision)
-                    assets = sorted(path.relative_to(target).as_posix() for path in (target / "assets").glob("*")
-                                    if path.suffix in {".js", ".css"})
-                    documents = sorted(Path(name).stem for name in contract.LEGAL_PAGES) if manifest["schemaVersion"] == 2 else []
-                    self.health(revision, assets + documents, manifest.get("googleEnabled", False))
-                except Exception:
-                    self.recover()
-                    raise
-                self.journal.unlink()
-                sync_directory(self.root)
-                self.complete(manifest, backend, previous)
+                self.save(state, phase="activating")
+                switch(self.releases, revision)
+                self.health(revision, target, manifest.get("googleEnabled", False))
+                self.finish(state, manifest, backend, previous, stay_paused)
                 return "installed"
+        except Exception:
+            if self.journal.exists():
+                self.recover()
+            else:
+                self.save(state, phase="failed", paused=True, resumeDigest=None, error="PUBLICATION_FAILED", checks={})
+            raise
