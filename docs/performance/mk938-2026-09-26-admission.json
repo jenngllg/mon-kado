@@ -1,0 +1,325 @@
+{
+  "schemaVersion": 1,
+  "audit": "MK-938",
+  "assessment": "image-cases-passed-throughput-unqualified",
+  "productionQualification": false,
+  "originalReportRewritten": false,
+  "limitations": [
+    "No OOM or restart during this campaign does not establish spare memory capacity: the shared cgroup reached its configured limit.",
+    "The automatic failed verdict is retained: observed throughput remains below the unchanged 10 requests/second target.",
+    "Previous clock observations are historical, not proof of the cause of this run's throughput shortfall.",
+    "No production deployment or provider calls."
+  ],
+  "postCampaignMemoryEvents": {
+    "low": 0,
+    "high": 0,
+    "max": 756,
+    "oom": 0,
+    "oom_kill": 0,
+    "oom_group_kill": 0
+  },
+  "sourceReportExcerpt": {
+    "schemaVersion": 1,
+    "profile": "images",
+    "qualificationScope": "local-performance",
+    "throughputQualificationRequired": true,
+    "verdict": "failed",
+    "expectedRequests": 9000,
+    "completedRequests": 9000,
+    "unexpectedErrors": 0,
+    "observedCompletionSpanSeconds": 900.5664529800415,
+    "observedRequestsPerSecond": 9.992599624626965,
+    "rateLimited": 0,
+    "droppedIterations": 0,
+    "families": {
+      "lists": {
+        "count": 3600,
+        "expected": 3600,
+        "p50": 5.344015,
+        "p95": 7.2914556,
+        "p99": 9.268629990000006
+      },
+      "wishes": {
+        "count": 2700,
+        "expected": 2700,
+        "p50": 7.3936915,
+        "p95": 9.844537,
+        "p99": 13.357081120000018
+      },
+      "shared": {
+        "count": 2700,
+        "expected": 2700,
+        "p50": 15.009907,
+        "p95": 21.95748415000001,
+        "p99": 62.296737310000125
+      }
+    },
+    "infrastructure": {
+      "qualified": true,
+      "memoryMax": 805306368,
+      "swapMax": 0,
+      "cpuMax": "100000 100000",
+      "memoryCurrent": 658534400,
+      "memoryPeak": 805310464,
+      "oom": 0,
+      "cpu": {
+        "usage_usec": "203049805",
+        "user_usec": "145531574",
+        "system_usec": "57518230",
+        "nice_usec": "0",
+        "nr_periods": "10272",
+        "nr_throttled": "587",
+        "throttled_usec": "246559675",
+        "nr_bursts": "0",
+        "burst_usec": "0"
+      },
+      "restarts": 0,
+      "alive": true,
+      "images": {
+        "api": "sha256:cac2089092354a3d5aa7f3bd435ed780edf77136d3406b48c2738a9c4aa99ebf",
+        "worker": "sha256:a7b8b8d7dd39477e78bd5a4e1f651a487fa775b653cf4fe8c184834f3878d9c5",
+        "postgres": "sha256:c293117fcecda7344b5480222e813b9f673d7abd69b1dd95eff239b768b04f59",
+        "caddy": "sha256:af555904a0961945f16bb323a501457b13a4f7e9bde969b145b97da80b38ecbe"
+      }
+    },
+    "stages": [
+      {
+        "index": 0,
+        "seconds": 900,
+        "requestedPerSecond": 10,
+        "completedRequests": 9000,
+        "deliveredPerScheduledSecond": 10,
+        "observedCompletionSpanSeconds": 900.5664529800415,
+        "observedRequestsPerSecond": 9.992599624626965,
+        "throughputTargetMet": false,
+        "unexpectedErrors": 0
+      }
+    ],
+    "latencyTargetsMet": true,
+    "throughputTargetsMet": false,
+    "productionQualification": false,
+    "generatorExitCodes": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "stopReason": null,
+    "supplement": {
+      "profile": "images",
+      "passed": true,
+      "results": [
+        {
+          "kind": "gift",
+          "inputBytes": 8807,
+          "outputBytes": 4164,
+          "milliseconds": 176.89692399994783,
+          "valid": true,
+          "case": "normal",
+          "concurrency": 1
+        },
+        {
+          "kind": "gift",
+          "inputBytes": 8807,
+          "outputBytes": 4164,
+          "milliseconds": 168.81901799990828,
+          "valid": true,
+          "case": "normal",
+          "concurrency": 2
+        },
+        {
+          "kind": "gift",
+          "inputBytes": 8807,
+          "outputBytes": 4164,
+          "milliseconds": 343.4030859999666,
+          "valid": true,
+          "case": "normal",
+          "concurrency": 2
+        },
+        {
+          "kind": "profile",
+          "inputBytes": 8807,
+          "outputBytes": 932,
+          "milliseconds": 50.50161199994818,
+          "valid": true,
+          "case": "normal",
+          "concurrency": 1
+        },
+        {
+          "kind": "profile",
+          "inputBytes": 8807,
+          "outputBytes": 932,
+          "milliseconds": 86.2930389999974,
+          "valid": true,
+          "case": "normal",
+          "concurrency": 2
+        },
+        {
+          "kind": "profile",
+          "inputBytes": 8807,
+          "outputBytes": 932,
+          "milliseconds": 56.870914000000994,
+          "valid": true,
+          "case": "normal",
+          "concurrency": 2
+        },
+        {
+          "kind": "gift",
+          "inputBytes": 10262753,
+          "outputBytes": 4892,
+          "milliseconds": 521.0755550000385,
+          "valid": true,
+          "case": "bytes",
+          "concurrency": 1
+        },
+        {
+          "kind": "gift",
+          "inputBytes": 10262753,
+          "outputBytes": 4892,
+          "milliseconds": 442.56689700000607,
+          "valid": true,
+          "case": "bytes",
+          "concurrency": 2
+        },
+        {
+          "kind": "gift",
+          "inputBytes": 10262753,
+          "outputBytes": 4892,
+          "milliseconds": 842.4643960000822,
+          "valid": true,
+          "case": "bytes",
+          "concurrency": 2
+        },
+        {
+          "kind": "profile",
+          "inputBytes": 10262753,
+          "outputBytes": 1020,
+          "milliseconds": 174.37073799999325,
+          "valid": true,
+          "case": "bytes",
+          "concurrency": 1
+        },
+        {
+          "kind": "profile",
+          "inputBytes": 10262753,
+          "outputBytes": 1020,
+          "milliseconds": 231.6053810000085,
+          "valid": true,
+          "case": "bytes",
+          "concurrency": 2
+        },
+        {
+          "kind": "profile",
+          "inputBytes": 10262753,
+          "outputBytes": 1020,
+          "milliseconds": 348.8091390000818,
+          "valid": true,
+          "case": "bytes",
+          "concurrency": 2
+        },
+        {
+          "kind": "gift",
+          "inputBytes": 126820,
+          "outputBytes": 3436,
+          "milliseconds": 384.44102400001157,
+          "valid": true,
+          "case": "pixels",
+          "concurrency": 1
+        },
+        {
+          "kind": "gift",
+          "inputBytes": 126820,
+          "outputBytes": 3436,
+          "milliseconds": 290.4035669999985,
+          "valid": true,
+          "case": "pixels",
+          "concurrency": 2
+        },
+        {
+          "kind": "gift",
+          "inputBytes": 126820,
+          "outputBytes": 3436,
+          "milliseconds": 628.7629589999142,
+          "valid": true,
+          "case": "pixels",
+          "concurrency": 2
+        },
+        {
+          "kind": "profile",
+          "inputBytes": 126820,
+          "outputBytes": 860,
+          "milliseconds": 214.39644100007627,
+          "valid": true,
+          "case": "pixels",
+          "concurrency": 1
+        },
+        {
+          "kind": "profile",
+          "inputBytes": 126820,
+          "outputBytes": 860,
+          "milliseconds": 211.0121660000459,
+          "valid": true,
+          "case": "pixels",
+          "concurrency": 2
+        },
+        {
+          "kind": "profile",
+          "inputBytes": 126820,
+          "outputBytes": 860,
+          "milliseconds": 402.63629100002163,
+          "valid": true,
+          "case": "pixels",
+          "concurrency": 2
+        }
+      ]
+    },
+    "metadata": {
+      "schemaVersion": 1,
+      "runId": "mk816-6ad209e47bc1",
+      "api": "sha256:cac2089092354a3d5aa7f3bd435ed780edf77136d3406b48c2738a9c4aa99ebf",
+      "worker": "sha256:a7b8b8d7dd39477e78bd5a4e1f651a487fa775b653cf4fe8c184834f3878d9c5",
+      "k6": "grafana/k6:2.3.0@sha256:9c2dee7f8ed74d317e4027c06a10f169b625638189de8d4555d0b3486a5aeb34",
+      "revision": "bbd930e513c9e2c8699bb7afe05349e4f43cfa50",
+      "dirty": false,
+      "host": "Docker Desktop;cpus=12;memory=8286515200",
+      "dataset": {
+        "members": 100,
+        "lists": 500,
+        "wishes": 10000,
+        "images": 200
+      },
+      "workerEnvironment": "Local",
+      "externalProviders": false
+    },
+    "auxiliaryRequests": 840,
+    "harness": {
+      "cgroup.py": "81db87fd119e899d2db503ad8f63bd17f9ac23927c24cb39d8d75dbb873a7d18",
+      "compose.py": "6de5ff2369fafde8cbf76bd365d435b4280894b70e7074fef7e6b6184423bed0",
+      "performance_cli.py": "9f97cb9cc412a706a7d5d13185d24725fcb2653e4a265b5ca08afd4f20ea286b",
+      "policy.py": "5116f9af803fdf38325a7244ea77077393dce96076e5a8501d9b3465e7402be9",
+      "reporting.py": "29d2051d51b47562ceb4aad72147adde945621fdfeb9c46da26f86d7603500be",
+      "runtime.py": "9134a81ea3778358d9629f082505af3693b42241111871a30d1484f80c820822",
+      "scenarios.js": "137935d79a7a6dd3a99bc6f8ccba958268aa3bc5dc04d9e03fedd8dc41df6a55",
+      "seed.py": "06f7749e59ebbf0348c8dabbafb89049697b5ea6dac98844fbac9ea25b2df544",
+      "supplements.py": "2be45571aa95136cb442674bc5c488127423e8a4629fd39c677128e5d729f158"
+    },
+    "dataInvariants": {
+      "members": 100,
+      "lists": 500,
+      "wishes": 10000,
+      "images": 202,
+      "overReserved": 0
+    },
+    "resourceSummary": {
+      "meanMeasuredCpuPercentOfOneCore": 12.23277797161193,
+      "memoryPeakBytesIncludingSetup": 805310464,
+      "resourceSampleCount": 132
+    }
+  }
+}

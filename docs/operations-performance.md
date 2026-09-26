@@ -3,9 +3,12 @@
 ## Latest release-quality evidence
 
 Read the [MK-938 campaign review](performance/mk938-2026-09-26.md) before
-interpreting older passing reports. It preserves a concurrent 40 MP PNG OOM
-under the unchanged 768 MiB budget and a directly observed Docker clock
-discrepancy. Complete counts alone do not qualify the requested throughput;
+interpreting older passing reports. It preserves the historical concurrent
+40 MP PNG OOM and Docker clock discrepancy. The subsequent approved admission
+campaign passes all 18 image cases without OOM or restart under the unchanged
+768 MiB budget, but reaches the memory limit and still fails the observed-rate
+gate. It does not establish spare memory capacity or production qualification.
+Complete counts alone do not qualify the requested throughput;
 every measured performance stage must meet its observed-rate requirement.
 The short CI smoke is explicitly functional, not a shared-runner performance
 reference. Do not rescale historical timestamps or relax thresholds to pass.
