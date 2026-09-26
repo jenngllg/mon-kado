@@ -102,3 +102,71 @@ class PolicyTests(unittest.TestCase):
         for point in points:
             point["phase"] = "warmup"
         self.assertEqual("incomplete", verdict(points, "smoke", health)["verdict"])
+
+    def test_complete_counts_do_not_hide_a_lower_observed_rate(self):
+        # Arrange
+        health = {"qualified": True, "alive": True, "oom": 0, "restarts": 0}
+        points = [{**point, "timestamp": point["timestamp"] * 1.03} for point in self.points()]
+
+        # Act
+        result = verdict(points, "smoke", health)
+
+        # Assert
+        self.assertEqual(300, result["completedRequests"])
+        self.assertEqual(0, result["unexpectedErrors"])
+        self.assertTrue(result["latencyTargetsMet"])
+        self.assertFalse(result["throughputTargetsMet"])
+        self.assertLess(result["stages"][0]["observedRequestsPerSecond"], 10)
+        self.assertEqual("failed", result["verdict"])
+
+    def test_throughput_boundary_allows_only_floating_point_rounding(self):
+        for stretch, expected in ((1, True), (1 + 1e-10, True), (1 + 1e-7, False), (.99, True)):
+            with self.subTest(stretch=stretch):
+                # Arrange
+                health = {"qualified": True, "alive": True, "oom": 0, "restarts": 0}
+                points = [{**point, "timestamp": point["timestamp"] * stretch} for point in self.points()]
+
+                # Act
+                result = verdict(points, "smoke", health)
+
+                # Assert
+                self.assertEqual(expected, result["throughputTargetsMet"])
+                self.assertEqual("passed" if expected else "failed", result["verdict"])
+
+    def test_zero_span_cannot_qualify_complete_work(self):
+        # Arrange
+        health = {"qualified": True, "alive": True, "oom": 0, "restarts": 0}
+        points = [{**point, "timestamp": 5} for point in self.points()]
+
+        # Act
+        result = verdict(points, "smoke", health)
+
+        # Assert
+        self.assertFalse(result["throughputTargetsMet"])
+        self.assertIsNone(result["stages"][0]["observedRequestsPerSecond"])
+        self.assertEqual("incomplete", result["verdict"])
+
+    def test_stress_requires_each_stage_rate_not_just_an_overall_average(self):
+        for slow_stage in (None, 1):
+            with self.subTest(slow_stage=slow_stage):
+                # Arrange
+                health = {"qualified": True, "alive": True, "oom": 0, "restarts": 0}
+                points = []
+                elapsed = 0
+                families = [family for family, weight in zip(FAMILIES, WEIGHTS) for _ in range(weight)]
+                for stage, (rate, seconds) in enumerate(schedule("stress")):
+                    speed = .9 if stage == slow_stage else 2
+                    for index in range(rate * seconds):
+                        for metric, value in (("business_ms", 25), ("business_ok", 1), ("business_status", 200)):
+                            points.append({"metric": metric, "value": value, "family": families[index % 10],
+                                           "phase": "measure", "stage": str(stage), "timestamp": elapsed + index / (rate * speed)})
+                    elapsed += seconds / speed
+
+                # Act
+                result = verdict(points, "stress", health)
+
+                # Assert
+                self.assertGreater(result["observedRequestsPerSecond"], 10)
+                self.assertEqual(12000, result["completedRequests"])
+                self.assertEqual(slow_stage is None, result["throughputTargetsMet"])
+                self.assertEqual("passed" if slow_stage is None else "failed", result["verdict"])

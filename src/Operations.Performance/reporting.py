@@ -29,6 +29,7 @@ def markdown(report):
              f"Memory limit: {infrastructure.get('memoryMax')} bytes; swap: {infrastructure.get('swapMax')}; CPU quota: {infrastructure.get('cpuMax')}.",
              f"Requests: {report['completedRequests']}/{report['expectedRequests']}; auxiliary requests: {report['auxiliaryRequests']}.",
              f"Observed completion rate: {report.get('observedRequestsPerSecond')} requests/second over {report.get('observedCompletionSpanSeconds')} seconds.",
+             f"Throughput targets met in every measured stage: {report.get('throughputTargetsMet')}.",
              f"Unexpected errors: {report['unexpectedErrors']}; 429: {report['rateLimited']}; dropped iterations: {report['droppedIterations']}.",
              f"OOM kills: {infrastructure.get('oom')}; restarts: {infrastructure.get('restarts')}.",
              f"Stop reason: {report['stopReason'] or 'none'}.", "",
@@ -37,5 +38,6 @@ def markdown(report):
                  for name, item in report["families"].items())
     lines.extend(["", f"Resource summary: `{report['resourceSummary']}`.",
                   f"Data invariants: `{report['dataInvariants']}`.",
-                  "Exact container image identifiers, stage counts, supplemental results and resource samples are in report.json."])
+                  "Exact container image identifiers, stage counts and observed rates, supplemental results and resource samples are in report.json.",
+                  "Completion timestamps gate throughput conservatively: clock discontinuities require investigation, not a passing qualification."])
     return "\n".join(lines) + "\n"

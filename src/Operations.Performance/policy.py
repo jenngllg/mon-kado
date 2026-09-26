@@ -92,10 +92,11 @@ def verdict(points, profile, infrastructure):
                      for family, value in families.items())
     stable = (infrastructure.get("qualified") is True and infrastructure.get("alive") is True
               and infrastructure.get("oom", 1) == 0 and infrastructure.get("restarts", 1) == 0)
-    success = complete and stable and dropped == 0 and errors / max(1, len(outcomes)) < .01 and 429 not in statuses
+    stage_results = stage_summaries(measured, stages)
+    throughput_ok = all(stage["throughputTargetMet"] for stage in stage_results)
+    success = complete and stable and throughput_ok and dropped == 0 and errors / max(1, len(outcomes)) < .01 and 429 not in statuses
     if profile not in ("smoke", "stress"):
         success = success and latency_ok
-    stage_results = stage_summaries(measured, stages)
     failed_verdict = "failed" if complete else "incomplete"
     return {"schemaVersion": 1, "profile": profile,
             "verdict": "passed" if success else failed_verdict,
@@ -104,7 +105,7 @@ def verdict(points, profile, infrastructure):
             "rateLimited": statuses.count(429), "droppedIterations": dropped,
             "families": families, "infrastructure": infrastructure,
             "stages": stage_results,
-            "latencyTargetsMet": latency_ok, "productionQualification": False}
+            "latencyTargetsMet": latency_ok, "throughputTargetsMet": throughput_ok, "productionQualification": False}
 
 
 def family_results(measured, profile, expected):
@@ -126,7 +127,16 @@ def stage_summaries(measured, stages):
     for index, (rate, seconds) in enumerate(stages):
         samples = [point for point in measured if point.get("stage", "0") == str(index)]
         done = [point for point in samples if point["metric"] == "business_ok"]
+        times = [point["timestamp"] for point in done if point.get("timestamp") is not None]
+        span = max(times) - min(times) if len(times) >= 2 else 0
+        observed_rate = (len(times) - 1) / span if span > 0 else None
+        # A complete count spread over a longer wall-clock interval is not proof
+        # of the requested throughput. isclose only absorbs floating-point rounding.
+        throughput_ok = (len(times) == rate * seconds and observed_rate is not None
+                         and (observed_rate >= rate or math.isclose(observed_rate, rate, rel_tol=1e-9)))
         stage_results.append({"index": index, "seconds": seconds, "requestedPerSecond": rate,
                               "completedRequests": len(done), "deliveredPerScheduledSecond": len(done) / seconds,
+                              "observedCompletionSpanSeconds": span, "observedRequestsPerSecond": observed_rate,
+                              "throughputTargetMet": throughput_ok,
                               "unexpectedErrors": sum(point["value"] != 1 for point in done)})
     return stage_results
