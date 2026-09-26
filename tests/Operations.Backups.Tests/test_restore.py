@@ -26,7 +26,7 @@ class RestoreTests(unittest.TestCase):
         # Act
         result = self.restore.download("a" * 64, target)
         # Assert
-        self.assertEqual(3, result["schemaVersion"])
+        self.assertEqual(4, result["schemaVersion"])
         self.operations.restic.assert_called_once_with("restore", "a" * 64, "--target", str(target))
         with self.assertRaisesRegex(BackupError, "RESTORE_TARGET_NOT_EMPTY"):
             self.restore.download("a" * 64, target)

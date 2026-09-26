@@ -9,7 +9,7 @@ import stat
 import tempfile
 from pathlib import Path
 
-from .policy import BackupError, FILES, LEGACY_FILES, PREVIOUS_FILES, HASH, release_metadata, timestamp
+from .policy import BackupError, FILES, LEGACY_FILES, PREVIOUS_FILES, DEPLOYMENT_FILES, HASH, release_metadata, timestamp
 
 IMAGE_NAME = re.compile(r"(?P<a>[0-9a-f]{2})/(?P<b>[0-9a-f]{2})/(?P=a)(?P=b)[0-9a-f]{28}\.(webp|pending)")
 # The repository also contains revocation records, not only key-{guid}.xml.
@@ -79,17 +79,17 @@ def entries(root):
     return result
 
 
-def validate_shape(paths, schema_version=3):
+def validate_shape(paths, schema_version=4):
     """Prevent a restored archive from injecting extra configuration or secrets."""
     required = {"postgres.dump", "configuration/production.env", RELEASE_PATH}
-    configuration = {1: LEGACY_FILES, 2: PREVIOUS_FILES, 3: FILES}[schema_version]
+    configuration = {1: LEGACY_FILES, 2: PREVIOUS_FILES, 3: DEPLOYMENT_FILES, 4: FILES}[schema_version]
     required.update("configuration/" + name for name in configuration)
     if not required.issubset(paths):
         raise BackupError("INCOMPLETE_CAPTURE")
     for name in paths:
         if name in required:
             continue
-        if schema_version == 3 and name in {"configuration/deployment-smoke.json", "configuration/deployment-status.json"}:
+        if schema_version >= 3 and name in {"configuration/deployment-smoke.json", "configuration/deployment-status.json"}:
             continue
         parent, _, filename = name.rpartition("/")
         if name.startswith("images/") and IMAGE_NAME.fullmatch(name[len("images/"):]):
@@ -113,7 +113,7 @@ def create_manifest(root, created_at, postgres_image, postgres_version, caddy_im
     inventory = entries(root)
     validate_shape(inventory)
     value = {
-        "schemaVersion": 3,
+        "schemaVersion": 4,
         "createdAt": created_at,
         "postgresImage": postgres_image,
         "postgresVersion": postgres_version,
@@ -129,7 +129,7 @@ def verify_manifest(root):
     """Verify every byte and reject unexpected files before a restore can run."""
     regular(root / MANIFEST_NAME)
     value = json.loads((root / MANIFEST_NAME).read_text())
-    if not isinstance(value, dict) or type(value.get("schemaVersion")) is not int or value["schemaVersion"] not in (1, 2, 3):
+    if not isinstance(value, dict) or type(value.get("schemaVersion")) is not int or value["schemaVersion"] not in (1, 2, 3, 4):
         raise BackupError("INVALID_MANIFEST")
     fields = {"schemaVersion", "createdAt", "postgresImage", "postgresVersion", "release", "files"}
     if value["schemaVersion"] >= 2:

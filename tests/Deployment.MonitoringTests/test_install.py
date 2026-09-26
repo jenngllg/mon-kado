@@ -55,6 +55,10 @@ if arguments[:1] == ['is-active']:
         # Assert
         self.assertEqual(0, result.returncode, result.stderr.decode())
         installed = Path("/opt/monkado")
+        for source in (self.source / "src/Operations.Frontend").glob("frontend_*.py"):
+            target = installed / "src/Operations.Frontend" / source.name
+            self.assertEqual(source.read_bytes(), target.read_bytes())
+            self.assertEqual(0o644, target.stat().st_mode & 0o777)
         for source in (self.source / "src/Operations.Monitoring").glob("monitor_*.py"):
             self.assertEqual(source.read_bytes(), (installed / "src/Operations.Monitoring" / source.name).read_bytes())
         for name in ("monkado-monitor.service", "monkado-monitor.timer"):

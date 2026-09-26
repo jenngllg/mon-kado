@@ -147,4 +147,9 @@ class Collector:
             result["deployment"] = monitor_deployment.collect(self.root, self.runner, now)
         except (OSError, ValueError, TypeError, KeyError, subprocess.SubprocessError):
             result["deployment"] = None
+        if frontend_enabled:
+            try:
+                result["frontendDeployment"] = monitor_deployment.collect_frontend(self.root, self.runner, now)
+            except (OSError, ValueError, TypeError, KeyError, subprocess.SubprocessError):
+                result["frontendDeployment"] = None
         return result, samples, oom

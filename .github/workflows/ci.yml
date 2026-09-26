@@ -117,7 +117,7 @@ jobs:
   frontend_publication:
     name: Static frontend publication
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -135,11 +135,19 @@ jobs:
         env:
           MONKADO_FRONTEND_DOCKER_TESTS: "1"
         run: python3 tests/Deployment.FrontendTests/test_frontend_http.py
+      - name: Verify release rollback and process interruption over isolated HTTPS
+        env:
+          MK936_DOCKER_CAMPAIGN: "1"
+        run: |
+          docker build -f tests/Deployment.FrontendTests/Dockerfile -t monkado-frontend-tests tests/Deployment.FrontendTests
+          python3 tests/Deployment.FrontendTests/test_frontend_campaign.py
       - name: Upload frontend publication coverage
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: frontend-publication-coverage
-          path: TestResults/frontend-publication-coverage.xml
+          path: |
+            TestResults/frontend-publication-coverage.xml
+            TestResults/mk936-frontend-campaign.json
           if-no-files-found: error
           retention-days: 3
   security_proxy:

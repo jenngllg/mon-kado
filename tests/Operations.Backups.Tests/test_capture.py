@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 from fixtures import capture
 from monkado_backup.capture import IMAGE_NAME, KEY_NAME, atomic_json, copy_files, copy_deployment_private, create_manifest, entries, regular, validate_shape, verify_manifest
-from monkado_backup.policy import BackupError, FILES, LEGACY_FILES, PREVIOUS_FILES
+from monkado_backup.policy import BackupError, FILES, LEGACY_FILES, PREVIOUS_FILES, DEPLOYMENT_FILES
 
 
 class CaptureTests(unittest.TestCase):
@@ -56,7 +56,7 @@ class CaptureTests(unittest.TestCase):
 
     def test_manifest_contract_is_strict(self):
         # Arrange / Act / Assert
-        for change in ({"schemaVersion": True}, {"schemaVersion": 4}, {"extra": 1},
+        for change in ({"schemaVersion": True}, {"schemaVersion": 5}, {"extra": 1},
                        {"caddyImage": None}, {"caddyImage": "caddy:latest"},
                        {"postgresImage": None}, {"postgresImage": "postgres:latest"},
                        {"postgresVersion": None}, {"postgresVersion": "17.1"}, {"postgresVersion": "18.\u0666"}, {"release": {}}):
@@ -105,6 +105,15 @@ class CaptureTests(unittest.TestCase):
         atomic_json(self.root / "manifest.json", value)
         self.assertEqual(value, verify_manifest(self.root))
 
+    def test_v3_capture_remains_readable_without_frontend_safety_modules(self):
+        # Arrange
+        for name in set(FILES) - set(DEPLOYMENT_FILES):
+            (self.root / "configuration" / name).unlink()
+        value = self.value | {"schemaVersion": 3, "files": entries(self.root)}
+        atomic_json(self.root / "manifest.json", value)
+        # Act / Assert
+        self.assertEqual(value, verify_manifest(self.root))
+
     def test_deployment_credentials_are_private_and_only_allowed_in_v3(self):
         private = self.root / "private"
         private.mkdir()
@@ -125,7 +134,7 @@ class CaptureTests(unittest.TestCase):
         with self.assertRaisesRegex(BackupError, "UNSAFE_FILE"):
             copy_deployment_private(private, private, target)
         paths = set(self.value["files"]) | {"configuration/deployment-smoke.json", "configuration/deployment-status.json"}
-        validate_shape(paths, 3)
+        validate_shape(paths, 4)
         with self.assertRaisesRegex(BackupError, "UNEXPECTED_CAPTURE_FILE"):
             validate_shape(paths, 2)
 

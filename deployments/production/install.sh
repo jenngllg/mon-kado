@@ -52,7 +52,7 @@ for file in compose.production.yaml release_manifest.py deploy.sh monkado.slice;
     install -m 0644 "$source_root/deployments/production/$file" "/opt/monkado/deployments/production/$file"
 done
 install -m 0644 "$source_root/deployments/frontend/frontend.caddy" /opt/monkado/deployments/frontend/frontend.caddy
-for file in frontend_contract.py frontend_runtime.py frontend_cli.py; do
+for file in frontend_contract.py frontend_runtime.py frontend_cli.py frontend_state.py frontend_probe.py; do
     install -m 0644 "$source_root/src/Operations.Frontend/$file" "/opt/monkado/src/Operations.Frontend/$file"
 done
 for unit in monkado-frontend.service monkado-frontend.timer; do

@@ -58,9 +58,10 @@ class DeploymentTests(unittest.TestCase):
         self.assertEqual("installed", result)
         self.assertEqual("unchanged", repeated)
         self.assertEqual("a" * 40, runtime.current_revision(self.releases))
-        self.health.assert_called_once_with("a" * 40, ["assets/main-abcdefgh.js"], False)
+        self.assertEqual(2, self.health.call_count)
+        self.health.assert_called_with("a" * 40, self.releases / ("a" * 40), False)
         self.assertFalse(self.operation.journal.exists())
-        self.assertEqual("healthy", json.loads(self.operation.status_file.read_text())["state"])
+        self.assertEqual("healthy", self.operation.load()["phase"])
         self.assertEqual(0o600, self.operation.status_file.stat().st_mode & 0o777)
         self.assertEqual(0o644, (self.releases / "current/index.html").stat().st_mode & 0o777)
         self.assertEqual([], list(self.state.glob("attempt-*")))
@@ -69,16 +70,19 @@ class DeploymentTests(unittest.TestCase):
         # Arrange
         self.operation.deploy()
         self.approved = self.build("d" * 40)
-        self.health.side_effect = RuntimeError("synthetic upstream failure")
+        self.health.side_effect = [None, RuntimeError("synthetic upstream failure"), None]
         # Act / Assert
         with self.assertRaises(RuntimeError):
             self.operation.deploy()
         self.assertEqual("a" * 40, runtime.current_revision(self.releases))
         self.health.reset_mock()
-        with self.assertRaises(ValueError):
-            self.operation.deploy()
+        self.assertEqual("rolledBack", self.operation.load()["phase"])
+        self.assertTrue(self.operation.load()["paused"])
+        self.assertEqual("paused", self.operation.deploy())
+        self.assertEqual("paused", self.operation.deploy(retry=True))
         self.health.assert_not_called()
         self.health.side_effect = None
+        self.operation.resume("d" * 40)
         self.assertEqual("installed", self.operation.deploy(retry=True))
         self.assertEqual("d" * 40, runtime.current_revision(self.releases))
         self.assertEqual("installed", self.operation.deploy(approved=self.build("e" * 40)))
@@ -94,7 +98,7 @@ class DeploymentTests(unittest.TestCase):
         result = self.operation.deploy()
         # Assert
         self.assertEqual("installed", result)
-        self.health.assert_called_once_with("d" * 40, ["assets/main-abcdefgh.js", "legal-notice", "privacy-policy", "terms-of-use"], True)
+        self.health.assert_called_once_with("d" * 40, self.releases / ("d" * 40), True)
 
     def test_failed_first_publication_removes_pointer(self):
         # Arrange
@@ -104,6 +108,24 @@ class DeploymentTests(unittest.TestCase):
             self.operation.deploy()
         self.assertIsNone(runtime.current_revision(self.releases))
         self.assertFalse(self.operation.journal.exists())
+
+    def test_manual_rollback_can_replace_an_unhealthy_active_site(self):
+        # Arrange
+        self.operation.deploy()
+        self.approved = self.build("d" * 40)
+        self.operation.deploy()
+        self.health.reset_mock()
+        def healthy_fallback_only(revision, directory, google_enabled):
+            if revision != "a" * 40:
+                raise ValueError("Current site unavailable")
+        self.health.side_effect = healthy_fallback_only
+        # Act
+        result = self.operation.rollback("a" * 40)
+        # Assert
+        self.assertEqual("installed", result)
+        self.assertEqual("a" * 40, runtime.current_revision(self.releases))
+        self.assertTrue(self.operation.load()["paused"])
+        self.health.assert_called_once_with("a" * 40, self.releases / ("a" * 40), False)
 
     def test_recovery_of_interruption_rolls_back_before_another_attempt(self):
         # Arrange
@@ -116,7 +138,8 @@ class DeploymentTests(unittest.TestCase):
         self.operation.recover()
         # Assert
         self.assertEqual("a" * 40, runtime.current_revision(self.releases))
-        self.assertEqual("ROLLOUT_INTERRUPTED", json.loads(self.operation.status_file.read_text())["error"])
+        self.assertEqual("PUBLICATION_FAILED", self.operation.load()["error"])
+        self.assertTrue(self.operation.load()["paused"])
         self.operation.recover()
         self.assertFalse(self.operation.journal.exists())
 
@@ -127,8 +150,10 @@ class DeploymentTests(unittest.TestCase):
         # Act / Assert
         with patch.object(runtime.shutil, "disk_usage", return_value=Mock(free=0)), self.assertRaises(ValueError):
             self.operation.deploy()
+        self.operation.resume("d" * 40)
         with patch.object(self.operation, "transport", side_effect=OSError("interrupted")), self.assertRaises(OSError):
             self.operation.deploy()
+        self.operation.resume("d" * 40)
         (self.backend / "in-progress.env").write_text("interrupted")
         with self.assertRaises(ValueError):
             self.operation.deploy()
@@ -184,6 +209,13 @@ class DeploymentTests(unittest.TestCase):
             (self.state / "history.json").write_text(json.dumps(history))
             with self.assertRaises(ValueError):
                 self.operation.complete(self.approved, "b" * 40, "e" * 40)
+        (self.state / "history.json").write_text(" " * 4097)
+        with self.assertRaises(ValueError):
+            self.operation.history()
+        (self.state / "history.json").unlink()
+        (self.state / "history.json").symlink_to(self.root / "missing")
+        with self.assertRaises(ValueError):
+            self.operation.history()
 
     def test_current_pointer_and_metadata_must_not_escape_trusted_roots(self):
         # Arrange / Act / Assert
@@ -215,3 +247,141 @@ class DeploymentTests(unittest.TestCase):
         (self.dist / ".env").write_text("private canary")
         with self.assertRaises(ValueError):
             runtime.fingerprints(self.dist)
+
+    def test_manual_pause_survives_a_new_process_and_retry_cannot_bypass_it(self):
+        # Arrange
+        self.operation.deploy()
+        # Act
+        self.assertEqual("paused", self.operation.pause())
+        restarted = runtime.Deployment(self.state, self.backend, "c" * 64, self.transport, self.health)
+        # Assert
+        self.assertEqual("paused", restarted.deploy(retry=True))
+        self.assertIsNone(restarted.load()["error"])
+        self.assertEqual("a" * 40, runtime.current_revision(self.releases))
+
+    def test_manual_rollback_remains_paused_until_exact_approved_manifest_is_resumed(self):
+        # Arrange
+        self.operation.deploy()
+        self.approved = self.build("d" * 40)
+        self.operation.deploy()
+        # Act
+        self.assertEqual("installed", self.operation.rollback("a" * 40))
+        # Assert
+        self.assertTrue(self.operation.load()["paused"])
+        self.assertEqual("a" * 40, runtime.current_revision(self.releases))
+        self.assertEqual("paused", self.operation.deploy(retry=True))
+        with self.assertRaises(ValueError):
+            self.operation.resume("a" * 40)
+        self.operation.resume("d" * 40)
+        self.approved = self.build("e" * 40)
+        with self.assertRaises(ValueError):
+            self.operation.deploy()
+        self.assertTrue(self.operation.load()["paused"])
+        self.assertEqual("a" * 40, runtime.current_revision(self.releases))
+
+    def test_rollback_incompatible_backend_and_unknown_history_never_switch(self):
+        # Arrange
+        self.operation.deploy()
+        # Act / Assert
+        (self.backend / "current.env").write_text("RELEASE_REVISION=" + "f" * 40 + "\n")
+        with self.assertRaises(ValueError):
+            self.operation.rollback("a" * 40)
+        self.assertTrue(self.operation.load()["paused"])
+        (self.backend / "current.env").write_text("RELEASE_REVISION=" + "b" * 40 + "\n")
+        (self.state / "history.json").write_text("[]")
+        with self.assertRaises(ValueError):
+            self.operation.rollback("a" * 40)
+        self.assertEqual("a" * 40, runtime.current_revision(self.releases))
+
+    def test_failed_restoration_keeps_journal_and_requires_explicit_recovery(self):
+        # Arrange
+        self.operation.deploy()
+        self.approved = self.build("d" * 40)
+        self.health.side_effect = [None, RuntimeError("candidate"), RuntimeError("fallback")]
+        # Act / Assert
+        with self.assertRaises(RuntimeError):
+            self.operation.deploy()
+        self.assertEqual("recoveryRequired", self.operation.load()["phase"])
+        self.assertEqual("ROLLBACK_FAILED", self.operation.load()["error"])
+        self.assertTrue(self.operation.journal.exists())
+        self.assertEqual("paused", self.operation.deploy(retry=True))
+        with self.assertRaises(ValueError):
+            self.operation.resume("d" * 40)
+        self.health.side_effect = None
+        self.operation.recover()
+        self.assertEqual("rolledBack", self.operation.load()["phase"])
+        self.assertFalse(self.operation.journal.exists())
+        self.assertTrue(self.operation.load()["paused"])
+
+    def test_interrupted_transition_recovery_stops_before_another_publication(self):
+        # Arrange
+        self.operation.deploy()
+        self.approved = self.build("d" * 40)
+        with patch.object(runtime, "switch", side_effect=KeyboardInterrupt), self.assertRaises(KeyboardInterrupt):
+            self.operation.deploy()
+        # Act
+        self.assertEqual("recovered", self.operation.deploy())
+        # Assert
+        self.assertEqual("a" * 40, runtime.current_revision(self.releases))
+        self.assertTrue(self.operation.load()["paused"])
+        self.assertFalse(self.operation.journal.exists())
+
+    def test_success_committed_before_journal_removal_is_reverified_not_rolled_back(self):
+        # Arrange
+        self.operation.deploy()
+        runtime.atomic_json(self.operation.journal, {"previous": None, "revision": "a" * 40})
+        self.health.reset_mock()
+        # Act
+        self.operation.recover()
+        # Assert
+        self.assertEqual("healthy", self.operation.load()["phase"])
+        self.assertTrue(self.operation.load()["paused"])
+        self.assertEqual("a" * 40, runtime.current_revision(self.releases))
+        self.health.assert_called_once()
+        self.assertFalse(self.operation.journal.exists())
+
+    def test_preparation_power_loss_latches_failure_without_a_switch(self):
+        # Arrange
+        self.operation.deploy()
+        self.approved = self.build("d" * 40)
+        self.health.side_effect = KeyboardInterrupt()
+        with self.assertRaises(KeyboardInterrupt):
+            self.operation.deploy()
+        self.health.side_effect = None
+        # Act / Assert
+        self.assertEqual("paused", self.operation.deploy())
+        self.assertEqual("ROLLOUT_INTERRUPTED", self.operation.load()["error"])
+        self.assertEqual("a" * 40, runtime.current_revision(self.releases))
+
+    def test_first_publication_can_resume_without_any_existing_site(self):
+        # Arrange
+        self.operation.pause()
+        # Act
+        self.operation.resume("a" * 40)
+        self.operation.deploy()
+        # Assert
+        self.assertEqual("healthy", self.operation.load()["phase"])
+        self.assertFalse(self.operation.load()["paused"])
+
+    def test_unchanged_site_cannot_hide_modified_bytes(self):
+        # Arrange
+        self.operation.deploy()
+        (self.releases / "current/index.html").write_text("unexpected bytes")
+        # Act / Assert
+        with self.assertRaises(ValueError):
+            self.operation.deploy()
+        self.assertTrue(self.operation.load()["paused"])
+        self.assertEqual("failed", self.operation.load()["phase"])
+
+    def test_corrupt_journal_latches_recovery_without_switch_or_automatic_retry(self):
+        # Arrange
+        self.operation.deploy()
+        self.operation.journal.write_text("{}")
+        # Act / Assert
+        with self.assertRaises(ValueError):
+            self.operation.deploy()
+        self.assertEqual("recoveryRequired", self.operation.load()["phase"])
+        self.assertTrue(self.operation.load()["paused"])
+        self.assertEqual("paused", self.operation.deploy(retry=True))
+        self.assertEqual("a" * 40, runtime.current_revision(self.releases))
+        self.assertEqual("{}", self.operation.journal.read_text())

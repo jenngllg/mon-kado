@@ -20,6 +20,7 @@ def snapshot(service="api", when=NOW, count=0):
 def observation():
     return {"frontendEnabled": True, "checks": {"api": False, "database": False, "frontend": False},
             "deployment": {"failed": False, "recoveryRequired": False, "rollbackFailed": False},
+            "frontendDeployment": {"failed": False, "recoveryRequired": False, "rollbackFailed": False},
             "maintenance": [], "containers": {name: {"running": True, "newOom": False, "recentRestarts": 0}
                                                for name in policy.SERVICES}, "newHostOom": False,
             "snapshots": {"api": snapshot(), "worker": snapshot("worker")},

@@ -140,6 +140,9 @@ def evaluate(observation, history, now, options):
     # Import here because the read-only adapter shares the primitive validators above.
     from monitor_deployment import decisions as deployment_decisions
     decisions.update(deployment_decisions(observation.get("deployment")))
+    if observation["frontendEnabled"]:
+        from monitor_deployment import frontend_decisions
+        decisions.update(frontend_decisions(observation.get("frontendDeployment")))
     for host, expiry in observation["certificates"].items():
         require(host in ("api", "frontend"))
         decisions[host + ".certificate"] = None if expiry is None else timestamp(expiry) - now < timedelta(days=options["certificateDays"])
