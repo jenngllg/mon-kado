@@ -377,7 +377,7 @@ class Bench:
             report["dataInvariants"] = {"verified": False}
             report["verdict"] = "failed"
         report["resourceSamples"] = samples
-        report["resourceSummary"] = resources(samples)
+        report["resourceSummary"] = resources(samples, health)
         private_write(self.directory / "report.json", json.dumps(report, indent=2))
         private_write(self.directory / "report.md", markdown(report))
         return report

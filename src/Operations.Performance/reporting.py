@@ -2,7 +2,7 @@
 from datetime import datetime
 
 
-def resources(samples):
+def resources(samples, terminal):
     measured = [sample for sample in samples if sample.get("phase") == "measure"]
     cpu = None
     if len(measured) >= 2:
@@ -10,8 +10,11 @@ def resources(samples):
         elapsed = (datetime.fromisoformat(last["observedAt"]) - datetime.fromisoformat(first["observedAt"])).total_seconds()
         if elapsed > 0:
             cpu = (int(last["cpu"]["usage_usec"]) - int(first["cpu"]["usage_usec"])) / elapsed / 10000
+    # An OOM can stop sampling before the failing observation is appended. The
+    # final cgroup lifetime peak must survive even when the generator has stopped.
+    peaks = [sample["memoryPeak"] for sample in [*samples, terminal] if "memoryPeak" in sample]
     return {"meanMeasuredCpuPercentOfOneCore": cpu,
-            "memoryPeakBytesIncludingSetup": max((sample.get("memoryPeak", 0) for sample in samples), default=None),
+            "memoryPeakBytesIncludingSetup": max(peaks, default=None),
             "resourceSampleCount": len(samples)}
 
 
