@@ -120,6 +120,27 @@ test('profiles retain bounded VUs, exact rates and separate warmup from measurem
     }
 });
 
+test('stress keeps its last scheduled arrival before the executor deadline without extra traffic', async () => {
+    const h = await harness('stress');
+    const stages = JSON.parse(JSON.stringify(h.api.options.scenarios.traffic.stages));
+    assert.deepEqual(stages, [
+        {target: 10, duration: '180s'},
+        {target: 5, duration: '0s'}, {target: 5, duration: '300s'},
+        {target: 10, duration: '0s'}, {target: 10, duration: '300s'},
+        {target: 20, duration: '0s'}, {target: 20, duration: '300s'},
+        {target: 5, duration: '0s'}, {target: 5, duration: '300s'},
+        {target: 0, duration: '0s'}, {target: 0, duration: '1s'},
+    ]);
+    const actors = h.api.setup();
+    h.execution.scenario.iterationInTest = 1379;
+    h.api.business(actors);
+    assert.equal('3', h.points.filter(point => point.metric === 'business_ok').at(-1).tags.stage);
+    const before = h.calls.length;
+    h.execution.scenario.iterationInTest = 1380;
+    h.api.business(actors);
+    assert.equal(before, h.calls.length);
+});
+
 test('unexpected status and invalid successful payloads cannot produce fast passing measurements', async () => {
     const h = await harness();
     const actors = h.api.setup();

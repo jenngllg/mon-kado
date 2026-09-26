@@ -28,7 +28,10 @@ const executor = {timeUnit: '10s', preAllocatedVUs: 7, maxVUs: 7, exec: 'busines
 const scenarios = profile === 'stress' ? {traffic: {
     ...executor, executor: 'ramping-arrival-rate', startRate: 10,
     stages: [{target: 10, duration: warmup + 's'}, ...stages.flatMap(stage =>
-        [{target: stage.target, duration: '0s'}, stage])],
+        [{target: stage.target, duration: '0s'}, stage]),
+        // The last ramping arrival is due at the final stage boundary. Keep the
+        // executor alive past it without scheduling or measuring extra traffic.
+        {target: 0, duration: '0s'}, {target: 0, duration: '1s'}],
 }} : {traffic: {...executor, executor: 'constant-arrival-rate',
     rate: 10, duration: (warmup + Number.parseInt(stages[0].duration)) + 's'}};
 const thresholds = {
