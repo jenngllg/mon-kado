@@ -95,6 +95,7 @@ public static class InfrastructureInjectionConfiguration
         services.AddScoped<IUnitOfWork>(provider => provider.GetRequiredService<MonKadoDbContext>());
         services.AddScoped<IMonKadoUserRepository, MonKadoUserRepository>();
         services.AddScoped<IUserSearchService, UserSearchService>();
+        services.AddScoped<IPublicMemberProfileService, PublicMemberProfileService>();
         services.AddScoped<IMemberRepository, MemberRepository>();
         services.AddScoped<IAuthenticationEmailOutboxRepository, AuthenticationEmailOutboxRepository>();
         services.AddScoped<IAuthenticationSessionRepository, AuthenticationSessionRepository>();

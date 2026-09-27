@@ -91,6 +91,8 @@ public static class LogEventIds
     public const int UserSearchStarted = 1130;
     /// <summary>Identifies completion of a public member search.</summary>
     public const int UserSearchCompleted = 1131;
+    /// <summary>Identifies a successful public member profile read.</summary>
+    public const int PublicMemberProfileRetrieved = 1132;
 
     /// <summary>Identifies delivery of an account deletion confirmation.</summary>
     public const int AccountDeletionConfirmationSent = 1120;
