@@ -9,6 +9,17 @@ namespace JennGllg.Fr.MonKado.Back.Application.Logging;
 /// </summary>
 public static partial class ApplicationLogMessages
 {
+    /// <summary>Logs a successful public profile read without personal data or share links.</summary>
+    /// <param name="logger">The logger.</param>
+    /// <param name="memberId">The technical member identifier.</param>
+    [LoggerMessage(
+        EventId = LogEventIds.PublicMemberProfileRetrieved,
+        Level = LogLevel.Information,
+        Message = "Public member profile {MemberId} retrieved.")]
+    public static partial void PublicMemberProfileRetrieved(
+        ILogger logger,
+        Guid memberId);
+
     /// <summary>Logs the start of a search without its term.</summary>
     /// <param name="logger">The logger.</param>
     [LoggerMessage(

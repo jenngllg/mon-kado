@@ -4,6 +4,27 @@ Mon Kado is an API for creating, sharing, and managing gift wishlists.
 
 The repository contains the technical baseline, PostgreSQL persistence, containerized runtime stack, and versioned business capabilities. The first public business endpoint supports account registration by e-mail and password.
 
+## Public member profiles — MK-970
+
+`GET /api/v1/members/{memberId}/profile` is anonymous and rate-limited using the
+existing member-search policy. It returns only `id`, `displayName`,
+`profileImageUrl` and `wishlists`. Each list exposes `id`, `name`, `occasion`,
+`eventDate` and its current `shareUrl`; responses are `no-store`.
+
+All active shares, including existing shares, are discoverable from a confirmed
+member's public profile. Unshared, suspended and other members' lists are excluded.
+This is an intentional product visibility rule, not a new visibility setting.
+Revoking a share or deleting/suspending its list removes it on the next read.
+Missing, deleted and unconfirmed members all return `404` with
+`ACCOUNT_PUBLIC_PROFILE_NOT_FOUND`; a confirmed member without active shares
+returns an empty list. No database migration is required.
+
+Share URLs use the existing protected token and URL builder. Reading a profile
+does not create participants or reservations; opening a list follows the existing
+shared-list authorization rules. Only the member ID is included in the success
+log, never names, photos, list content or bearer secrets. Deploy this API contract
+before the matching frontend MK-970 change.
+
 ## Prerequisites
 
 - [.NET SDK 10.0.302 or a later .NET 10 feature band](https://dotnet.microsoft.com/download/dotnet/10.0)

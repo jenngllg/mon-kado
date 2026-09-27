@@ -47,6 +47,8 @@ public static class ErrorCodes
     public const string ProfileImageInvalid = "ACCOUNT_PROFILE_IMAGE_INVALID";
     /// <summary>Identifies ProfileImageNotFound errors.</summary>
     public const string ProfileImageNotFound = "ACCOUNT_PROFILE_IMAGE_NOT_FOUND";
+    /// <summary>Identifies an unavailable public member profile.</summary>
+    public const string PublicMemberProfileNotFound = "ACCOUNT_PUBLIC_PROFILE_NOT_FOUND";
     /// <summary>Identifies an account whose email is not confirmed.</summary>
     public const string AccountEmailNotConfirmed = "ACCOUNT_EMAIL_NOT_CONFIRMED";
     /// <summary>Identifies an invalid account deletion confirmation.</summary>

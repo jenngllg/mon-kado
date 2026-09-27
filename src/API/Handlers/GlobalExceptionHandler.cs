@@ -114,6 +114,12 @@ public class GlobalExceptionHandler(
                 "The supplied profile image is corrupt or exceeds the permitted dimensions.",
                 ErrorCodes.ProfileImageInvalid,
                 null),
+            PublicMemberProfileNotFoundException => new ErrorResponse(
+                StatusCodes.Status404NotFound,
+                "Member profile not found",
+                "The member profile is unavailable.",
+                ErrorCodes.PublicMemberProfileNotFound,
+                null),
             ProfileImageNotFoundException => new ErrorResponse(
                 StatusCodes.Status404NotFound,
                 "Profile image not found",
