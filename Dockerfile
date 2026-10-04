@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.7
 
 # Python 3.13 slim, pinned by digest.
-FROM python@sha256:8d9d0b8bcf6506481eae4907c18f5e3e7902e629f5f6d684f9e7c32e85e3ddf0 AS migration-catalog
+FROM python@sha256:be8ccd085666c34273c9dc5607c9842f8b2e3116128aae45148ce164c07ce09d AS migration-catalog
 WORKDIR /catalog
 COPY src/Operations.Deployment/release_catalog.py ./
 COPY src/Infrastructure.Persistence.PostgreSql/Migrations/ ./migrations/
