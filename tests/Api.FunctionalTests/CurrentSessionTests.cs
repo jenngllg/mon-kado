@@ -24,8 +24,10 @@ public class CurrentSessionTests
     private const string Issuer = "MonKado.Api";
     private const string SigningKey = "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA=";
 
-    [Fact]
-    public async Task GetCurrentAsync_WhenBearerIsValid_ReturnsExactCurrentSessionContract()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task GetCurrentAsync_WhenBearerIsValid_ReturnsExactCurrentSessionContract(bool isGoogleLinked)
     {
         // Arrange
         await using var factory = new RegistrationApiFactory();
@@ -38,7 +40,10 @@ public class CurrentSessionTests
                 "Administrator",
                 "Member"
             ],
-            42);
+            42)
+        {
+            IsGoogleLinked = isGoogleLinked
+        };
         using var client = factory.CreateClient();
         var accessTokenService = factory.Services.GetRequiredService<IAccessTokenService>();
         var accessToken = accessTokenService.Create(memberId);
@@ -73,6 +78,7 @@ public class CurrentSessionTests
                 "displayName",
                 "email",
                 "id",
+                "isGoogleLinked",
                 "profileImageUrl",
                 "roles"
             ],
@@ -80,6 +86,9 @@ public class CurrentSessionTests
         Assert.Equal(
             memberId,
             payload.GetProperty("id").GetGuid());
+        Assert.Equal(
+            isGoogleLinked,
+            payload.GetProperty("isGoogleLinked").GetBoolean());
         Assert.Equal(
             "jenn@example.fr",
             payload.GetProperty("email").GetString());

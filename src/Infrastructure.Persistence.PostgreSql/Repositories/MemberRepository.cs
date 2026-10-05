@@ -1,3 +1,4 @@
+using JennGllg.Fr.MonKado.Back.Application.Common.Constants;
 using JennGllg.Fr.MonKado.Back.Application.Models;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Abstractions;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Constants;
@@ -52,7 +53,10 @@ public class MemberRepository(MonKadoDbContext context) : IMemberRepository
                     .ToArray(),
                 member.Version)
             {
-                ProfileImageId = member.ProfileImageId
+                ProfileImageId = member.ProfileImageId,
+                IsGoogleLinked = context.UserLogins
+                    .Any(login => login.UserId == member.Id &&
+                        login.LoginProvider == ExternalLoginProviders.Google)
             })
             .SingleOrDefaultAsync(cancellationToken);
     }

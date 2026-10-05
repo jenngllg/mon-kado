@@ -120,6 +120,7 @@ public class GoogleSessionCompletionIntegrationTests(PostgreSqlContainerFixture 
         Assert.NotNull(current.Headers.ETag);
         Assert.False(current.Headers.ETag.IsWeak);
         Assert.NotNull(member);
+        Assert.True(member.IsGoogleLinked);
         Assert.Equal(
             jwt.Subject,
             member.Id.ToString("D"));

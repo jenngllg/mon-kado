@@ -16,6 +16,12 @@ public class CurrentSessionResponse(
     string displayName,
     IEnumerable<string> roles)
 {
+    /// <summary>Gets whether the member has a linked Google identity.</summary>
+    public bool IsGoogleLinked
+    {
+        get; init;
+    }
+
     /// <summary>
     /// Gets the member identifier.
     /// </summary>

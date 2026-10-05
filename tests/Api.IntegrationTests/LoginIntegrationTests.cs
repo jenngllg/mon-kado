@@ -1312,6 +1312,7 @@ public class LoginIntegrationTests(PostgreSqlContainerFixture fixture)
         var currentSession = await response.Content.ReadFromJsonAsync<CurrentSessionResponse>(
             TestContext.Current.CancellationToken);
         Assert.NotNull(currentSession);
+        Assert.False(currentSession.IsGoogleLinked);
         Assert.Equal(
             user.Id,
             currentSession.Id);

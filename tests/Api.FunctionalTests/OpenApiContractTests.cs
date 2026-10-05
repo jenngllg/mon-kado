@@ -167,10 +167,18 @@ public class OpenApiContractTests(UnavailablePostgreSqlApiFactory factory) : ICl
                 "displayName",
                 "email",
                 "id",
+                "isGoogleLinked",
                 "profileImageUrl",
                 "roles"
             ],
             properties);
+        Assert.Equal(
+            "boolean",
+            schema
+                .GetProperty("properties")
+                .GetProperty("isGoogleLinked")
+                .GetProperty("type")
+                .GetString());
         Assert.Equal(
             "array",
             schema
