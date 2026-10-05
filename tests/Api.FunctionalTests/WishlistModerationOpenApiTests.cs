@@ -158,7 +158,8 @@ public class WishlistModerationOpenApiTests
                 "eventDate",
                 "message",
                 "name",
-                "occasion"
+                "occasion",
+                "surpriseMode"
             ],
             ownerRequest
                 .GetProperty("properties")

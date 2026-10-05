@@ -67,6 +67,18 @@ public class WishDetails(
     /// </summary>
     public int Quantity { get; } = quantity;
 
+    /// <summary>Gets the reserved quantity, or null when reservation information is hidden.</summary>
+    public int? ReservedQuantity
+    {
+        get; init;
+    }
+
+    /// <summary>Gets the available quantity, or null when reservation information is hidden.</summary>
+    public int? AvailableQuantity
+    {
+        get; init;
+    }
+
     /// <summary>
     /// Gets the stable position inside the parent wishlist.
     /// </summary>

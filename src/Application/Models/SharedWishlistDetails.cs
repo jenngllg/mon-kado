@@ -26,6 +26,15 @@ public class SharedWishlistDetails(
 {
     /// <summary>Gets the wishlist identifier.</summary>
     public Guid Id { get; } = id;
+
+    /// <summary>Gets the owner identifier used only for access-dependent projections.</summary>
+    public Guid OwnerId
+    {
+        get; init;
+    }
+
+    /// <summary>Gets whether reservation quantities are hidden from the owner.</summary>
+    public bool SurpriseMode { get; init; } = true;
     /// <summary>Gets the public owner display name.</summary>
     public string OwnerDisplayName { get; } = ownerDisplayName;
     /// <summary>Gets the wishlist name.</summary>

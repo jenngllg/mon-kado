@@ -119,7 +119,11 @@ public class WishlistShareLinkRepository(MonKadoDbContext context) : IWishlistSh
                             .Sum() ?? 0,
                         null,
                         wish.ImageId))
-                    .ToArray()))
+                    .ToArray())
+            {
+                OwnerId = wishlist.OwnerId,
+                SurpriseMode = wishlist.SurpriseMode
+            })
             .SingleOrDefaultAsync(cancellationToken);
     }
 
@@ -138,6 +142,14 @@ public class WishlistShareLinkRepository(MonKadoDbContext context) : IWishlistSh
             .Select(wish => new SharedWishDetail
             {
                 WishlistId = wish.WishlistId,
+                OwnerId = context.Wishlists
+                    .Where(wishlist => wishlist.Id == wish.WishlistId)
+                    .Select(wishlist => wishlist.OwnerId)
+                    .Single(),
+                SurpriseMode = context.Wishlists
+                    .Where(wishlist => wishlist.Id == wish.WishlistId)
+                    .Select(wishlist => wishlist.SurpriseMode)
+                    .Single(),
                 Id = wish.Id,
                 Name = wish.Name,
                 Note = wish.Note,

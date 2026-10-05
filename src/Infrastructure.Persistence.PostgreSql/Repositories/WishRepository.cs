@@ -1,3 +1,4 @@
+using JennGllg.Fr.MonKado.Back.Application.Models;
 using JennGllg.Fr.MonKado.Back.Domain.Entities;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Abstractions;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Contexts;
@@ -13,6 +14,52 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Reposit
 /// <param name="context">The database context.</param>
 public class WishRepository(MonKadoDbContext context) : IWishRepository
 {
+    /// <inheritdoc />
+    public Task<WishDetails?> GetOwnerDetailsAsync(
+        Guid wishlistId,
+        Guid wishId,
+        CancellationToken cancellationToken)
+    {
+
+        return context.Wishes
+            .AsNoTracking()
+            .Where(wish => wish.WishlistId == wishlistId && wish.Id == wishId)
+            .Select(wish => new
+            {
+                Wish = wish,
+                ReservedQuantity = context.Wishlists
+                    .Where(wishlist => wishlist.Id == wish.WishlistId)
+                    .Select(wishlist => wishlist.SurpriseMode
+                        ? (int?)null
+                        : context.Set<GiftReservation>()
+                            .Where(reservation => reservation.WishId == wish.Id)
+                            .Sum(reservation => (int?)reservation.Quantity) ?? 0)
+                    .Single()
+            })
+            .Select(item => new WishDetails(
+                item.Wish.Id,
+                item.Wish.WishlistId,
+                item.Wish.Name,
+                item.Wish.Note,
+                item.Wish.Url,
+                item.Wish.Price,
+                item.Wish.Position,
+                item.Wish.CreatedAt,
+                item.Wish.UpdatedAt,
+                item.Wish.Version,
+                item.Wish.Quantity,
+                item.Wish.ImageId)
+            {
+                ReservedQuantity = item.ReservedQuantity,
+                AvailableQuantity = item.ReservedQuantity == null
+                    ? null
+                    : Math.Max(
+                        0,
+                        item.Wish.Quantity - item.ReservedQuantity.Value)
+            })
+            .SingleOrDefaultAsync(cancellationToken);
+    }
+
     /// <inheritdoc />
     public async Task<long> AllocatePositionAsync(
         Guid wishlistId,

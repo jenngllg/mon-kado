@@ -153,6 +153,7 @@ public class GetSharedWishQueryHandler(
             currentQuantity = reservation?.Quantity ?? 0;
         }
 
+        var hideReservations = wish.SurpriseMode && request.MemberId == wish.OwnerId;
         var result = new SharedWishDetail
         {
             Id = wish.Id,
@@ -161,8 +162,10 @@ public class GetSharedWishQueryHandler(
             Url = wish.Url,
             Price = wish.Price,
             Quantity = wish.Quantity,
-            ReservedQuantity = wish.ReservedQuantity,
-            CurrentParticipantReservedQuantity = currentQuantity,
+            ReservedQuantity = hideReservations
+                ? null
+                : wish.ReservedQuantity,
+            CurrentParticipantReservedQuantity = hideReservations ? null : currentQuantity,
             ImageId = wish.ImageId
         };
 

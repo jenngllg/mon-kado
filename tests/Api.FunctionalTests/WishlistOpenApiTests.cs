@@ -57,7 +57,8 @@ public class WishlistOpenApiTests
                 "eventDate",
                 "message",
                 "name",
-                "occasion"
+                "occasion",
+                "surpriseMode"
             ],
             requestSchema
                 .GetProperty("properties")
@@ -167,7 +168,8 @@ public class WishlistOpenApiTests
                 "eventDate",
                 "message",
                 "name",
-                "occasion"
+                "occasion",
+                "surpriseMode"
             ],
             updateRequestSchema
                 .GetProperty("properties")
@@ -290,6 +292,7 @@ public class WishlistOpenApiTests
                 "message",
                 "name",
                 "occasion",
+                "surpriseMode",
                 "suspendedAt",
                 "suspensionReason",
                 "updatedAt"
@@ -324,6 +327,7 @@ public class WishlistOpenApiTests
                 "message",
                 "name",
                 "occasion",
+                "surpriseMode",
                 "suspendedAt",
                 "suspensionReason",
                 "updatedAt"

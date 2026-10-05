@@ -22,6 +22,57 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Migrati
 public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
 {
     [Fact]
+    public async Task MigrateAsync_WhenWishlistAlreadyExists_EnablesSurpriseMode()
+    {
+        // Arrange
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var provider = CreateServiceProvider();
+        await using var scope = provider.CreateAsyncScope();
+        var context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
+        await context.Database.MigrateAsync(cancellationToken);
+        var ownerId = Guid.CreateVersion7();
+        context.Users.Add(CreateMigrationMember(
+            ownerId,
+            $"{ownerId:N}@example.test",
+            "Migration owner"));
+        var wishlist = new Wishlist(
+            Guid.CreateVersion7(),
+            ownerId,
+            "Migration wishlist",
+            "MIGRATION WISHLIST",
+            WishlistOccasion.Other,
+            null,
+            null,
+            false);
+        context.Wishlists.Add(wishlist);
+        await context.SaveChangesAsync(cancellationToken);
+        var migrator = context.GetService<Microsoft.EntityFrameworkCore.Migrations.IMigrator>();
+
+        try
+        {
+            // Act
+            await migrator.MigrateAsync(
+                "20260908165700_AddTwoFactorSecurityNotifications",
+                cancellationToken);
+            await context.Database.MigrateAsync(cancellationToken);
+            context.ChangeTracker.Clear();
+            var persisted = await context.Wishlists.SingleAsync(
+                item => item.Id == wishlist.Id,
+                cancellationToken);
+
+            // Assert
+            Assert.True(persisted.SurpriseMode);
+            Assert.Equal(
+                wishlist.Name,
+                persisted.Name);
+        }
+        finally
+        {
+            await context.Database.MigrateAsync(cancellationToken);
+        }
+    }
+
+    [Fact]
     public async Task MigrateAsync_WhenAdministrativeAuditIndexesAreAdded_PreservesEventsAcrossRollback()
     {
         // Arrange
@@ -425,6 +476,10 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
                 StringComparison.Ordinal),
             migration => Assert.EndsWith(
                 "_AddTwoFactorSecurityNotifications",
+                migration,
+                StringComparison.Ordinal),
+            migration => Assert.EndsWith(
+                "_AddWishlistSurpriseMode",
                 migration,
                 StringComparison.Ordinal));
         Assert.False(context.Database.HasPendingModelChanges());

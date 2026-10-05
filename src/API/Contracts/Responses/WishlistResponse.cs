@@ -49,6 +49,9 @@ public class WishlistResponse(
     /// </summary>
     public string? Message { get; } = message;
 
+    /// <summary>Gets whether reservation quantities are hidden from the owner.</summary>
+    public bool SurpriseMode { get; init; } = true;
+
     /// <summary>
     /// Gets the UTC creation date and time.
     /// </summary>

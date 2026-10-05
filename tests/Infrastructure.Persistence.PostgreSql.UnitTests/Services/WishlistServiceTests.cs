@@ -216,6 +216,7 @@ public class WishlistServiceTests
             WishlistOccasion.Birthday,
             eventDate,
             "Merci",
+            true,
             cancellationToken);
 
         // Assert
@@ -338,6 +339,7 @@ public class WishlistServiceTests
             WishlistOccasion.Other,
             null,
             null,
+            true,
             cancellationToken);
 
         // Assert
@@ -392,6 +394,7 @@ public class WishlistServiceTests
             WishlistOccasion.Other,
             null,
             null,
+            true,
             cancellationToken);
 
         // Assert
@@ -446,6 +449,7 @@ public class WishlistServiceTests
             WishlistOccasion.Other,
             null,
             null,
+            true,
             cancellationToken);
 
         // Assert
@@ -497,6 +501,7 @@ public class WishlistServiceTests
             WishlistOccasion.Other,
             null,
             null,
+            true,
             cancellationToken);
 
         // Assert
@@ -557,6 +562,7 @@ public class WishlistServiceTests
             WishlistOccasion.Other,
             null,
             null,
+            true,
             cancellationToken);
 
         // Assert
@@ -769,6 +775,7 @@ public class WishlistServiceTests
             eventDate,
             "Merci",
             0,
+            null,
             cancellationToken);
 
         // Assert
@@ -865,6 +872,7 @@ public class WishlistServiceTests
             eventDate,
             "Merci",
             0,
+            null,
             cancellationToken);
 
         // Assert
@@ -1189,6 +1197,7 @@ public class WishlistServiceTests
             null,
             null,
             0,
+            null,
             cancellationToken);
 
         // Assert
@@ -1254,6 +1263,7 @@ public class WishlistServiceTests
             pastDate,
             null,
             0,
+            null,
             cancellationToken);
 
         // Assert
@@ -1321,6 +1331,7 @@ public class WishlistServiceTests
                 1),
             null,
             0,
+            null,
             cancellationToken);
 
         // Assert
@@ -1420,6 +1431,7 @@ public class WishlistServiceTests
             null,
             null,
             42,
+            null,
             cancellationToken);
 
         // Assert
@@ -1475,6 +1487,7 @@ public class WishlistServiceTests
             null,
             null,
             0,
+            null,
             cancellationToken);
 
         // Assert
@@ -1541,6 +1554,7 @@ public class WishlistServiceTests
             null,
             null,
             0,
+            null,
             cancellationToken);
 
         // Assert
@@ -1600,6 +1614,7 @@ public class WishlistServiceTests
             null,
             null,
             0,
+            null,
             cancellationToken);
 
         // Assert
@@ -2446,6 +2461,7 @@ public class WishlistServiceTests
             WishlistOccasion.Other,
             null,
             null,
+            true,
             cancellationToken);
     }
 
@@ -2463,6 +2479,7 @@ public class WishlistServiceTests
             null,
             null,
             0,
+            null,
             cancellationToken);
     }
 

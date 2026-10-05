@@ -363,6 +363,7 @@ public class WishOpenApiTests
                 .GetProperty("schema"));
         Assert.Equal(
             [
+                "availableQuantity",
                 "createdAt",
                 "id",
                 "imageUrl",
@@ -371,6 +372,7 @@ public class WishOpenApiTests
                 "position",
                 "price",
                 "quantity",
+                "reservedQuantity",
                 "updatedAt",
                 "url",
                 "wishlistId"

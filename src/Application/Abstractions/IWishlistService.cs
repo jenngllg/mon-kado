@@ -12,6 +12,7 @@ public interface IWishlistService
     /// Creates a private wishlist for an existing member.
     /// </summary>
     /// <param name="id">The generated wishlist identifier.</param>
+    /// <param name="surpriseMode">Whether reservation quantities are hidden from the owner.</param>
     /// <param name="ownerId">The owner member identifier.</param>
     /// <param name="name">The normalized display name.</param>
     /// <param name="normalizedName">The normalized uniqueness key.</param>
@@ -32,11 +33,13 @@ public interface IWishlistService
         WishlistOccasion occasion,
         DateOnly? eventDate,
         string? message,
+        bool surpriseMode,
         CancellationToken cancellationToken);
 
     /// <summary>
     /// Updates a private wishlist owned by a member.
     /// </summary>
+    /// <param name="surpriseMode">The requested mode, or null to retain the current setting.</param>
     /// <param name="ownerId">The owner member identifier.</param>
     /// <param name="wishlistId">The wishlist identifier.</param>
     /// <param name="name">The normalized display name.</param>
@@ -65,6 +68,7 @@ public interface IWishlistService
         DateOnly? eventDate,
         string? message,
         uint expectedVersion,
+        bool? surpriseMode,
         CancellationToken cancellationToken);
 
     /// <summary>

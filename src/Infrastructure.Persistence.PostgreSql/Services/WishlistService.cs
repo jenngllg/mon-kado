@@ -47,6 +47,7 @@ public class WishlistService(
         WishlistOccasion occasion,
         DateOnly? eventDate,
         string? message,
+        bool surpriseMode,
         CancellationToken cancellationToken)
     {
         var wishlist = new Wishlist(
@@ -56,7 +57,8 @@ public class WishlistService(
             normalizedName,
             occasion,
             eventDate,
-            message);
+            message,
+            surpriseMode);
         wishlistRepository.Add(wishlist);
         try
         {
@@ -94,6 +96,7 @@ public class WishlistService(
         DateOnly? eventDate,
         string? message,
         uint expectedVersion,
+        bool? surpriseMode,
         CancellationToken cancellationToken)
     {
         (Wishlist Attempted, Wishlist Original)? attemptedUpdate = null;
@@ -139,7 +142,8 @@ public class WishlistService(
                     normalizedName,
                     occasion,
                     eventDate,
-                    message);
+                    message,
+                    surpriseMode);
 
                 if (!hasChanged)
                     return CreateDetails(wishlist);
@@ -369,6 +373,7 @@ public class WishlistService(
             wishlist.UpdatedAt,
             wishlist.Version)
         {
+            SurpriseMode = wishlist.SurpriseMode,
             IsSuspended = wishlist.IsSuspended,
             SuspensionReason = wishlist.SuspensionReason,
             SuspendedAt = wishlist.SuspendedAt
@@ -513,7 +518,8 @@ public class WishlistService(
             wishlist.NormalizedName,
             wishlist.Occasion,
             wishlist.EventDate,
-            wishlist.Message);
+            wishlist.Message,
+            wishlist.SurpriseMode);
     }
 
     /// <summary>
@@ -605,8 +611,8 @@ public class WishlistService(
         Wishlist first,
         Wishlist second)
     {
-        var firstValues = (first.Id, first.OwnerId, first.Name, first.NormalizedName, first.Occasion, first.EventDate, first.Message);
-        var secondValues = (second.Id, second.OwnerId, second.Name, second.NormalizedName, second.Occasion, second.EventDate, second.Message);
+        var firstValues = (first.Id, first.OwnerId, first.Name, first.NormalizedName, first.Occasion, first.EventDate, first.Message, first.SurpriseMode);
+        var secondValues = (second.Id, second.OwnerId, second.Name, second.NormalizedName, second.Occasion, second.EventDate, second.Message, second.SurpriseMode);
 
         return firstValues == secondValues;
     }

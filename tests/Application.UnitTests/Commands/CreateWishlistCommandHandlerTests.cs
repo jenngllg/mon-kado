@@ -49,6 +49,7 @@ public class CreateWishlistCommandHandlerTests
                 WishlistOccasion.Birthday,
                 eventDate,
                 "Merci",
+                true,
                 cancellationToken))
             .Returns((
                 Guid id,
@@ -58,6 +59,7 @@ public class CreateWishlistCommandHandlerTests
                 WishlistOccasion _,
                 DateOnly? _,
                 string? _,
+                bool _,
                 CancellationToken _) =>
             {
                 expected = new WishlistDetails(
@@ -91,6 +93,7 @@ public class CreateWishlistCommandHandlerTests
                 WishlistOccasion.Birthday,
                 eventDate,
                 "Merci",
+                true,
                 cancellationToken),
             Times.Once);
         _wishlistServiceMock.VerifyNoOtherCalls();
@@ -117,6 +120,7 @@ public class CreateWishlistCommandHandlerTests
                 WishlistOccasion.Other,
                 null,
                 null,
+                true,
                 cancellationToken))
             .ReturnsAsync((WishlistDetails?)null);
 
@@ -136,6 +140,7 @@ public class CreateWishlistCommandHandlerTests
                 WishlistOccasion.Other,
                 null,
                 null,
+                true,
                 cancellationToken),
             Times.Once);
         _wishlistServiceMock.VerifyNoOtherCalls();

@@ -1221,6 +1221,8 @@ public class WishTests
                 "url",
                 "price",
                 "quantity",
+                "reservedQuantity",
+                "availableQuantity",
                 "position",
                 "createdAt",
                 "updatedAt",

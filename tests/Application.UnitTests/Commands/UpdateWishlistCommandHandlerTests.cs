@@ -61,6 +61,7 @@ public class UpdateWishlistCommandHandlerTests
                 eventDate,
                 "Merci",
                 42,
+                null,
                 cancellationToken))
             .ReturnsAsync(expected);
 
@@ -83,6 +84,7 @@ public class UpdateWishlistCommandHandlerTests
                 eventDate,
                 "Merci",
                 42,
+                null,
                 cancellationToken),
             Times.Once);
         _wishlistServiceMock.VerifyNoOtherCalls();
@@ -113,6 +115,7 @@ public class UpdateWishlistCommandHandlerTests
                 null,
                 null,
                 42,
+                null,
                 cancellationToken))
             .ReturnsAsync((WishlistDetails?)null);
 
@@ -133,6 +136,7 @@ public class UpdateWishlistCommandHandlerTests
                 null,
                 null,
                 42,
+                null,
                 cancellationToken),
             Times.Once);
         _wishlistServiceMock.VerifyNoOtherCalls();

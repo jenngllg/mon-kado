@@ -14,6 +14,15 @@ public class SharedWishDetail
         get; init;
     }
 
+    /// <summary>Gets the owner identifier used only for access-dependent projections.</summary>
+    public Guid OwnerId
+    {
+        get; init;
+    }
+
+    /// <summary>Gets whether reservation quantities are hidden from the owner.</summary>
+    public bool SurpriseMode { get; init; } = true;
+
     /// <summary>Gets the gift-wish identifier.</summary>
     public Guid Id
     {
@@ -51,7 +60,7 @@ public class SharedWishDetail
     }
 
     /// <summary>Gets the total quantity reserved by all participants.</summary>
-    public int ReservedQuantity
+    public int? ReservedQuantity
     {
         get; init;
     }

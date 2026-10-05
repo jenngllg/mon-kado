@@ -19,6 +19,9 @@ internal sealed class WishlistConfiguration : IEntityTypeConfiguration<Wishlist>
     {
         builder.ToTable("wishlists");
         builder.HasKey(wishlist => wishlist.Id);
+        builder.Property(wishlist => wishlist.SurpriseMode)
+            .HasDefaultValue(true)
+            .HasSentinel(true);
         builder.Property(wishlist => wishlist.Name)
             .HasMaxLength(WishlistTextValidation.MaximumNameLength)
             .IsRequired();

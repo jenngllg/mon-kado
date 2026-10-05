@@ -6,6 +6,58 @@ namespace JennGllg.Fr.MonKado.Back.Domain.UnitTests.Entities;
 public class WishlistTests
 {
     [Fact]
+    public void Constructor_WhenModeIsOmitted_EnablesSurpriseMode()
+    {
+        // Arrange
+        // Act
+        var wishlist = CreateWishlist();
+
+        // Assert
+        Assert.True(wishlist.SurpriseMode);
+    }
+
+    [Theory]
+    [InlineData(true, false, true)]
+    [InlineData(false, true, true)]
+    [InlineData(true, true, false)]
+    [InlineData(false, false, false)]
+    [InlineData(false, null, false)]
+    [InlineData(true, null, false)]
+    public void Update_WhenModeIsRequested_PreservesOrChangesSetting(
+        bool originalMode,
+        bool? requestedMode,
+        bool expectedChange)
+    {
+        // Arrange
+        var wishlist = new Wishlist(
+            Guid.CreateVersion7(),
+            Guid.CreateVersion7(),
+            "Liste",
+            "LISTE",
+            WishlistOccasion.Birthday,
+            null,
+            null,
+            originalMode);
+
+        // Act
+        var changed = wishlist.Update(
+            wishlist.Name,
+            wishlist.NormalizedName,
+            wishlist.Occasion,
+            wishlist.EventDate,
+            wishlist.Message,
+            requestedMode);
+
+        // Assert
+        Assert.Equal(
+            expectedChange,
+            changed);
+        Assert.Equal(
+            requestedMode ?? originalMode,
+            wishlist.SurpriseMode);
+    }
+
+    [Fact]
     public void Constructor_WhenValuesAreProvided_InitializesWishlist()
     {
         // Arrange

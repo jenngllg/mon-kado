@@ -16,6 +16,8 @@ namespace JennGllg.Fr.MonKado.Back.Api.Contracts.Responses;
 /// <param name="updatedAt">The optional UTC update date and time.</param>
 /// <param name="quantity">The total desired quantity.</param>
 /// <param name="imageUrl">The optional short-lived absolute image URL.</param>
+/// <param name="reservedQuantity">The reserved quantity, or null when hidden.</param>
+/// <param name="availableQuantity">The available quantity, or null when hidden.</param>
 [ExcludeFromCodeCoverage]
 public class WishResponse(
     Guid id,
@@ -28,7 +30,9 @@ public class WishResponse(
     DateTime createdAt,
     DateTime? updatedAt,
     int quantity = 1,
-    string? imageUrl = null)
+    string? imageUrl = null,
+    int? reservedQuantity = null,
+    int? availableQuantity = null)
 {
     /// <summary>
     /// Gets the wish identifier.
@@ -64,6 +68,12 @@ public class WishResponse(
     /// Gets the total desired quantity.
     /// </summary>
     public int Quantity { get; } = quantity;
+
+    /// <summary>Gets the reserved quantity, or null when reservation information is hidden.</summary>
+    public int? ReservedQuantity { get; } = reservedQuantity;
+
+    /// <summary>Gets the available quantity, or null when reservation information is hidden.</summary>
+    public int? AvailableQuantity { get; } = availableQuantity;
 
     /// <summary>
     /// Gets the stable position inside the parent wishlist.

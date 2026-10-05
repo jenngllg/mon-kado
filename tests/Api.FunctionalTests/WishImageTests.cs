@@ -183,6 +183,8 @@ public class WishImageTests
                 "url",
                 "price",
                 "quantity",
+                "reservedQuantity",
+                "availableQuantity",
                 "position",
                 "createdAt",
                 "updatedAt",
