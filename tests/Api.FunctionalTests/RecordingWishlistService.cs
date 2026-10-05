@@ -157,6 +157,7 @@ public class RecordingWishlistService : IWishlistService
         WishlistOccasion occasion,
         DateOnly? eventDate,
         string? message,
+        bool surpriseMode,
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -183,7 +184,10 @@ public class RecordingWishlistService : IWishlistService
             message,
             _createdAt,
             null,
-            42);
+            42)
+        {
+            SurpriseMode = surpriseMode
+        };
         Wishlists[id] = wishlist;
 
         return Task.FromResult<WishlistDetails?>(wishlist);
@@ -217,6 +221,7 @@ public class RecordingWishlistService : IWishlistService
         DateOnly? eventDate,
         string? message,
         uint expectedVersion,
+        bool? surpriseMode,
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -244,7 +249,10 @@ public class RecordingWishlistService : IWishlistService
             message,
             _createdAt,
             _createdAt.AddDays(1),
-            UpdatedVersion);
+            UpdatedVersion)
+        {
+            SurpriseMode = surpriseMode ?? Wishlists.GetValueOrDefault(wishlistId)?.SurpriseMode ?? true
+        };
         Wishlists[wishlistId] = wishlist;
 
         return Task.FromResult<WishlistDetails?>(wishlist);

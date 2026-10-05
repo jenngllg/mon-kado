@@ -62,6 +62,12 @@ public class UpdateWishlistCommand(
     /// </summary>
     public string? Message { get; } = message;
 
+    /// <summary>Gets the requested surprise mode; omission keeps the default or existing setting.</summary>
+    public bool? SurpriseMode
+    {
+        get; init;
+    }
+
     /// <summary>
     /// Gets the version supplied by the client.
     /// </summary>
@@ -123,6 +129,7 @@ public class UpdateWishlistCommandHandler(
             request.EventDate,
             message,
             request.ExpectedVersion,
+            request.SurpriseMode,
             cancellationToken);
 
         if (wishlist is null)

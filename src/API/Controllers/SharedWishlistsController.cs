@@ -130,9 +130,11 @@ public class SharedWishlistsController(
                     Price = wish.Price,
                     Quantity = wish.Quantity,
                     ReservedQuantity = wish.ReservedQuantity,
-                    AvailableQuantity = Math.Max(
-                        0,
-                        wish.Quantity - wish.ReservedQuantity),
+                    AvailableQuantity = wish.ReservedQuantity is int reservedQuantity
+                        ? Math.Max(
+                            0,
+                            wish.Quantity - reservedQuantity)
+                        : null,
                     CurrentParticipantReservedQuantity = wish.CurrentParticipantReservedQuantity,
                     ImageUrl = wish.ImageId is Guid imageId
                         ? wishImageUrlService.CreateSharedUrl(
@@ -192,9 +194,11 @@ public class SharedWishlistsController(
             Price = wish.Price,
             Quantity = wish.Quantity,
             ReservedQuantity = wish.ReservedQuantity,
-            AvailableQuantity = Math.Max(
-                0,
-                wish.Quantity - wish.ReservedQuantity),
+            AvailableQuantity = wish.ReservedQuantity is int reservedQuantity
+                ? Math.Max(
+                    0,
+                    wish.Quantity - reservedQuantity)
+                : null,
             CurrentParticipantReservedQuantity = wish.CurrentParticipantReservedQuantity,
             ImageUrl = wish.ImageId is Guid imageId
                 ? wishImageUrlService.CreateSharedUrl(

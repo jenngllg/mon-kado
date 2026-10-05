@@ -53,6 +53,12 @@ public class CreateWishlistCommand(
     /// </summary>
     public string? Message { get; } = message;
 
+    /// <summary>Gets the requested surprise mode; omission keeps the default or existing setting.</summary>
+    public bool? SurpriseMode
+    {
+        get; init;
+    }
+
     /// <inheritdoc />
     Exception IGenericValidationFailure.CreateValidationException(
         IEnumerable<ValidationError> validationErrors)
@@ -102,6 +108,7 @@ public class CreateWishlistCommandHandler(
             request.Occasion ?? default,
             request.EventDate,
             message,
+            request.SurpriseMode ?? true,
             cancellationToken);
 
         if (wishlist is null)

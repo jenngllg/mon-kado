@@ -129,7 +129,8 @@ public class GetSharedWishlistQueryHandler(
         var enrichedWishlist = CreateWishlistDetails(
             wishlist,
             currentQuantities,
-            request.AvailableOnly);
+            request.AvailableOnly,
+            wishlist.SurpriseMode && request.MemberId == wishlist.OwnerId);
 
         ApplicationLogMessages.SharedWishlistRetrieved(
             logger,
@@ -144,7 +145,8 @@ public class GetSharedWishlistQueryHandler(
     private static SharedWishlistDetails CreateWishlistDetails(
         SharedWishlistDetails wishlist,
         IReadOnlyDictionary<Guid, int>? currentQuantities,
-        bool availableOnly)
+        bool availableOnly,
+        bool hideReservations)
     {
         var wishes = wishlist.Wishes
             .Select(wish => new SharedWishDetails(
@@ -153,10 +155,11 @@ public class GetSharedWishlistQueryHandler(
                 wish.Url,
                 wish.Price,
                 wish.Quantity,
-                wish.ReservedQuantity,
-                currentQuantities?.GetValueOrDefault(wish.Id),
+                hideReservations ? null : wish.ReservedQuantity,
+                hideReservations ? null : currentQuantities?.GetValueOrDefault(wish.Id),
                 wish.ImageId))
             .Where(wish =>
+                hideReservations ||
                 !availableOnly ||
                 wish.ReservedQuantity < wish.Quantity ||
                 wish.CurrentParticipantReservedQuantity > 0)

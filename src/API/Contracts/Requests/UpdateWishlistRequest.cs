@@ -37,4 +37,10 @@ public class UpdateWishlistRequest(
     /// Gets the optional owner message.
     /// </summary>
     public string? Message { get; } = message;
+
+    /// <summary>Gets the requested surprise mode; omission keeps the default or existing setting.</summary>
+    public bool? SurpriseMode
+    {
+        get; init;
+    }
 }

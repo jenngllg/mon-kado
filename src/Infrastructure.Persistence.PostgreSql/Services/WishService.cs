@@ -435,12 +435,21 @@ public class WishService(
         Guid wishId,
         CancellationToken cancellationToken)
     {
-        var wish = await GetByIdSafelyAsync(
-            wishlistId,
-            wishId,
-            cancellationToken);
+        try
+        {
 
-        return wish is null ? null : CreateDetails(wish);
+            return await wishRepository.GetOwnerDetailsAsync(
+                wishlistId,
+                wishId,
+                cancellationToken);
+        }
+        catch (Exception exception) when (PostgreSqlFailureClassifier.IsUnavailable(exception))
+        {
+
+            throw new DependencyUnavailableException(
+                DependencyNames.PostgreSql,
+                exception);
+        }
     }
 
     /// <inheritdoc/>

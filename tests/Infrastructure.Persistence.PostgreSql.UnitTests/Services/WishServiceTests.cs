@@ -1430,9 +1430,19 @@ public class WishServiceTests
     {
         // Arrange
         var data = CreateData();
-        var wish = CreateWish(data);
+        var wish = new WishDetails(
+            data.Id,
+            data.WishlistId,
+            "Souhait",
+            null,
+            null,
+            null,
+            1,
+            DateTime.UnixEpoch,
+            null,
+            0);
         _wishRepositoryMock
-            .Setup(repository => repository.GetByIdAsync(
+            .Setup(repository => repository.GetOwnerDetailsAsync(
                 data.WishlistId,
                 data.Id,
                 data.CancellationToken))
@@ -1449,7 +1459,13 @@ public class WishServiceTests
         Assert.Equal(
             data.Id,
             result.Id);
-        VerifyRetrieval(data);
+        _wishRepositoryMock.Verify(
+            repository => repository.GetOwnerDetailsAsync(
+                data.WishlistId,
+                data.Id,
+                data.CancellationToken),
+            Times.Once);
+        VerifyNoOtherCalls();
     }
 
     [Fact]
@@ -1458,11 +1474,11 @@ public class WishServiceTests
         // Arrange
         var data = CreateData();
         _wishRepositoryMock
-            .Setup(repository => repository.GetByIdAsync(
+            .Setup(repository => repository.GetOwnerDetailsAsync(
                 data.WishlistId,
                 data.Id,
                 data.CancellationToken))
-            .ReturnsAsync((Wish?)null);
+            .ReturnsAsync((WishDetails?)null);
 
         // Act
         var result = await _wishService.GetAsync(
@@ -1472,7 +1488,13 @@ public class WishServiceTests
 
         // Assert
         Assert.Null(result);
-        VerifyRetrieval(data);
+        _wishRepositoryMock.Verify(
+            repository => repository.GetOwnerDetailsAsync(
+                data.WishlistId,
+                data.Id,
+                data.CancellationToken),
+            Times.Once);
+        VerifyNoOtherCalls();
     }
 
     [Fact]
@@ -1481,7 +1503,7 @@ public class WishServiceTests
         // Arrange
         var data = CreateData();
         _wishRepositoryMock
-            .Setup(repository => repository.GetByIdAsync(
+            .Setup(repository => repository.GetOwnerDetailsAsync(
                 data.WishlistId,
                 data.Id,
                 data.CancellationToken))
@@ -1495,7 +1517,13 @@ public class WishServiceTests
 
         // Assert
         await Assert.ThrowsAsync<DependencyUnavailableException>(action);
-        VerifyRetrieval(data);
+        _wishRepositoryMock.Verify(
+            repository => repository.GetOwnerDetailsAsync(
+                data.WishlistId,
+                data.Id,
+                data.CancellationToken),
+            Times.Once);
+        VerifyNoOtherCalls();
     }
 
     [Fact]

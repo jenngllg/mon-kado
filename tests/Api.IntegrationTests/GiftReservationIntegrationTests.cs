@@ -21,6 +21,149 @@ namespace JennGllg.Fr.MonKado.Back.Api.IntegrationTests;
 [Collection(PostgreSqlApiTestSuite.Name)]
 public class GiftReservationIntegrationTests(PostgreSqlContainerFixture fixture)
 {
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task GetAsync_WhenOwnerSelectsSurpriseMode_ProtectsQuantitiesAcrossRoutes(
+        bool surpriseMode)
+    {
+        // Arrange
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var factory = await CreateFactoryAsync(cancellationToken);
+        var ownerId = Guid.CreateVersion7();
+        var participantId = Guid.CreateVersion7();
+        var wishlistId = Guid.CreateVersion7();
+        var wishId = Guid.CreateVersion7();
+        await SeedAsync(
+            factory,
+            ownerId,
+            [(participantId, "participant@example.test", "Private participant")],
+            wishlistId,
+            wishId,
+            2,
+            cancellationToken);
+        using var ownerClient = await CreateAuthorizedClientAsync(
+            factory,
+            ownerId);
+        using var participantClient = await CreateAuthorizedClientAsync(
+            factory,
+            participantId);
+        var share = await CreateShareLinkAsync(
+            ownerClient,
+            wishlistId,
+            cancellationToken);
+        var csrf = await GetCsrfTokenAsync(
+            participantClient,
+            cancellationToken);
+        using var join = await JoinAsync(
+            participantClient,
+            share.Id,
+            share.Secret,
+            csrf,
+            cancellationToken);
+        join.EnsureSuccessStatusCode();
+        using var reservation = await UpsertAsync(
+            participantClient,
+            share.Id,
+            wishId,
+            share.Secret,
+            csrf,
+            2,
+            null,
+            cancellationToken);
+        reservation.EnsureSuccessStatusCode();
+        using var initial = await ownerClient.GetAsync(
+            $"/api/v1/wishlists/{wishlistId}",
+            cancellationToken);
+        initial.EnsureSuccessStatusCode();
+        var original = await initial.Content.ReadFromJsonAsync<JsonElement>(cancellationToken);
+        Assert.True(original.GetProperty("surpriseMode").GetBoolean());
+        using var updateRequest = new HttpRequestMessage(
+            HttpMethod.Put,
+            $"/api/v1/wishlists/{wishlistId}")
+        {
+            Content = JsonContent.Create(new
+            {
+                name = original.GetProperty("name").GetString(),
+                occasion = original.GetProperty("occasion").GetString(),
+                eventDate = original.GetProperty("eventDate"),
+                message = original.GetProperty("message"),
+                surpriseMode
+            })
+        };
+        Assert.NotNull(initial.Headers.ETag);
+        updateRequest.Headers.IfMatch.Add(initial.Headers.ETag);
+
+        // Act
+        using var update = await ownerClient.SendAsync(
+            updateRequest,
+            cancellationToken);
+        update.EnsureSuccessStatusCode();
+        var updated = await update.Content.ReadFromJsonAsync<JsonElement>(cancellationToken);
+        using var owned = await ownerClient.GetAsync(
+            $"/api/v1/wishlists/{wishlistId}/wishes/{wishId}",
+            cancellationToken);
+        owned.EnsureSuccessStatusCode();
+        var ownedBody = await owned.Content.ReadFromJsonAsync<JsonElement>(cancellationToken);
+        using var sharedRequest = new HttpRequestMessage(
+            HttpMethod.Get,
+            $"/api/v1/shared-wishlists/{share.Id}/wishes/{wishId}");
+        sharedRequest.Headers.Add(
+            "X-MonKado-Share-Token",
+            share.Secret);
+        using var shared = await ownerClient.SendAsync(
+            sharedRequest,
+            cancellationToken);
+        shared.EnsureSuccessStatusCode();
+        var sharedBody = await shared.Content.ReadFromJsonAsync<JsonElement>(cancellationToken);
+        using var filtered = await GetSharedWishlistAsync(
+            ownerClient,
+            share.Id,
+            share.Secret,
+            true,
+            cancellationToken);
+        filtered.EnsureSuccessStatusCode();
+        var filteredBody = await filtered.Content.ReadFromJsonAsync<JsonElement>(cancellationToken);
+        using var participantRead = await GetSharedWishlistAsync(
+            participantClient,
+            share.Id,
+            share.Secret,
+            false,
+            cancellationToken);
+        participantRead.EnsureSuccessStatusCode();
+        var participantBody = await participantRead.Content.ReadFromJsonAsync<JsonElement>(cancellationToken);
+
+        // Assert
+        Assert.Equal(
+            surpriseMode,
+            updated.GetProperty("surpriseMode").GetBoolean());
+        Assert.Equal(
+            surpriseMode ? (int?)null : 2,
+            ownedBody.GetProperty("reservedQuantity").Deserialize<int?>());
+        Assert.Equal(
+            surpriseMode ? (int?)null : 0,
+            ownedBody.GetProperty("availableQuantity").Deserialize<int?>());
+        Assert.Equal(
+            surpriseMode ? (int?)null : 2,
+            sharedBody.GetProperty("reservedQuantity").Deserialize<int?>());
+        Assert.Equal(
+            surpriseMode ? (int?)null : 0,
+            sharedBody.GetProperty("availableQuantity").Deserialize<int?>());
+        Assert.Equal(
+            surpriseMode ? 1 : 0,
+            filteredBody.GetProperty("wishes").GetArrayLength());
+        Assert.Equal(
+            2,
+            Assert.Single(participantBody.GetProperty("wishes").EnumerateArray())
+                .GetProperty("reservedQuantity").GetInt32());
+        Assert.DoesNotContain(
+            "Private participant",
+            ownedBody.GetRawText());
+        Assert.DoesNotContain(
+            "Private participant",
+            sharedBody.GetRawText());
+    }
+
     [Fact]
     public async Task PutAsync_WhenCreatedAndReplaced_ExposesConsistentPublicQuantities()
     {

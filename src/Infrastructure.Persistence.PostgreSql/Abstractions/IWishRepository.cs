@@ -1,3 +1,4 @@
+using JennGllg.Fr.MonKado.Back.Application.Models;
 using JennGllg.Fr.MonKado.Back.Domain.Entities;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Entities;
 
@@ -8,6 +9,16 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Abstrac
 /// </summary>
 public interface IWishRepository
 {
+    /// <summary>Reads owner details and reservation visibility in one database snapshot.</summary>
+    /// <param name="wishlistId">The authorized parent wishlist identifier.</param>
+    /// <param name="wishId">The wish identifier.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The wish with reservation quantities only when surprise mode is disabled.</returns>
+    Task<WishDetails?> GetOwnerDetailsAsync(
+        Guid wishlistId,
+        Guid wishId,
+        CancellationToken cancellationToken);
+
     /// <summary>
     /// Allocates the next stable position for a parent wishlist atomically.
     /// </summary>

@@ -89,7 +89,10 @@ public class WishlistsController(
                 request.Name,
                 request.Occasion,
                 request.EventDate,
-                request.Message),
+                request.Message)
+            {
+                SurpriseMode = request.SurpriseMode
+            },
             cancellationToken);
         var response = CreateResponse(wishlist);
         Response.Headers.ETag = entityTagService.Format(wishlist.Version);
@@ -148,7 +151,10 @@ public class WishlistsController(
                 request.Occasion,
                 request.EventDate,
                 request.Message,
-                expectedVersion),
+                expectedVersion)
+            {
+                SurpriseMode = request.SurpriseMode
+            },
             cancellationToken);
         var response = CreateResponse(wishlist);
         Response.Headers.ETag = entityTagService.Format(wishlist.Version);
@@ -258,6 +264,7 @@ public class WishlistsController(
             wishlist.CreatedAt,
             wishlist.UpdatedAt)
         {
+            SurpriseMode = wishlist.SurpriseMode,
             IsSuspended = wishlist.IsSuspended,
             SuspensionReason = wishlist.SuspensionReason,
             SuspendedAt = wishlist.SuspendedAt

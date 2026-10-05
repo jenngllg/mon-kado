@@ -25,6 +25,73 @@ namespace JennGllg.Fr.MonKado.Back.Api.IntegrationTests;
 [Collection(PostgreSqlApiTestSuite.Name)]
 public class WishlistIntegrationTests(PostgreSqlContainerFixture fixture)
 {
+    [Theory]
+    [InlineData(null, true)]
+    [InlineData(true, true)]
+    [InlineData(false, false)]
+    public async Task CreateAsync_WhenSurpriseModeIsSpecified_PersistsAndPreservesSetting(
+        bool? requestedMode,
+        bool expectedMode)
+    {
+        // Arrange
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var factory = await CreateMigratedFactoryAsync();
+        var owner = await CreateMemberAsync(
+            factory,
+            "surprise-owner@example.test");
+        using var client = await AuthenticationTestData.CreateClientAsync(
+            factory,
+            owner.Id,
+            cancellationToken);
+
+        // Act
+        using var creation = await client.PostAsJsonAsync(
+            "/api/v1/wishlists",
+            new
+            {
+                name = "Surprise",
+                occasion = "other",
+                surpriseMode = requestedMode
+            },
+            cancellationToken);
+        creation.EnsureSuccessStatusCode();
+        var created = await creation.Content.ReadFromJsonAsync<JsonElement>(cancellationToken);
+        var location = creation.Headers.Location;
+        Assert.NotNull(location);
+        using var read = await client.GetAsync(
+            location,
+            cancellationToken);
+        read.EnsureSuccessStatusCode();
+        var persisted = await read.Content.ReadFromJsonAsync<JsonElement>(cancellationToken);
+        Assert.NotNull(read.Headers.ETag);
+        using var request = new HttpRequestMessage(
+            HttpMethod.Put,
+            location)
+        {
+            Content = JsonContent.Create(new { name = "Renamed", occasion = "other" })
+        };
+        request.Headers.IfMatch.Add(read.Headers.ETag);
+        using var update = await client.SendAsync(
+            request,
+            cancellationToken);
+        update.EnsureSuccessStatusCode();
+        var updated = await update.Content.ReadFromJsonAsync<JsonElement>(cancellationToken);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.Created,
+            creation.StatusCode);
+        Assert.Equal(
+            expectedMode,
+            created.GetProperty("surpriseMode").GetBoolean());
+        Assert.Equal(
+            expectedMode,
+            persisted.GetProperty("surpriseMode").GetBoolean());
+        Assert.Equal(
+            expectedMode,
+            updated.GetProperty("surpriseMode").GetBoolean());
+    }
+
     private static readonly DateTimeOffset _referenceTime = new(
         2026,
         8,

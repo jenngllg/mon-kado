@@ -45,13 +45,13 @@ public class SharedWishDetailResponse
     }
 
     /// <summary>Gets the total quantity reserved by all participants.</summary>
-    public int ReservedQuantity
+    public int? ReservedQuantity
     {
         get; init;
     }
 
     /// <summary>Gets the remaining quantity.</summary>
-    public int AvailableQuantity
+    public int? AvailableQuantity
     {
         get; init;
     }

@@ -20,7 +20,7 @@ public class SharedWishDetails(
     string? url,
     decimal? price,
     int quantity = 1,
-    int reservedQuantity = 0,
+    int? reservedQuantity = 0,
     int? currentParticipantReservedQuantity = null,
     Guid? imageId = null)
 {
@@ -35,7 +35,7 @@ public class SharedWishDetails(
     /// <summary>Gets the total desired quantity.</summary>
     public int Quantity { get; } = quantity;
     /// <summary>Gets the total quantity reserved by all participants.</summary>
-    public int ReservedQuantity { get; } = reservedQuantity;
+    public int? ReservedQuantity { get; } = reservedQuantity;
     /// <summary>Gets the quantity reserved by the current participant when one is joined.</summary>
     public int? CurrentParticipantReservedQuantity { get; } = currentParticipantReservedQuantity;
     /// <summary>Gets the optional normalized image identifier.</summary>

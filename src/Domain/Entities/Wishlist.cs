@@ -22,6 +22,7 @@ public class Wishlist : IAuditableEntity
     /// <param name="occasion">The associated occasion.</param>
     /// <param name="eventDate">The optional event date.</param>
     /// <param name="message">The optional owner message.</param>
+    /// <param name="surpriseMode">Whether reservation quantities are hidden from the owner.</param>
     public Wishlist(
         Guid id,
         Guid ownerId,
@@ -29,8 +30,10 @@ public class Wishlist : IAuditableEntity
         string normalizedName,
         WishlistOccasion occasion,
         DateOnly? eventDate,
-        string? message)
+        string? message,
+        bool surpriseMode = true)
     {
+        SurpriseMode = surpriseMode;
         Id = id;
         OwnerId = ownerId;
         Name = name;
@@ -48,13 +51,15 @@ public class Wishlist : IAuditableEntity
     /// <param name="occasion">The associated occasion.</param>
     /// <param name="eventDate">The optional event date.</param>
     /// <param name="message">The optional owner message.</param>
+    /// <param name="surpriseMode">The requested mode, or null to retain the current setting.</param>
     /// <returns><see langword="true" /> when at least one value changed; otherwise, <see langword="false" />.</returns>
     public bool Update(
         string name,
         string normalizedName,
         WishlistOccasion occasion,
         DateOnly? eventDate,
-        string? message)
+        string? message,
+        bool? surpriseMode = null)
     {
 
         if (string.Equals(
@@ -65,6 +70,7 @@ public class Wishlist : IAuditableEntity
                 NormalizedName,
                 normalizedName,
                 StringComparison.Ordinal) &&
+            (!surpriseMode.HasValue || SurpriseMode == surpriseMode.Value) &&
             Occasion == occasion &&
             Nullable.Equals(
                 EventDate,
@@ -82,6 +88,8 @@ public class Wishlist : IAuditableEntity
         Occasion = occasion;
         EventDate = eventDate;
         Message = message;
+
+        SurpriseMode = surpriseMode ?? SurpriseMode;
 
         return true;
     }
@@ -115,6 +123,9 @@ public class Wishlist : IAuditableEntity
 
         return true;
     }
+
+    /// <summary>Gets whether reservation quantities are hidden from the owner.</summary>
+    public bool SurpriseMode { get; private set; } = true;
 
     /// <summary>Gets whether an administrator has suspended this wishlist.</summary>
     public bool IsSuspended
