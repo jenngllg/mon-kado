@@ -18,6 +18,12 @@ public class CurrentSession(
     IEnumerable<string> roles,
     uint version)
 {
+    /// <summary>Gets whether the member has a linked Google identity.</summary>
+    public bool IsGoogleLinked
+    {
+        get; init;
+    }
+
     /// <summary>
     /// Gets the member identifier.
     /// </summary>
