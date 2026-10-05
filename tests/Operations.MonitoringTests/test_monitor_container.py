@@ -58,8 +58,12 @@ class MonitorContainerTests(unittest.TestCase):
         created = subprocess.run(["docker", "create", "--network", "none", "--memory", "32m", "--memory-swap", "32m",
                                   "--pids-limit", "32", "--cap-drop", "ALL", "--security-opt", "no-new-privileges",
                                   "--read-only", IMAGE, "python", "-c",
-                                  "payload = bytearray(128 * 1024 * 1024)\n"
-                                  "payload[::4096] = b'x' * (len(payload) // 4096)"],
+                                  "import signal, subprocess, sys\n"
+                                  "signal.signal(signal.SIGTERM, lambda *_: sys.exit(137))\n"
+                                  "child = subprocess.run([sys.executable, '-c', 'payload = bytearray(128 * 1024 * 1024)'])\n"
+                                  "if child.returncode != -signal.SIGKILL: sys.exit(1)\n"
+                                  "print('child-killed', flush=True)\n"
+                                  "signal.pause()"],
                                  capture_output=True, check=True, timeout=15)
         container = created.stdout.decode().strip()
         self.assertRegex(container, r"^[0-9a-f]{64}$")
@@ -67,22 +71,31 @@ class MonitorContainerTests(unittest.TestCase):
             # Act
             created_at = subprocess.run(["docker", "inspect", "--format", "{{.Created}}", container],
                                         capture_output=True, text=True, check=True, timeout=5).stdout.strip()
-            # Attach EOF is not a barrier for the daemon's independent OOM/exit events.
-            # Replay events for this exact container so subscription setup cannot miss a fast OOM.
-            with ThreadPoolExecutor(max_workers=1) as listener:
+            # Keep PID 1 alive until Docker acknowledges the child's real OOM. Otherwise the
+            # cgroup can disappear before the daemon consumes its independent OOM notification.
+            # Replay this container's events so subscription startup cannot miss the signal.
+            with ThreadPoolExecutor(max_workers=2) as listener:
                 events = subprocess.Popen(["docker", "events", "--since", created_at, "--filter", "container=" + container,
                                            "--filter", "event=oom", "--format", "{{.Action}}"],
                                           stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+                attached = subprocess.Popen(["docker", "start", "--attach", container],
+                                            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
                 try:
                     event = listener.submit(events.stdout.readline)
-                    subprocess.run(["docker", "start", "--attach", container], capture_output=True, check=False, timeout=30)
+                    killed = listener.submit(attached.stdout.readline)
+                    self.assertEqual("child-killed", killed.result(timeout=30).strip(),
+                                     "The child must really be killed by the memory limit")
+                    self.assertEqual("oom", event.result(timeout=10).strip(), "Docker must acknowledge the OOM before exit")
+                    subprocess.run(["docker", "stop", "--time", "5", container], capture_output=True, check=True, timeout=15)
                     exited = subprocess.run(["docker", "wait", container], capture_output=True, text=True, check=True, timeout=30)
-                    self.assertEqual("137", exited.stdout.strip(), "The disposable process must really be killed by the memory limit")
-                    self.assertEqual("oom", event.result(timeout=10).strip(), "Docker must acknowledge the OOM before collection")
+                    self.assertEqual("137", exited.stdout.strip(), "The supervisor must retain the OOM exit status")
                 finally:
                     events.terminate()
                     events.wait(timeout=5)
                     events.stdout.close()
+                    attached.terminate()
+                    attached.wait(timeout=5)
+                    attached.stdout.close()
             def runner(arguments):
                 # Only substitute the owned disposable container; inspect's fixed field allowlist is unchanged.
                 inspected = subprocess.run(arguments[:-1] + [container], capture_output=True, check=True, timeout=5)
