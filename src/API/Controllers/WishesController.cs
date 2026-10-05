@@ -481,11 +481,9 @@ public class WishesController(
                     wish.WishlistId,
                     wish.Id,
                     imageId)
-                : null)
-        {
-            ReservedQuantity = wish.ReservedQuantity,
-            AvailableQuantity = wish.AvailableQuantity
-        };
+                : null,
+            wish.ReservedQuantity,
+            wish.AvailableQuantity);
     }
 
     private static async Task<byte[]> ReadImageAsync(
