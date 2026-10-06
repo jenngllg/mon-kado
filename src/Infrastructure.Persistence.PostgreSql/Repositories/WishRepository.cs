@@ -144,19 +144,6 @@ public class WishRepository(MonKadoDbContext context) : IWishRepository
     }
 
     /// <inheritdoc />
-    public async Task<IReadOnlyCollection<Wish>> GetByWishlistIdAsync(
-        Guid wishlistId,
-        CancellationToken cancellationToken)
-    {
-        return await context.Wishes
-            .AsNoTracking()
-            .Where(wish => wish.WishlistId == wishlistId)
-            .OrderBy(wish => wish.Position)
-            .ThenBy(wish => wish.Id)
-            .ToArrayAsync(cancellationToken);
-    }
-
-    /// <inheritdoc />
     public async Task<IReadOnlyCollection<Wish>> GetByWishlistIdForUpdateAsync(
         Guid wishlistId,
         CancellationToken cancellationToken)

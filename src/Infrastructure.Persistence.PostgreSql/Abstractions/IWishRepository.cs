@@ -74,16 +74,6 @@ public interface IWishRepository
         CancellationToken cancellationToken);
 
     /// <summary>
-    /// Gets all gift wishes from a parent wishlist without tracking them.
-    /// </summary>
-    /// <param name="wishlistId">The parent wishlist identifier.</param>
-    /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>The complete collection ordered by position.</returns>
-    Task<IReadOnlyCollection<Wish>> GetByWishlistIdAsync(
-        Guid wishlistId,
-        CancellationToken cancellationToken);
-
-    /// <summary>
     /// Gets and locks all tracked gift wishes from a parent wishlist.
     /// </summary>
     /// <param name="wishlistId">The parent wishlist identifier.</param>
