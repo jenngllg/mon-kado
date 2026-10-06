@@ -280,10 +280,15 @@ public class GiftReservationIntegrationTests(PostgreSqlContainerFixture fixture)
     }
 
     [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
+    [InlineData(true, 0)]
+    [InlineData(true, 1)]
+    [InlineData(true, 2)]
+    [InlineData(false, 0)]
+    [InlineData(false, 1)]
+    [InlineData(false, 2)]
     public async Task GetAsync_WhenOwnerSelectsSurpriseMode_ProtectsQuantitiesAcrossRoutes(
-        bool surpriseMode)
+        bool surpriseMode,
+        int reservationQuantity)
     {
         // Arrange
         var cancellationToken = TestContext.Current.CancellationToken;
@@ -320,16 +325,26 @@ public class GiftReservationIntegrationTests(PostgreSqlContainerFixture fixture)
             csrf,
             cancellationToken);
         join.EnsureSuccessStatusCode();
-        using var reservation = await UpsertAsync(
-            participantClient,
-            share.Id,
-            wishId,
-            share.Secret,
-            csrf,
-            2,
-            null,
+
+        using var initialCollection = await ownerClient.GetAsync(
+            $"/api/v1/wishlists/{wishlistId}/wishes",
             cancellationToken);
-        reservation.EnsureSuccessStatusCode();
+        initialCollection.EnsureSuccessStatusCode();
+        Assert.NotNull(initialCollection.Headers.ETag);
+
+        if (reservationQuantity > 0)
+        {
+            using var reservation = await UpsertAsync(
+                participantClient,
+                share.Id,
+                wishId,
+                share.Secret,
+                csrf,
+                reservationQuantity,
+                null,
+                cancellationToken);
+            reservation.EnsureSuccessStatusCode();
+        }
         using var initial = await ownerClient.GetAsync(
             $"/api/v1/wishlists/{wishlistId}",
             cancellationToken);
@@ -363,6 +378,12 @@ public class GiftReservationIntegrationTests(PostgreSqlContainerFixture fixture)
             cancellationToken);
         owned.EnsureSuccessStatusCode();
         var ownedBody = await owned.Content.ReadFromJsonAsync<JsonElement>(cancellationToken);
+        using var collectionResponse = await ownerClient.GetAsync(
+            $"/api/v1/wishlists/{wishlistId}/wishes",
+            cancellationToken);
+        collectionResponse.EnsureSuccessStatusCode();
+        var collectionBody = await collectionResponse.Content.ReadFromJsonAsync<JsonElement>(cancellationToken);
+        var collectionWish = Assert.Single(collectionBody.GetProperty("wishes").EnumerateArray());
         using var sharedRequest = new HttpRequestMessage(
             HttpMethod.Get,
             $"/api/v1/shared-wishlists/{share.Id}/wishes/{wishId}");
@@ -396,22 +417,31 @@ public class GiftReservationIntegrationTests(PostgreSqlContainerFixture fixture)
             surpriseMode,
             updated.GetProperty("surpriseMode").GetBoolean());
         Assert.Equal(
-            surpriseMode ? (int?)null : 2,
+            initialCollection.Headers.ETag,
+            collectionResponse.Headers.ETag);
+        Assert.Equal(
+            surpriseMode ? (int?)null : reservationQuantity,
             ownedBody.GetProperty("reservedQuantity").Deserialize<int?>());
         Assert.Equal(
-            surpriseMode ? (int?)null : 0,
+            surpriseMode ? (int?)null : 2 - reservationQuantity,
             ownedBody.GetProperty("availableQuantity").Deserialize<int?>());
         Assert.Equal(
-            surpriseMode ? (int?)null : 2,
+            surpriseMode ? (int?)null : reservationQuantity,
+            collectionWish.GetProperty("reservedQuantity").Deserialize<int?>());
+        Assert.Equal(
+            surpriseMode ? (int?)null : 2 - reservationQuantity,
+            collectionWish.GetProperty("availableQuantity").Deserialize<int?>());
+        Assert.Equal(
+            surpriseMode ? (int?)null : reservationQuantity,
             sharedBody.GetProperty("reservedQuantity").Deserialize<int?>());
         Assert.Equal(
-            surpriseMode ? (int?)null : 0,
+            surpriseMode ? (int?)null : 2 - reservationQuantity,
             sharedBody.GetProperty("availableQuantity").Deserialize<int?>());
         Assert.Equal(
-            surpriseMode ? 1 : 0,
+            surpriseMode || reservationQuantity < 2 ? 1 : 0,
             filteredBody.GetProperty("wishes").GetArrayLength());
         Assert.Equal(
-            2,
+            reservationQuantity,
             Assert.Single(participantBody.GetProperty("wishes").EnumerateArray())
                 .GetProperty("reservedQuantity").GetInt32());
         Assert.DoesNotContain(
@@ -665,6 +695,7 @@ public class GiftReservationIntegrationTests(PostgreSqlContainerFixture fixture)
             ownerWish.GetProperty("imageUrl").ValueKind);
         Assert.Equal(
             [
+                "availableQuantity",
                 "createdAt",
                 "entityTag",
                 "id",
@@ -675,6 +706,7 @@ public class GiftReservationIntegrationTests(PostgreSqlContainerFixture fixture)
                 "position",
                 "price",
                 "quantity",
+                "reservedQuantity",
                 "updatedAt",
                 "url",
                 "wishlistId"

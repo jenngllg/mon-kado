@@ -625,12 +625,12 @@ public class WishServiceTests
                 data.CancellationToken))
             .ReturnsAsync(CreateSequence(data.WishlistId));
         _wishRepositoryMock
-            .Setup(repository => repository.GetByWishlistIdAsync(
+            .Setup(repository => repository.GetOwnerCollectionDetailsAsync(
                 data.WishlistId,
                 data.CancellationToken))
             .ReturnsAsync([
-                firstWish,
-                secondWish
+                CreateCollectionDetails(firstWish),
+                CreateCollectionDetails(secondWish)
             ]);
         transactionMock
             .Setup(transaction => transaction.CommitAsync(data.CancellationToken))
@@ -661,7 +661,7 @@ public class WishServiceTests
                 data.CancellationToken),
             Times.Once);
         _wishRepositoryMock.Verify(
-            repository => repository.GetByWishlistIdAsync(
+            repository => repository.GetOwnerCollectionDetailsAsync(
                 data.WishlistId,
                 data.CancellationToken),
             Times.Once);
@@ -1187,10 +1187,10 @@ public class WishServiceTests
                 data.CancellationToken))
             .ReturnsAsync(sequence);
         _wishRepositoryMock
-            .Setup(repository => repository.GetByWishlistIdAsync(
+            .Setup(repository => repository.GetOwnerCollectionDetailsAsync(
                 data.WishlistId,
                 data.CancellationToken))
-            .ReturnsAsync(persistedWishes);
+            .ReturnsAsync(persistedWishes.Select(CreateCollectionDetails).ToArray());
         verificationTransactionMock
             .Setup(transaction => transaction.CommitAsync(data.CancellationToken))
             .Returns(Task.CompletedTask);
@@ -1270,7 +1270,7 @@ public class WishServiceTests
                 data.CancellationToken),
             Times.Once);
         _wishRepositoryMock.Verify(
-            repository => repository.GetByWishlistIdAsync(
+            repository => repository.GetOwnerCollectionDetailsAsync(
                 data.WishlistId,
                 data.CancellationToken),
             Times.Once);
@@ -3758,6 +3758,25 @@ public class WishServiceTests
         _unitOfWorkMock.VerifyNoOtherCalls();
         _wishTransactionFactoryMock.VerifyNoOtherCalls();
         _giftImageDeletionOutboxRepositoryMock.VerifyNoOtherCalls();
+    }
+
+    private static WishDetails CreateCollectionDetails(Wish wish)
+    {
+
+        return new WishDetails(
+            wish.Id,
+            wish.WishlistId,
+            wish.Name,
+            wish.Note,
+            wish.Url,
+            wish.Price,
+            wish.Position,
+            wish.CreatedAt,
+            wish.UpdatedAt,
+            wish.Version,
+            wish.Quantity,
+            wish.ImageId,
+            wish.IsFavorite);
     }
 
     private static WishServiceTestData CreateData()

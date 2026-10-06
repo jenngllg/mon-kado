@@ -137,11 +137,11 @@ public class WishService(
 
             if (sequence is null)
                 throw new WishlistNotFoundException();
-            var wishes = await wishRepository.GetByWishlistIdAsync(
+            var wishes = await wishRepository.GetOwnerCollectionDetailsAsync(
                 wishlistId,
                 cancellationToken);
             await transaction.CommitAsync(cancellationToken);
-            result = CreateCollectionDetails(
+            result = new WishCollectionDetails(
                 wishes,
                 sequence.Version);
         }
@@ -443,25 +443,6 @@ public class WishService(
             .ToHashSet();
 
         return currentIds.SetEquals(wishIds);
-    }
-
-    /// <summary>
-    /// Maps persisted wishes to a complete versioned collection.
-    /// </summary>
-    /// <param name="wishes">The persisted wishes.</param>
-    /// <param name="version">The collection version.</param>
-    /// <returns>The complete application collection.</returns>
-    private static WishCollectionDetails CreateCollectionDetails(
-        IEnumerable<Wish> wishes,
-        uint version)
-    {
-        var details = wishes
-            .Select(CreateDetails)
-            .ToArray();
-
-        return new WishCollectionDetails(
-            details,
-            version);
     }
 
     /// <summary>

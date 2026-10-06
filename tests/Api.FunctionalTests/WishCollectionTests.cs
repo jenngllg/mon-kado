@@ -80,6 +80,7 @@ public class WishCollectionTests
             {
                 Assert.Equal(
                     [
+                        "availableQuantity",
                         "createdAt",
                         "entityTag",
                         "id",
@@ -90,6 +91,7 @@ public class WishCollectionTests
                         "position",
                         "price",
                         "quantity",
+                        "reservedQuantity",
                         "updatedAt",
                         "url",
                         "wishlistId"
@@ -100,6 +102,12 @@ public class WishCollectionTests
                 Assert.Equal(
                     7,
                     wish.GetProperty("quantity").GetInt32());
+                Assert.Equal(
+                    JsonValueKind.Null,
+                    wish.GetProperty("reservedQuantity").ValueKind);
+                Assert.Equal(
+                    JsonValueKind.Null,
+                    wish.GetProperty("availableQuantity").ValueKind);
                 Assert.Equal(
                     JsonValueKind.Null,
                     wish.GetProperty("imageUrl").ValueKind);
