@@ -68,6 +68,7 @@ public class WishOpenApiTests
         var collectionItemProperties = collectionItemSchema.GetProperty("properties");
         Assert.Equal(
             [
+                "availableQuantity",
                 "createdAt",
                 "entityTag",
                 "id",
@@ -78,6 +79,7 @@ public class WishOpenApiTests
                 "position",
                 "price",
                 "quantity",
+                "reservedQuantity",
                 "updatedAt",
                 "url",
                 "wishlistId"
@@ -90,6 +92,25 @@ public class WishOpenApiTests
             collectionItemProperties.GetProperty("quantity")
                 .GetProperty("type")
                 .GetString());
+        var quantityProperties = new[]
+        {
+            "reservedQuantity",
+            "availableQuantity"
+        };
+        foreach (var name in quantityProperties)
+        {
+            Assert.Equal(
+                [
+                    "integer",
+                    "null",
+                    "string"
+                ],
+                collectionItemProperties.GetProperty(name)
+                    .GetProperty("type")
+                    .EnumerateArray()
+                    .Select(type => type.GetString())
+                    .Order());
+        }
         Assert.Equal(
             [
                 "null",

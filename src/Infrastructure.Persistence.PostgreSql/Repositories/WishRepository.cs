@@ -21,9 +21,38 @@ public class WishRepository(MonKadoDbContext context) : IWishRepository
         CancellationToken cancellationToken)
     {
 
+        return QueryOwnerDetails(
+                wishlistId,
+                wishId)
+            .SingleOrDefaultAsync(cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyCollection<WishDetails>> GetOwnerCollectionDetailsAsync(
+        Guid wishlistId,
+        CancellationToken cancellationToken)
+    {
+
+        return await QueryOwnerDetails(
+                wishlistId,
+                null)
+            .ToArrayAsync(cancellationToken);
+    }
+
+    /// <summary>Projects owner quantities without leaking reservations through surprise mode.</summary>
+    /// <param name="wishlistId">The authorized parent identifier.</param>
+    /// <param name="wishId">The optional individual wish filter.</param>
+    /// <returns>The no-tracking owner detail query.</returns>
+    private IQueryable<WishDetails> QueryOwnerDetails(
+        Guid wishlistId,
+        Guid? wishId)
+    {
+
         return context.Wishes
             .AsNoTracking()
-            .Where(wish => wish.WishlistId == wishlistId && wish.Id == wishId)
+            .Where(wish => wish.WishlistId == wishlistId && (wishId == null || wish.Id == wishId))
+            .OrderBy(wish => wish.Position)
+            .ThenBy(wish => wish.Id)
             .Select(wish => new
             {
                 Wish = wish,
@@ -57,8 +86,7 @@ public class WishRepository(MonKadoDbContext context) : IWishRepository
                     : Math.Max(
                         0,
                         item.Wish.Quantity - item.ReservedQuantity.Value)
-            })
-            .SingleOrDefaultAsync(cancellationToken);
+            });
     }
 
     /// <inheritdoc />
@@ -113,19 +141,6 @@ public class WishRepository(MonKadoDbContext context) : IWishRepository
             .SingleOrDefaultAsync(
                 wish => wish.WishlistId == wishlistId && wish.Id == wishId,
                 cancellationToken);
-    }
-
-    /// <inheritdoc />
-    public async Task<IReadOnlyCollection<Wish>> GetByWishlistIdAsync(
-        Guid wishlistId,
-        CancellationToken cancellationToken)
-    {
-        return await context.Wishes
-            .AsNoTracking()
-            .Where(wish => wish.WishlistId == wishlistId)
-            .OrderBy(wish => wish.Position)
-            .ThenBy(wish => wish.Id)
-            .ToArrayAsync(cancellationToken);
     }
 
     /// <inheritdoc />

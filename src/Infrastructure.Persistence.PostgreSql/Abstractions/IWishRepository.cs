@@ -9,6 +9,14 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Abstrac
 /// </summary>
 public interface IWishRepository
 {
+    /// <summary>Reads the complete owner collection with reservation visibility in one snapshot.</summary>
+    /// <param name="wishlistId">The authorized parent wishlist identifier.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The collection in manual order, with quantities hidden in surprise mode.</returns>
+    Task<IReadOnlyCollection<WishDetails>> GetOwnerCollectionDetailsAsync(
+        Guid wishlistId,
+        CancellationToken cancellationToken);
+
     /// <summary>Reads owner details and reservation visibility in one database snapshot.</summary>
     /// <param name="wishlistId">The authorized parent wishlist identifier.</param>
     /// <param name="wishId">The wish identifier.</param>
@@ -63,16 +71,6 @@ public interface IWishRepository
     Task<Wish?> GetByIdForUpdateAsync(
         Guid wishlistId,
         Guid wishId,
-        CancellationToken cancellationToken);
-
-    /// <summary>
-    /// Gets all gift wishes from a parent wishlist without tracking them.
-    /// </summary>
-    /// <param name="wishlistId">The parent wishlist identifier.</param>
-    /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>The complete collection ordered by position.</returns>
-    Task<IReadOnlyCollection<Wish>> GetByWishlistIdAsync(
-        Guid wishlistId,
         CancellationToken cancellationToken);
 
     /// <summary>

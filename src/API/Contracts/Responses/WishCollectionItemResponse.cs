@@ -50,6 +50,12 @@ public class WishCollectionItemResponse(
     [JsonNumberHandling(JsonNumberHandling.Strict)]
     public int Quantity { get; } = wish.Quantity;
 
+    /// <summary>Gets the reserved quantity, or null when hidden by surprise mode.</summary>
+    public int? ReservedQuantity { get; } = wish.ReservedQuantity;
+
+    /// <summary>Gets the remaining quantity, or null when hidden by surprise mode.</summary>
+    public int? AvailableQuantity { get; } = wish.AvailableQuantity;
+
     /// <summary>
     /// Gets the short-lived signed absolute owner image URL, or null when no image exists.
     /// </summary>
