@@ -18,6 +18,39 @@ public class GmailApiClientTests
     private static readonly Uri _messagesEndpoint = new("https://gmail.test/messages/send");
 
     [Fact]
+    public async Task SendAsync_WhenUsingOfficialEndpoint_PostsToVersionedGmailRoute()
+    {
+        // Arrange
+        Uri? capturedUri = null;
+        using var httpClient = CreateHttpClient((
+            request,
+            _) =>
+        {
+            capturedUri = request.RequestUri;
+
+            return Task.FromResult(JsonResponse(
+                HttpStatusCode.OK,
+                """{"id":"gmail-message-id"}"""));
+        });
+        using var client = new GmailApiClient(
+            httpClient,
+            TimeProvider.System);
+
+        // Act
+        var identifier = await client.SendAsync(
+            "raw-message",
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(
+            new Uri("https://gmail.googleapis.com/gmail/v1/users/me/messages/send"),
+            capturedUri);
+        Assert.Equal(
+            "gmail-message-id",
+            identifier);
+    }
+
+    [Fact]
     public async Task SendAsync_WhenSuccessfulRequestPostsRawMessageAnd_ReturnsProviderIdentifier()
     {
         // Arrange

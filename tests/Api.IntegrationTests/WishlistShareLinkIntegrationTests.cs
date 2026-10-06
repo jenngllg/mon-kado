@@ -23,6 +23,86 @@ namespace JennGllg.Fr.MonKado.Back.Api.IntegrationTests;
 [Collection(PostgreSqlApiTestSuite.Name)]
 public class WishlistShareLinkIntegrationTests(PostgreSqlContainerFixture fixture)
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task GetAsync_WhenOwnerMarksFavorite_ExposesThePreferenceOnSharedCollectionAndDetail(bool isFavorite)
+    {
+        // Arrange
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var factory = await CreateFactoryAsync(cancellationToken);
+        var ownerId = Guid.CreateVersion7();
+        var wishlistId = Guid.CreateVersion7();
+        var wishId = await SeedWishlistAsync(
+            factory,
+            ownerId,
+            wishlistId,
+            cancellationToken);
+        using var ownerClient = await CreateAuthorizedClientAsync(
+            factory,
+            ownerId);
+        using var currentWish = await ownerClient.GetAsync(
+            $"/api/v1/wishlists/{wishlistId}/wishes/{wishId}",
+            cancellationToken);
+        using var favoriteRequest = new HttpRequestMessage(
+            HttpMethod.Patch,
+            $"/api/v1/wishlists/{wishlistId}/wishes/{wishId}")
+        {
+            Content = JsonContent.Create(new
+            {
+                isFavorite
+            })
+        };
+        favoriteRequest.Headers.TryAddWithoutValidation(
+            "If-Match",
+            currentWish.Headers.ETag?.Tag);
+        using var markedWish = await ownerClient.SendAsync(
+            favoriteRequest,
+            cancellationToken);
+        Assert.Equal(
+            HttpStatusCode.OK,
+            markedWish.StatusCode);
+        using var createdShare = await ownerClient.PostAsync(
+            $"/api/v1/wishlists/{wishlistId}/share-link",
+            null,
+            cancellationToken);
+        var shareBody = await createdShare.Content.ReadFromJsonAsync<JsonElement>(cancellationToken);
+        var shareId = shareBody.GetProperty("id").GetGuid();
+        var secret = GetSecret(shareBody);
+
+        // Act
+        using var collection = await GetSharedWishlistAsync(
+            factory,
+            shareId,
+            secret,
+            cancellationToken);
+        using var guestClient = factory.CreateClient();
+        using var detail = await GetSharedWishAsync(
+            guestClient,
+            shareId,
+            wishId,
+            secret,
+            cancellationToken);
+        var collectionBody = await collection.Content.ReadFromJsonAsync<JsonElement>(cancellationToken);
+        var detailBody = await detail.Content.ReadFromJsonAsync<JsonElement>(cancellationToken);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.OK,
+            collection.StatusCode);
+        Assert.Equal(
+            HttpStatusCode.OK,
+            detail.StatusCode);
+        Assert.Equal(
+            isFavorite,
+            collectionBody.GetProperty("wishes").EnumerateArray()
+                .Single(wish => wish.GetProperty("id").GetGuid() == wishId)
+                .GetProperty("isFavorite").GetBoolean());
+        Assert.Equal(
+            isFavorite,
+            detailBody.GetProperty("isFavorite").GetBoolean());
+    }
+
     [Fact]
     public async Task ShareLink_WhenCreatedRotatedAndRevoked_ProtectsSecretAndControlsPublicAccess()
     {

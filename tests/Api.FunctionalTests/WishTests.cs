@@ -1214,6 +1214,7 @@ public class WishTests
     {
         Assert.Equal(
             [
+                "isFavorite",
                 "id",
                 "wishlistId",
                 "name",

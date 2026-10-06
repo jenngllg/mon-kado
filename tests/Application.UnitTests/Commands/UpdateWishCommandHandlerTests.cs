@@ -63,6 +63,7 @@ public class UpdateWishCommandHandlerTests
                 12.34m,
                 4,
                 42,
+                null,
                 cancellationToken))
             .ReturnsAsync(expected);
 
@@ -86,6 +87,7 @@ public class UpdateWishCommandHandlerTests
                 12.34m,
                 4,
                 42,
+                null,
                 cancellationToken),
             Times.Once);
         _wishServiceMock.VerifyNoOtherCalls();
@@ -119,6 +121,7 @@ public class UpdateWishCommandHandlerTests
                 null,
                 1,
                 42,
+                null,
                 cancellationToken))
             .ReturnsAsync((WishDetails?)null);
 
@@ -140,6 +143,7 @@ public class UpdateWishCommandHandlerTests
                 null,
                 1,
                 42,
+                null,
                 cancellationToken),
             Times.Once);
         _wishServiceMock.VerifyNoOtherCalls();

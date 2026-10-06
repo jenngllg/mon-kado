@@ -5,11 +5,14 @@ using JennGllg.Fr.MonKado.Back.Domain.Entities;
 using JennGllg.Fr.MonKado.Back.Domain.Enums;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Contexts;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Entities;
+using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Abstractions;
+using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Services;
 
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 using System.Net;
 using System.Net.Http.Headers;
@@ -21,6 +24,261 @@ namespace JennGllg.Fr.MonKado.Back.Api.IntegrationTests;
 [Collection(PostgreSqlApiTestSuite.Name)]
 public class GiftReservationIntegrationTests(PostgreSqlContainerFixture fixture)
 {
+    [Fact]
+    public async Task UpsertAsync_WhenArchivingWinsBeforeReservationLock_RejectsConcurrentReservation()
+    {
+        // Arrange
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var reservationReachedLock = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseReservation = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        await using var factory = await CreateFactoryAsync(
+            cancellationToken,
+            services => services.Replace(ServiceDescriptor.Scoped<IGiftReservationTransactionFactory>(provider =>
+                new CoordinatedGiftReservationTransactionFactory(
+                    new GiftReservationTransactionFactory(
+                        provider.GetRequiredService<MonKadoDbContext>(),
+                        provider.GetRequiredService<IWishlistShareLinkRepository>()),
+                    async token =>
+                    {
+                        reservationReachedLock.TrySetResult();
+                        await releaseReservation.Task.WaitAsync(token);
+                    }))));
+        var ownerId = Guid.CreateVersion7();
+        var participantId = Guid.CreateVersion7();
+        var wishlistId = Guid.CreateVersion7();
+        var wishId = Guid.CreateVersion7();
+        await SeedAsync(
+            factory,
+            ownerId,
+            [(participantId, "archive-race@example.test", "Participant")],
+            wishlistId,
+            wishId,
+            1,
+            cancellationToken);
+        using var owner = await CreateAuthorizedClientAsync(
+            factory,
+            ownerId);
+        using var participant = await CreateAuthorizedClientAsync(
+            factory,
+            participantId);
+        var share = await CreateShareLinkAsync(
+            owner,
+            wishlistId,
+            cancellationToken);
+        var csrf = await GetCsrfTokenAsync(
+            participant,
+            cancellationToken);
+        using var join = await JoinAsync(
+            participant,
+            share.Id,
+            share.Secret,
+            csrf,
+            cancellationToken);
+        join.EnsureSuccessStatusCode();
+        using var initial = await owner.GetAsync(
+            $"/api/v1/wishlists/{wishlistId}",
+            cancellationToken);
+        using var request = new HttpRequestMessage(
+            HttpMethod.Patch,
+            $"/api/v1/wishlists/{wishlistId}")
+        {
+            Content = JsonContent.Create(new { isArchived = true })
+        };
+        request.Headers.IfMatch.Add(initial.Headers.ETag
+            ?? throw new InvalidOperationException("The ETag is missing."));
+
+        // Act
+        var reservationTask = UpsertAsync(
+            participant,
+            share.Id,
+            wishId,
+            share.Secret,
+            csrf,
+            1,
+            null,
+            cancellationToken);
+        HttpResponseMessage archive;
+        try
+        {
+            await reservationReachedLock.Task.WaitAsync(cancellationToken);
+            archive = await owner.SendAsync(
+                request,
+                cancellationToken);
+        }
+        finally
+        {
+            releaseReservation.TrySetResult();
+        }
+
+        using var archived = archive;
+        using var reservation = await reservationTask;
+        using var history = await GetHistoryAsync(
+            participant,
+            cancellationToken);
+        var historyBody = await history.Content.ReadFromJsonAsync<JsonElement>(cancellationToken);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.OK,
+            archived.StatusCode);
+        Assert.Equal(
+            HttpStatusCode.NotFound,
+            reservation.StatusCode);
+        Assert.Empty(historyBody.GetProperty("items").EnumerateArray());
+    }
+
+    [Fact]
+    public async Task SetArchivedAsync_WhenReservationExists_BlocksSharingWithoutEndingReservation()
+    {
+        // Arrange
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var factory = await CreateFactoryAsync(cancellationToken);
+        var ownerId = Guid.CreateVersion7();
+        var participantId = Guid.CreateVersion7();
+        var wishlistId = Guid.CreateVersion7();
+        var wishId = Guid.CreateVersion7();
+        await SeedAsync(
+            factory,
+            ownerId,
+            [(participantId, "archive-participant@example.test", "Archive participant")],
+            wishlistId,
+            wishId,
+            2,
+            cancellationToken);
+        using var ownerClient = await CreateAuthorizedClientAsync(
+            factory,
+            ownerId);
+        using var participantClient = await CreateAuthorizedClientAsync(
+            factory,
+            participantId);
+        var share = await CreateShareLinkAsync(
+            ownerClient,
+            wishlistId,
+            cancellationToken);
+        var csrf = await GetCsrfTokenAsync(
+            participantClient,
+            cancellationToken);
+        using var join = await JoinAsync(
+            participantClient,
+            share.Id,
+            share.Secret,
+            csrf,
+            cancellationToken);
+        join.EnsureSuccessStatusCode();
+        using var reservation = await UpsertAsync(
+            participantClient,
+            share.Id,
+            wishId,
+            share.Secret,
+            csrf,
+            1,
+            null,
+            cancellationToken);
+        reservation.EnsureSuccessStatusCode();
+        using var initial = await ownerClient.GetAsync(
+            $"/api/v1/wishlists/{wishlistId}",
+            cancellationToken);
+        using var archiveRequest = new HttpRequestMessage(
+            HttpMethod.Patch,
+            $"/api/v1/wishlists/{wishlistId}")
+        {
+            Content = JsonContent.Create(new { isArchived = true })
+        };
+        archiveRequest.Headers.IfMatch.Add(initial.Headers.ETag
+            ?? throw new InvalidOperationException("The ETag is missing."));
+
+        // Act
+        using var archived = await ownerClient.SendAsync(
+            archiveRequest,
+            cancellationToken);
+        archived.EnsureSuccessStatusCode();
+        using var shared = await GetSharedWishlistAsync(
+            participantClient,
+            share.Id,
+            share.Secret,
+            false,
+            cancellationToken);
+        using var blockedCancel = await CancelAsync(
+            participantClient,
+            share.Id,
+            wishId,
+            share.Secret,
+            csrf,
+            reservation.Headers.ETag?.Tag,
+            cancellationToken);
+        using var blockedUpdate = await UpsertAsync(
+            participantClient,
+            share.Id,
+            wishId,
+            share.Secret,
+            csrf,
+            2,
+            reservation.Headers.ETag?.Tag,
+            cancellationToken);
+        using var history = await GetHistoryAsync(
+            participantClient,
+            cancellationToken);
+        var historyBody = await history.Content.ReadFromJsonAsync<JsonElement>(cancellationToken);
+        var item = Assert.Single(historyBody.GetProperty("items").EnumerateArray());
+        using var restoreRequest = new HttpRequestMessage(
+            HttpMethod.Patch,
+            $"/api/v1/wishlists/{wishlistId}")
+        {
+            Content = JsonContent.Create(new { isArchived = false })
+        };
+        restoreRequest.Headers.IfMatch.Add(archived.Headers.ETag
+            ?? throw new InvalidOperationException("The ETag is missing."));
+        using var restored = await ownerClient.SendAsync(
+            restoreRequest,
+            cancellationToken);
+        using var current = await GetCurrentAsync(
+            participantClient,
+            share.Id,
+            wishId,
+            share.Secret,
+            cancellationToken);
+        var currentBody = await current.Content.ReadFromJsonAsync<JsonElement>(cancellationToken);
+        using var restoredShare = await GetSharedWishlistAsync(
+            participantClient,
+            share.Id,
+            share.Secret,
+            false,
+            cancellationToken);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.NotFound,
+            shared.StatusCode);
+        Assert.Equal(
+            HttpStatusCode.NotFound,
+            blockedCancel.StatusCode);
+        Assert.Equal(
+            HttpStatusCode.NotFound,
+            blockedUpdate.StatusCode);
+        Assert.True(item.GetProperty("isArchived").GetBoolean());
+        Assert.Equal(
+            "active",
+            item.GetProperty("status").GetString());
+        Assert.Equal(
+            JsonValueKind.Null,
+            item.GetProperty("endedAt").ValueKind);
+        Assert.Equal(
+            JsonValueKind.Null,
+            item.GetProperty("shareUrl").ValueKind);
+        Assert.Equal(
+            1,
+            currentBody.GetProperty("quantity").GetInt32());
+        Assert.Equal(
+            reservation.Headers.ETag?.Tag,
+            current.Headers.ETag?.Tag);
+        Assert.Equal(
+            HttpStatusCode.OK,
+            restored.StatusCode);
+        Assert.Equal(
+            HttpStatusCode.OK,
+            restoredShare.StatusCode);
+    }
+
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
@@ -432,6 +690,10 @@ public class GiftReservationIntegrationTests(PostgreSqlContainerFixture fixture)
         Assert.Equal(
             shareLink.Id,
             activeHistory.GetProperty("shareLinkId").GetGuid());
+        Assert.IsType<string>(activeHistory.GetProperty("ownerDisplayName").GetString());
+        Assert.Equal(
+            $"#{shareLink.Secret}",
+            new Uri(Assert.IsType<string>(activeHistory.GetProperty("shareUrl").GetString())).Fragment);
         Assert.Equal(
             2,
             activeHistory.GetProperty("quantity").GetInt32());
@@ -452,6 +714,12 @@ public class GiftReservationIntegrationTests(PostgreSqlContainerFixture fixture)
             JsonValueKind.Null,
             historyWithoutShareLink.GetProperty("shareLinkId").ValueKind);
         Assert.Equal(
+            JsonValueKind.Null,
+            historyWithoutShareLink.GetProperty("shareUrl").ValueKind);
+        Assert.Equal(
+            JsonValueKind.Null,
+            historyWithoutShareLink.GetProperty("imageUrl").ValueKind);
+        Assert.Equal(
             "active",
             historyWithoutShareLink.GetProperty("status").GetString());
         Assert.Equal(
@@ -470,6 +738,9 @@ public class GiftReservationIntegrationTests(PostgreSqlContainerFixture fixture)
         Assert.Equal(
             "unavailable",
             unavailableHistory.GetProperty("status").GetString());
+        Assert.Equal(
+            JsonValueKind.Null,
+            unavailableHistory.GetProperty("shareUrl").ValueKind);
         Assert.Equal(
             JsonValueKind.String,
             unavailableHistory.GetProperty("endedAt").ValueKind);

@@ -124,6 +124,7 @@ public class SharedWishlistsController(
             Wishes = wishlist.Wishes
                 .Select(wish => new SharedWishResponse
                 {
+                    IsFavorite = wish.IsFavorite,
                     Id = wish.Id,
                     Name = wish.Name,
                     Url = wish.Url,
@@ -187,6 +188,7 @@ public class SharedWishlistsController(
             cancellationToken);
         var response = new SharedWishDetailResponse
         {
+            IsFavorite = wish.IsFavorite,
             Id = wish.Id,
             Name = wish.Name,
             Note = wish.Note,

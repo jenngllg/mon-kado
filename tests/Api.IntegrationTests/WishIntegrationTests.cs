@@ -25,6 +25,403 @@ namespace JennGllg.Fr.MonKado.Back.Api.IntegrationTests;
 [Collection(PostgreSqlApiTestSuite.Name)]
 public class WishIntegrationTests(PostgreSqlContainerFixture fixture)
 {
+    [Theory]
+    [InlineData(null, null, false)]
+    [InlineData(false, null, false)]
+    [InlineData(true, null, true)]
+    [InlineData(true, false, false)]
+    [InlineData(false, true, true)]
+    public async Task UpdateAsync_WhenFavoriteIsProvidedOrOmitted_PreservesTheExplicitOwnerChoice(
+        bool? initialFavorite,
+        bool? updatedFavorite,
+        bool expectedFavorite)
+    {
+        // Arrange
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var factory = await CreateFactoryAsync();
+        var owner = await CreateMemberAsync(factory);
+        var wishlist = await SeedWishlistAsync(
+            factory,
+            owner.Id,
+            "Favorite form");
+        using var client = await AuthenticationTestData.CreateClientAsync(
+            factory,
+            owner.Id,
+            cancellationToken);
+        var creationPayload = new Dictionary<string, object?>
+        {
+            ["name"] = "Gift",
+            ["quantity"] = 1
+        };
+
+        if (initialFavorite.HasValue)
+            creationPayload["isFavorite"] = initialFavorite.Value;
+
+        using var created = await client.PostAsJsonAsync(
+            $"/api/v1/wishlists/{wishlist.Id}/wishes",
+            creationPayload,
+            cancellationToken);
+        Assert.Equal(
+            HttpStatusCode.Created,
+            created.StatusCode);
+        var createdBody = await created.Content.ReadFromJsonAsync<JsonElement>(cancellationToken);
+        var wishId = createdBody.GetProperty("id").GetGuid();
+        var updatePayload = new Dictionary<string, object?>
+        {
+            ["name"] = "Updated gift",
+            ["quantity"] = 1
+        };
+
+        if (updatedFavorite.HasValue)
+            updatePayload["isFavorite"] = updatedFavorite.Value;
+
+        // Act
+        using var updated = await UpdateWishAsync(
+            client,
+            wishlist.Id,
+            wishId,
+            updatePayload,
+            created.Headers.ETag?.Tag);
+        using var retrieved = await client.GetAsync(
+            $"/api/v1/wishlists/{wishlist.Id}/wishes/{wishId}",
+            cancellationToken);
+        var retrievedBody = await retrieved.Content.ReadFromJsonAsync<JsonElement>(cancellationToken);
+
+        // Assert
+        Assert.Equal(
+            initialFavorite.GetValueOrDefault(),
+            createdBody.GetProperty("isFavorite").GetBoolean());
+        Assert.Equal(
+            HttpStatusCode.OK,
+            updated.StatusCode);
+        Assert.Equal(
+            expectedFavorite,
+            retrievedBody.GetProperty("isFavorite").GetBoolean());
+        Assert.Equal(
+            "Updated gift",
+            retrievedBody.GetProperty("name").GetString());
+    }
+
+    [Fact]
+    public async Task SetFavoriteAsync_WhenTwoRequestsUseTheSameVersion_OnlyOneMutationCommits()
+    {
+        // Arrange
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var factory = await CreateFactoryAsync();
+        var owner = await CreateMemberAsync(factory);
+        var wishlist = await SeedWishlistAsync(
+            factory,
+            owner.Id,
+            "Concurrent favorites");
+        using var client = await AuthenticationTestData.CreateClientAsync(
+            factory,
+            owner.Id,
+            cancellationToken);
+        using var created = await CreateWishAsync(
+            client,
+            wishlist.Id,
+            "Gift");
+        var wishId = await ReadWishIdAsync(created);
+
+        // Act
+        var responses = await Task.WhenAll(
+            SetFavoriteAsync(
+                client,
+                wishlist.Id,
+                wishId,
+                true,
+                created.Headers.ETag?.Tag,
+                cancellationToken),
+            SetFavoriteAsync(
+                client,
+                wishlist.Id,
+                wishId,
+                true,
+                created.Headers.ETag?.Tag,
+                cancellationToken));
+        using var first = responses[0];
+        using var second = responses[1];
+        using var retrieved = await client.GetAsync(
+            $"/api/v1/wishlists/{wishlist.Id}/wishes/{wishId}",
+            cancellationToken);
+        var body = await retrieved.Content.ReadFromJsonAsync<JsonElement>(cancellationToken);
+
+        // Assert
+        Assert.Equal(
+            [
+                HttpStatusCode.OK,
+                HttpStatusCode.PreconditionFailed
+            ],
+            responses.Select(response => response.StatusCode)
+                .Order());
+        Assert.True(body.GetProperty("isFavorite").GetBoolean());
+    }
+
+    [Fact]
+    public async Task SetFavoriteAsync_WhenOwnerChangesPreference_PersistsWithoutReorderingAndPreservesNoOpVersions()
+    {
+        // Arrange
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var factory = await CreateFactoryAsync();
+        var owner = await CreateMemberAsync(factory);
+        var wishlist = await SeedWishlistAsync(
+            factory,
+            owner.Id,
+            "Favorites");
+        using var client = await AuthenticationTestData.CreateClientAsync(
+            factory,
+            owner.Id,
+            cancellationToken);
+        using var first = await CreateWishAsync(
+            client,
+            wishlist.Id,
+            "First");
+        using var second = await CreateWishAsync(
+            client,
+            wishlist.Id,
+            "Second");
+        var firstId = await ReadWishIdAsync(first);
+        var secondId = await ReadWishIdAsync(second);
+        using var before = await client.GetAsync(
+            $"/api/v1/wishlists/{wishlist.Id}/wishes",
+            cancellationToken);
+
+        // Act
+        using var changed = await SetFavoriteAsync(
+            client,
+            wishlist.Id,
+            firstId,
+            true,
+            first.Headers.ETag?.Tag,
+            cancellationToken);
+        using var changedSecond = await SetFavoriteAsync(
+            client,
+            wishlist.Id,
+            secondId,
+            true,
+            second.Headers.ETag?.Tag,
+            cancellationToken);
+        using var after = await client.GetAsync(
+            $"/api/v1/wishlists/{wishlist.Id}/wishes",
+            cancellationToken);
+        using var noOp = await SetFavoriteAsync(
+            client,
+            wishlist.Id,
+            firstId,
+            true,
+            changed.Headers.ETag?.Tag,
+            cancellationToken);
+        using var afterNoOp = await client.GetAsync(
+            $"/api/v1/wishlists/{wishlist.Id}/wishes",
+            cancellationToken);
+        var body = await after.Content.ReadFromJsonAsync<JsonElement>(cancellationToken);
+        var wishes = body.GetProperty("wishes").EnumerateArray().ToArray();
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.OK,
+            changed.StatusCode);
+        Assert.Equal(
+            HttpStatusCode.OK,
+            changedSecond.StatusCode);
+        Assert.NotEqual(
+            first.Headers.ETag?.Tag,
+            changed.Headers.ETag?.Tag);
+        Assert.NotEqual(
+            before.Headers.ETag?.Tag,
+            after.Headers.ETag?.Tag);
+        Assert.Equal(
+            [
+                firstId,
+                secondId
+            ],
+            wishes.Select(wish => wish.GetProperty("id").GetGuid()));
+        Assert.Equal(
+            [
+                1L,
+                2L
+            ],
+            wishes.Select(wish => wish.GetProperty("position").GetInt64()));
+        Assert.All(
+            wishes,
+            wish => Assert.True(wish.GetProperty("isFavorite").GetBoolean()));
+        Assert.Equal(
+            HttpStatusCode.OK,
+            noOp.StatusCode);
+        Assert.Equal(
+            changed.Headers.ETag?.Tag,
+            noOp.Headers.ETag?.Tag);
+        Assert.Equal(
+            after.Headers.ETag?.Tag,
+            afterNoOp.Headers.ETag?.Tag);
+    }
+
+    [Theory]
+    [InlineData("missingVersion", 428)]
+    [InlineData("staleVersion", 412)]
+    [InlineData("foreignOwner", 404)]
+    [InlineData("missingWish", 404)]
+    [InlineData("archived", 409)]
+    [InlineData("suspended", 409)]
+    public async Task SetFavoriteAsync_WhenAccessOrVersionIsRestricted_RejectsWithoutChangingPreference(
+        string scenario,
+        int statusCode)
+    {
+        // Arrange
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var factory = await CreateFactoryAsync();
+        var owner = await CreateMemberAsync(factory);
+        var wishlist = await SeedWishlistAsync(
+            factory,
+            owner.Id,
+            "Restricted favorites");
+        using var ownerClient = await AuthenticationTestData.CreateClientAsync(
+            factory,
+            owner.Id,
+            cancellationToken);
+        using var created = await CreateWishAsync(
+            ownerClient,
+            wishlist.Id,
+            "Wish");
+        var wishId = await ReadWishIdAsync(created);
+        var originalWishId = wishId;
+        var caller = owner;
+
+        if (scenario == "foreignOwner")
+            caller = await CreateMemberAsync(factory);
+
+        if (scenario is "archived" or "suspended")
+        {
+            await using var scope = factory.Services.CreateAsyncScope();
+            var context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
+            var current = await context.Wishlists.SingleAsync(
+                item => item.Id == wishlist.Id,
+                cancellationToken);
+
+            if (scenario == "archived")
+                current.SetArchived(true);
+
+            if (scenario == "suspended")
+                current.Moderate(
+                    true,
+                    "Administrative restriction",
+                    _referenceTime.UtcDateTime);
+
+            await context.SaveChangesAsync(cancellationToken);
+        }
+
+        using var client = await AuthenticationTestData.CreateClientAsync(
+            factory,
+            caller.Id,
+            cancellationToken);
+        var tag = scenario == "missingVersion" ? null : created.Headers.ETag?.Tag;
+
+        if (scenario == "staleVersion")
+            tag = "\"00000000\"";
+
+        if (scenario == "missingWish")
+            wishId = Guid.CreateVersion7();
+
+        // Act
+        using var changed = await SetFavoriteAsync(
+            client,
+            wishlist.Id,
+            wishId,
+            true,
+            tag,
+            cancellationToken);
+        using var unchanged = await ownerClient.GetAsync(
+            $"/api/v1/wishlists/{wishlist.Id}/wishes/{originalWishId}",
+            cancellationToken);
+        var body = await unchanged.Content.ReadFromJsonAsync<JsonElement>(cancellationToken);
+
+        // Assert
+        Assert.Equal(
+            statusCode,
+            (int)changed.StatusCode);
+        Assert.False(body.GetProperty("isFavorite").GetBoolean());
+        Assert.Equal(
+            created.Headers.ETag?.Tag,
+            unchanged.Headers.ETag?.Tag);
+    }
+
+    [Theory]
+    [InlineData("{}")]
+    [InlineData("{\"isFavorite\":null}")]
+    [InlineData("{\"isFavorite\":\"true\"}")]
+    [InlineData("{\"isFavorite\":true,\"name\":\"Changed\"}")]
+    public async Task SetFavoriteAsync_WhenPayloadIsInvalid_ReturnsValidationError(string payload)
+    {
+        // Arrange
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var factory = await CreateFactoryAsync();
+        var owner = await CreateMemberAsync(factory);
+        var wishlist = await SeedWishlistAsync(
+            factory,
+            owner.Id,
+            "Validated favorites");
+        using var client = await AuthenticationTestData.CreateClientAsync(
+            factory,
+            owner.Id,
+            cancellationToken);
+        using var created = await CreateWishAsync(
+            client,
+            wishlist.Id,
+            "Wish");
+        var wishId = await ReadWishIdAsync(created);
+        using var request = new HttpRequestMessage(
+            HttpMethod.Patch,
+            $"/api/v1/wishlists/{wishlist.Id}/wishes/{wishId}")
+        {
+            Content = new StringContent(
+                payload,
+                System.Text.Encoding.UTF8,
+                "application/json")
+        };
+        request.Headers.IfMatch.Add(EntityTagHeaderValue.Parse(created.Headers.ETag?.Tag ?? string.Empty));
+
+        // Act
+        using var response = await client.SendAsync(
+            request,
+            cancellationToken);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.BadRequest,
+            response.StatusCode);
+    }
+
+    /// <summary>Sends one versioned favorite preference without retrying it.</summary>
+    /// <param name="client">The authenticated client.</param>
+    /// <param name="wishlistId">The parent wishlist identifier.</param>
+    /// <param name="wishId">The wish identifier.</param>
+    /// <param name="isFavorite">The requested preference.</param>
+    /// <param name="entityTag">The optional precondition.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The HTTP result.</returns>
+    private static async Task<HttpResponseMessage> SetFavoriteAsync(
+        HttpClient client,
+        Guid wishlistId,
+        Guid wishId,
+        bool isFavorite,
+        string? entityTag,
+        CancellationToken cancellationToken)
+    {
+        using var request = new HttpRequestMessage(
+            HttpMethod.Patch,
+            $"/api/v1/wishlists/{wishlistId}/wishes/{wishId}")
+        {
+            Content = JsonContent.Create(new { isFavorite })
+        };
+
+        if (entityTag is not null)
+            request.Headers.IfMatch.Add(EntityTagHeaderValue.Parse(entityTag));
+
+        return await client.SendAsync(
+            request,
+            cancellationToken);
+    }
+
     private static readonly DateTimeOffset _referenceTime = new(
         2026,
         8,
@@ -1308,11 +1705,13 @@ public class WishIntegrationTests(PostgreSqlContainerFixture fixture)
     {
         await using var scope = factory.Services.CreateAsyncScope();
         var userManager = scope.ServiceProvider.GetRequiredService<UserManager<MonKadoUser>>();
+        var memberId = Guid.CreateVersion7(_referenceTime);
+        var email = $"owner-{memberId:N}@example.fr";
         var member = new MonKadoUser
         {
-            Id = Guid.CreateVersion7(_referenceTime),
-            Email = "owner@example.fr",
-            UserName = "owner@example.fr",
+            Id = memberId,
+            Email = email,
+            UserName = email,
             DisplayName = "Jenn",
             EmailConfirmed = true
         };

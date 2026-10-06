@@ -59,6 +59,270 @@ public class WishImageIntegrationTests(PostgreSqlContainerFixture fixture) : IAs
     }
 
     [Fact]
+    public async Task GetHistoryAsync_WhenReservedWishHasImage_ReturnsCurrentOwnerPhotoAndSharingAccess()
+    {
+        // Arrange
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var factory = await CreateFactoryAsync();
+        var owner = await CreateMemberAsync(factory);
+        var wishlist = await SeedWishlistAsync(
+            factory,
+            owner.Id,
+            "Public history");
+        using var client = await AuthenticationTestData.CreateClientAsync(
+            factory,
+            owner.Id,
+            cancellationToken);
+        using var creation = await CreateWishAsync(
+            client,
+            wishlist.Id);
+        var wishId = await ReadWishIdAsync(creation);
+        using var upload = CreateUpsertRequest(
+            wishlist.Id,
+            wishId,
+            CreatePng(SKColors.Blue),
+            creation.Headers.ETag?.Tag);
+        using var uploaded = await client.SendAsync(
+            upload,
+            cancellationToken);
+        Assert.Equal(
+            HttpStatusCode.OK,
+            uploaded.StatusCode);
+        using var shared = await client.PostAsync(
+            $"/api/v1/wishlists/{wishlist.Id}/share-link",
+            null,
+            cancellationToken);
+        var link = await shared.Content.ReadFromJsonAsync<JsonElement>(cancellationToken);
+        var participantId = Guid.CreateVersion7();
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var manager = scope.ServiceProvider.GetRequiredService<UserManager<MonKadoUser>>();
+            var participant = new MonKadoUser
+            {
+                Id = participantId,
+                Email = "history-participant@example.test",
+                UserName = "history-participant@example.test",
+                DisplayName = "Participant",
+                EmailConfirmed = true
+            };
+            var created = await manager.CreateAsync(participant);
+            Assert.True(created.Succeeded);
+            var context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
+            context.GiftReservationHistories.Add(new GiftReservationHistory(
+                Guid.CreateVersion7(),
+                participantId,
+                wishlist.Id,
+                wishlist.Name,
+                wishId,
+                "Gift",
+                1,
+                _referenceTime.UtcDateTime,
+                _referenceTime.UtcDateTime));
+            await context.SaveChangesAsync(cancellationToken);
+        }
+        using var visitor = await AuthenticationTestData.CreateClientAsync(
+            factory,
+            participantId,
+            cancellationToken);
+
+        // Act
+        using var history = await visitor.GetAsync(
+            "/api/v1/members/current/reservations",
+            cancellationToken);
+        var page = await history.Content.ReadFromJsonAsync<JsonElement>(cancellationToken);
+        var item = Assert.Single(page.GetProperty("items").EnumerateArray());
+        var imageUrl = Assert.IsType<string>(item.GetProperty("imageUrl").GetString());
+        using var image = await visitor.GetAsync(
+            imageUrl,
+            cancellationToken);
+        using var ownerHistory = await client.GetAsync(
+            "/api/v1/members/current/reservations",
+            cancellationToken);
+        var ownerPage = await ownerHistory.Content.ReadFromJsonAsync<JsonElement>(cancellationToken);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.OK,
+            history.StatusCode);
+        Assert.Equal(
+            owner.DisplayName,
+            item.GetProperty("ownerDisplayName").GetString());
+        Assert.Equal(
+            owner.Id,
+            item.GetProperty("ownerId").GetGuid());
+        Assert.Equal(
+            link.GetProperty("shareUrl").GetString(),
+            item.GetProperty("shareUrl").GetString());
+        Assert.Equal(
+            HttpStatusCode.OK,
+            image.StatusCode);
+        Assert.NotEmpty(await image.Content.ReadAsByteArrayAsync(cancellationToken));
+        Assert.Empty(ownerPage.GetProperty("items").EnumerateArray());
+        Assert.False(item.TryGetProperty(
+            "protectedShareSecret",
+            out _));
+    }
+
+    [Fact]
+    public async Task GetWishAsync_WhenSharedWishIsArchived_BlocksAndRestoresSameImageAndDetails()
+    {
+        // Arrange
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var factory = await CreateFactoryAsync();
+        var owner = await CreateMemberAsync(factory);
+        var wishlist = await SeedWishlistAsync(
+            factory,
+            owner.Id,
+            "Public details");
+        using var client = await AuthenticationTestData.CreateClientAsync(
+            factory,
+            owner.Id,
+            cancellationToken);
+        using var creation = await client.PostAsJsonAsync(
+            $"/api/v1/wishlists/{wishlist.Id}/wishes",
+            new
+            {
+                name = "Product with image",
+                note = "Product description",
+                url = "https://example.com/product",
+                price = 12.34m,
+                quantity = 3
+            },
+            cancellationToken);
+        Assert.Equal(
+            HttpStatusCode.Created,
+            creation.StatusCode);
+        var wishId = await ReadWishIdAsync(creation);
+        using var upload = CreateUpsertRequest(
+            wishlist.Id,
+            wishId,
+            CreatePng(SKColors.Blue),
+            creation.Headers.ETag?.Tag);
+        using var uploaded = await client.SendAsync(
+            upload,
+            cancellationToken);
+        Assert.Equal(
+            HttpStatusCode.OK,
+            uploaded.StatusCode);
+        using var shared = await client.PostAsync(
+            $"/api/v1/wishlists/{wishlist.Id}/share-link",
+            null,
+            cancellationToken);
+        Assert.Equal(
+            HttpStatusCode.Created,
+            shared.StatusCode);
+        var link = await shared.Content.ReadFromJsonAsync<JsonElement>(cancellationToken);
+        var shareUrl = Assert.IsType<string>(link.GetProperty("shareUrl").GetString());
+        using var visitor = factory.CreateClient();
+        using var request = new HttpRequestMessage(
+            HttpMethod.Get,
+            $"/api/v1/shared-wishlists/{link.GetProperty("id").GetGuid()}/wishes/{wishId}");
+        request.Headers.TryAddWithoutValidation(
+            "X-MonKado-Share-Token",
+            new Uri(shareUrl).Fragment[1..]);
+
+        // Act
+        using var detail = await visitor.SendAsync(
+            request,
+            cancellationToken);
+        var body = await detail.Content.ReadFromJsonAsync<JsonElement>(cancellationToken);
+        var imageUrl = Assert.IsType<string>(body.GetProperty("imageUrl").GetString());
+        using var image = await visitor.GetAsync(
+            imageUrl,
+            cancellationToken);
+        using var publicProfile = await visitor.GetAsync(
+            $"/api/v1/members/{owner.Id}/profile",
+            cancellationToken);
+        using var ownerRead = await client.GetAsync(
+            $"/api/v1/wishlists/{wishlist.Id}",
+            cancellationToken);
+        using var archiveRequest = new HttpRequestMessage(
+            HttpMethod.Patch,
+            $"/api/v1/wishlists/{wishlist.Id}")
+        {
+            Content = JsonContent.Create(new { isArchived = true })
+        };
+        archiveRequest.Headers.IfMatch.Add(ownerRead.Headers.ETag
+            ?? throw new InvalidOperationException("The ETag is missing."));
+        using var archived = await client.SendAsync(
+            archiveRequest,
+            cancellationToken);
+        archived.EnsureSuccessStatusCode();
+        using var archivedProfile = await visitor.GetAsync(
+            $"/api/v1/members/{owner.Id}/profile",
+            cancellationToken);
+        using var blockedImage = await visitor.GetAsync(
+            imageUrl,
+            cancellationToken);
+        using var blockedRequest = new HttpRequestMessage(
+            HttpMethod.Get,
+            request.RequestUri);
+        blockedRequest.Headers.TryAddWithoutValidation(
+            "X-MonKado-Share-Token",
+            new Uri(shareUrl).Fragment[1..]);
+        using var blockedDetail = await visitor.SendAsync(
+            blockedRequest,
+            cancellationToken);
+        using var restoreRequest = new HttpRequestMessage(
+            HttpMethod.Patch,
+            $"/api/v1/wishlists/{wishlist.Id}")
+        {
+            Content = JsonContent.Create(new { isArchived = false })
+        };
+        restoreRequest.Headers.IfMatch.Add(archived.Headers.ETag
+            ?? throw new InvalidOperationException("The ETag is missing."));
+        using var restored = await client.SendAsync(
+            restoreRequest,
+            cancellationToken);
+        restored.EnsureSuccessStatusCode();
+        using var restoredImage = await visitor.GetAsync(
+            imageUrl,
+            cancellationToken);
+        using var restoredProfile = await visitor.GetAsync(
+            $"/api/v1/members/{owner.Id}/profile",
+            cancellationToken);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.OK,
+            detail.StatusCode);
+        Assert.Equal(
+            "Product with image",
+            body.GetProperty("name").GetString());
+        Assert.Equal(
+            "Product description",
+            body.GetProperty("note").GetString());
+        Assert.Equal(
+            "https://example.com/product",
+            body.GetProperty("url").GetString());
+        Assert.Equal(
+            12.34m,
+            body.GetProperty("price").GetDecimal());
+        Assert.Equal(
+            3,
+            body.GetProperty("quantity").GetInt32());
+        Assert.Equal(
+            HttpStatusCode.OK,
+            image.StatusCode);
+        Assert.NotEmpty(await image.Content.ReadAsByteArrayAsync(cancellationToken));
+        Assert.Equal(
+            HttpStatusCode.NotFound,
+            blockedImage.StatusCode);
+        Assert.Equal(
+            HttpStatusCode.NotFound,
+            blockedDetail.StatusCode);
+        Assert.Equal(
+            HttpStatusCode.OK,
+            restoredImage.StatusCode);
+        Assert.Equal(
+            await image.Content.ReadAsByteArrayAsync(cancellationToken),
+            await restoredImage.Content.ReadAsByteArrayAsync(cancellationToken));
+        Assert.Single((await publicProfile.Content.ReadFromJsonAsync<JsonElement>(cancellationToken)).GetProperty("wishlists").EnumerateArray());
+        Assert.Empty((await archivedProfile.Content.ReadFromJsonAsync<JsonElement>(cancellationToken)).GetProperty("wishlists").EnumerateArray());
+        Assert.Single((await restoredProfile.Content.ReadFromJsonAsync<JsonElement>(cancellationToken)).GetProperty("wishlists").EnumerateArray());
+    }
+
+    [Fact]
     public async Task UpsertImageAsync_WhenAddingRepeatingAndReplacing_PersistsHashAndCleansThroughOutbox()
     {
         // Arrange

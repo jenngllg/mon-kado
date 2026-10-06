@@ -4,6 +4,46 @@ namespace JennGllg.Fr.MonKado.Back.Domain.UnitTests.Entities;
 
 public class WishTests
 {
+    [Fact]
+    public void Constructor_WhenCreated_DefaultsFavoriteToFalse()
+    {
+        // Arrange
+        // Act
+        var wish = CreateWish();
+
+        // Assert
+        Assert.False(wish.IsFavorite);
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void SetFavorite_WhenStateRequested_PreservesContentAndOrder(
+        bool initialState,
+        bool requestedState)
+    {
+        // Arrange
+        var wish = CreateWish();
+        wish.SetFavorite(initialState);
+        var originalState = (wish.Name, wish.Note, wish.Url, wish.Price, wish.Quantity, wish.Position);
+
+        // Act
+        var changed = wish.SetFavorite(requestedState);
+
+        // Assert
+        Assert.Equal(
+            initialState != requestedState,
+            changed);
+        Assert.Equal(
+            requestedState,
+            wish.IsFavorite);
+        Assert.Equal(
+            originalState,
+            (wish.Name, wish.Note, wish.Url, wish.Price, wish.Quantity, wish.Position));
+    }
+
     [Theory]
     [InlineData(true)]
     [InlineData(false)]

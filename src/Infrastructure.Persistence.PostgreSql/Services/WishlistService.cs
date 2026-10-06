@@ -38,6 +38,56 @@ public class WishlistService(
 {
     private const string OwnerForeignKeyName = "fk_wishlists_users_owner_id";
     private const string OwnerNormalizedNameIndexName = "ux_wishlists_owner_normalized_name";
+    /// <inheritdoc />
+    public async Task<WishlistDetails> SetArchivedAsync(
+        Guid ownerId,
+        Guid wishlistId,
+        bool isArchived,
+        uint expectedVersion,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await using var transaction = await transactionFactory.BeginAsync(
+                IsolationLevel.ReadCommitted,
+                cancellationToken);
+            await mutationGuard.LockStateChangeAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken);
+            var wishlist = await wishlistRepository.GetByIdForUpdateAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken);
+
+            if (wishlist is null)
+                throw new WishlistNotFoundException();
+
+            if (wishlist.Version != expectedVersion)
+                throw new WishlistVersionConflictException();
+
+            if (!wishlist.SetArchived(isArchived))
+                return CreateDetails(wishlist);
+
+            await unitOfWork.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+
+            return CreateDetails(wishlist);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+
+            throw new WishlistVersionConflictException();
+        }
+        catch (Exception exception) when (PostgreSqlFailureClassifier.IsUnavailable(exception))
+        {
+
+            throw new DependencyUnavailableException(
+                DependencyNames.PostgreSql,
+                exception);
+        }
+    }
+
     /// <inheritdoc/>
     public async Task<WishlistDetails?> CreateAsync(
         Guid id,
@@ -207,7 +257,7 @@ public class WishlistService(
             await using var transaction = await transactionFactory.BeginAsync(
                 IsolationLevel.ReadCommitted,
                 cancellationToken);
-            await mutationGuard.LockAsync(
+            await mutationGuard.LockStateChangeAsync(
                 ownerId,
                 wishlistId,
                 cancellationToken);
@@ -374,6 +424,7 @@ public class WishlistService(
             wishlist.Version)
         {
             SurpriseMode = wishlist.SurpriseMode,
+            IsArchived = wishlist.IsArchived,
             IsSuspended = wishlist.IsSuspended,
             SuspensionReason = wishlist.SuspensionReason,
             SuspendedAt = wishlist.SuspendedAt

@@ -13,6 +13,7 @@ namespace JennGllg.Fr.MonKado.Back.Application.Models;
 /// <param name="reservedQuantity">The total quantity reserved by all participants.</param>
 /// <param name="currentParticipantReservedQuantity">The optional current-participant quantity.</param>
 /// <param name="imageId">The optional normalized image identifier.</param>
+/// <param name="isFavorite">Whether the owner marked the wish as a favorite.</param>
 [ExcludeFromCodeCoverage]
 public class SharedWishDetails(
     Guid id,
@@ -22,8 +23,12 @@ public class SharedWishDetails(
     int quantity = 1,
     int? reservedQuantity = 0,
     int? currentParticipantReservedQuantity = null,
-    Guid? imageId = null)
+    Guid? imageId = null,
+    bool isFavorite = false)
 {
+    /// <summary>Gets whether the owner marked the wish as a favorite.</summary>
+    public bool IsFavorite { get; } = isFavorite;
+
     /// <summary>Gets the gift-wish identifier.</summary>
     public Guid Id { get; } = id;
     /// <summary>Gets the gift-wish name.</summary>

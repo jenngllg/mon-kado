@@ -7,6 +7,22 @@ namespace JennGllg.Fr.MonKado.Back.Application.Abstractions;
 /// </summary>
 public interface IWishService
 {
+    /// <summary>Changes only the owner's favorite preference under a writable parent lock.</summary>
+    /// <param name="ownerId">The authenticated owner identifier.</param>
+    /// <param name="wishlistId">The parent wishlist identifier.</param>
+    /// <param name="wishId">The wish identifier.</param>
+    /// <param name="isFavorite">The requested preference.</param>
+    /// <param name="expectedVersion">The client wish version.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The updated wish, or null when the owned parent has no matching wish.</returns>
+    Task<WishDetails?> SetFavoriteAsync(
+        Guid ownerId,
+        Guid wishlistId,
+        Guid wishId,
+        bool isFavorite,
+        uint expectedVersion,
+        CancellationToken cancellationToken);
+
     /// <summary>Removes a gift image and schedules durable file cleanup.</summary>
     /// <param name="ownerId">The owner identifier.</param>
     /// <param name="wishlistId">The parent wishlist identifier.</param>
@@ -68,6 +84,7 @@ public interface IWishService
     /// <param name="url">The normalized optional product URL.</param>
     /// <param name="price">The optional price in euros.</param>
     /// <param name="quantity">The total desired quantity.</param>
+    /// <param name="isFavorite">The initial owner favorite preference.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>The created wish, or <see langword="null" /> when the wishlist is unavailable to the owner.</returns>
     /// <exception cref="Common.Exceptions.InvalidAuthenticationSessionException">The authenticated member no longer exists.</exception>
@@ -81,6 +98,7 @@ public interface IWishService
         string? url,
         decimal? price,
         int quantity,
+        bool isFavorite,
         CancellationToken cancellationToken);
 
     /// <summary>
@@ -107,6 +125,7 @@ public interface IWishService
     /// <param name="url">The normalized optional product URL.</param>
     /// <param name="price">The optional price in euros.</param>
     /// <param name="quantity">The total desired quantity.</param>
+    /// <param name="isFavorite">The optional preference; omission preserves the current state.</param>
     /// <param name="expectedVersion">The version supplied by the client.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>The updated wish, or <see langword="null" /> when the wish does not exist under an owned parent.</returns>
@@ -124,6 +143,7 @@ public interface IWishService
         decimal? price,
         int quantity,
         uint expectedVersion,
+        bool? isFavorite,
         CancellationToken cancellationToken);
 
     /// <summary>

@@ -61,6 +61,9 @@ public class WishlistDetails(
     /// </summary>
     public uint Version { get; } = version;
 
+    /// <summary>Gets whether the owner archived this wishlist.</summary>
+    public bool IsArchived { get; init; }
+
     /// <summary>Gets whether an administrator suspended this wishlist.</summary>
     public bool IsSuspended
     {

@@ -19,6 +19,8 @@ internal sealed class WishlistConfiguration : IEntityTypeConfiguration<Wishlist>
     {
         builder.ToTable("wishlists");
         builder.HasKey(wishlist => wishlist.Id);
+        builder.Property(wishlist => wishlist.IsArchived)
+            .HasDefaultValue(false);
         builder.Property(wishlist => wishlist.SurpriseMode)
             .HasDefaultValue(true)
             .HasSentinel(true);

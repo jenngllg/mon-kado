@@ -9,6 +9,38 @@ namespace JennGllg.Fr.MonKado.Back.Application.Logging;
 /// </summary>
 public static partial class ApplicationLogMessages
 {
+    /// <summary>Logs an owner favorite preference without wish content.</summary>
+    /// <param name="logger">The logger.</param>
+    /// <param name="ownerId">The owner identifier.</param>
+    /// <param name="wishlistId">The parent wishlist identifier.</param>
+    /// <param name="wishId">The wish identifier.</param>
+    /// <param name="isFavorite">The resulting preference.</param>
+    [LoggerMessage(
+        EventId = LogEventIds.WishFavoriteChanged,
+        Level = LogLevel.Information,
+        Message = "Owner {OwnerId} changed wishlist {WishlistId} wish {WishId} favorite state to {IsFavorite}.")]
+    public static partial void WishFavoriteChanged(
+        ILogger logger,
+        Guid ownerId,
+        Guid wishlistId,
+        Guid wishId,
+        bool isFavorite);
+
+    /// <summary>Logs an archive-state change without wishlist content or sharing credentials.</summary>
+    /// <param name="logger">The logger.</param>
+    /// <param name="ownerId">The owner identifier.</param>
+    /// <param name="wishlistId">The wishlist identifier.</param>
+    /// <param name="isArchived">The resulting archive state.</param>
+    [LoggerMessage(
+        EventId = LogEventIds.WishlistArchiveStateChanged,
+        Level = LogLevel.Information,
+        Message = "Owner {OwnerId} changed wishlist {WishlistId} archive state to {IsArchived}.")]
+    public static partial void WishlistArchiveStateChanged(
+        ILogger logger,
+        Guid ownerId,
+        Guid wishlistId,
+        bool isArchived);
+
     /// <summary>Logs a successful public profile read without personal data or share links.</summary>
     /// <param name="logger">The logger.</param>
     /// <param name="memberId">The technical member identifier.</param>

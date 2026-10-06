@@ -181,6 +181,25 @@ Cookie-enabled unsafe endpoints declare antiforgery validation explicitly. Endpo
 
 ## Wishlist sharing security contract
 
+### Manual wishlist archiving (#976)
+
+Owners archive or restore a list with `PATCH /api/v1/wishlists/{wishlistId}` and
+`{ "isArchived": true | false }`. This endpoint accepts no other fields and requires
+the latest strong `If-Match` ETag. It returns the complete owner DTO and its ETag;
+a stale version returns `412`, a missing version `428`, and a foreign list `404`.
+Repeating the current state with a valid version does not write or change the ETag.
+`GET /api/v1/wishlists` defaults to active lists; `?isArchived=true` selects archives.
+
+An archived list remains readable and deletable by its owner, but content and
+sharing mutations return `409 WISHLIST_ARCHIVED`. It disappears from public
+profiles and its shared list, wish and image access returns `404`. No share secret
+is revoked or rotated. Existing reservations retain their status and quantity;
+their history remains visible without shared navigation or mutation actions.
+Parent-first transaction locks serialize reservation/content writes with archiving.
+Restoration re-enables the same links and reservations, except when an independent
+administrative suspension still prevents access. Archiving is never automatic and
+does not send email or change name uniqueness.
+
 The owner-facing share-link response contains a copyable frontend URL whose 256-bit bearer secret appears only after the URL fragment marker (`#`). The frontend must remove that secret from browser history immediately, keep it in memory only, and send it to the API through `X-MonKado-Share-Token`. It must never place the secret in query parameters, persistent browser storage, analytics, telemetry, or logs.
 
 The API stores a SHA-256 hash for verification and a Data Protection payload solely so the owner can retrieve the same link again. Rotating the link preserves its identifier but invalidates the previous secret. Revoking it invalidates the complete public URL. Active links do not expire automatically.
@@ -683,6 +702,14 @@ docker compose --env-file .env -f compose.yaml logs api worker caddy
 docker compose --env-file .env -f compose.yaml run --rm migrations
 docker compose --env-file .env -f compose.yaml exec caddy caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
 ```
+
+## Owner wish favorites (#978)
+
+Wishes expose `isFavorite` in owner and shared collection/detail responses. Multiple wishes may be favorites; positions, reservations and image references remain unchanged. Existing wishes default to `false` through `AddWishFavoriteState`.
+
+Creation accepts an optional `isFavorite` (omission means `false`). Full updates accept the optional property too; omission preserves the current preference. `PATCH /api/v1/wishlists/{wishlistId}/wishes/{wishId}` accepts only `{ "isFavorite": true | false }`, requires owner authorization and a strong `If-Match`, and returns `200` with the complete wish and its ETag. Missing preconditions return `428`, stale versions `412`, missing or foreign resources `404`, invalid or additional fields `400`. Repeating the current preference with a valid version preserves wish and collection ETags.
+
+Preference writes lock the parent wishlist before the wish inside a transaction. Archived or administratively suspended lists reject mutations with `409` and their existing stable error codes. Public reads expose the owner's preference, never a visitor-owned bookmark. Personal-data exports include the preference.
 
 ## PostgreSQL backup and restore
 

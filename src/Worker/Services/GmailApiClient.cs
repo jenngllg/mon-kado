@@ -20,6 +20,7 @@ namespace JennGllg.Fr.MonKado.Back.Worker.Services;
 /// </summary>
 public sealed class GmailApiClient : IGmailApiClient, IDisposable
 {
+    private static readonly Uri _defaultMessagesEndpoint = new("https://gmail.googleapis.com/gmail/v1/users/me/messages/send");
     private readonly HttpClient _httpClient;
     private readonly Uri _messagesEndpoint;
     private readonly GmailService? _ownedService;
@@ -52,13 +53,24 @@ public sealed class GmailApiClient : IGmailApiClient, IDisposable
         });
         service.HttpClient.Timeout = gmail.RequestTimeout;
         _httpClient = service.HttpClient;
-        _messagesEndpoint = new Uri(
-            new Uri(
-                service.BaseUri,
-                UriKind.Absolute),
-            $"{service.BasePath}users/me/messages/send");
+        _messagesEndpoint = _defaultMessagesEndpoint;
         _ownedService = service;
         _timeProvider = TimeProvider.System;
+    }
+
+    /// <summary>
+    /// Initializes a client targeting the official Gmail send endpoint with an authenticated HTTP client.
+    /// </summary>
+    /// <param name="httpClient">The authenticated HTTP client used to call Gmail.</param>
+    /// <param name="timeProvider">The time provider used to evaluate retry delays.</param>
+    public GmailApiClient(
+        HttpClient httpClient,
+        TimeProvider timeProvider)
+        : this(
+            httpClient,
+            _defaultMessagesEndpoint,
+            timeProvider)
+    {
     }
 
     /// <summary>

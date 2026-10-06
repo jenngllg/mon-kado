@@ -73,7 +73,7 @@ public class WishImageAccessService(MonKadoDbContext context) : IWishImageAccess
                     result.ShareLink.WishlistId == wishlistId &&
                     result.Wish.Id == wishId &&
                     result.Wish.ImageId == imageId &&
-                    context.Wishlists.Any(wishlist => wishlist.Id == wishlistId && !wishlist.IsSuspended))
+                    context.Wishlists.Any(wishlist => wishlist.Id == wishlistId && !wishlist.IsSuspended && !wishlist.IsArchived))
                 .Select(result => result.Wish.Id)
                 .AnyAsync(cancellationToken);
         }

@@ -56,6 +56,9 @@ public class WishlistOwnerAuthorizationHandler(
 
             if (wishlist.IsSuspended)
                 throw new WishlistSuspendedException();
+
+            if (wishlist.IsArchived)
+                throw new WishlistArchivedException();
         }
 
         context.Succeed(requirement);

@@ -9,6 +9,35 @@ namespace JennGllg.Fr.MonKado.Back.Api.FunctionalTests;
 /// </summary>
 public class RecordingWishlistService : IWishlistService
 {
+    /// <inheritdoc />
+    public Task<WishlistDetails> SetArchivedAsync(
+        Guid ownerId,
+        Guid wishlistId,
+        bool isArchived,
+        uint expectedVersion,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var current = Wishlists[wishlistId];
+        var updated = new WishlistDetails(
+            current.Id,
+            current.Name,
+            current.Occasion,
+            current.EventDate,
+            current.Message,
+            current.CreatedAt,
+            current.UpdatedAt,
+            current.Version)
+        {
+            IsArchived = isArchived,
+            IsSuspended = current.IsSuspended,
+            SurpriseMode = current.SurpriseMode
+        };
+        Wishlists[wishlistId] = updated;
+
+        return Task.FromResult(updated);
+    }
+
     private static readonly DateTime _createdAt = new(
         2026,
         8,

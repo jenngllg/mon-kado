@@ -405,6 +405,7 @@ public class WishlistShareLinkTests
         var wish = document.RootElement.GetProperty("wishes")[0];
         Assert.Equal(
             [
+                "isFavorite",
                 "id",
                 "name",
                 "url",
@@ -638,6 +639,7 @@ public class WishlistShareLinkTests
             ?? throw new InvalidOperationException("The shared-wish response is empty.");
         Assert.Equal(
             [
+                "isFavorite",
                 "id",
                 "name",
                 "note",

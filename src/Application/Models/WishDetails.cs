@@ -17,6 +17,7 @@ namespace JennGllg.Fr.MonKado.Back.Application.Models;
 /// <param name="version">The optimistic concurrency version.</param>
 /// <param name="quantity">The total desired quantity.</param>
 /// <param name="imageId">The optional normalized image identifier.</param>
+/// <param name="isFavorite">Whether the owner marked the wish as a favorite.</param>
 [ExcludeFromCodeCoverage]
 public class WishDetails(
     Guid id,
@@ -30,8 +31,12 @@ public class WishDetails(
     DateTime? updatedAt,
     uint version,
     int quantity = 1,
-    Guid? imageId = null)
+    Guid? imageId = null,
+    bool isFavorite = false)
 {
+    /// <summary>Gets whether the owner marked the wish as a favorite.</summary>
+    public bool IsFavorite { get; } = isFavorite;
+
     /// <summary>
     /// Gets the wish identifier.
     /// </summary>

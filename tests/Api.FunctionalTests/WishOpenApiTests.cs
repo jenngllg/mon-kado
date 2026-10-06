@@ -72,6 +72,7 @@ public class WishOpenApiTests
                 "entityTag",
                 "id",
                 "imageUrl",
+                "isFavorite",
                 "name",
                 "note",
                 "position",
@@ -160,6 +161,7 @@ public class WishOpenApiTests
                 .GetProperty("schema"));
         Assert.Equal(
             [
+                "isFavorite",
                 "name",
                 "note",
                 "price",
@@ -229,6 +231,7 @@ public class WishOpenApiTests
                 .GetProperty("schema"));
         Assert.Equal(
             [
+                "isFavorite",
                 "name",
                 "note",
                 "price",
@@ -260,6 +263,41 @@ public class WishOpenApiTests
         AssertWishResponseSchema(
             document.RootElement,
             updateResponses.GetProperty("200"));
+
+        var favorite = itemPath.GetProperty("patch");
+        AssertBearerWithoutAntiforgery(favorite);
+        Assert.Contains(
+            favorite.GetProperty("parameters").EnumerateArray(),
+            parameter => parameter.GetProperty("name").GetString() == "If-Match" &&
+                parameter.GetProperty("required").GetBoolean());
+        var favoriteSchema = ResolveSchema(
+            document.RootElement,
+            favorite.GetProperty("requestBody")
+                .GetProperty("content")
+                .GetProperty("application/json")
+                .GetProperty("schema"));
+        Assert.Equal(
+            "isFavorite",
+            Assert.Single(favoriteSchema.GetProperty("properties").EnumerateObject()).Name);
+        var favoriteResponses = favorite.GetProperty("responses");
+        AssertResponses(
+            favoriteResponses,
+            "200",
+            "400",
+            "401",
+            "403",
+            "404",
+            "409",
+            "412",
+            "428",
+            "500",
+            "503");
+        AssertSuccessHeaders(
+            favoriteResponses.GetProperty("200"),
+            includesLocation: false);
+        AssertWishResponseSchema(
+            document.RootElement,
+            favoriteResponses.GetProperty("200"));
 
         Assert.Equal(
             "Deletes a gift wish from an owned private wishlist.",
@@ -367,6 +405,7 @@ public class WishOpenApiTests
                 "createdAt",
                 "id",
                 "imageUrl",
+                "isFavorite",
                 "name",
                 "note",
                 "position",

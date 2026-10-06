@@ -8,6 +8,9 @@ namespace JennGllg.Fr.MonKado.Back.Application.Models;
 [ExcludeFromCodeCoverage]
 public class SharedWishDetail
 {
+    /// <summary>Gets whether the owner marked the wish as a favorite.</summary>
+    public bool IsFavorite { get; init; }
+
     /// <summary>Gets the parent wishlist identifier.</summary>
     public Guid WishlistId
     {

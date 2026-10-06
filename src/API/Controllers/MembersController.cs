@@ -6,6 +6,7 @@ using JennGllg.Fr.MonKado.Back.Api.Contracts.Responses;
 using JennGllg.Fr.MonKado.Back.Api.Errors;
 using JennGllg.Fr.MonKado.Back.Api.Extensions;
 using JennGllg.Fr.MonKado.Back.Application.Commands;
+using JennGllg.Fr.MonKado.Back.Application.Abstractions;
 using JennGllg.Fr.MonKado.Back.Application.Models;
 using JennGllg.Fr.MonKado.Back.Application.Queries;
 
@@ -28,6 +29,9 @@ namespace JennGllg.Fr.MonKado.Back.Api.Controllers;
 /// <param name="entityTagService">The entity tag service.</param>
 /// <param name="refreshTokenCookieService">The refresh token cookie service.</param>
 /// <param name="profileImageUrlService">The public profile-photo URL service.</param>
+/// <param name="wishImageUrlService">The signed shared wish-image URL service.</param>
+/// <param name="shareLinkUrlService">The frontend share-link URL service.</param>
+/// <param name="shareTokenService">The share-token protection service.</param>
 [ApiController]
 [Authorize(Policy = AuthorizationPolicies.CurrentSession)]
 [Route("api/v1/members")]
@@ -35,7 +39,10 @@ public class MembersController(
     ISender sender,
     IEntityTagService entityTagService,
     IRefreshTokenCookieService refreshTokenCookieService,
-    IProfileImageUrlService profileImageUrlService) : ControllerBase
+    IProfileImageUrlService profileImageUrlService,
+    IWishImageUrlService wishImageUrlService,
+    IWishlistShareLinkUrlService shareLinkUrlService,
+    IWishlistShareTokenService shareTokenService) : ControllerBase
 {
     private const int MaximumRequestBodySize = 4 * 1024;
     private const string NoStoreCacheControl = "no-store";
@@ -301,8 +308,27 @@ public class MembersController(
         return NoContent();
     }
 
-    private static GiftReservationHistoryResponse CreateHistoryResponse(GiftReservationHistoryDetails history)
+    /// <summary>Projects an authorized history item with current public navigation and image grants.</summary>
+    /// <param name="history">The current member's history item.</param>
+    /// <returns>The client-facing history item, without protected secret material.</returns>
+    private GiftReservationHistoryResponse CreateHistoryResponse(GiftReservationHistoryDetails history)
     {
+        string? shareUrl = null;
+        string? imageUrl = null;
+
+        if (history.ShareLinkId is Guid shareLinkId && history.ProtectedShareSecret is string protectedSecret)
+        {
+            shareUrl = shareLinkUrlService.Build(
+                shareLinkId,
+                shareTokenService.Unprotect(protectedSecret));
+
+            if (history.ImageId is Guid imageId)
+                imageUrl = wishImageUrlService.CreateSharedUrl(
+                    shareLinkId,
+                    history.WishlistId,
+                    history.WishId,
+                    imageId);
+        }
 
         return new GiftReservationHistoryResponse(
             history.Id,
@@ -315,6 +341,13 @@ public class MembersController(
             history.Status,
             history.CreatedAt,
             history.LastActivityAt,
-            history.EndedAt);
+            history.EndedAt)
+        {
+            OwnerId = history.OwnerId,
+            IsArchived = history.IsArchived,
+            OwnerDisplayName = history.OwnerDisplayName,
+            ShareUrl = shareUrl,
+            ImageUrl = imageUrl
+        };
     }
 }

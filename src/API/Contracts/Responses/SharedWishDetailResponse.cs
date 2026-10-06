@@ -8,6 +8,9 @@ namespace JennGllg.Fr.MonKado.Back.Api.Contracts.Responses;
 [ExcludeFromCodeCoverage]
 public class SharedWishDetailResponse
 {
+    /// <summary>Gets whether the owner marked the wish as a favorite.</summary>
+    public bool IsFavorite { get; init; }
+
     /// <summary>Gets the gift-wish identifier.</summary>
     public Guid Id
     {

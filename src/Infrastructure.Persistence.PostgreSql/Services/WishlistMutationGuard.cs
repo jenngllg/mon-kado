@@ -19,9 +19,43 @@ public class WishlistMutationGuard(MonKadoDbContext context) : IWishlistMutation
     /// <exception cref="InvalidAuthenticationSessionException">The member no longer exists.</exception>
     /// <exception cref="WishlistNotFoundException">The wishlist is unavailable to this owner.</exception>
     /// <exception cref="WishlistSuspendedException">An administrator has suspended the wishlist.</exception>
-    public async Task LockAsync(
+    public Task LockAsync(
         Guid ownerId,
         Guid wishlistId,
+        CancellationToken cancellationToken)
+    {
+
+        return LockParentAsync(
+            ownerId,
+            wishlistId,
+            false,
+            cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public Task LockStateChangeAsync(
+        Guid ownerId,
+        Guid wishlistId,
+        CancellationToken cancellationToken)
+    {
+
+        return LockParentAsync(
+            ownerId,
+            wishlistId,
+            true,
+            cancellationToken);
+    }
+
+    /// <summary>Locks the account and parent with the requested archive-state permissions.</summary>
+    /// <param name="ownerId">The owner identifier.</param>
+    /// <param name="wishlistId">The wishlist identifier.</param>
+    /// <param name="allowArchived">Whether an archived parent may be changed.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A task completed when the parent state is checked under its lock.</returns>
+    private async Task LockParentAsync(
+        Guid ownerId,
+        Guid wishlistId,
+        bool allowArchived,
         CancellationToken cancellationToken)
     {
 
@@ -50,5 +84,8 @@ public class WishlistMutationGuard(MonKadoDbContext context) : IWishlistMutation
 
         if (wishlist.IsSuspended)
             throw new WishlistSuspendedException();
+
+        if (wishlist.IsArchived && !allowArchived)
+            throw new WishlistArchivedException();
     }
 }

@@ -10,14 +10,19 @@ namespace JennGllg.Fr.MonKado.Back.Api.Contracts.Requests;
 /// <param name="url">The optional product URL.</param>
 /// <param name="price">The optional price in euros.</param>
 /// <param name="quantity">The optional total desired quantity.</param>
+/// <param name="isFavorite">The optional owner favorite preference.</param>
 [ExcludeFromCodeCoverage]
 public class CreateWishRequest(
     string? name,
     string? note,
     string? url,
     decimal? price,
-    int? quantity = null)
+    int? quantity = null,
+    bool? isFavorite = null)
 {
+    /// <summary>Gets the optional owner favorite preference.</summary>
+    public bool? IsFavorite { get; } = isFavorite;
+
     /// <summary>
     /// Gets the requested name.
     /// </summary>

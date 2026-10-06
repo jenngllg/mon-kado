@@ -184,6 +184,7 @@ public class GiftReservationRepository(MonKadoDbContext context) : IGiftReservat
             {
                 Id = history.Id,
                 WishlistId = history.WishlistId,
+                IsArchived = context.Wishlists.Any(wishlist => wishlist.Id == history.WishlistId && wishlist.IsArchived),
                 WishlistName = context.Wishlists
                     .Where(wishlist => wishlist.Id == history.WishlistId)
                     .Select(wishlist => wishlist.Name)
@@ -196,6 +197,32 @@ public class GiftReservationRepository(MonKadoDbContext context) : IGiftReservat
                 ShareLinkId = context.WishlistShareLinks
                     .Where(shareLink => shareLink.WishlistId == history.WishlistId)
                     .Select(shareLink => (Guid?)shareLink.Id)
+                    .FirstOrDefault(),
+                OwnerId = context.Wishlists
+                    .Where(wishlist => wishlist.Id == history.WishlistId)
+                    .Join(
+                        context.Users,
+                        wishlist => wishlist.OwnerId,
+                        member => member.Id,
+                        (wishlist, member) => (Guid?)member.Id)
+                    .FirstOrDefault(),
+                OwnerDisplayName = context.Wishlists
+                    .Where(wishlist => wishlist.Id == history.WishlistId)
+                    .Join(
+                        context.Users,
+                        wishlist => wishlist.OwnerId,
+                        member => member.Id,
+                        (wishlist, member) => member.DisplayName)
+                    .FirstOrDefault(),
+                ImageId = context.Wishes
+                    .Where(wish => wish.Id == history.WishId && wish.WishlistId == history.WishlistId)
+                    .Select(wish => wish.ImageId)
+                    .FirstOrDefault(),
+                ProtectedShareSecret = context.WishlistShareLinks
+                    .Where(link => link.WishlistId == history.WishlistId &&
+                        context.Wishlists.Any(wishlist => wishlist.Id == history.WishlistId && !wishlist.IsSuspended && !wishlist.IsArchived) &&
+                        context.Wishes.Any(wish => wish.Id == history.WishId && wish.WishlistId == history.WishlistId))
+                    .Select(link => link.ProtectedSecret)
                     .FirstOrDefault(),
                 Quantity = history.Quantity,
                 Status = history.Status,

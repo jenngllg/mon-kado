@@ -23,7 +23,7 @@ public class WishlistShareLinkRepository(MonKadoDbContext context) : IWishlistSh
         return context.WishlistShareLinks
             .FromSqlInterpolated($"""
                 WITH locked_wishlist AS MATERIALIZED (
-                    SELECT wishlist.id, wishlist.is_suspended
+                    SELECT wishlist.id, wishlist.is_suspended, wishlist.is_archived
                     FROM public.wishlists AS wishlist
                     WHERE wishlist.id = (
                         SELECT wishlist_id FROM public.wishlist_share_links WHERE id = {shareLinkId})
@@ -32,7 +32,7 @@ public class WishlistShareLinkRepository(MonKadoDbContext context) : IWishlistSh
                 SELECT link.*, link.xmin
                 FROM public.wishlist_share_links AS link
                 JOIN locked_wishlist AS wishlist ON wishlist.id = link.wishlist_id
-                WHERE link.id = {shareLinkId} AND NOT wishlist.is_suspended
+                WHERE link.id = {shareLinkId} AND NOT wishlist.is_suspended AND NOT wishlist.is_archived
                 FOR UPDATE OF link
                 """)
             .SingleOrDefaultAsync(cancellationToken);
@@ -91,7 +91,7 @@ public class WishlistShareLinkRepository(MonKadoDbContext context) : IWishlistSh
     {
         return context.Wishlists
             .AsNoTracking()
-            .Where(wishlist => wishlist.Id == wishlistId && !wishlist.IsSuspended)
+            .Where(wishlist => wishlist.Id == wishlistId && !wishlist.IsSuspended && !wishlist.IsArchived)
             .Select(wishlist => new SharedWishlistDetails(
                 wishlist.Id,
                 context.Users
@@ -118,7 +118,8 @@ public class WishlistShareLinkRepository(MonKadoDbContext context) : IWishlistSh
                             .Select(reservation => (int?)reservation.Quantity)
                             .Sum() ?? 0,
                         null,
-                        wish.ImageId))
+                        wish.ImageId,
+                        wish.IsFavorite))
                     .ToArray())
             {
                 OwnerId = wishlist.OwnerId,
@@ -138,9 +139,10 @@ public class WishlistShareLinkRepository(MonKadoDbContext context) : IWishlistSh
             .Where(wish =>
                 wish.WishlistId == wishlistId &&
                 wish.Id == wishId &&
-                context.Wishlists.Any(wishlist => wishlist.Id == wishlistId && !wishlist.IsSuspended))
+                context.Wishlists.Any(wishlist => wishlist.Id == wishlistId && !wishlist.IsSuspended && !wishlist.IsArchived))
             .Select(wish => new SharedWishDetail
             {
+                IsFavorite = wish.IsFavorite,
                 WishlistId = wish.WishlistId,
                 OwnerId = context.Wishlists
                     .Where(wishlist => wishlist.Id == wish.WishlistId)

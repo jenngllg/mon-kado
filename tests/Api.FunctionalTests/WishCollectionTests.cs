@@ -84,6 +84,7 @@ public class WishCollectionTests
                         "entityTag",
                         "id",
                         "imageUrl",
+                        "isFavorite",
                         "name",
                         "note",
                         "position",

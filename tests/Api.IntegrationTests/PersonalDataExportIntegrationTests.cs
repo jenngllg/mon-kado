@@ -234,6 +234,8 @@ public class PersonalDataExportIntegrationTests(PostgreSqlContainerFixture fixtu
         Assert.Single(root
                 .GetProperty("wishlists")
                 .EnumerateArray());
+        Assert.True(Assert.Single(root.GetProperty("wishes").EnumerateArray())
+            .GetProperty("isFavorite").GetBoolean());
         Assert.Equal(
             wishId,
             Assert
@@ -1876,6 +1878,7 @@ public class PersonalDataExportIntegrationTests(PostgreSqlContainerFixture fixtu
         wish.ReplaceImage(
             imageId,
             SHA256.HashData(wishBytes));
+        wish.SetFavorite(true);
         var foreign = new Wishlist(
             Guid.CreateVersion7(),
             other.Id,
