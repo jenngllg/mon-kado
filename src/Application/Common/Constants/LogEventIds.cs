@@ -516,6 +516,8 @@ public static class LogEventIds
 
     /// <summary>Identifies a successful owner favorite preference mutation.</summary>
     public const int WishFavoriteChanged = 2076;
+    /// <summary>Identifies a public social-preview metadata read.</summary>
+    public const int WishlistSharePreviewRetrieved = 2077;
     #endregion
     #region Technical
     /// <summary>

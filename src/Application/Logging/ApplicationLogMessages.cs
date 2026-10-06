@@ -9,6 +9,14 @@ namespace JennGllg.Fr.MonKado.Back.Application.Logging;
 /// </summary>
 public static partial class ApplicationLogMessages
 {
+    /// <summary>Logs a public social-preview read without personal content.</summary>
+    /// <param name="logger">The logger.</param>
+    /// <param name="shareLinkId">The share-link identifier.</param>
+    [LoggerMessage(EventId = LogEventIds.WishlistSharePreviewRetrieved, Level = LogLevel.Information, Message = "Public preview for share link {ShareLinkId} retrieved.")]
+    public static partial void WishlistSharePreviewRetrieved(
+        ILogger logger,
+        Guid shareLinkId);
+
     /// <summary>Logs an owner favorite preference without wish content.</summary>
     /// <param name="logger">The logger.</param>
     /// <param name="ownerId">The owner identifier.</param>

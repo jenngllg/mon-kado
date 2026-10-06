@@ -29,6 +29,7 @@ public static class ImageInfrastructureInjectionConfiguration
             .ValidateOnStart();
         services.AddSingleton<IGiftImageProcessor, GiftImageProcessor>();
         services.AddSingleton<IProfileImageProcessor, GiftImageProcessor>();
+        services.AddScoped<IWishlistSharePreviewImageProcessor, WishlistSharePreviewImageProcessor>();
         services.AddSingleton<IGiftImageStore, LocalGiftImageStore>();
 
         return services;

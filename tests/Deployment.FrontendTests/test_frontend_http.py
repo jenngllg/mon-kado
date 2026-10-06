@@ -37,6 +37,18 @@ class FrontendHttpTests(unittest.TestCase):
             server = """import http.server
 class Handler(http.server.BaseHTTPRequestHandler):
  def do_GET(self):
+  if self.path.endswith('/preview'):
+   self.send_response(200)
+   self.send_header('Content-Type','text/html; charset=utf-8')
+   self.end_headers()
+   self.wfile.write(b'<meta property="og:title" content="Public preview">')
+   return
+  if self.path.endswith('/preview/image'):
+   self.send_response(200)
+   self.send_header('Content-Type','image/jpeg')
+   self.end_headers()
+   self.wfile.write(b'preview-image-fixture')
+   return
   self.send_response(200)
   self.end_headers()
   self.wfile.write(b'api-fixture')
@@ -52,7 +64,7 @@ server.serve_forever()
                 ready(api, "fixture-ready")
                 docker("run", "-d", "--name", edge, "--network", name,
                        "-e", "API_HOST=api.localhost", "-e", "FRONTEND_HOST=www.localhost",
-                       "-e", "FRONTEND_APEX_HOST=localhost", "-e", "FRONTEND_API_ORIGIN=https://api.localhost",
+                       "-e", "FRONTEND_APEX_HOST=localhost", "-e", "FRONTEND_API_ORIGIN=http://api:8080",
                        "-e", "FRONTEND_ROOT=/srv/frontend/current", "-p", "127.0.0.1::443", "-p", "127.0.0.1::80",
                        "--mount", "type=bind,src=" + str(root / "deployments/caddy/Caddyfile") + ",dst=/etc/caddy/Caddyfile,readonly",
                        "--mount", "type=bind,src=" + str(root / "deployments/frontend/frontend.caddy") + ",dst=/etc/caddy/frontend/site.caddy,readonly",
@@ -71,11 +83,11 @@ server.serve_forever()
                     return original_resolver("127.0.0.1" if host in {"www.localhost", "api.localhost", "localhost"} else host,
                                              *args, **kwargs)
 
-                def request(host, path, method="GET", tls=True):
+                def request(host, path, method="GET", tls=True, user_agent="browser-fixture"):
                     connection = (http.client.HTTPSConnection(host, tls_port, context=context, timeout=15) if tls
                                   else http.client.HTTPConnection(host, http_port, timeout=15))
                     try:
-                        connection.request(method, path, headers={"Host": host})
+                        connection.request(method, path, headers={"Host": host, "User-Agent": user_agent})
                         response = connection.getresponse()
                         return response.status, dict(response.getheaders()), response.read()
                     finally:
@@ -83,6 +95,18 @@ server.serve_forever()
 
                 # Act / Assert: only DNS is localized; TLS verifies each real requested hostname.
                 with patch.object(socket, "getaddrinfo", side_effect=local_resolver):
+                    shared_path = "/shared-wishlists/01900000-0000-7000-8000-000000000001"
+                    self.assertIn(b"fixture-app", request("www.localhost", shared_path)[2])
+                    for agent in ("facebookexternalhit/1.1", "Discordbot/2.0", "WhatsApp/2.0"):
+                        status, headers, body = request("www.localhost", shared_path, user_agent=agent)
+                        self.assertEqual(200, status)
+                        self.assertIn(b'property="og:title"', body)
+                        self.assertNotIn(b"fixture-app", body)
+                        self.assertEqual("no-store", headers["Cache-Control"])
+                    status, headers, body = request("www.localhost", "/share-previews/01900000-0000-7000-8000-000000000001/image")
+                    self.assertEqual(200, status)
+                    self.assertEqual("image/jpeg", headers["Content-Type"])
+                    self.assertEqual(b"preview-image-fixture", body)
                     for path in ("/", "/login", "/lists/01900000-0000-7000-8000-000000000001", "/shared-wishlists/fixture"):
                         status, headers, body = request("www.localhost", path)
                         self.assertEqual(200, status)

@@ -96,6 +96,7 @@ public static class InfrastructureInjectionConfiguration
         services.AddScoped<IMonKadoUserRepository, MonKadoUserRepository>();
         services.AddScoped<IUserSearchService, UserSearchService>();
         services.AddScoped<IPublicMemberProfileService, PublicMemberProfileService>();
+        services.AddScoped<IWishlistSharePreviewService, WishlistSharePreviewService>();
         services.AddScoped<IMemberRepository, MemberRepository>();
         services.AddScoped<IAuthenticationEmailOutboxRepository, AuthenticationEmailOutboxRepository>();
         services.AddScoped<IAuthenticationSessionRepository, AuthenticationSessionRepository>();
