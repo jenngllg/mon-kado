@@ -8,6 +8,24 @@ namespace JennGllg.Fr.MonKado.Back.Application.Abstractions;
 /// </summary>
 public interface IWishlistService
 {
+    /// <summary>Changes the archive state while holding the writable parent lock.</summary>
+    /// <param name="ownerId">The authenticated owner identifier.</param>
+    /// <param name="wishlistId">The wishlist identifier.</param>
+    /// <param name="isArchived">The requested archive state.</param>
+    /// <param name="expectedVersion">The version supplied by the client.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The complete updated wishlist.</returns>
+    /// <exception cref="Common.Exceptions.WishlistNotFoundException">The wishlist is not owned by this member.</exception>
+    /// <exception cref="Common.Exceptions.WishlistSuspendedException">The wishlist is suspended.</exception>
+    /// <exception cref="Common.Exceptions.WishlistVersionConflictException">The version is stale.</exception>
+    /// <exception cref="Common.Exceptions.DependencyUnavailableException">Persistence could not be confirmed.</exception>
+    Task<WishlistDetails> SetArchivedAsync(
+        Guid ownerId,
+        Guid wishlistId,
+        bool isArchived,
+        uint expectedVersion,
+        CancellationToken cancellationToken);
+
     /// <summary>
     /// Creates a private wishlist for an existing member.
     /// </summary>

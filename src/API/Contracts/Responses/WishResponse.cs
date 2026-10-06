@@ -18,6 +18,7 @@ namespace JennGllg.Fr.MonKado.Back.Api.Contracts.Responses;
 /// <param name="imageUrl">The optional short-lived absolute image URL.</param>
 /// <param name="reservedQuantity">The reserved quantity, or null when hidden.</param>
 /// <param name="availableQuantity">The available quantity, or null when hidden.</param>
+/// <param name="isFavorite">Whether the owner marked the wish as a favorite.</param>
 [ExcludeFromCodeCoverage]
 public class WishResponse(
     Guid id,
@@ -32,8 +33,12 @@ public class WishResponse(
     int quantity = 1,
     string? imageUrl = null,
     int? reservedQuantity = null,
-    int? availableQuantity = null)
+    int? availableQuantity = null,
+    bool isFavorite = false)
 {
+    /// <summary>Gets whether the owner marked the wish as a favorite.</summary>
+    public bool IsFavorite { get; } = isFavorite;
+
     /// <summary>
     /// Gets the wish identifier.
     /// </summary>

@@ -157,7 +157,8 @@ public class GetSharedWishlistQueryHandler(
                 wish.Quantity,
                 hideReservations ? null : wish.ReservedQuantity,
                 hideReservations ? null : currentQuantities?.GetValueOrDefault(wish.Id),
-                wish.ImageId))
+                wish.ImageId,
+                wish.IsFavorite))
             .Where(wish =>
                 hideReservations ||
                 !availableOnly ||

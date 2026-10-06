@@ -25,6 +25,7 @@ namespace JennGllg.Fr.MonKado.Back.Application.Commands;
 /// <param name="price">The optional price in euros.</param>
 /// <param name="expectedVersion">The version supplied by the client.</param>
 /// <param name="quantity">The required total desired quantity.</param>
+/// <param name="isFavorite">The optional owner favorite preference.</param>
 public class UpdateWishCommand(
     Guid ownerId,
     Guid wishlistId,
@@ -34,8 +35,12 @@ public class UpdateWishCommand(
     string? url,
     decimal? price,
     uint expectedVersion,
-    int? quantity = null) : IRequest<WishDetails>, IGenericValidationFailure
+    int? quantity = null,
+    bool? isFavorite = null) : IRequest<WishDetails>, IGenericValidationFailure
 {
+    /// <summary>Gets the optional owner favorite preference.</summary>
+    public bool? IsFavorite { get; } = isFavorite;
+
     /// <summary>
     /// Gets the authenticated owner identifier.
     /// </summary>
@@ -141,6 +146,7 @@ public class UpdateWishCommandHandler(
             request.Price,
             request.Quantity ?? WishTextValidation.MinimumQuantity,
             request.ExpectedVersion,
+            request.IsFavorite,
             cancellationToken);
 
         if (wish is null)

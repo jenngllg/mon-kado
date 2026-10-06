@@ -109,6 +109,26 @@ public class Wish : IAuditableEntity
         get; private set;
     }
 
+    /// <summary>Gets whether the owner marked this wish as a favorite.</summary>
+    public bool IsFavorite
+    {
+        get; private set;
+    }
+
+    /// <summary>Changes the owner's favorite preference without changing the wish order.</summary>
+    /// <param name="isFavorite">The requested favorite state.</param>
+    /// <returns>Whether the preference changed.</returns>
+    public bool SetFavorite(bool isFavorite)
+    {
+
+        if (IsFavorite == isFavorite)
+            return false;
+
+        IsFavorite = isFavorite;
+
+        return true;
+    }
+
     /// <summary>
     /// Gets the stable position inside the parent wishlist.
     /// </summary>

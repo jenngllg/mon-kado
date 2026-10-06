@@ -510,6 +510,12 @@ public static class LogEventIds
     public const int WishlistReportReviewed = 2073;
     /// <summary>Identifies the WishlistReportReviewStarted event.</summary>
     public const int WishlistReportReviewStarted = 2074;
+
+    /// <summary>Identifies a completed owner archive-state change.</summary>
+    public const int WishlistArchiveStateChanged = 2075;
+
+    /// <summary>Identifies a successful owner favorite preference mutation.</summary>
+    public const int WishFavoriteChanged = 2076;
     #endregion
     #region Technical
     /// <summary>

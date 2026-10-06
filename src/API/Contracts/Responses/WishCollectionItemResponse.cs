@@ -11,6 +11,9 @@ public class WishCollectionItemResponse(
     WishResponse wish,
     string entityTag)
 {
+    /// <summary>Gets whether the owner marked the wish as a favorite.</summary>
+    public bool IsFavorite { get; } = wish.IsFavorite;
+
     /// <summary>
     /// Gets the wish identifier.
     /// </summary>

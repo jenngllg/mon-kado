@@ -309,6 +309,7 @@ public class MemberReservationHistoryTests
         Assert.Equal(
             [
                 "id",
+                "isArchived",
                 "wishlistId",
                 "wishlistName",
                 "wishId",
@@ -318,7 +319,11 @@ public class MemberReservationHistoryTests
                 "status",
                 "createdAt",
                 "lastActivityAt",
-                "endedAt"
+                "endedAt",
+                "ownerId",
+                "ownerDisplayName",
+                "shareUrl",
+                "imageUrl"
             ],
             element.EnumerateObject().Select(property => property.Name));
         Assert.Equal(
@@ -354,5 +359,8 @@ public class MemberReservationHistoryTests
         Assert.Equal(
             JsonValueKind.Null,
             element.GetProperty("endedAt").ValueKind);
+        Assert.Equal(
+            JsonValueKind.Null,
+            element.GetProperty("ownerId").ValueKind);
     }
 }

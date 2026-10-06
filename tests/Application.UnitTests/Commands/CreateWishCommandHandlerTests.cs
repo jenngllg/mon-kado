@@ -48,6 +48,7 @@ public class CreateWishCommandHandlerTests
                 "https://example.com/gift",
                 12.34m,
                 4,
+                false,
                 cancellationToken))
             .Returns((
                 Guid id,
@@ -58,6 +59,7 @@ public class CreateWishCommandHandlerTests
                 string? _,
                 decimal? _,
                 int _,
+                bool _,
                 CancellationToken _) =>
             {
                 expected = CreateDetails(id, wishlistId);
@@ -84,6 +86,7 @@ public class CreateWishCommandHandlerTests
                 "https://example.com/gift",
                 12.34m,
                 4,
+                false,
                 cancellationToken),
             Times.Once);
         _wishServiceMock.VerifyNoOtherCalls();
@@ -113,6 +116,7 @@ public class CreateWishCommandHandlerTests
                 null,
                 null,
                 1,
+                false,
                 cancellationToken))
             .ReturnsAsync((WishDetails?)null);
 
@@ -133,6 +137,7 @@ public class CreateWishCommandHandlerTests
                 null,
                 null,
                 1,
+                false,
                 cancellationToken),
             Times.Once);
         _wishServiceMock.VerifyNoOtherCalls();

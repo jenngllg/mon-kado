@@ -48,7 +48,8 @@ public class WishRepository(MonKadoDbContext context) : IWishRepository
                 item.Wish.UpdatedAt,
                 item.Wish.Version,
                 item.Wish.Quantity,
-                item.Wish.ImageId)
+                item.Wish.ImageId,
+                item.Wish.IsFavorite)
             {
                 ReservedQuantity = item.ReservedQuantity,
                 AvailableQuantity = item.ReservedQuantity == null

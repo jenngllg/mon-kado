@@ -30,7 +30,7 @@ public class PublicMemberProfileService(
                     user.DisplayName,
                     user.ProfileImageId,
                     Wishlists = context.Wishlists
-                        .Where(wishlist => wishlist.OwnerId == user.Id && !wishlist.IsSuspended)
+                        .Where(wishlist => wishlist.OwnerId == user.Id && !wishlist.IsSuspended && !wishlist.IsArchived)
                         .Join(
                             context.WishlistShareLinks,
                             wishlist => wishlist.Id,

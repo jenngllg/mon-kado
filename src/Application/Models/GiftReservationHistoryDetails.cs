@@ -10,6 +10,30 @@ namespace JennGllg.Fr.MonKado.Back.Application.Models;
 [ExcludeFromCodeCoverage]
 public class GiftReservationHistoryDetails
 {
+    /// <summary>Gets the current public wishlist owner's identifier, when available.</summary>
+    public Guid? OwnerId
+    {
+        get; init;
+    }
+
+    /// <summary>Gets the current public display name of the wishlist owner, when available.</summary>
+    public string? OwnerDisplayName
+    {
+        get; init;
+    }
+
+    /// <summary>Gets the current wish image identifier, when available.</summary>
+    public Guid? ImageId
+    {
+        get; init;
+    }
+
+    /// <summary>Gets the protected secret of an accessible current share link, never a client response.</summary>
+    public string? ProtectedShareSecret
+    {
+        get; init;
+    }
+
     /// <summary>Gets the reservation lifecycle identifier.</summary>
     public Guid Id
     {
@@ -42,6 +66,12 @@ public class GiftReservationHistoryDetails
 
     /// <summary>Gets the current share-link identifier when the wishlist is shared.</summary>
     public Guid? ShareLinkId
+    {
+        get; init;
+    }
+
+    /// <summary>Gets whether the retained reservation belongs to an archived wishlist.</summary>
+    public bool IsArchived
     {
         get; init;
     }

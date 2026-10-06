@@ -6,6 +6,55 @@ namespace JennGllg.Fr.MonKado.Back.Api.FunctionalTests;
 public class WishlistOpenApiTests
 {
     [Fact]
+    public async Task GetAsync_WhenArchiveEndpointIsDocumented_ExposesVersionedPatchAndFilter()
+    {
+        // Arrange
+        await using var factory = new RegistrationApiFactory();
+        using var client = factory.CreateClient();
+
+        // Act
+        using var response = await client.GetAsync(
+            "/openapi/v1.json",
+            TestContext.Current.CancellationToken);
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+        var paths = document.RootElement.GetProperty("paths");
+        var patch = paths.GetProperty("/api/v1/wishlists/{wishlistId}").GetProperty("patch");
+        var schema = ResolveSchema(
+            document.RootElement,
+            patch.GetProperty("requestBody").GetProperty("content").GetProperty("application/json").GetProperty("schema"));
+
+        // Assert
+        AssertBearerWithoutAntiforgery(patch);
+        Assert.Equal(
+            "isArchived",
+            Assert.Single(schema.GetProperty("properties").EnumerateObject()).Name);
+        Assert.Contains(
+            patch.GetProperty("parameters").EnumerateArray(),
+            parameter => parameter.GetProperty("name").GetString() == "If-Match" && parameter.GetProperty("required").GetBoolean());
+        var responses = patch.GetProperty("responses");
+        AssertResponses(
+            responses,
+            "200",
+            "400",
+            "401",
+            "404",
+            "409",
+            "412",
+            "428",
+            "500",
+            "503");
+        Assert.True(responses.GetProperty("200").GetProperty("headers").TryGetProperty(
+            "ETag",
+            out _));
+        AssertWishlistResponseSchema(
+            document.RootElement,
+            responses.GetProperty("200"));
+        Assert.Contains(
+            paths.GetProperty("/api/v1/wishlists").GetProperty("get").GetProperty("parameters").EnumerateArray(),
+            parameter => parameter.GetProperty("name").GetString() == "isArchived" && parameter.GetProperty("in").GetString() == "query");
+    }
+
+    [Fact]
     public async Task GetAsync_WhenWishlistEndpointsAreDocumented_ExposesPrivateResourceContracts()
     {
         // Arrange
@@ -288,6 +337,7 @@ public class WishlistOpenApiTests
                 "createdAt",
                 "eventDate",
                 "id",
+                "isArchived",
                 "isSuspended",
                 "message",
                 "name",
@@ -323,6 +373,7 @@ public class WishlistOpenApiTests
                 "createdAt",
                 "eventDate",
                 "id",
+                "isArchived",
                 "isSuspended",
                 "message",
                 "name",

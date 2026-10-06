@@ -22,6 +22,84 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Migrati
 public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
 {
     [Fact]
+    public async Task MigrateAsync_WhenWishAlreadyExists_DefaultsFavoriteToFalseAndPreservesContent()
+    {
+        // Arrange
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var provider = CreateServiceProvider();
+        await using var scope = provider.CreateAsyncScope();
+        var context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
+        await context.Database.MigrateAsync(cancellationToken);
+        var ownerId = Guid.CreateVersion7();
+        context.Users.Add(CreateMigrationMember(
+            ownerId,
+            $"{ownerId:N}@example.test",
+            "Favorite migration owner"));
+        var wishlist = new Wishlist(
+            Guid.CreateVersion7(),
+            ownerId,
+            "Favorite migration wishlist",
+            "FAVORITE MIGRATION WISHLIST",
+            WishlistOccasion.Other,
+            null,
+            null);
+        var wish = new Wish(
+            Guid.CreateVersion7(),
+            wishlist.Id,
+            "Existing gift",
+            "Existing note",
+            "https://example.test/gift",
+            15.50m,
+            1,
+            2);
+        context.Wishlists.Add(wishlist);
+        context.Wishes.Add(wish);
+        await context.SaveChangesAsync(cancellationToken);
+        var migrator = context.GetService<Microsoft.EntityFrameworkCore.Migrations.IMigrator>();
+
+        try
+        {
+            // Act
+            await migrator.MigrateAsync(
+                "20261006113029_AddWishlistArchiveState",
+                cancellationToken);
+            await context.Database.MigrateAsync(cancellationToken);
+            context.ChangeTracker.Clear();
+            var persisted = await context.Wishes.SingleAsync(
+                item => item.Id == wish.Id,
+                cancellationToken);
+
+            // Assert
+            Assert.False(persisted.IsFavorite);
+            Assert.Equal(
+                wish.Name,
+                persisted.Name);
+            Assert.Equal(
+                wish.Note,
+                persisted.Note);
+            Assert.Equal(
+                wish.Url,
+                persisted.Url);
+            Assert.Equal(
+                wish.Price,
+                persisted.Price);
+            Assert.Equal(
+                wish.Position,
+                persisted.Position);
+            Assert.Equal(
+                wish.Quantity,
+                persisted.Quantity);
+        }
+        finally
+        {
+            await context.Database.MigrateAsync(cancellationToken);
+            await context.Users
+                .Where(user => user.Id == ownerId)
+                .ExecuteDeleteAsync(cancellationToken);
+        }
+    }
+
+    [Fact]
     public async Task MigrateAsync_WhenWishlistAlreadyExists_EnablesSurpriseMode()
     {
         // Arrange
@@ -480,6 +558,14 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
                 StringComparison.Ordinal),
             migration => Assert.EndsWith(
                 "_AddWishlistSurpriseMode",
+                migration,
+                StringComparison.Ordinal),
+            migration => Assert.EndsWith(
+                "_AddWishlistArchiveState",
+                migration,
+                StringComparison.Ordinal),
+            migration => Assert.EndsWith(
+                "_AddWishFavoriteState",
                 migration,
                 StringComparison.Ordinal));
         Assert.False(context.Database.HasPendingModelChanges());

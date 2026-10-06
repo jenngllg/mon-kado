@@ -124,6 +124,26 @@ public class Wishlist : IAuditableEntity
         return true;
     }
 
+    /// <summary>Changes the reversible owner-controlled archive state.</summary>
+    /// <param name="isArchived">The requested archive state.</param>
+    /// <returns>Whether the state changed.</returns>
+    public bool SetArchived(bool isArchived)
+    {
+
+        if (IsArchived == isArchived)
+            return false;
+
+        IsArchived = isArchived;
+
+        return true;
+    }
+
+    /// <summary>Gets whether the owner archived this wishlist.</summary>
+    public bool IsArchived
+    {
+        get; private set;
+    }
+
     /// <summary>Gets whether reservation quantities are hidden from the owner.</summary>
     public bool SurpriseMode { get; private set; } = true;
 

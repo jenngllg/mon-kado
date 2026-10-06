@@ -5,6 +5,41 @@ namespace JennGllg.Fr.MonKado.Back.Domain.UnitTests.Entities;
 
 public class WishlistTests
 {
+    [Theory]
+    [InlineData(false, false, false)]
+    [InlineData(false, true, true)]
+    [InlineData(true, false, true)]
+    [InlineData(true, true, false)]
+    public void SetArchived_WhenStateIsRequested_ChangesOnlyArchiveState(
+        bool originalState,
+        bool requestedState,
+        bool expectedChange)
+    {
+        // Arrange
+        var wishlist = CreateWishlist();
+        Assert.False(wishlist.IsArchived);
+        wishlist.SetArchived(originalState);
+        var originalName = wishlist.Name;
+        var originalMode = wishlist.SurpriseMode;
+
+        // Act
+        var changed = wishlist.SetArchived(requestedState);
+
+        // Assert
+        Assert.Equal(
+            expectedChange,
+            changed);
+        Assert.Equal(
+            requestedState,
+            wishlist.IsArchived);
+        Assert.Equal(
+            originalName,
+            wishlist.Name);
+        Assert.Equal(
+            originalMode,
+            wishlist.SurpriseMode);
+    }
+
     [Fact]
     public void Constructor_WhenModeIsOmitted_EnablesSurpriseMode()
     {

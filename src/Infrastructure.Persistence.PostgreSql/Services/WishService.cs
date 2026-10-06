@@ -38,6 +38,83 @@ public class WishService(
     private const string PositionWishlistForeignKeyName = "fk_wish_position_sequences_wishlists_wishlist_id";
     private const string WishCountConstraintName = "ck_wish_position_sequences_current_count_limit";
     private const string WishQuantityConstraintName = "ck_wishes_quantity_not_below_reserved";
+    /// <inheritdoc />
+    public async Task<WishDetails?> SetFavoriteAsync(
+        Guid ownerId,
+        Guid wishlistId,
+        Guid wishId,
+        bool isFavorite,
+        uint expectedVersion,
+        CancellationToken cancellationToken)
+    {
+        (Wish Attempted, Wish Original)? attemptedUpdate = null;
+        try
+        {
+            WishDetails completedResult;
+            await using (var transaction = await wishTransactionFactory.BeginAsync(
+                IsolationLevel.ReadCommitted,
+                cancellationToken))
+            {
+                await mutationGuard.LockAsync(
+                    ownerId,
+                    wishlistId,
+                    cancellationToken);
+                var wish = await wishRepository.GetByIdForUpdateAsync(
+                    wishlistId,
+                    wishId,
+                    cancellationToken);
+
+                if (wish is null)
+                    return null;
+
+                if (wish.Version != expectedVersion)
+                    throw new WishVersionConflictException();
+
+                var originalWish = CopyClientState(wish);
+
+                if (!wish.SetFavorite(isFavorite))
+                    return CreateDetails(wish);
+
+                await unitOfWork.SaveChangesAsync(cancellationToken);
+                attemptedUpdate = (wish, originalWish);
+                await transaction.CommitAsync(cancellationToken);
+
+                completedResult = CreateDetails(wish);
+            }
+
+            return completedResult;
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+
+            return await ResolveConcurrentUpdateAsync(
+                ownerId,
+                wishlistId,
+                wishId,
+                cancellationToken);
+        }
+        catch (Exception exception)
+        {
+
+            if (!PostgreSqlFailureClassifier.IsUnavailable(exception))
+                throw;
+
+            wishRepository.ClearTracking();
+
+            if (attemptedUpdate is null)
+                throw new DependencyUnavailableException(
+                    DependencyNames.PostgreSql,
+                    exception);
+
+            return await ResolveAmbiguousUpdateAsync(
+                ownerId,
+                attemptedUpdate.Value.Attempted,
+                attemptedUpdate.Value.Original,
+                exception,
+                cancellationToken);
+        }
+    }
+
     /// <inheritdoc/>
     public async Task<WishCollectionDetails> GetCollectionAsync(
         Guid ownerId,
@@ -206,6 +283,7 @@ public class WishService(
         string? url,
         decimal? price,
         int quantity,
+        bool isFavorite,
         CancellationToken cancellationToken)
     {
         Wish? attemptedWish = null;
@@ -233,6 +311,7 @@ public class WishService(
                     position,
                     quantity);
                 wishRepository.Add(wish);
+                wish.SetFavorite(isFavorite);
                 await unitOfWork.SaveChangesAsync(cancellationToken);
                 attemptedWish = wish;
                 await transaction.CommitAsync(cancellationToken);
@@ -463,6 +542,7 @@ public class WishService(
         decimal? price,
         int quantity,
         uint expectedVersion,
+        bool? isFavorite,
         CancellationToken cancellationToken)
     {
         (Wish Attempted, Wish Original)? attemptedUpdate = null;
@@ -497,6 +577,8 @@ public class WishService(
                     url,
                     price,
                     quantity);
+                var favoriteChanged = wish.SetFavorite(isFavorite ?? wish.IsFavorite);
+                hasChanged = hasChanged || favoriteChanged;
 
                 if (!hasChanged)
                     return CreateDetails(wish);
@@ -1096,6 +1178,7 @@ public class WishService(
             wish.Position,
             wish.Quantity);
         var contentHash = wish.ImageContentHash;
+        copy.SetFavorite(wish.IsFavorite);
 
         if (contentHash is null)
             return copy;
@@ -1255,7 +1338,8 @@ public class WishService(
             wish.UpdatedAt,
             wish.Version,
             wish.Quantity,
-            wish.ImageId);
+            wish.ImageId,
+            wish.IsFavorite);
     }
 
     /// <summary>
@@ -1323,6 +1407,9 @@ public class WishService(
         var secondValues = (second.Id, second.WishlistId, second.Name, second.Note, second.Url, second.Price, second.Quantity, second.Position, second.ImageId);
 
         if (!firstValues.Equals(secondValues))
+            return false;
+
+        if (first.IsFavorite != second.IsFavorite)
             return false;
 
         return StructuralComparisons.StructuralEqualityComparer.Equals(

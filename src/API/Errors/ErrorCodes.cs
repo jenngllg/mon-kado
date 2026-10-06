@@ -153,6 +153,9 @@ public static class ErrorCodes
     #region Wishlist
     /// <summary>Identifies a suspended wishlist that cannot be changed by its owner.</summary>
     public const string WishlistSuspended = "WISHLIST_SUSPENDED";
+
+    /// <summary>Identifies a mutation of an archived wishlist.</summary>
+    public const string WishlistArchived = "WISHLIST_ARCHIVED";
     /// <summary>Identifies missing administrator privileges for moderation.</summary>
     public const string WishlistModerationForbidden = "WISHLIST_MODERATION_FORBIDDEN";
     /// <summary>The report does not exist under the requested wishlist.</summary>

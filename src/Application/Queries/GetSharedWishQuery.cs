@@ -156,6 +156,8 @@ public class GetSharedWishQueryHandler(
         var hideReservations = wish.SurpriseMode && request.MemberId == wish.OwnerId;
         var result = new SharedWishDetail
         {
+            IsFavorite = wish.IsFavorite,
+            WishlistId = wishlistId,
             Id = wish.Id,
             Name = wish.Name,
             Note = wish.Note,

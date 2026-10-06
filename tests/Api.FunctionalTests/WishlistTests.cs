@@ -98,6 +98,7 @@ public class WishlistTests
                 "surpriseMode",
                 "createdAt",
                 "updatedAt",
+                "isArchived",
                 "isSuspended",
                 "suspensionReason",
                 "suspendedAt"
@@ -293,6 +294,7 @@ public class WishlistTests
                 "surpriseMode",
                 "createdAt",
                 "updatedAt",
+                "isArchived",
                 "isSuspended",
                 "suspensionReason",
                 "suspendedAt"
@@ -997,6 +999,7 @@ public class WishlistTests
                 "surpriseMode",
                 "createdAt",
                 "updatedAt",
+                "isArchived",
                 "isSuspended",
                 "suspensionReason",
                 "suspendedAt"

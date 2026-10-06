@@ -18,6 +18,260 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.UnitTes
 
 public class WishServiceTests
 {
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task SetFavoriteAsync_WhenStateIsRequested_SavesOnlyWhenItChanges(
+        bool initialState,
+        bool requestedState)
+    {
+        // Arrange
+        var data = CreateData();
+        var changes = initialState != requestedState;
+        SetupMutationTransaction(
+            data,
+            changes);
+        var wish = CreateWish(data);
+        wish.SetFavorite(initialState);
+        _wishRepositoryMock
+            .Setup(repository => repository.GetByIdForUpdateAsync(
+                data.WishlistId,
+                data.Id,
+                data.CancellationToken))
+            .ReturnsAsync(wish);
+
+        if (changes)
+            _unitOfWorkMock
+                .Setup(unitOfWork => unitOfWork.SaveChangesAsync(data.CancellationToken))
+                .ReturnsAsync(1);
+
+        // Act
+        var result = await _wishService.SetFavoriteAsync(
+            data.OwnerId,
+            data.WishlistId,
+            data.Id,
+            requestedState,
+            0,
+            data.CancellationToken);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal(
+            requestedState,
+            result.IsFavorite);
+        Assert.Equal(
+            data.Name,
+            result.Name);
+        VerifyTrackedRetrieval(data);
+        _unitOfWorkMock.Verify(
+            unitOfWork => unitOfWork.SaveChangesAsync(data.CancellationToken),
+            changes ? Times.Once() : Times.Never());
+        VerifyNoOtherCalls();
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task SetFavoriteAsync_WhenWishIsMissingOrVersionIsStale_DoesNotSave(bool missing)
+    {
+        // Arrange
+        var data = CreateData();
+        SetupMutationTransaction(
+            data,
+            false);
+        _wishRepositoryMock
+            .Setup(repository => repository.GetByIdForUpdateAsync(
+                data.WishlistId,
+                data.Id,
+                data.CancellationToken))
+            .ReturnsAsync(missing ? null : CreateWish(data));
+
+        // Act
+        var action = () => _wishService.SetFavoriteAsync(
+            data.OwnerId,
+            data.WishlistId,
+            data.Id,
+            true,
+            1,
+            data.CancellationToken);
+
+        // Assert
+        if (missing)
+            Assert.Null(await action());
+        else
+            await Assert.ThrowsAsync<WishVersionConflictException>(action);
+
+        VerifyTrackedRetrieval(data);
+        VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task SetFavoriteAsync_WhenUnexpectedLookupFailureOccurs_PropagatesItWithoutSaving()
+    {
+        // Arrange
+        var data = CreateData();
+        SetupMutationTransaction(
+            data,
+            false);
+        var failure = new InvalidOperationException("Unexpected persistence failure.");
+        _wishRepositoryMock
+            .Setup(repository => repository.GetByIdForUpdateAsync(
+                data.WishlistId,
+                data.Id,
+                data.CancellationToken))
+            .ThrowsAsync(failure);
+
+        // Act
+        var action = () => _wishService.SetFavoriteAsync(
+            data.OwnerId,
+            data.WishlistId,
+            data.Id,
+            true,
+            0,
+            data.CancellationToken);
+
+        // Assert
+        Assert.Same(
+            failure,
+            await Assert.ThrowsAsync<InvalidOperationException>(action));
+        VerifyTrackedRetrieval(data);
+        VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task SetFavoriteAsync_WhenSaveTimesOut_ReportsUnavailabilityWithoutRetrying()
+    {
+        // Arrange
+        var data = CreateData();
+        SetupMutationTransaction(
+            data,
+            false);
+        var wish = ConfigureFailedSave(
+            data,
+            new TimeoutException());
+        _wishRepositoryMock
+            .Setup(repository => repository.ClearTracking());
+
+        // Act
+        var action = () => _wishService.SetFavoriteAsync(
+            data.OwnerId,
+            data.WishlistId,
+            data.Id,
+            true,
+            0,
+            data.CancellationToken);
+
+        // Assert
+        await Assert.ThrowsAsync<DependencyUnavailableException>(action);
+        VerifyTrackedRetrieval(data);
+        _unitOfWorkMock.Verify(
+            unitOfWork => unitOfWork.SaveChangesAsync(data.CancellationToken),
+            Times.Once);
+        _wishRepositoryMock.Verify(
+            repository => repository.ClearTracking(),
+            Times.Once);
+        VerifyNoOtherCalls();
+    }
+
+    [Theory]
+    [InlineData(WishlistAccess.MemberNotFound, false, typeof(InvalidAuthenticationSessionException))]
+    [InlineData(WishlistAccess.NotOwned, false, typeof(WishlistNotFoundException))]
+    [InlineData(WishlistAccess.Owner, false, null)]
+    [InlineData(WishlistAccess.Owner, true, typeof(WishVersionConflictException))]
+    public async Task SetFavoriteAsync_WhenConcurrencyFails_ResolvesCurrentResource(
+        WishlistAccess access,
+        bool wishStillExists,
+        Type? expectedExceptionType)
+    {
+        // Arrange
+        var data = CreateData();
+        SetupMutationTransaction(
+            data,
+            false);
+        ConfigureConcurrencyFailure(
+            data,
+            access,
+            wishStillExists);
+
+        // Act
+        var action = () => _wishService.SetFavoriteAsync(
+            data.OwnerId,
+            data.WishlistId,
+            data.Id,
+            true,
+            0,
+            data.CancellationToken);
+
+        // Assert
+        if (expectedExceptionType is null)
+            Assert.Null(await action());
+        else
+            Assert.IsType(
+                expectedExceptionType,
+                await Assert.ThrowsAnyAsync<Exception>(action));
+
+        VerifyConcurrencyFailure(
+            data,
+            access is WishlistAccess.Owner);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task SetFavoriteAsync_WhenCommitAcknowledgementIsLost_ResolvesThePersistedPreference(bool committed)
+    {
+        // Arrange
+        var data = CreateData();
+        SetupMutationTransaction(
+            data,
+            true);
+        var wish = ConfigureFailedCommit(
+            data,
+            new TimeoutException());
+        var persisted = CreateWish(data);
+        persisted.SetFavorite(committed);
+        _wishRepositoryMock
+            .Setup(repository => repository.ClearTracking());
+        _wishRepositoryMock
+            .Setup(repository => repository.GetByIdAsync(
+                data.WishlistId,
+                data.Id,
+                data.CancellationToken))
+            .ReturnsAsync(persisted);
+
+        // Act
+        var action = () => _wishService.SetFavoriteAsync(
+            data.OwnerId,
+            data.WishlistId,
+            data.Id,
+            true,
+            0,
+            data.CancellationToken);
+
+        // Assert
+        if (committed)
+            Assert.True((await action())?.IsFavorite);
+        else
+            await Assert.ThrowsAsync<DependencyUnavailableException>(action);
+
+        Assert.True(wish.IsFavorite);
+        VerifyTrackedRetrieval(data);
+        _unitOfWorkMock.Verify(
+            unitOfWork => unitOfWork.SaveChangesAsync(data.CancellationToken),
+            Times.Once);
+        _wishRepositoryMock.Verify(
+            repository => repository.ClearTracking(),
+            Times.Once);
+        _wishRepositoryMock.Verify(
+            repository => repository.GetByIdAsync(
+                data.WishlistId,
+                data.Id,
+                data.CancellationToken),
+            Times.Once);
+        VerifyNoOtherCalls();
+    }
 
     [Theory]
     [InlineData("23505", "ux_gift_image_deletion_outbox_image_id", true)]
@@ -2490,6 +2744,7 @@ public class WishServiceTests
             data.Url,
             data.Price,
             1,
+            false,
             data.CancellationToken);
     }
 
@@ -2511,6 +2766,7 @@ public class WishServiceTests
             price,
             1,
             expectedVersion,
+            null,
             data.CancellationToken);
     }
 

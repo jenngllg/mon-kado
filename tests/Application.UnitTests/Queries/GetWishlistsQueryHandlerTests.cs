@@ -23,13 +23,18 @@ public class GetWishlistsQueryHandlerTests
             NullLogger<GetWishlistsQueryHandler>.Instance);
     }
 
-    [Fact]
-    public async Task Handle_WhenMemberExists_ReturnsOwnedWishlists()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Handle_WhenMemberExists_ReturnsMatchingArchiveState(bool isArchived)
     {
         // Arrange
         var memberId = Guid.CreateVersion7();
         var cancellationToken = TestContext.Current.CancellationToken;
-        var query = new GetWishlistsQuery(memberId);
+        var query = new GetWishlistsQuery(memberId)
+        {
+            IsArchived = isArchived
+        };
         IReadOnlyCollection<WishlistDetails> expected =
         [
             new WishlistDetails(
@@ -48,6 +53,28 @@ public class GetWishlistsQueryHandlerTests
                     DateTimeKind.Utc),
                 null,
                 42)
+            {
+                IsArchived = isArchived
+            },
+            new WishlistDetails(
+                Guid.CreateVersion7(),
+                "Other category",
+                WishlistOccasion.Other,
+                null,
+                null,
+                new DateTime(
+                    2026,
+                    8,
+                    25,
+                    12,
+                    0,
+                    0,
+                    DateTimeKind.Utc),
+                null,
+                42)
+            {
+                IsArchived = !isArchived
+            }
         ];
         _wishlistServiceMock
             .Setup(service => service.GetByOwnerIdAsync(
@@ -62,8 +89,8 @@ public class GetWishlistsQueryHandlerTests
 
         // Assert
         Assert.Same(
-            expected,
-            result);
+            expected.First(),
+            Assert.Single(result));
         _wishlistServiceMock.Verify(
             service => service.GetByOwnerIdAsync(
                 memberId,

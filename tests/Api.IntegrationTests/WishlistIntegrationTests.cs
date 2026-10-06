@@ -26,6 +26,352 @@ namespace JennGllg.Fr.MonKado.Back.Api.IntegrationTests;
 public class WishlistIntegrationTests(PostgreSqlContainerFixture fixture)
 {
     [Theory]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    public async Task SetArchivedAsync_WhenAdministratorSuspendedList_PreservesIndependentRestriction(
+        bool originalArchiveState,
+        bool requestedArchiveState)
+    {
+        // Arrange
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var factory = await CreateMigratedFactoryAsync();
+        var owner = await CreateMemberAsync(
+            factory,
+            "archive-suspended@example.test");
+        using var client = await AuthenticationTestData.CreateClientAsync(
+            factory,
+            owner.Id,
+            cancellationToken);
+        using var creation = await CreateWishlistAsync(
+            client,
+            "Suspended archive");
+        var id = GetWishlistId(creation);
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
+            var wishlist = await context.Wishlists.SingleAsync(
+                item => item.Id == id,
+                cancellationToken);
+            wishlist.SetArchived(originalArchiveState);
+            wishlist.Moderate(
+                true,
+                "Administrative restriction",
+                new DateTime(
+                    2026,
+                    10,
+                    6,
+                    0,
+                    0,
+                    0,
+                    DateTimeKind.Utc));
+            await context.SaveChangesAsync(cancellationToken);
+        }
+
+        using var current = await client.GetAsync(
+            $"/api/v1/wishlists/{id}",
+            cancellationToken);
+        var tag = Assert.IsType<string>(current.Headers.ETag?.Tag);
+
+        // Act
+        using var changed = await SetArchivedAsync(
+            client,
+            id,
+            requestedArchiveState,
+            tag,
+            cancellationToken);
+        using var deleteRequest = new HttpRequestMessage(
+            HttpMethod.Delete,
+            $"/api/v1/wishlists/{id}");
+        deleteRequest.Headers.IfMatch.Add(EntityTagHeaderValue.Parse(tag));
+        using var deleted = await client.SendAsync(
+            deleteRequest,
+            cancellationToken);
+        using var unchanged = await client.GetAsync(
+            $"/api/v1/wishlists/{id}",
+            cancellationToken);
+        var body = await unchanged.Content.ReadFromJsonAsync<JsonElement>(cancellationToken);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.Conflict,
+            changed.StatusCode);
+        Assert.Equal(
+            "WISHLIST_SUSPENDED",
+            (await changed.Content.ReadFromJsonAsync<JsonElement>(cancellationToken)).GetProperty("errorCode").GetString());
+        Assert.Equal(
+            HttpStatusCode.Conflict,
+            deleted.StatusCode);
+        Assert.Equal(
+            originalArchiveState,
+            body.GetProperty("isArchived").GetBoolean());
+        Assert.True(body.GetProperty("isSuspended").GetBoolean());
+        Assert.Equal(
+            tag,
+            unchanged.Headers.ETag?.Tag);
+    }
+
+    [Fact]
+    public async Task SetArchivedAsync_WhenAccessIsRestricted_EnforcesOwnershipAndAllowsArchivedDeletion()
+    {
+        // Arrange
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var factory = await CreateMigratedFactoryAsync();
+        var owner = await CreateMemberAsync(
+            factory,
+            "archive-access-owner@example.test");
+        var other = await CreateMemberAsync(
+            factory,
+            "archive-access-other@example.test");
+        using var client = await AuthenticationTestData.CreateClientAsync(
+            factory,
+            owner.Id,
+            cancellationToken);
+        using var foreign = await AuthenticationTestData.CreateClientAsync(
+            factory,
+            other.Id,
+            cancellationToken);
+        using var anonymous = factory.CreateClient();
+        using var creation = await CreateWishlistAsync(
+            client,
+            "Archived access");
+        var id = GetWishlistId(creation);
+        var originalTag = Assert.IsType<string>(creation.Headers.ETag?.Tag);
+
+        // Act
+        using var unauthorized = await SetArchivedAsync(
+            anonymous,
+            id,
+            true,
+            originalTag,
+            cancellationToken);
+        using var notOwned = await SetArchivedAsync(
+            foreign,
+            id,
+            true,
+            originalTag,
+            cancellationToken);
+        using var missing = await SetArchivedAsync(
+            client,
+            Guid.CreateVersion7(),
+            true,
+            originalTag,
+            cancellationToken);
+        using var noVersionRequest = new HttpRequestMessage(
+            HttpMethod.Patch,
+            $"/api/v1/wishlists/{id}")
+        {
+            Content = JsonContent.Create(new { isArchived = true })
+        };
+        using var noVersion = await client.SendAsync(
+            noVersionRequest,
+            cancellationToken);
+        using var archived = await SetArchivedAsync(
+            client,
+            id,
+            true,
+            originalTag,
+            cancellationToken);
+        using var read = await client.GetAsync(
+            $"/api/v1/wishlists/{id}",
+            cancellationToken);
+        using var deleteRequest = new HttpRequestMessage(
+            HttpMethod.Delete,
+            $"/api/v1/wishlists/{id}");
+        deleteRequest.Headers.IfMatch.Add(archived.Headers.ETag
+            ?? throw new InvalidOperationException("The ETag is missing."));
+        using var deleted = await client.SendAsync(
+            deleteRequest,
+            cancellationToken);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.Unauthorized,
+            unauthorized.StatusCode);
+        Assert.Equal(
+            HttpStatusCode.NotFound,
+            notOwned.StatusCode);
+        Assert.Equal(
+            HttpStatusCode.NotFound,
+            missing.StatusCode);
+        Assert.Equal(
+            (HttpStatusCode)428,
+            noVersion.StatusCode);
+        Assert.Equal(
+            HttpStatusCode.OK,
+            read.StatusCode);
+        Assert.Equal(
+            HttpStatusCode.NoContent,
+            deleted.StatusCode);
+    }
+
+    [Fact]
+    public async Task SetArchivedAsync_WhenOwnerArchivesAndRestores_PreservesDataAndConcurrency()
+    {
+        // Arrange
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var factory = await CreateMigratedFactoryAsync();
+        var owner = await CreateMemberAsync(
+            factory,
+            "archive-owner@example.test");
+        using var client = await AuthenticationTestData.CreateClientAsync(
+            factory,
+            owner.Id,
+            cancellationToken);
+        using var creation = await CreateWishlistAsync(
+            client,
+            "Archived wishlist");
+        creation.EnsureSuccessStatusCode();
+        var id = GetWishlistId(creation);
+        var originalTag = creation.Headers.ETag?.Tag
+            ?? throw new InvalidOperationException("The ETag is missing.");
+
+        // Act
+        using var archived = await SetArchivedAsync(
+            client,
+            id,
+            true,
+            originalTag,
+            cancellationToken);
+        archived.EnsureSuccessStatusCode();
+        var archivedBody = await archived.Content.ReadFromJsonAsync<JsonElement>(cancellationToken);
+        var archivedTag = archived.Headers.ETag?.Tag
+            ?? throw new InvalidOperationException("The ETag is missing.");
+        using var active = await client.GetAsync(
+            "/api/v1/wishlists",
+            cancellationToken);
+        using var archives = await client.GetAsync(
+            "/api/v1/wishlists?isArchived=true",
+            cancellationToken);
+        using var noOp = await SetArchivedAsync(
+            client,
+            id,
+            true,
+            archivedTag,
+            cancellationToken);
+        using var stale = await SetArchivedAsync(
+            client,
+            id,
+            false,
+            originalTag,
+            cancellationToken);
+        using var blocked = await UpdateWishlistAsync(
+            client,
+            id,
+            archivedTag,
+            "Changed",
+            "other",
+            null,
+            null);
+        using var restored = await SetArchivedAsync(
+            client,
+            id,
+            false,
+            archivedTag,
+            cancellationToken);
+        var restoredBody = await restored.Content.ReadFromJsonAsync<JsonElement>(cancellationToken);
+
+        // Assert
+        Assert.True(archivedBody.GetProperty("isArchived").GetBoolean());
+        Assert.NotEqual(
+            originalTag,
+            archivedTag);
+        Assert.Empty((await active.Content.ReadFromJsonAsync<JsonElement>(cancellationToken)).EnumerateArray());
+        Assert.Single((await archives.Content.ReadFromJsonAsync<JsonElement>(cancellationToken)).EnumerateArray());
+        Assert.Equal(
+            HttpStatusCode.OK,
+            noOp.StatusCode);
+        Assert.Equal(
+            archivedTag,
+            noOp.Headers.ETag?.Tag);
+        Assert.Equal(
+            HttpStatusCode.PreconditionFailed,
+            stale.StatusCode);
+        Assert.Equal(
+            HttpStatusCode.Conflict,
+            blocked.StatusCode);
+        Assert.Equal(
+            "WISHLIST_ARCHIVED",
+            (await blocked.Content.ReadFromJsonAsync<JsonElement>(cancellationToken)).GetProperty("errorCode").GetString());
+        Assert.Equal(
+            HttpStatusCode.OK,
+            restored.StatusCode);
+        Assert.False(restoredBody.GetProperty("isArchived").GetBoolean());
+        Assert.Equal(
+            "Archived wishlist",
+            restoredBody.GetProperty("name").GetString());
+    }
+
+    [Theory]
+    [InlineData("{}")]
+    [InlineData("""{"isArchived":null}""")]
+    [InlineData("""{"isArchived":"true"}""")]
+    [InlineData("""{"isArchived":true,"name":"Changed"}""")]
+    public async Task SetArchivedAsync_WhenPayloadIsInvalid_ReturnsBadRequest(string payload)
+    {
+        // Arrange
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var factory = await CreateMigratedFactoryAsync();
+        var owner = await CreateMemberAsync(
+            factory,
+            "archive-invalid@example.test");
+        using var client = await AuthenticationTestData.CreateClientAsync(
+            factory,
+            owner.Id,
+            cancellationToken);
+        using var creation = await CreateWishlistAsync(
+            client,
+            "Archive validation");
+        using var request = new HttpRequestMessage(
+            HttpMethod.Patch,
+            creation.Headers.Location)
+        {
+            Content = new StringContent(
+                payload,
+                System.Text.Encoding.UTF8,
+                "application/json")
+        };
+        request.Headers.IfMatch.Add(creation.Headers.ETag
+            ?? throw new InvalidOperationException("The ETag is missing."));
+
+        // Act
+        using var response = await client.SendAsync(
+            request,
+            cancellationToken);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.BadRequest,
+            response.StatusCode);
+    }
+
+    /// <summary>Sends a versioned archive command.</summary>
+    /// <param name="client">The authenticated client.</param>
+    /// <param name="wishlistId">The wishlist identifier.</param>
+    /// <param name="isArchived">The requested state.</param>
+    /// <param name="etag">The expected version.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The HTTP response.</returns>
+    private static async Task<HttpResponseMessage> SetArchivedAsync(
+        HttpClient client,
+        Guid wishlistId,
+        bool isArchived,
+        string etag,
+        CancellationToken cancellationToken)
+    {
+        using var request = new HttpRequestMessage(
+            HttpMethod.Patch,
+            $"/api/v1/wishlists/{wishlistId}")
+        {
+            Content = JsonContent.Create(new { isArchived })
+        };
+        request.Headers.IfMatch.Add(EntityTagHeaderValue.Parse(etag));
+
+        return await client.SendAsync(
+            request,
+            cancellationToken);
+    }
+
+    [Theory]
     [InlineData(null, true)]
     [InlineData(true, true)]
     [InlineData(false, false)]

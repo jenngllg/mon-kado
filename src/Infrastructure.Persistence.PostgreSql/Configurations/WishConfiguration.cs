@@ -37,6 +37,9 @@ public class WishConfiguration : IEntityTypeConfiguration<Wish>
                 WishTextValidation.MaximumPriceScale);
         builder.Property(wish => wish.Quantity)
             .IsRequired();
+        builder.Property(wish => wish.IsFavorite)
+            .HasDefaultValue(false)
+            .IsRequired();
         builder.Property(wish => wish.Position)
             .IsRequired();
         builder.Property(wish => wish.Version)

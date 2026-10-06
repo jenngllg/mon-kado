@@ -243,6 +243,9 @@ public class GetSharedWishQueryHandlerTests
             wish,
             result,
             expectedCurrentQuantity: null);
+        Assert.Equal(
+            wishlistId,
+            result.WishlistId);
         VerifyFoundLookup(
             query,
             wishlistId,
@@ -383,7 +386,8 @@ public class GetSharedWishQueryHandlerTests
             Price = 12.34m,
             Quantity = 3,
             ReservedQuantity = 1,
-            CurrentParticipantReservedQuantity = null
+            CurrentParticipantReservedQuantity = null,
+            ImageId = Guid.CreateVersion7()
         };
     }
 
@@ -458,6 +462,9 @@ public class GetSharedWishQueryHandlerTests
         Assert.Equal(
             expected.Price,
             actual.Price);
+        Assert.Equal(
+            expected.ImageId,
+            actual.ImageId);
         Assert.Equal(
             expected.Quantity,
             actual.Quantity);

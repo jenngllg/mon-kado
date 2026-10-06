@@ -96,6 +96,12 @@ public class GlobalExceptionHandler(
                 "Only administrators may moderate wishlists.",
                 ErrorCodes.WishlistModerationForbidden,
                 null),
+            WishlistArchivedException => new ErrorResponse(
+                StatusCodes.Status409Conflict,
+                "Wishlist archived",
+                "Restore the wishlist before changing its content or sharing.",
+                ErrorCodes.WishlistArchived,
+                null),
             WishlistSuspendedException => new ErrorResponse(
                 StatusCodes.Status409Conflict,
                 "Wishlist suspended",

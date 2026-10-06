@@ -9,6 +9,19 @@ public class CoordinatedWishlistMutationGuard(
     IWishlistMutationGuard guard,
     Func<CancellationToken, Task> beforeLockAsync) : IWishlistMutationGuard
 {
+    /// <inheritdoc />
+    public async Task LockStateChangeAsync(
+        Guid ownerId,
+        Guid wishlistId,
+        CancellationToken cancellationToken)
+    {
+        await beforeLockAsync(cancellationToken);
+        await guard.LockStateChangeAsync(
+            ownerId,
+            wishlistId,
+            cancellationToken);
+    }
+
     /// <inheritdoc/>
     public async Task LockAsync(
         Guid ownerId,

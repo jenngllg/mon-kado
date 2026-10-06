@@ -168,7 +168,8 @@ public class WishesController(
                 request.Note,
                 request.Url,
                 request.Price,
-                request.Quantity),
+                request.Quantity,
+                request.IsFavorite),
             cancellationToken);
         var response = CreateResponse(wish);
         Response.Headers.ETag = entityTagService.Format(wish.Version);
@@ -266,13 +267,54 @@ public class WishesController(
                 request.Url,
                 request.Price,
                 expectedVersion,
-                request.Quantity),
+                request.Quantity,
+                request.IsFavorite),
             cancellationToken);
         var response = CreateResponse(wish);
         Response.Headers.ETag = entityTagService.Format(wish.Version);
         Response.Headers.CacheControl = "no-store";
 
         return Ok(response);
+    }
+
+    /// <summary>Changes only the owner's favorite preference without moving the wish.</summary>
+    /// <param name="wishlistId">The parent wishlist identifier.</param>
+    /// <param name="wishId">The wish identifier.</param>
+    /// <param name="request">The requested preference.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The complete updated wish and strong ETag.</returns>
+    [HttpPatch("{wishId:guid}")]
+    [EntityTag(isRequired: true)]
+    [NoStoreResponse(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(WishResponse), StatusCodes.Status200OK, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status409Conflict, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status412PreconditionFailed, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status428PreconditionRequired, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status503ServiceUnavailable, "application/json")]
+    public async Task<ActionResult<WishResponse>> SetFavoriteAsync(
+        Guid wishlistId,
+        Guid wishId,
+        SetWishFavoriteRequest request,
+        CancellationToken cancellationToken)
+    {
+        await AuthorizeWishlistAsync(
+            wishlistId,
+            AuthorizationPolicies.ModifyWishlist,
+            cancellationToken);
+        var wish = await sender.Send(
+            new SetWishFavoriteCommand(
+                GetMemberId(),
+                wishlistId,
+                wishId,
+                request.IsFavorite,
+                entityTagService.Parse(Request.Headers.IfMatch)),
+            cancellationToken);
+        Response.Headers.ETag = entityTagService.Format(wish.Version);
+        Response.Headers.CacheControl = "no-store";
+
+        return Ok(CreateResponse(wish));
     }
 
     /// <summary>
@@ -483,7 +525,8 @@ public class WishesController(
                     imageId)
                 : null,
             wish.ReservedQuantity,
-            wish.AvailableQuantity);
+            wish.AvailableQuantity,
+            wish.IsFavorite);
     }
 
     private static async Task<byte[]> ReadImageAsync(

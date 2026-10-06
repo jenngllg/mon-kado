@@ -176,6 +176,7 @@ public class WishImageTests
             response.Headers.ETag?.Tag);
         Assert.Equal(
             [
+                "isFavorite",
                 "id",
                 "wishlistId",
                 "name",

@@ -9,6 +9,51 @@ namespace JennGllg.Fr.MonKado.Back.Api.FunctionalTests;
 /// </summary>
 public class RecordingWishService : IWishService
 {
+    /// <inheritdoc />
+    public Task<WishDetails?> SetFavoriteAsync(
+        Guid ownerId,
+        Guid wishlistId,
+        Guid wishId,
+        bool isFavorite,
+        uint expectedVersion,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (Exception is not null)
+            throw Exception;
+
+        if (!Wishes.TryGetValue(
+            (wishlistId, wishId),
+            out var current))
+            return Task.FromResult<WishDetails?>(null);
+
+        if (current.Version != expectedVersion)
+            throw new WishVersionConflictException();
+
+        if (current.IsFavorite == isFavorite)
+            return Task.FromResult<WishDetails?>(current);
+
+        var updated = new WishDetails(
+            current.Id,
+            current.WishlistId,
+            current.Name,
+            current.Note,
+            current.Url,
+            current.Price,
+            current.Position,
+            current.CreatedAt,
+            _createdAt.AddHours(1),
+            current.Version + 1,
+            current.Quantity,
+            current.ImageId,
+            isFavorite);
+        Wishes[(wishlistId, wishId)] = updated;
+        CollectionVersion++;
+
+        return Task.FromResult<WishDetails?>(updated);
+    }
+
     private static readonly DateTime _createdAt = new(
         2026,
         8,
@@ -200,6 +245,7 @@ public class RecordingWishService : IWishService
         string? url,
         decimal? price,
         int quantity,
+        bool isFavorite,
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -230,7 +276,8 @@ public class RecordingWishService : IWishService
             _createdAt,
             null,
             42,
-            quantity);
+            quantity,
+            isFavorite: isFavorite);
         Wishes[(wishlistId, id)] = wish;
 
         return Task.FromResult<WishDetails?>(wish);
@@ -268,6 +315,7 @@ public class RecordingWishService : IWishService
         decimal? price,
         int quantity,
         uint expectedVersion,
+        bool? isFavorite,
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -304,7 +352,8 @@ public class RecordingWishService : IWishService
             currentWish.CreatedAt,
             _createdAt.AddHours(1),
             expectedVersion + 1,
-            quantity);
+            quantity,
+            isFavorite: isFavorite ?? currentWish.IsFavorite);
         Wishes[(wishlistId, wishId)] = wish;
 
         return Task.FromResult<WishDetails?>(wish);

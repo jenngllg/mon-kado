@@ -40,6 +40,7 @@ public class WishlistsController(
     /// <summary>
     /// Gets all private wishlists owned by the current member.
     /// </summary>
+    /// <param name="isArchived">Whether to retrieve archived lists; omission returns active lists.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>The owned wishlists in reverse creation order.</returns>
     [HttpGet]
@@ -47,11 +48,15 @@ public class WishlistsController(
     [ProducesResponseType(typeof(IEnumerable<WishlistResponse>), StatusCodes.Status200OK, "application/json")]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status503ServiceUnavailable, "application/json")]
     public async Task<ActionResult<IEnumerable<WishlistResponse>>> GetAllAsync(
+        [FromQuery] bool? isArchived,
         CancellationToken cancellationToken)
     {
         var memberId = GetMemberId();
         var wishlists = await sender.Send(
-            new GetWishlistsQuery(memberId),
+            new GetWishlistsQuery(memberId)
+            {
+                IsArchived = isArchived ?? false
+            },
             cancellationToken);
         var response = wishlists
             .Select(CreateResponse)
@@ -163,6 +168,49 @@ public class WishlistsController(
         return Ok(response);
     }
 
+    /// <summary>Archives or restores an owned wishlist without changing its shares or reservations.</summary>
+    /// <param name="wishlistId">The wishlist identifier.</param>
+    /// <param name="request">The requested archive state, and no other metadata.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The complete wishlist and its current ETag.</returns>
+    [HttpPatch("{wishlistId:guid}")]
+    [EntityTag(isRequired: true)]
+    [NoStoreResponse(StatusCodes.Status200OK)]
+    [RequestSizeLimit(MaximumRequestBodySize)]
+    [Consumes("application/json")]
+    [ProducesResponseType(typeof(WishlistResponse), StatusCodes.Status200OK, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status409Conflict, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status412PreconditionFailed, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status428PreconditionRequired, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status503ServiceUnavailable, "application/json")]
+    public async Task<ActionResult<WishlistResponse>> SetArchivedAsync(
+        Guid wishlistId,
+        SetWishlistArchivedRequest request,
+        CancellationToken cancellationToken)
+    {
+        var authorization = await authorizationService.AuthorizeAsync(
+            User,
+            wishlistId,
+            AuthorizationPolicies.ManageWishlist);
+
+        if (!authorization.Succeeded)
+            throw new WishlistNotFoundException();
+
+        var wishlist = await sender.Send(
+            new SetWishlistArchivedCommand(
+                GetMemberId(),
+                wishlistId,
+                request.IsArchived,
+                entityTagService.Parse(Request.Headers.IfMatch)),
+            cancellationToken);
+        Response.Headers.ETag = entityTagService.Format(wishlist.Version);
+        Response.Headers.CacheControl = "no-store";
+
+        return Ok(CreateResponse(wishlist));
+    }
+
     /// <summary>
     /// Deletes a private wishlist owned by the current member.
     /// </summary>
@@ -186,7 +234,7 @@ public class WishlistsController(
         var authorization = await authorizationService.AuthorizeAsync(
             User,
             wishlistId,
-            AuthorizationPolicies.ModifyWishlist);
+            AuthorizationPolicies.ManageWishlist);
 
         if (!authorization.Succeeded)
             throw new WishlistNotFoundException();
@@ -265,6 +313,7 @@ public class WishlistsController(
             wishlist.UpdatedAt)
         {
             SurpriseMode = wishlist.SurpriseMode,
+            IsArchived = wishlist.IsArchived,
             IsSuspended = wishlist.IsSuspended,
             SuspensionReason = wishlist.SuspensionReason,
             SuspendedAt = wishlist.SuspendedAt
