@@ -669,6 +669,7 @@ public class GiftReservationIntegrationTests(PostgreSqlContainerFixture fixture)
                 "entityTag",
                 "id",
                 "imageUrl",
+                "isFavorite",
                 "name",
                 "note",
                 "position",

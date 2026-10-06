@@ -93,6 +93,9 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
         finally
         {
             await context.Database.MigrateAsync(cancellationToken);
+            await context.Users
+                .Where(user => user.Id == ownerId)
+                .ExecuteDeleteAsync(cancellationToken);
         }
     }
 
@@ -555,6 +558,14 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
                 StringComparison.Ordinal),
             migration => Assert.EndsWith(
                 "_AddWishlistSurpriseMode",
+                migration,
+                StringComparison.Ordinal),
+            migration => Assert.EndsWith(
+                "_AddWishlistArchiveState",
+                migration,
+                StringComparison.Ordinal),
+            migration => Assert.EndsWith(
+                "_AddWishFavoriteState",
                 migration,
                 StringComparison.Ordinal));
         Assert.False(context.Database.HasPendingModelChanges());
