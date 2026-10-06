@@ -57,6 +57,7 @@ public class WishlistSharePreviewsController(
             new GetWishlistSharePreviewQuery(shareLinkId),
             cancellationToken);
         var title = HtmlEncoder.Default.Encode($"{preview.Name} | Ma liste sur MonKado");
+        var canonicalUrl = HtmlEncoder.Default.Encode(options.Value.FrontendOrigin + $"/shared-wishlists/{shareLinkId:D}");
         var images = string.Empty;
 
         if (preview.Images.Count > 0)
@@ -67,14 +68,16 @@ public class WishlistSharePreviewsController(
                 <meta property="og:image:height" content="630">
                 <meta property="og:image:alt" content="Aperçu des souhaits de cette liste">
                 """;
-        // Do not canonicalize the shared URL: its fragment must remain on the link shared by the user.
+        // The graph identity is public; bearer fragments remain only on user-facing share links.
         var html = $"""
             <!doctype html>
-            <html lang="fr"><head><meta charset="utf-8">
+            <html lang="fr" prefix="og: https://ogp.me/ns#"><head><meta charset="utf-8">
             <title>{title}</title>
             <meta property="og:type" content="website">
             <meta property="og:site_name" content="MonKado">
             <meta property="og:title" content="{title}">
+            <meta property="og:url" content="{canonicalUrl}">
+            <meta property="og:locale" content="fr_FR">
             <meta property="og:description" content="Découvre cette liste de souhaits sur MonKado.">
             {images}
             </head><body><h1>{title}</h1></body></html>
