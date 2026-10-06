@@ -33,6 +33,8 @@ public class PublicMemberProfileIntegrationTests(PostgreSqlContainerFixture fixt
         var active = CreateList(owner.Id);
         var second = CreateList(owner.Id);
         var privateList = CreateList(owner.Id);
+        var archived = CreateList(owner.Id);
+        archived.SetArchived(true);
         var suspended = CreateList(owner.Id);
         suspended.Moderate(
             true,
@@ -43,6 +45,7 @@ public class PublicMemberProfileIntegrationTests(PostgreSqlContainerFixture fixt
             active,
             second,
             privateList,
+            archived,
             suspended,
             foreign);
         var tokens = scope.ServiceProvider.GetRequiredService<IWishlistShareTokenService>();
@@ -50,6 +53,7 @@ public class PublicMemberProfileIntegrationTests(PostgreSqlContainerFixture fixt
         {
             active,
             second,
+            archived,
             suspended,
             foreign
         })

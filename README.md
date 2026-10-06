@@ -181,6 +181,12 @@ Cookie-enabled unsafe endpoints declare antiforgery validation explicitly. Endpo
 
 ## Wishlist sharing security contract
 
+### Channel sharing — MK-982 / MK-983
+
+An active share link makes a wishlist public; there is no separate publication flag. Archived or suspended lists remain inaccessible even when their share link is retained. Channel sharing reuses the existing owner `shareUrl` response and does not create, rotate or revoke it. WhatsApp and Facebook open their share composers, Discord and Messenger use copy-and-open, and mail opens the user's mail composer. MonKado does not send messages, register social accounts or require new provider credentials.
+
+The frontend displays channel controls only after a successful active-link read, beneath the existing link. It passes the complete URL, including the secret fragment, only following an explicit user action. No social SDK, external logo request, analytics event containing the URL, or server-side sharing endpoint is added. Third-party previews must not be given access to private wish content.
+
 ### Manual wishlist archiving (#976)
 
 Owners archive or restore a list with `PATCH /api/v1/wishlists/{wishlistId}` and
