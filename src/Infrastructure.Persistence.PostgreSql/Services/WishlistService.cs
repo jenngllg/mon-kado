@@ -48,31 +48,36 @@ public class WishlistService(
     {
         try
         {
-            await using var transaction = await transactionFactory.BeginAsync(
+            WishlistDetails completedResult;
+            await using (var transaction = await transactionFactory.BeginAsync(
                 IsolationLevel.ReadCommitted,
-                cancellationToken);
-            await mutationGuard.LockStateChangeAsync(
-                ownerId,
-                wishlistId,
-                cancellationToken);
-            var wishlist = await wishlistRepository.GetByIdForUpdateAsync(
-                ownerId,
-                wishlistId,
-                cancellationToken);
+                cancellationToken))
+            {
+                await mutationGuard.LockStateChangeAsync(
+                    ownerId,
+                    wishlistId,
+                    cancellationToken);
+                var wishlist = await wishlistRepository.GetByIdForUpdateAsync(
+                    ownerId,
+                    wishlistId,
+                    cancellationToken);
 
-            if (wishlist is null)
-                throw new WishlistNotFoundException();
+                if (wishlist is null)
+                    throw new WishlistNotFoundException();
 
-            if (wishlist.Version != expectedVersion)
-                throw new WishlistVersionConflictException();
+                if (wishlist.Version != expectedVersion)
+                    throw new WishlistVersionConflictException();
 
-            if (!wishlist.SetArchived(isArchived))
-                return CreateDetails(wishlist);
+                if (!wishlist.SetArchived(isArchived))
+                    return CreateDetails(wishlist);
 
-            await unitOfWork.SaveChangesAsync(cancellationToken);
-            await transaction.CommitAsync(cancellationToken);
+                await unitOfWork.SaveChangesAsync(cancellationToken);
+                await transaction.CommitAsync(cancellationToken);
 
-            return CreateDetails(wishlist);
+                completedResult = CreateDetails(wishlist);
+            }
+
+            return completedResult;
         }
         catch (DbUpdateConcurrencyException)
         {

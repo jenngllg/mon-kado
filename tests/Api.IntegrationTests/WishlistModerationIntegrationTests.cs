@@ -846,6 +846,7 @@ public class WishlistModerationIntegrationTests(PostgreSqlContainerFixture fixtu
     [InlineData("missingWishlist", typeof(WishlistNotFoundException))]
     [InlineData("otherOwner", typeof(WishlistNotFoundException))]
     [InlineData("suspended", typeof(WishlistSuspendedException))]
+    [InlineData("archived", typeof(WishlistArchivedException))]
     public async Task LockAsync_WhenOwnerMutationCannotProceed_RejectsAtDatabaseBoundary(
         string scenario,
         Type expectedException)
@@ -877,6 +878,15 @@ public class WishlistModerationIntegrationTests(PostgreSqlContainerFixture fixtu
             wishlistId = Guid.CreateVersion7();
         await using var scope = factory.Services.CreateAsyncScope();
         var context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
+
+        if (scenario == "archived")
+        {
+            var wishlist = await context.Wishlists.SingleAsync(
+                value => value.Id == wishlistId,
+                cancellationToken);
+            wishlist.SetArchived(true);
+            await context.SaveChangesAsync(cancellationToken);
+        }
 
         if (scenario == "suspended")
         {

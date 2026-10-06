@@ -50,34 +50,39 @@ public class WishService(
         (Wish Attempted, Wish Original)? attemptedUpdate = null;
         try
         {
-            await using var transaction = await wishTransactionFactory.BeginAsync(
+            WishDetails completedResult;
+            await using (var transaction = await wishTransactionFactory.BeginAsync(
                 IsolationLevel.ReadCommitted,
-                cancellationToken);
-            await mutationGuard.LockAsync(
-                ownerId,
-                wishlistId,
-                cancellationToken);
-            var wish = await wishRepository.GetByIdForUpdateAsync(
-                wishlistId,
-                wishId,
-                cancellationToken);
+                cancellationToken))
+            {
+                await mutationGuard.LockAsync(
+                    ownerId,
+                    wishlistId,
+                    cancellationToken);
+                var wish = await wishRepository.GetByIdForUpdateAsync(
+                    wishlistId,
+                    wishId,
+                    cancellationToken);
 
-            if (wish is null)
-                return null;
+                if (wish is null)
+                    return null;
 
-            if (wish.Version != expectedVersion)
-                throw new WishVersionConflictException();
+                if (wish.Version != expectedVersion)
+                    throw new WishVersionConflictException();
 
-            var originalWish = CopyClientState(wish);
+                var originalWish = CopyClientState(wish);
 
-            if (!wish.SetFavorite(isFavorite))
-                return CreateDetails(wish);
+                if (!wish.SetFavorite(isFavorite))
+                    return CreateDetails(wish);
 
-            await unitOfWork.SaveChangesAsync(cancellationToken);
-            attemptedUpdate = (wish, originalWish);
-            await transaction.CommitAsync(cancellationToken);
+                await unitOfWork.SaveChangesAsync(cancellationToken);
+                attemptedUpdate = (wish, originalWish);
+                await transaction.CommitAsync(cancellationToken);
 
-            return CreateDetails(wish);
+                completedResult = CreateDetails(wish);
+            }
+
+            return completedResult;
         }
         catch (DbUpdateConcurrencyException)
         {
@@ -88,8 +93,12 @@ public class WishService(
                 wishId,
                 cancellationToken);
         }
-        catch (Exception exception) when (PostgreSqlFailureClassifier.IsUnavailable(exception))
+        catch (Exception exception)
         {
+
+            if (!PostgreSqlFailureClassifier.IsUnavailable(exception))
+                throw;
+
             wishRepository.ClearTracking();
 
             if (attemptedUpdate is null)
