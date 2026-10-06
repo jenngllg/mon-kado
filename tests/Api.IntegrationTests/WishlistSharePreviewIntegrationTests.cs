@@ -46,12 +46,27 @@ public class WishlistSharePreviewIntegrationTests(PostgreSqlContainerFixture fix
         using var protectedList = await client.GetAsync(
             $"/api/v1/shared-wishlists/{link.Id}",
             token);
+        using var authorizedRequest = new HttpRequestMessage(
+            HttpMethod.Get,
+            $"/api/v1/shared-wishlists/{link.Id}");
+        authorizedRequest.Headers.Add(
+            "X-MonKado-Share-Token",
+            secret.Secret);
+        using var authorizedList = await client.SendAsync(
+            authorizedRequest,
+            token);
 
         // Assert
         Assert.Equal(
             HttpStatusCode.OK,
             response.StatusCode);
         Assert.Contains("og:title", html);
+        Assert.Contains(
+            $"<meta property=\"og:url\" content=\"http://localhost:5173/shared-wishlists/{link.Id:D}\">",
+            html);
+        Assert.DoesNotContain(
+            secret.Secret,
+            html);
         Assert.DoesNotContain("og:image", html);
         Assert.Equal(
             HttpStatusCode.NotFound,
@@ -59,6 +74,9 @@ public class WishlistSharePreviewIntegrationTests(PostgreSqlContainerFixture fix
         Assert.Equal(
             HttpStatusCode.NotFound,
             protectedList.StatusCode);
+        Assert.Equal(
+            HttpStatusCode.OK,
+            authorizedList.StatusCode);
     }
 
     [Fact]
@@ -216,6 +234,9 @@ public class WishlistSharePreviewIntegrationTests(PostgreSqlContainerFixture fix
             "text/html",
             response.Content.Headers.ContentType?.MediaType);
         Assert.Contains("og:title", html);
+        Assert.Contains(
+            $"<meta property=\"og:url\" content=\"http://localhost:5173/shared-wishlists/{link.Id:D}\">",
+            html);
         Assert.Contains("&lt;script&gt;", html);
         Assert.DoesNotContain("<script>", html);
         Assert.Contains($"/share-previews/{link.Id}/image", html);
