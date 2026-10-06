@@ -24,6 +24,26 @@
 		@unsupported not method GET HEAD
 		respond @unsupported 405
 
+		# Crawlers receive only the explicitly public preview, not the bearer-protected SPA data.
+		@sharePreview {
+			path_regexp sharePreview ^/shared-wishlists/([0-9a-fA-F-]{36})/?$
+			header_regexp User-Agent (?i)(facebookexternalhit|Facebot|WhatsApp|Discordbot|Twitterbot|LinkedInBot)
+		}
+		handle @sharePreview {
+			rewrite * /api/v1/shared-wishlists/{re.sharePreview.1}/preview
+			reverse_proxy {$FRONTEND_API_ORIGIN} {
+				header_up Host {upstream_hostport}
+			}
+		}
+
+		@previewImage path_regexp previewImage ^/share-previews/([0-9a-fA-F-]{36})/image$
+		handle @previewImage {
+			rewrite * /api/v1/shared-wishlists/{re.previewImage.1}/preview/image
+			reverse_proxy {$FRONTEND_API_ORIGIN} {
+				header_up Host {upstream_hostport}
+			}
+		}
+
 		# Exact documents remain available without JavaScript or the API.
 		@legal path /legal-notice /privacy-policy /terms-of-use
 		handle @legal {
