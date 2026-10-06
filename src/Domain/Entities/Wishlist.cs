@@ -139,7 +139,10 @@ public class Wishlist : IAuditableEntity
     }
 
     /// <summary>Gets whether the owner archived this wishlist.</summary>
-    public bool IsArchived { get; private set; }
+    public bool IsArchived
+    {
+        get; private set;
+    }
 
     /// <summary>Gets whether reservation quantities are hidden from the owner.</summary>
     public bool SurpriseMode { get; private set; } = true;

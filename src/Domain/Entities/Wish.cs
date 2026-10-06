@@ -110,7 +110,10 @@ public class Wish : IAuditableEntity
     }
 
     /// <summary>Gets whether the owner marked this wish as a favorite.</summary>
-    public bool IsFavorite { get; private set; }
+    public bool IsFavorite
+    {
+        get; private set;
+    }
 
     /// <summary>Changes the owner's favorite preference without changing the wish order.</summary>
     /// <param name="isFavorite">The requested favorite state.</param>

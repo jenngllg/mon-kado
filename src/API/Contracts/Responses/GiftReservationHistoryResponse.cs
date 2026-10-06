@@ -40,7 +40,10 @@ public class GiftReservationHistoryResponse(
     public Guid Id { get; } = id;
 
     /// <summary>Gets whether the reservation belongs to an archived wishlist.</summary>
-    public bool IsArchived { get; init; }
+    public bool IsArchived
+    {
+        get; init;
+    }
 
     /// <summary>Gets the original wishlist identifier.</summary>
     public Guid WishlistId { get; } = wishlistId;
@@ -73,14 +76,26 @@ public class GiftReservationHistoryResponse(
     public DateTime? EndedAt { get; } = endedAt;
 
     /// <summary>Gets the current public wishlist owner's identifier, when available.</summary>
-    public Guid? OwnerId { get; init; }
+    public Guid? OwnerId
+    {
+        get; init;
+    }
 
     /// <summary>Gets the public display name of the wishlist owner, when available.</summary>
-    public string? OwnerDisplayName { get; init; }
+    public string? OwnerDisplayName
+    {
+        get; init;
+    }
 
     /// <summary>Gets the current frontend share URL, when the wish remains accessible.</summary>
-    public string? ShareUrl { get; init; }
+    public string? ShareUrl
+    {
+        get; init;
+    }
 
     /// <summary>Gets the short-lived signed wish image URL, when accessible.</summary>
-    public string? ImageUrl { get; init; }
+    public string? ImageUrl
+    {
+        get; init;
+    }
 }

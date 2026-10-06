@@ -24,7 +24,10 @@ public class GetWishlistsQuery(Guid memberId)
     public Guid MemberId { get; } = memberId;
 
     /// <summary>Gets the archive-state filter, defaulting to active wishlists.</summary>
-    public bool IsArchived { get; init; }
+    public bool IsArchived
+    {
+        get; init;
+    }
 
     /// <inheritdoc />
     Exception IGenericValidationFailure.CreateValidationException(

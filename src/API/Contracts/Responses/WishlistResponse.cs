@@ -63,7 +63,10 @@ public class WishlistResponse(
     public DateTime? UpdatedAt { get; } = updatedAt;
 
     /// <summary>Gets whether the owner archived this wishlist.</summary>
-    public bool IsArchived { get; init; }
+    public bool IsArchived
+    {
+        get; init;
+    }
 
     /// <summary>Gets whether an administrator suspended this wishlist.</summary>
     public bool IsSuspended
