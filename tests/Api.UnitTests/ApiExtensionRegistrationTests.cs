@@ -33,7 +33,7 @@ public class ApiExtensionRegistrationTests
         var services = new ServiceCollection();
 
         // Act
-        var result = services.AddApiOpenApi();
+        var result = services.AddApiOpenApi(new ConfigurationBuilder().Build());
 
         // Assert
         Assert.Same(

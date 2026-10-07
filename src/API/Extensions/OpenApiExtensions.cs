@@ -11,6 +11,8 @@ using Microsoft.OpenApi;
 
 using System.Text.Json.Nodes;
 
+using HttpResults = Microsoft.AspNetCore.Http.Results;
+
 namespace JennGllg.Fr.MonKado.Back.Api.Extensions;
 /// <summary>
 /// Represents open api extensions.
@@ -21,16 +23,25 @@ public static class OpenApiExtensions
     internal const string BearerSecuritySchemeName = "Bearer";
     private const string DocumentName = "v1";
     private const string DocumentPath = "/openapi/{documentName}.json";
+    private const string StaticDocumentSetting = "OpenApi:DocumentPath";
     private const string RobotsHeaderName = "X-Robots-Tag";
     private const string SharedWishlistsPath = "api/v1/shared-wishlists/";
     /// <summary>
     /// Executes the add api open api operation.
     /// </summary>
     /// <param name="services">The services.</param>
+    /// <param name="configuration">The application configuration.</param>
     /// <returns>The operation result.</returns>
 
-    public static IServiceCollection AddApiOpenApi(this IServiceCollection services)
+    public static IServiceCollection AddApiOpenApi(
+        this IServiceCollection services,
+        IConfiguration configuration)
     {
+        // Published images serve the build artifact without retaining the generation graph.
+
+        if (!string.IsNullOrEmpty(configuration[StaticDocumentSetting]))
+            return services;
+
         services.AddOpenApi(
             DocumentName,
             options =>
@@ -152,14 +163,45 @@ public static class OpenApiExtensions
         return services;
     }
     /// <summary>
-    /// Executes the map api open api operation.
+    /// Maps build-generated documentation, or dynamic documentation for local development and contract tests.
     /// </summary>
     /// <param name="endpoints">The endpoints.</param>
     /// <returns>The operation result.</returns>
+    /// <exception cref="FileNotFoundException">The configured build artifact is missing.</exception>
 
-    public static IEndpointRouteBuilder MapApiOpenApi(this IEndpointRouteBuilder endpoints)
+    public static IEndpointRouteBuilder MapApiOpenApi(this WebApplication endpoints)
     {
-        endpoints.MapOpenApi(DocumentPath);
+        var documentPath = endpoints.Configuration[StaticDocumentSetting];
+
+        if (string.IsNullOrEmpty(documentPath))
+        {
+            endpoints.MapOpenApi(DocumentPath);
+
+            return endpoints;
+        }
+
+        var fullPath = Path.GetFullPath(
+            documentPath,
+            endpoints.Environment.ContentRootPath);
+
+        if (!File.Exists(fullPath))
+            throw new FileNotFoundException("The build-generated OpenAPI document is missing.");
+
+        endpoints.MapMethods(
+            DocumentPath,
+            [
+                HttpMethods.Get,
+                HttpMethods.Head
+            ],
+            (string documentName) => string.Equals(
+                documentName,
+                DocumentName,
+                StringComparison.Ordinal)
+                ? HttpResults.File(
+                    fullPath,
+                    "application/json; charset=utf-8")
+                : HttpResults.NotFound())
+            .ExcludeFromDescription();
 
         return endpoints;
     }

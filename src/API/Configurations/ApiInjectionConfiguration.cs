@@ -68,7 +68,7 @@ public static class ApiInjectionConfiguration
                     JsonNamingPolicy.CamelCase,
                     allowIntegerValues: false)));
         services.AddApiHealthChecks();
-        services.AddApiOpenApi();
+        services.AddApiOpenApi(configuration);
         services.AddTrustedReverseProxy(
             configuration,
             environment);

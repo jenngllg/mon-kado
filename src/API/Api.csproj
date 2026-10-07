@@ -4,12 +4,16 @@
     <AssemblyName>JennGllg.Fr.MonKado.Back.Api</AssemblyName>
     <RootNamespace>JennGllg.Fr.MonKado.Back.Api</RootNamespace>
     <UserSecretsId>f274ef3a-2328-4039-ba63-41c7b13f3bf2</UserSecretsId>
+    <!-- Generation is enabled explicitly by the image build, with synthetic configuration. -->
+    <OpenApiGenerateDocuments Condition="'$(OpenApiGenerateDocuments)' == ''">false</OpenApiGenerateDocuments>
+    <OpenApiGenerateDocumentsOptions>--file-name v1 --document-name v1</OpenApiGenerateDocumentsOptions>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
+    <PackageReference Include="Microsoft.Extensions.ApiDescription.Server" PrivateAssets="all" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>

@@ -29,11 +29,22 @@ RUN dotnet restore src/API/Api.csproj \
 COPY .editorconfig ./
 COPY src/ src/
 
-RUN dotnet publish src/API/Api.csproj \
+RUN AllowedHosts=localhost \
+    WebSecurity__AllowedOrigins__0=https://localhost \
+    WishlistSharing__FrontendOrigin=https://localhost \
+    GoogleAuthentication__FrontendOrigin=https://localhost \
+    DataProtection__KeysPath=/tmp/data-protection-keys \
+    ReverseProxy__KnownNetworks__0=127.0.0.0/8 \
+    Jwt__SigningKey="AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA=" \
+    ConnectionStrings__PostgreSql="Host=127.0.0.1;Port=1;Database=build_only;Username=build_only;Password=build-only;Timeout=1" \
+    dotnet publish src/API/Api.csproj \
         --configuration Release \
         --no-restore \
         --output /out/api \
         /p:UseAppHost=false \
+        /p:OpenApiGenerateDocuments=true \
+        /p:OpenApiDocumentsDirectory=/out/api/openapi \
+    && test -s /out/api/openapi/v1.json \
     && dotnet publish src/Worker/Worker.csproj \
         --configuration Release \
         --no-restore \
@@ -66,7 +77,8 @@ RUN AllowedHosts=localhost \
 FROM mcr.microsoft.com/dotnet/aspnet:10.0.12-noble-chiseled-extra AS api
 WORKDIR /app
 ENV ASPNETCORE_HTTP_PORTS=8080 \
-    DOTNET_EnableDiagnostics=0
+    DOTNET_EnableDiagnostics=0 \
+    OpenApi__DocumentPath=/app/openapi/v1.json
 EXPOSE 8080
 COPY --from=build /out/api/ ./
 COPY --from=migrations-build --chmod=0555 /out/migrations/efbundle ./efbundle

@@ -33,6 +33,7 @@ jobs:
       - name: Verify API unit and public-preview integration tests
         run: |
           dotnet test tests/Api.UnitTests/Api.UnitTests.csproj -c Release -m:1
+          dotnet test tests/Api.FunctionalTests/Api.FunctionalTests.csproj -c Release -m:1 --filter FullyQualifiedName~OpenApi
           dotnet test tests/Api.IntegrationTests/Api.IntegrationTests.csproj -c Release -m:1 --filter FullyQualifiedName~WishlistSharePreviewIntegrationTests
           docker run --rm --network none -v "$PWD:/source:ro" -w /source \
             -e PYTHONPATH=/source/src/Operations.Deployment:/source/deployments/production \
@@ -44,6 +45,8 @@ jobs:
             --label "org.opencontainers.image.source=https://github.com/$GITHUB_REPOSITORY" \
             --label "org.opencontainers.image.revision=$GITHUB_SHA" \
             -t "ghcr.io/jenngllg/mon-kado-api:$GITHUB_SHA" .
+      - name: Verify the packaged static OpenAPI document
+        run: python3 tests/Operations.DeploymentTests/verify_static_openapi.py "ghcr.io/jenngllg/mon-kado-api:$GITHUB_SHA"
       - name: Scan image before publication
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:

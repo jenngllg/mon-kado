@@ -104,6 +104,19 @@ non-cacheable `429` response before database/image buffers are allocated. This
 prevents independent crawler requests from multiplying native image allocations;
 it is not a claim that the complete deployment is ready for unbounded traffic.
 
+API images generate the `v1` OpenAPI document during publishing, using the standard
+`Microsoft.Extensions.ApiDescription.Server` build tooling with synthetic settings
+and an unreachable database. The immutable JSON is served at `/openapi/v1.json`
+through the existing security, CORS and correlation middleware. Published images set
+`OpenApi__DocumentPath=/app/openapi/v1.json`; a missing artifact fails startup rather
+than falling back to runtime generation. No production credentials or member data
+are used to produce the documentation. An empty OpenAPI `servers` collection uses
+the document's current origin rather than persisting the synthetic build origin.
+Local source runs and contract tests retain dynamic generation when no artifact
+path is configured. Technical deployment checks still validate the same public URL.
+The packaging check verifies that the response matches the embedded artifact,
+security headers, unsupported document names, HEAD and authentication enforcement.
+
 This release's API configuration pins glibc's `MALLOC_MMAP_THRESHOLD_` to 1 MiB. Large native image
 allocations can then be released back to the OS rather than changing the dynamic
 threshold and retaining subsequent buffers in allocator arenas. This complements
