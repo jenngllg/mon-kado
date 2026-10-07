@@ -17,6 +17,8 @@ services:
     environment:
       <<: *small-pool
       DOTNET_GCHeapHardLimit: "0x10000000"
+      # Keep large freed native image buffers eligible for immediate return to the OS.
+      MALLOC_MMAP_THRESHOLD_: "1048576"
       Observability__Enabled: "true"
       Observability__Version: ${RELEASE_REVISION:?Set the approved RELEASE_REVISION}
       Observability__Directory: /var/lib/monkado-observability

@@ -1,20 +1,77 @@
+using JennGllg.Fr.MonKado.Back.Api.Abstractions;
 using JennGllg.Fr.MonKado.Back.Application.Abstractions;
 using JennGllg.Fr.MonKado.Back.Domain.Entities;
 using JennGllg.Fr.MonKado.Back.Domain.Enums;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Contexts;
 using JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Entities;
+using JennGllg.Fr.MonKado.Back.Tests.Common;
 
 using Microsoft.Extensions.DependencyInjection;
 
 using SkiaSharp;
 
 using System.Net;
+using System.Text.Json;
 
 namespace JennGllg.Fr.MonKado.Back.Api.IntegrationTests;
 
 [Collection(PostgreSqlApiTestSuite.Name)]
 public class WishlistSharePreviewIntegrationTests(PostgreSqlContainerFixture fixture)
 {
+    [Theory]
+    [InlineData("GET")]
+    [InlineData("HEAD")]
+    public async Task GetImageAsync_WhenSharedImageAdmissionIsFull_ReturnsTooManyRequestsBeforeDatabaseRead(string method)
+    {
+        // Arrange
+        var token = TestContext.Current.CancellationToken;
+        await fixture.ResetDatabaseAsync(token);
+        await using var factory = new PostgreSqlApiFactory(
+            fixture.Container.GetConnectionString(),
+            new FrozenTimerTimeProvider());
+        var limiter = factory.Services.GetRequiredService<IImageProcessingLimiter>();
+        using var active = await limiter.AcquireAsync(token);
+        var firstQueued = limiter.AcquireAsync(token);
+        var secondQueued = limiter.AcquireAsync(token);
+        using var visitor = factory.CreateClient();
+        using var request = new HttpRequestMessage(
+            new HttpMethod(method),
+            $"/api/v1/shared-wishlists/{Guid.CreateVersion7()}/preview/image");
+
+        // Act
+        using var response = await visitor.SendAsync(
+            request,
+            token);
+        active?.Dispose();
+        using var firstLease = await firstQueued;
+        firstLease?.Dispose();
+        using var secondLease = await secondQueued;
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.TooManyRequests,
+            response.StatusCode);
+        Assert.True(response.Headers.CacheControl?.NoStore);
+        Assert.Equal(
+            TimeSpan.FromSeconds(60),
+            response.Headers.RetryAfter?.Delta);
+
+        if (method == "HEAD")
+        {
+            // TestServer does not implement Kestrel's transport-level suppression of HEAD bodies.
+
+            return;
+        }
+
+        await using var content = await response.Content.ReadAsStreamAsync(token);
+        using var body = await JsonDocument.ParseAsync(
+            content,
+            cancellationToken: token);
+        Assert.Equal(
+            "REQUEST_RATE_LIMIT_EXCEEDED",
+            body.RootElement.GetProperty("errorCode").GetString());
+    }
+
     [Fact]
     public async Task GetAsync_WhenNoImages_ReturnsTitleOnlyAndImageNotFound()
     {

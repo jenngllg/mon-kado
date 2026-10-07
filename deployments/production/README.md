@@ -97,6 +97,67 @@ and application pools of 12. These are initial settings to verify on the real VP
 not a throughput guarantee. Do not compile on this machine. Previous local image
 stress tests reached the shared limit: uploads/exports still need load validation.
 
+Public social-image previews now share the same process-wide native-image admission
+limit as wish/profile uploads and merchant imports: one operation runs, at most two
+wait, and admission expires after five seconds. Overflow returns the documented
+non-cacheable `429` response before database/image buffers are allocated. This
+prevents independent crawler requests from multiplying native image allocations;
+it is not a claim that the complete deployment is ready for unbounded traffic.
+
+This release's API configuration pins glibc's `MALLOC_MMAP_THRESHOLD_` to 1 MiB. Large native image
+allocations can then be released back to the OS rather than changing the dynamic
+threshold and retaining subsequent buffers in allocator arenas. This complements
+the managed heap cap; it does not cap all native memory or replace correct disposal.
+The setting is specific to the current Ubuntu/glibc image and is deliberately not
+applied to the Worker, PostgreSQL or Caddy.
+
+In isolated one-CPU-quota tests on .NET 10.0.12, the same application image handled
+1,200 reads, five 36-megapixel PNG uploads, and 720 successful social previews.
+Two default-allocator runs ended at approximately 249 and 283 MiB API PSS;
+128-KiB threshold runs ended at 178 and 181 MiB. A 1-MiB threshold run ended at
+180 MiB. PSS attributes shared resident pages proportionally rather than adding
+RSS across processes. No OOM kill occurred. These are local synthetic measurements,
+not production capacity guarantees or proof that every possible leak is absent.
+
+The local host exposes 12 native online CPUs despite the quota, whereas the VPS
+exposes one. An additional comparison pins `MALLOC_ARENA_MAX=8` on both candidates
+to reproduce glibc's one-CPU arena ceiling. It confirms the reduction: 252 MiB
+default versus 178 MiB at the 1-MiB threshold. This arena setting is a test control,
+not a new production override.
+
+The setting has a performance tradeoff. In a measured run, the mixed 12/3-client
+preview workload had mean/p95 latency of 130/301 ms with the default allocator,
+201/488 ms at 128 KiB, and 164/386 ms at 1 MiB. Upload/read latency was comparable.
+The 1-MiB value retains most of the observed memory benefit with less overhead than
+128 KiB. Repeat these checks after changing the runtime/native image library.
+With the eight-arena test control, mean/p95 preview latency was 122/287 ms default
+and 211/492 ms at 1 MiB. Do not describe the memory reduction as a free throughput
+improvement; production warm-memory and load validation remain required.
+A 4-MiB candidate with the same eight-arena control ended at 193 MiB, with
+187/422 ms mean/p95 preview latency. It recovered less memory and did not eliminate
+the load-time overhead, so the prepared release retains the 1-MiB setting.
+
+The combined admission-guard/1-MiB test admitted 31 of 360 requests at 12-client
+concurrency and rejected the rest with `429`; a following 360 requests at three
+clients and the final HEAD request all succeeded. API PSS ended at 184 MiB with no
+OOM kill. Do not count rejected requests as a throughput or latency improvement.
+
+Publishing this configuration still requires the reviewed reinstall described
+above because it changes the deployment configuration hash. After rollout, verify
+the exact API environment setting with an allowlisted inspection, readiness and
+image processing, and compare warm memory over time, not only immediately after
+restart. To revert, remove only this API setting from the reviewed Compose overlay
+and recreate the API through the normal rollout; do not force GC, drop OS caches,
+resize the VPS or remove volumes. No extra paid service is required.
+
+See [glibc memory-allocation tunables](https://sourceware.org/glibc/manual/latest/html_node/Memory-Allocation-Tunables.html)
+for static threshold and release semantics.
+The [glibc 2.39 allocator implementation](https://raw.githubusercontent.com/bminor/glibc/glibc-2.39/malloc/malloc.c)
+also shows how adaptive mmap threshold increases raise the trimming threshold,
+and how an explicit threshold disables that adaptation. The experiments support
+allocator retention during image processing; they do not establish the exclusive
+cause of the earlier production alert or demonstrate a missing `Dispose`.
+
 The persistent volumes include PostgreSQL, images/profile photos, Data Protection
 keys, exports and Caddy certificate state. Persistent volumes are NOT backups.
 Off-server backup/restore (including images/keys) is maintained by MK-813; security

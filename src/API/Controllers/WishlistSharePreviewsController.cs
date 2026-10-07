@@ -93,6 +93,7 @@ public class WishlistSharePreviewsController(
     /// <exception cref="GiftImageNotFoundException">The image is not part of the current preview.</exception>
     [HttpGet("image")]
     [HttpHead("image")]
+    [PublicImageProcessing]
     [NoStoreResponse(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(string), StatusCodes.Status200OK, ImageContentType)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound, "application/json")]

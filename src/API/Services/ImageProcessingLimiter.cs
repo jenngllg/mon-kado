@@ -8,12 +8,12 @@ namespace JennGllg.Fr.MonKado.Back.Api.Services;
 /// <param name="timeProvider">The clock controlling the bounded admission wait.</param>
 public class ImageProcessingLimiter(TimeProvider timeProvider) : IImageProcessingLimiter, IDisposable
 {
-    private const int MaximumQueuedUploads = 2;
+    private const int MaximumQueuedImageOperations = 2;
     private static readonly TimeSpan _maximumWait = TimeSpan.FromSeconds(5);
     private readonly ConcurrencyLimiter _limiter = new(new ConcurrencyLimiterOptions
     {
         PermitLimit = 1,
-        QueueLimit = MaximumQueuedUploads,
+        QueueLimit = MaximumQueuedImageOperations,
         QueueProcessingOrder = QueueProcessingOrder.OldestFirst
     });
 

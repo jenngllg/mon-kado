@@ -70,6 +70,8 @@ def main():
     compose_prefix = ["docker", "compose", "-p", project, "--env-file", str(env_file), "-f", str(ROOT / "compose.yaml"),
                       "-f", str(ROOT / "deployments/production/compose.production.yaml")]
     config = json.loads(run(compose_prefix + ["config", "--format", "json"]))
+    assert config["services"]["api"]["environment"]["MALLOC_MMAP_THRESHOLD_"] == "1048576"
+    assert "MALLOC_MMAP_THRESHOLD_" not in config["services"]["worker"]["environment"]
     config["name"] = project
     config["networks"] = {"edge": {"internal": True, "ipam": {"config": [{"subnet": environment["EDGE_NETWORK_CIDR"]}]}},
                           "backend": {"internal": True}}

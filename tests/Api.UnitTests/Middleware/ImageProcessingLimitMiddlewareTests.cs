@@ -1,6 +1,9 @@
 using JennGllg.Fr.MonKado.Back.Api.Abstractions;
+using JennGllg.Fr.MonKado.Back.Api.Attributes;
 using JennGllg.Fr.MonKado.Back.Api.Extensions;
 using JennGllg.Fr.MonKado.Back.Api.Middleware;
+using JennGllg.Fr.MonKado.Back.Api.Services;
+using JennGllg.Fr.MonKado.Back.Tests.Common;
 
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.RateLimiting;
@@ -17,6 +20,110 @@ namespace JennGllg.Fr.MonKado.Back.Api.UnitTests.Middleware;
 public class ImageProcessingLimitMiddlewareTests
 {
     private readonly Mock<IImageProcessingLimiter> _limiterMock = new(MockBehavior.Strict);
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task InvokeAsync_WhenPublicImageIsMarked_AcquiresWithoutAuthentication(bool missingIdentity)
+    {
+        // Arrange
+        using var limiter = new ConcurrencyLimiter(new ConcurrencyLimiterOptions
+        {
+            PermitLimit = 1,
+            QueueLimit = 0
+        });
+        using var lease = limiter.AttemptAcquire();
+        var context = CreatePublicImageContext();
+
+        if (missingIdentity)
+            context.User = new ClaimsPrincipal();
+        _limiterMock.Setup(service => service.AcquireAsync(context.RequestAborted))
+            .ReturnsAsync(lease);
+        var called = false;
+        var middleware = new ImageProcessingLimitMiddleware(
+            _ =>
+            {
+                called = true;
+
+                return Task.CompletedTask;
+            },
+            _limiterMock.Object);
+
+        // Act
+        await middleware.InvokeAsync(context);
+        using var released = limiter.AttemptAcquire();
+
+        // Assert
+        Assert.True(called);
+        Assert.True(released.IsAcquired);
+        _limiterMock.Verify(
+            service => service.AcquireAsync(context.RequestAborted),
+            Times.Once);
+        _limiterMock.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task InvokeAsync_WhenPublicRenderingAndUploadsCompete_BoundsSharedAdmissionAndRejectsOverflow()
+    {
+        // Arrange
+        using var limiter = new ImageProcessingLimiter(new FrozenTimerTimeProvider());
+        using var services = new ServiceCollection()
+            .AddLogging()
+            .BuildServiceProvider();
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var active = 0;
+        var maximumActive = 0;
+        var completed = 0;
+        var middleware = new ImageProcessingLimitMiddleware(
+            async context =>
+            {
+                var current = Interlocked.Increment(ref active);
+                maximumActive = Math.Max(
+                    maximumActive,
+                    current);
+                started.TrySetResult();
+                await release.Task.WaitAsync(context.RequestAborted);
+                Interlocked.Decrement(ref active);
+                Interlocked.Increment(ref completed);
+            },
+            limiter);
+        var publicContext = CreatePublicImageContext();
+        var uploadContext = CreateContext(
+            AuthenticationRateLimitingExtensions.GiftImageUploadPolicy,
+            true,
+            true);
+        var queuedPublicContext = CreatePublicImageContext();
+        var overflowContext = CreatePublicImageContext();
+        overflowContext.RequestServices = services;
+        using var body = new MemoryStream();
+        overflowContext.Response.Body = body;
+
+        // Act
+        var first = middleware.InvokeAsync(publicContext);
+        await started.Task.WaitAsync(TestContext.Current.CancellationToken);
+        var upload = middleware.InvokeAsync(uploadContext);
+        var queuedPublic = middleware.InvokeAsync(queuedPublicContext);
+        await middleware.InvokeAsync(overflowContext);
+        var overflowStatus = overflowContext.Response.StatusCode;
+        release.SetResult();
+        await Task.WhenAll(
+            first,
+            upload,
+            queuedPublic);
+
+        // Assert
+        Assert.Equal(
+            StatusCodes.Status429TooManyRequests,
+            overflowStatus);
+        Assert.Equal(
+            1,
+            maximumActive);
+        Assert.Equal(
+            3,
+            completed);
+        _limiterMock.VerifyNoOtherCalls();
+    }
 
     [Fact]
     public async Task InvokeAsync_WhenPrincipalHasNoIdentity_DoesNotAcquire()
@@ -206,6 +313,22 @@ public class ImageProcessingLimitMiddlewareTests
 
         if (authenticated)
             context.User = new ClaimsPrincipal(new ClaimsIdentity("Bearer"));
+
+        return context;
+    }
+
+    private static DefaultHttpContext CreatePublicImageContext()
+    {
+        var context = CreateContext(
+            AuthenticationRateLimitingExtensions.SharedWishlistPolicy,
+            true,
+            false);
+        context.SetEndpoint(new Endpoint(
+            null,
+            new EndpointMetadataCollection(
+                new EnableRateLimitingAttribute(AuthenticationRateLimitingExtensions.SharedWishlistPolicy),
+                new PublicImageProcessingAttribute()),
+            "public-image"));
 
         return context;
     }

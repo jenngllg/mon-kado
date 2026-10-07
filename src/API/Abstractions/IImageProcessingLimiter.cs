@@ -2,10 +2,10 @@ using System.Threading.RateLimiting;
 
 namespace JennGllg.Fr.MonKado.Back.Api.Abstractions;
 
-/// <summary>Shares bounded admission across gift, profile and merchant-preview image processing.</summary>
+/// <summary>Shares bounded admission across uploads, merchant imports and public image previews.</summary>
 public interface IImageProcessingLimiter
 {
-    /// <summary>Waits briefly for exclusive admission before the upload body is read.</summary>
+    /// <summary>Waits briefly for exclusive admission before image buffers or native rendering resources are allocated.</summary>
     /// <param name="cancellationToken">The caller's cancellation token.</param>
     /// <returns>A disposable lease, or null when the maximum wait expires.</returns>
     /// <exception cref="OperationCanceledException">The caller cancels admission.</exception>
