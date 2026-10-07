@@ -191,6 +191,8 @@ Social crawlers receive minimal public Open Graph HTML at the original shared fr
 
 Preview rendering by Facebook or Discord requires a publicly reachable HTTPS deployment of both the API and the updated frontend Caddy configuration. Localhost links cannot be fetched by their crawlers. A preview is an attachment to the pasted/shared link, not automatic posting or prefilled Facebook caption text.
 
+Open Graph metadata includes a canonical `og:url` derived exclusively from the configured trusted frontend origin and the active share-link identifier, as well as the French locale. This public graph identity excludes the bearer fragment, query parameters and request-host headers. User-facing channel destinations still carry the complete original fragment URL, and protected wishlist reads still require its secret. No fabricated Facebook application identifier or automatic third-party cache-refresh request is added. A fresh-list first-share test on Facebook remains necessary before rollout: metadata completeness does not guarantee immediate image collection, and Facebook's handling of the original fragment-bearing destination must be checked in the real composer. The Sharing Debugger is a developer diagnostic tool, not part of the end-user flow.
+
 ### Manual wishlist archiving (#976)
 
 Owners archive or restore a list with `PATCH /api/v1/wishlists/{wishlistId}` and
