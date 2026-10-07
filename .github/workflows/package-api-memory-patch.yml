@@ -1,0 +1,68 @@
+name: Package API memory patch
+
+# Builds a recoverable immutable artifact only. Never promotes backend-production,
+# changes production protections, connects to the VPS or reads production secrets.
+on:
+  push:
+    branches:
+      - codex/memory-pressure-guards
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: api-memory-patch-package
+  cancel-in-progress: false
+
+jobs:
+  package:
+    if: github.repository == 'jenngllg/mon-kado' && github.ref == 'refs/heads/codex/memory-pressure-guards'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+      - name: Verify API unit and public-preview integration tests
+        run: |
+          dotnet test tests/Api.UnitTests/Api.UnitTests.csproj -c Release -m:1
+          dotnet test tests/Api.IntegrationTests/Api.IntegrationTests.csproj -c Release -m:1 --filter FullyQualifiedName~WishlistSharePreviewIntegrationTests
+          PYTHONPATH=src/Operations.Deployment:deployments/production python3 -m unittest discover -s tests/Operations.DeploymentTests -p 'test_*.py'
+      - name: Build immutable API patch
+        run: |
+          docker build --target api \
+            --label "org.opencontainers.image.source=https://github.com/$GITHUB_REPOSITORY" \
+            --label "org.opencontainers.image.revision=$GITHUB_SHA" \
+            -t "ghcr.io/jenngllg/mon-kado-api:$GITHUB_SHA" .
+      - name: Scan image before publication
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ghcr.io/jenngllg/mon-kado-api:${{ github.sha }}
+          format: table
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+      - name: Publish patch artifact, not production promotion
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          printf '%s' "$GH_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          trap 'docker logout ghcr.io' EXIT
+          image="ghcr.io/jenngllg/mon-kado-api:$GITHUB_SHA"
+          docker push "$image"
+          docker inspect "$image" --format '{{index .RepoDigests 0}}' > "$RUNNER_TEMP/api-memory-patch.digest"
+          echo 'Published immutable API artifact; no production changes were made.' >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: api-memory-patch-digest
+          path: ${{ runner.temp }}/api-memory-patch.digest
+          if-no-files-found: error
+          retention-days: 7
