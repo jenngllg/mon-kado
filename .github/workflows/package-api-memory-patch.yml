@@ -30,11 +30,14 @@ jobs:
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           global-json-file: global.json
-      - name: Verify API unit and public-preview integration tests
+      - name: Verify API, worker and bounded persistence-pool regression tests
         run: |
           dotnet test tests/Api.UnitTests/Api.UnitTests.csproj -c Release -m:1
+          dotnet test tests/Worker.UnitTests/Worker.UnitTests.csproj -c Release -m:1
+          dotnet test tests/Worker.IntegrationTests/Worker.IntegrationTests.csproj -c Release -m:1
+          dotnet test tests/Infrastructure.Persistence.PostgreSql.UnitTests/Infrastructure.Persistence.PostgreSql.UnitTests.csproj -c Release -m:1
           dotnet test tests/Api.FunctionalTests/Api.FunctionalTests.csproj -c Release -m:1 --filter FullyQualifiedName~OpenApi
-          dotnet test tests/Api.IntegrationTests/Api.IntegrationTests.csproj -c Release -m:1 --filter FullyQualifiedName~WishlistSharePreviewIntegrationTests
+          dotnet test tests/Api.IntegrationTests/Api.IntegrationTests.csproj -c Release -m:1 --filter 'FullyQualifiedName~WishlistSharePreviewIntegrationTests|FullyQualifiedName~InfrastructureInjectionConfigurationTests|FullyQualifiedName~WishlistIntegrationTests|FullyQualifiedName~GiftReservationIntegrationTests|FullyQualifiedName~LoginIntegrationTests'
           docker run --rm --network none -v "$PWD:/source:ro" -w /source \
             -e PYTHONPATH=/source/src/Operations.Deployment:/source/deployments/production \
             python:3.13-slim@sha256:8d9d0b8bcf6506481eae4907c18f5e3e7902e629f5f6d684f9e7c32e85e3ddf0 \

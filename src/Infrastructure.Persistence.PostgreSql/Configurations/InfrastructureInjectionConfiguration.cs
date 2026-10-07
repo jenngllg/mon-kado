@@ -30,6 +30,7 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Configu
 public static class InfrastructureInjectionConfiguration
 {
     private const string ConnectionStringName = "PostgreSql";
+    private const int RetainedDbContextCount = 32;
     /// <summary>
     /// Executes the configure infrastructure injection operation.
     /// </summary>
@@ -50,6 +51,7 @@ public static class InfrastructureInjectionConfiguration
 
         services.TryAddSingleton(TimeProvider.System);
         services.AddSingleton<AuditableEntityInterceptor>();
+        // This bounds post-burst retention, not simultaneous requests or database connections.
         services.AddDbContextPool<MonKadoDbContext>((
                 provider,
                 options) => options
@@ -63,7 +65,8 @@ public static class InfrastructureInjectionConfiguration
                         "public");
                 })
                 .UseSnakeCaseNamingConvention()
-                .AddInterceptors(provider.GetRequiredService<AuditableEntityInterceptor>()));
+                .AddInterceptors(provider.GetRequiredService<AuditableEntityInterceptor>()),
+            poolSize: RetainedDbContextCount);
         services
             .AddIdentityCore<MonKadoUser>(options =>
             {

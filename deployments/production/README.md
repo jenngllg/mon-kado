@@ -97,6 +97,16 @@ and application pools of 12. These are initial settings to verify on the real VP
 not a throughput guarantee. Do not compile on this machine. Previous local image
 stress tests reached the shared limit: uploads/exports still need load validation.
 
+The shared persistence registration retains at most 32 EF Core contexts after a
+traffic burst, instead of the provider's default pool capacity of 1024. This is
+independent of the 12-connection PostgreSQL pool and does not reject simultaneous
+requests above 32: overflow contexts are created normally and disposed rather
+than retained. The scoped context and `IUnitOfWork` remain the same instance, and
+tracked state is reset before reuse. Repeated bursts above this capacity can add
+context-construction work; verify latency under the intended load. This is a
+post-burst retention safeguard, not a promised idle-memory reduction or evidence
+that the earlier alert was caused by this pool.
+
 Public social-image previews now share the same process-wide native-image admission
 limit as wish/profile uploads and merchant imports: one operation runs, at most two
 wait, and admission expires after five seconds. Overflow returns the documented
