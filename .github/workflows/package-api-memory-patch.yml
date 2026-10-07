@@ -6,6 +6,7 @@ on:
   push:
     branches:
       - codex/memory-pressure-guards
+      - codex/MK-982-native-preview-test
   workflow_dispatch:
 
 permissions:
@@ -17,7 +18,7 @@ concurrency:
 
 jobs:
   package:
-    if: github.repository == 'jenngllg/mon-kado' && github.ref == 'refs/heads/codex/memory-pressure-guards'
+    if: github.repository == 'jenngllg/mon-kado' && (github.ref == 'refs/heads/codex/memory-pressure-guards' || github.ref == 'refs/heads/codex/MK-982-native-preview-test')
     runs-on: ubuntu-latest
     timeout-minutes: 25
     permissions:
