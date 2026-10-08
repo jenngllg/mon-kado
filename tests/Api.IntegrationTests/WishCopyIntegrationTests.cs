@@ -27,6 +27,221 @@ namespace JennGllg.Fr.MonKado.Back.Api.IntegrationTests;
 public class WishCopyIntegrationTests(PostgreSqlContainerFixture fixture)
 {
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task CopyOwnedAsync_WhenBothListsAreOwned_CreatesAnIndependentCopyWithoutSharing(bool withImage)
+    {
+        // Arrange
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var factory = await CreateFactoryAsync();
+        var seeded = await SeedAsync(
+            factory,
+            withImage,
+            true);
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var database = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
+            database.WishlistShareLinks.RemoveRange(database.WishlistShareLinks);
+            await database.SaveChangesAsync(cancellationToken);
+        }
+
+        using var client = await AuthenticationTestData.CreateClientAsync(
+            factory,
+            seeded.LinkOwner,
+            cancellationToken);
+        using var request = new HttpRequestMessage(
+            HttpMethod.Post,
+            $"/api/v1/wishlists/{seeded.Source.WishlistId}/wishes/{seeded.Source.Id}/copies")
+        {
+            Content = JsonContent.Create(new { destinationWishlistId = seeded.Destination.Id })
+        };
+        request.Headers.Add(
+            "X-CSRF-TOKEN",
+            await GetCsrfTokenAsync(
+                client,
+                cancellationToken));
+
+        // Act
+        using var response = await client.SendAsync(
+            request,
+            cancellationToken);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.Created,
+            response.StatusCode);
+        var copied = await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken);
+        var id = copied.GetProperty("id").GetGuid();
+        Assert.NotEqual(
+            seeded.Source.Id,
+            id);
+        Assert.Equal(
+            7,
+            id.Version);
+        Assert.Equal(
+            seeded.Destination.Id,
+            copied.GetProperty("wishlistId").GetGuid());
+        Assert.Equal(
+            seeded.Source.Name,
+            copied.GetProperty("name").GetString());
+        Assert.Equal(
+            seeded.Source.Note,
+            copied.GetProperty("note").GetString());
+        Assert.Equal(
+            seeded.Source.Url,
+            copied.GetProperty("url").GetString());
+        Assert.Equal(
+            seeded.Source.Price,
+            copied.GetProperty("price").GetDecimal());
+        Assert.Equal(
+            seeded.Source.Quantity,
+            copied.GetProperty("quantity").GetInt32());
+        Assert.False(copied.GetProperty("isFavorite").GetBoolean());
+        Assert.NotNull(response.Headers.ETag);
+        Assert.Contains(
+            $"/wishlists/{seeded.Destination.Id}/wishes/{id}",
+            response.Headers.Location?.ToString());
+        using var read = await client.GetAsync(
+            response.Headers.Location,
+            cancellationToken);
+        Assert.Equal(
+            HttpStatusCode.OK,
+            read.StatusCode);
+        await using var verification = factory.Services.CreateAsyncScope();
+        var context = verification.ServiceProvider.GetRequiredService<MonKadoDbContext>();
+        var source = await context.Wishes.SingleAsync(
+            wish => wish.Id == seeded.Source.Id,
+            cancellationToken);
+        var destination = await context.Wishes.SingleAsync(
+            wish => wish.Id == id,
+            cancellationToken);
+        Assert.True(source.IsFavorite);
+        Assert.False(await context.GiftReservations.AnyAsync(
+            reservation => reservation.WishId == id,
+            cancellationToken));
+
+        if (withImage)
+        {
+            Assert.NotNull(destination.ImageId);
+            Assert.NotEqual(
+                source.ImageId,
+                destination.ImageId);
+        }
+
+        if (!withImage)
+            Assert.Null(destination.ImageId);
+    }
+
+    [Theory]
+    [InlineData("foreign-source", HttpStatusCode.NotFound)]
+    [InlineData("foreign-destination", HttpStatusCode.NotFound)]
+    [InlineData("missing-wish", HttpStatusCode.NotFound)]
+    [InlineData("missing-destination", HttpStatusCode.NotFound)]
+    [InlineData("same-list", HttpStatusCode.BadRequest)]
+    [InlineData("empty-destination", HttpStatusCode.BadRequest)]
+    [InlineData("null-destination", HttpStatusCode.BadRequest)]
+    [InlineData("source-archived", HttpStatusCode.Conflict)]
+    [InlineData("source-suspended", HttpStatusCode.Conflict)]
+    [InlineData("destination-archived", HttpStatusCode.Conflict)]
+    [InlineData("destination-suspended", HttpStatusCode.Conflict)]
+    [InlineData("missing-csrf", HttpStatusCode.BadRequest)]
+    [InlineData("anonymous", HttpStatusCode.Unauthorized)]
+    public async Task CopyOwnedAsync_WhenAccessOrInputIsInvalid_DoesNotCopy(
+        string scenario,
+        HttpStatusCode expectedStatus)
+    {
+        // Arrange
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var factory = await CreateFactoryAsync();
+        var seeded = await SeedAsync(
+            factory,
+            false,
+            scenario != "foreign-source");
+        var owner = seeded.Destination.OwnerId;
+        Guid? destinationId = seeded.Destination.Id;
+
+        if (scenario == "same-list")
+            destinationId = seeded.Source.WishlistId;
+
+        if (scenario == "empty-destination")
+            destinationId = Guid.Empty;
+
+        if (scenario == "null-destination")
+            destinationId = null;
+
+        if (scenario == "missing-destination")
+            destinationId = Guid.CreateVersion7();
+
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var database = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
+
+            if (scenario == "foreign-destination")
+            {
+                var foreignId = await database.Users.Where(user => user.Id != owner)
+                    .Select(user => user.Id)
+                    .SingleAsync(cancellationToken);
+                await database.Database.ExecuteSqlInterpolatedAsync(
+                    $"UPDATE public.wishlists SET owner_id = {foreignId} WHERE id = {seeded.Destination.Id}",
+                    cancellationToken);
+            }
+
+            if (scenario.EndsWith("archived", StringComparison.Ordinal) || scenario.EndsWith("suspended", StringComparison.Ordinal))
+            {
+                var parentId = scenario.StartsWith("source", StringComparison.Ordinal) ? seeded.Source.WishlistId : seeded.Destination.Id;
+                var parent = await database.Wishlists.SingleAsync(
+                    list => list.Id == parentId,
+                    cancellationToken);
+
+                if (scenario.EndsWith("archived", StringComparison.Ordinal))
+                    parent.SetArchived(true);
+
+                if (scenario.EndsWith("suspended", StringComparison.Ordinal))
+                    parent.Moderate(
+                        true,
+                        "Test moderation",
+                        TimeProvider.System.GetUtcNow().UtcDateTime);
+
+                await database.SaveChangesAsync(cancellationToken);
+            }
+        }
+
+        using var client = scenario == "anonymous" ? factory.CreateClient() : await AuthenticationTestData.CreateClientAsync(
+            factory,
+            owner,
+            cancellationToken);
+        var wishId = scenario == "missing-wish" ? Guid.CreateVersion7() : seeded.Source.Id;
+        using var request = new HttpRequestMessage(
+            HttpMethod.Post,
+            $"/api/v1/wishlists/{seeded.Source.WishlistId}/wishes/{wishId}/copies")
+        {
+            Content = JsonContent.Create(new { destinationWishlistId = destinationId })
+        };
+
+        if (scenario is not ("missing-csrf" or "anonymous"))
+            request.Headers.Add(
+                "X-CSRF-TOKEN",
+                await GetCsrfTokenAsync(
+                    client,
+                    cancellationToken));
+
+        // Act
+        using var response = await client.SendAsync(
+            request,
+            cancellationToken);
+
+        // Assert
+        Assert.Equal(
+            expectedStatus,
+            response.StatusCode);
+        await using var verification = factory.Services.CreateAsyncScope();
+        var context = verification.ServiceProvider.GetRequiredService<MonKadoDbContext>();
+        Assert.Equal(
+            1,
+            await context.Wishes.CountAsync(cancellationToken));
+    }
+
+    [Theory]
     [InlineData("anonymous", HttpStatusCode.Unauthorized)]
     [InlineData("missing-secret", HttpStatusCode.NotFound)]
     [InlineData("empty-body", HttpStatusCode.BadRequest)]
@@ -725,7 +940,8 @@ public class WishCopyIntegrationTests(PostgreSqlContainerFixture fixture)
 
     private static async Task<(Wishlist Destination, Wish Source, WishlistShareLink Link, string Secret, Guid LinkOwner)> SeedAsync(
         PostgreSqlApiFactory factory,
-        bool withImage)
+        bool withImage,
+        bool ownedDestination = false)
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         await using var scope = factory.Services.CreateAsyncScope();
@@ -765,7 +981,7 @@ public class WishCopyIntegrationTests(PostgreSqlContainerFixture fixture)
             null);
         var destination = new Wishlist(
             Guid.CreateVersion7(),
-            destinationOwner.Id,
+            ownedDestination ? sourceOwner.Id : destinationOwner.Id,
             "Destination",
             "DESTINATION",
             WishlistOccasion.Other,
