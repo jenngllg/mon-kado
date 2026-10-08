@@ -171,6 +171,7 @@ public static class InfrastructureInjectionConfiguration
         services.AddScoped<IWishlistModerationService, WishlistModerationService>();
         services.AddScoped<IAdministratorAccessService, AdministratorAccessService>();
         services.AddScoped<IWishService, WishService>();
+        services.AddScoped<IWishCopyService, WishCopyService>();
         services.AddScoped<IWishImageAccessService, WishImageAccessService>();
         services.AddScoped<IGiftImageCleanupService, GiftImageCleanupService>();
         services.AddScoped<IWishlistShareService, WishlistShareService>();
