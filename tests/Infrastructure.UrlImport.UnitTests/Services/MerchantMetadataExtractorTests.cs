@@ -430,6 +430,7 @@ public class MerchantMetadataExtractorTests
 
     [Theory]
     [InlineData("<img alt='media/cover' src='https://cdn.example.com/images/cover'>", "https://cdn.example.com/images/cover")]
+    [InlineData("<img alt='media/cover' src='http://cdn.example.com/images/cover'>", "http://cdn.example.com/images/cover")]
     [InlineData("<img alt='media/cover' src='/images/cover'>", "https://example.com/images/cover")]
     [InlineData("<img alt='other' src='/logo'>", "https://example.com/media/cover")]
     [InlineData("<img alt='media/cover' src='http://[invalid'>", "https://example.com/media/cover")]

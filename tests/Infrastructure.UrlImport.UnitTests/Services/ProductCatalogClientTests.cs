@@ -398,6 +398,52 @@ public class ProductCatalogClientTests
         VerifyRequest();
     }
 
+    [Theory]
+    [InlineData("null")]
+    [InlineData("{}")]
+    [InlineData("\"invalid\"")]
+    public async Task GetAsync_WhenVariationsAreNotAnArray_PreservesExactRootVariant(string variations)
+    {
+        // Arrange
+        SetupResponse("{\"response\":{\"results\":[{\"data\":" + Data + ",\"variations\":" + variations + "}]}}");
+
+        // Act
+        var result = await _catalogClient.GetAsync(
+            new Uri(ProductUrl),
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(
+            "Product",
+            result.Name);
+        Assert.Equal(
+            29.9m,
+            result.Price);
+        VerifyRequest();
+    }
+
+    [Fact]
+    public async Task GetAsync_WhenImageAlreadyUsesFirstPartyHttps_PreservesSecureNormalizedImage()
+    {
+        // Arrange
+        var data = Data.Replace(
+            "http://media.sephora.eu/product.jpg",
+            "https://media.sephora.eu/product.jpg",
+            StringComparison.Ordinal);
+        SetupResponse("{\"response\":{\"results\":[{\"data\":" + data + "}]}}");
+
+        // Act
+        var result = await _catalogClient.GetAsync(
+            new Uri(ProductUrl),
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(
+            "https://media.sephora.eu/product.jpg?scaleWidth=750&scaleHeight=750&scaleMode=fit",
+            result.ImageUrl?.AbsoluteUri);
+        VerifyRequest();
+    }
+
     [Fact]
     public void CanHandle_WhenUrlIsRelative_RejectsWithoutResolvingAuthority()
     {
