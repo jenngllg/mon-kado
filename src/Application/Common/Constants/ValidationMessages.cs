@@ -8,6 +8,9 @@ namespace JennGllg.Fr.MonKado.Back.Application.Common.Constants;
 [ExcludeFromCodeCoverage]
 public static class ValidationMessages
 {
+    /// <summary>Identifies a copy targeting its source list.</summary>
+    public const string DestinationWishlistMustDiffer = "The destination wishlist must differ from the source wishlist.";
+
     /// <summary>Identifies an invalid second-factor continuation proof.</summary>
     public const string InvalidTwoFactorFlow = "The property {PropertyName} must be a canonical 256-bit Base64URL proof.";
 

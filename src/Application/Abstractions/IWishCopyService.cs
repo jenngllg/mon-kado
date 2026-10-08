@@ -6,6 +6,30 @@ namespace JennGllg.Fr.MonKado.Back.Application.Abstractions;
 /// <summary>Copies an accessible shared wish into a writable owned list.</summary>
 public interface IWishCopyService
 {
+    /// <summary>Copies an owned wish into another writable owned list without sharing.</summary>
+    /// <param name="id">The generated destination wish identifier.</param>
+    /// <param name="ownerId">The authenticated owner of both lists.</param>
+    /// <param name="wishlistId">The destination list.</param>
+    /// <param name="sourceWishlistId">The source list.</param>
+    /// <param name="sourceWishId">The source wish.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The complete independently created wish.</returns>
+    /// <exception cref="WishlistNotFoundException">Either list is unavailable to the owner.</exception>
+    /// <exception cref="WishNotFoundException">The source wish is unavailable.</exception>
+    /// <exception cref="WishlistArchivedException">Either list is archived.</exception>
+    /// <exception cref="WishlistSuspendedException">Either list is suspended.</exception>
+    /// <exception cref="WishLimitReachedException">The destination is full.</exception>
+    /// <exception cref="GiftImageStorageUnavailableException">The image cannot be copied safely.</exception>
+    /// <exception cref="DependencyUnavailableException">Persistence is unavailable or the commit outcome is uncertain.</exception>
+    /// <exception cref="OperationCanceledException">The operation is cancelled.</exception>
+    Task<WishDetails> CopyOwnedAsync(
+        Guid id,
+        Guid ownerId,
+        Guid wishlistId,
+        Guid sourceWishlistId,
+        Guid sourceWishId,
+        CancellationToken cancellationToken);
+
     /// <summary>Creates an independent wish and normalized image without copying reservations.</summary>
     /// <param name="id">The generated destination wish identifier.</param>
     /// <param name="ownerId">The authenticated destination owner.</param>

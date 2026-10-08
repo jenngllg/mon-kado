@@ -43,6 +43,57 @@ public class WishesController(
     private const int MaximumReorderRequestBodySize = 64 * 1024;
     private const int MaximumImageRequestBodySize = GiftImageConstraints.MaximumInputLength + 64 * 1024;
 
+    /// <summary>Copies this owned wish into another owned list without a share link.</summary>
+    /// <param name="wishlistId">The source list.</param>
+    /// <param name="wishId">The source wish.</param>
+    /// <param name="request">The destination identifier.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The independently created wish in the destination.</returns>
+    [HttpPost("{wishId:guid}/copies")]
+    [ValidateAntiForgeryToken]
+    [EnableRateLimiting(AuthenticationRateLimitingExtensions.GiftImageUploadPolicy)]
+    [EntityTag]
+    [NoStoreResponse(StatusCodes.Status201Created)]
+    [RequestSizeLimit(MaximumRequestBodySize)]
+    [Consumes("application/json")]
+    [ProducesResponseType(typeof(WishResponse), StatusCodes.Status201Created, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status409Conflict, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status413PayloadTooLarge, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status415UnsupportedMediaType, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status429TooManyRequests, "application/json")]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status503ServiceUnavailable, "application/json")]
+    public async Task<ActionResult<WishResponse>> CopyOwnedAsync(
+        Guid wishlistId,
+        Guid wishId,
+        CopyOwnedWishRequest request,
+        CancellationToken cancellationToken)
+    {
+        await AuthorizeWishlistAsync(
+            wishlistId,
+            AuthorizationPolicies.ModifyWishlist,
+            cancellationToken);
+        var wish = await sender.Send(
+            new CopyOwnedWishCommand(
+                GetMemberId(),
+                wishlistId,
+                wishId,
+                request.DestinationWishlistId),
+            cancellationToken);
+        Response.Headers.ETag = entityTagService.Format(wish.Version);
+        Response.Headers.CacheControl = "no-store";
+
+        return CreatedAtRoute(
+            GetWishRouteName,
+            new
+            {
+                wishlistId = wish.WishlistId,
+                wishId = wish.Id
+            },
+            CreateResponse(wish));
+    }
+
     /// <summary>Copies an accessible shared wish into this owned list.</summary>
     /// <param name="wishlistId">The destination list.</param>
     /// <param name="request">The source identifiers.</param>
