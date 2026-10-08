@@ -15,6 +15,61 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.UrlImport.UnitTests.Services;
 
 public class WishImportServiceTests
 {
+    [Fact]
+    public async Task PreviewAsync_WhenExactPublicCatalogIsEnabled_ReturnsSuggestionsWithoutDownloadingStorefront()
+    {
+        // Arrange
+        var catalogMock = new Mock<IProductCatalogClient>(MockBehavior.Strict);
+        var url = new Uri(ProductUrl);
+        catalogMock
+            .Setup(catalog => catalog.CanHandle(url))
+            .Returns(true);
+        CancellationToken catalogToken = default;
+        catalogMock
+            .Setup(catalog => catalog.GetAsync(
+                url,
+                It.IsAny<CancellationToken>()))
+            .Callback<Uri, CancellationToken>((
+                _,
+                token) => catalogToken = token)
+            .ReturnsAsync(new CatalogProductMetadata { Name = "Exact variant", Price = 29.9m });
+        var service = new WishImportService(
+            _clientMock.Object,
+            new MerchantMetadataExtractor(),
+            _processorMock.Object,
+            Microsoft.Extensions.Options.Options.Create(new UrlImportOptions()),
+            _timeProvider,
+            catalogMock.Object);
+
+        // Act
+        var result = await service.PreviewAsync(
+            ProductUrl,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(
+            "Exact variant",
+            result.Name);
+        Assert.Equal(
+            29.9m,
+            result.Price);
+        Assert.True(catalogToken.CanBeCanceled);
+        Assert.Equal(
+            [WishImportWarnings.ImageUnavailable],
+            result.Warnings);
+        catalogMock.Verify(
+            catalog => catalog.CanHandle(url),
+            Times.Once);
+        catalogMock.Verify(
+            catalog => catalog.GetAsync(
+                url,
+                catalogToken),
+            Times.Once);
+        catalogMock.VerifyNoOtherCalls();
+        _clientMock.VerifyNoOtherCalls();
+        _processorMock.VerifyNoOtherCalls();
+    }
+
     [Theory]
     [InlineData("TEXT/HTML")]
     [InlineData("APPLICATION/XHTML+XML")]
@@ -58,7 +113,11 @@ public class WishImportServiceTests
             new MerchantMetadataExtractor(),
             _processorMock.Object,
             Microsoft.Extensions.Options.Options.Create(new UrlImportOptions()),
-            _timeProvider);
+            _timeProvider,
+            new ProductCatalogClient(
+                _clientMock.Object,
+                new MerchantMetadataExtractor(),
+                Microsoft.Extensions.Options.Options.Create(new ProductCatalogOptions())));
     }
 
     [Fact]
@@ -154,7 +213,7 @@ public class WishImportServiceTests
         _clientMock
             .Setup(client => client.DownloadAsync(
                 new Uri(ProductUrl),
-                2 * 1024 * 1024,
+                UrlImportOptions.MaximumSupportedHtmlBytes,
                 It.IsAny<CancellationToken>()))
             .ThrowsAsync(CreateFailure(failure));
 
@@ -331,7 +390,7 @@ public class WishImportServiceTests
         _clientMock
             .Setup(client => client.DownloadAsync(
                 new Uri(ProductUrl),
-                2 * 1024 * 1024,
+                UrlImportOptions.MaximumSupportedHtmlBytes,
                 It.IsAny<CancellationToken>()))
             .Returns<Uri, int, CancellationToken>((
                 _,
@@ -367,7 +426,7 @@ public class WishImportServiceTests
         _clientMock
             .Setup(client => client.DownloadAsync(
                 new Uri(ProductUrl),
-                2 * 1024 * 1024,
+                UrlImportOptions.MaximumSupportedHtmlBytes,
                 It.IsAny<CancellationToken>()))
             .Returns<Uri, int, CancellationToken>((
                 _,
@@ -399,7 +458,7 @@ public class WishImportServiceTests
         _clientMock
             .Setup(client => client.DownloadAsync(
                 new Uri(ProductUrl),
-                2 * 1024 * 1024,
+                UrlImportOptions.MaximumSupportedHtmlBytes,
                 It.IsAny<CancellationToken>()))
             .ThrowsAsync(new WishImportUrlRejectedException());
 
@@ -422,7 +481,7 @@ public class WishImportServiceTests
         _clientMock
             .Setup(client => client.DownloadAsync(
                 new Uri(ProductUrl),
-                2 * 1024 * 1024,
+                UrlImportOptions.MaximumSupportedHtmlBytes,
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync(new ImportDocument
             {
@@ -437,7 +496,7 @@ public class WishImportServiceTests
         _clientMock.Verify(
             client => client.DownloadAsync(
                 new Uri(ProductUrl),
-                2 * 1024 * 1024,
+                UrlImportOptions.MaximumSupportedHtmlBytes,
                 It.Is<CancellationToken>(actual => token == null || actual == token)),
             Times.Once);
     }

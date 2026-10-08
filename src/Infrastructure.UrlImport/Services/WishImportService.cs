@@ -16,12 +16,14 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.UrlImport.Services;
 /// <param name="imageProcessor">The existing normalized image processor.</param>
 /// <param name="options">The validated work limits.</param>
 /// <param name="timeProvider">The shared controllable clock.</param>
+/// <param name="catalogClient">The optional exact-reference public catalog client.</param>
 public class WishImportService(
     IUrlImportClient client,
     IMerchantMetadataExtractor extractor,
     IGiftImageProcessor imageProcessor,
     IOptions<UrlImportOptions> options,
-    TimeProvider timeProvider) : IWishImportService
+    TimeProvider timeProvider,
+    IProductCatalogClient catalogClient) : IWishImportService
 {
     /// <inheritdoc/>
     public async Task<WishImportPreview> PreviewAsync(
@@ -38,20 +40,9 @@ public class WishImportService(
         var metadata = new MerchantMetadata();
         try
         {
-            var document = await client.DownloadAsync(
+            metadata = await ReadMetadataAsync(
                 new Uri(url),
-                options.Value.MaximumHtmlBytes,
                 budget.Token);
-
-            if (!string.Equals(
-                document.MediaType,
-                "text/html",
-                StringComparison.OrdinalIgnoreCase) && !string.Equals(
-                document.MediaType,
-                "application/xhtml+xml",
-                StringComparison.OrdinalIgnoreCase))
-                throw new HttpRequestException("The merchant response is not HTML.");
-            metadata = extractor.Extract(document);
             budget.Token.ThrowIfCancellationRequested();
         }
         catch (Exception exception) when (IsRemoteFailure(
@@ -83,6 +74,46 @@ public class WishImportService(
             Image = image,
             Warnings = warnings.ToArray()
         };
+    }
+
+    /// <summary>Uses an exact public catalog when configured, otherwise retains passive HTML extraction.</summary>
+    /// <param name="url">The original merchant URL.</param>
+    /// <param name="cancellationToken">The shared overall import budget.</param>
+    /// <returns>Validated metadata without downloading a second merchant page.</returns>
+    private async Task<MerchantMetadata> ReadMetadataAsync(
+        Uri url,
+        CancellationToken cancellationToken)
+    {
+
+        if (catalogClient.CanHandle(url))
+        {
+            var catalog = await catalogClient.GetAsync(
+                url,
+                cancellationToken);
+
+            return new MerchantMetadata
+            {
+                Name = catalog.Name,
+                Price = catalog.Price,
+                ImageUrl = catalog.ImageUrl,
+                CurrencyUnsupported = catalog.CurrencyUnsupported
+            };
+        }
+        var document = await client.DownloadAsync(
+            url,
+            options.Value.MaximumHtmlBytes,
+            cancellationToken);
+
+        if (!string.Equals(
+            document.MediaType,
+            "text/html",
+            StringComparison.OrdinalIgnoreCase) && !string.Equals(
+            document.MediaType,
+            "application/xhtml+xml",
+            StringComparison.OrdinalIgnoreCase))
+            throw new HttpRequestException("The merchant response is not HTML.");
+
+        return extractor.Extract(document);
     }
 
     /// <summary>Normalizes at most one image; failure never discards valid text suggestions.</summary>

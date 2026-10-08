@@ -9,6 +9,146 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.UrlImport.UnitTests.Services;
 
 public class UrlImportClientTests
 {
+    [Theory]
+    [InlineData(2097153, true)]
+    [InlineData(4194304, true)]
+    [InlineData(4194305, false)]
+    public async Task DownloadAsync_WhenDocumentExceedsTwoMebibytes_RespectsConfiguredFourMebibyteCap(
+        int contentLength,
+        bool expectedSuccess)
+    {
+        // Arrange
+        using var handler = new RecordingImportHttpHandler((
+                _,
+                _) => new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new ByteArrayContent(new byte[contentLength])
+                });
+        using var httpClient = new HttpClient(handler);
+        var client = CreateClient(httpClient);
+        var cancellationToken = TestContext.Current.CancellationToken;
+
+        // Act
+        var action = () => client.DownloadAsync(
+            new Uri("https://example.com/product"),
+            new UrlImportOptions().MaximumHtmlBytes,
+            cancellationToken);
+
+        // Assert
+
+        if (!expectedSuccess)
+        {
+            await Assert.ThrowsAsync<HttpRequestException>(action);
+
+            return;
+        }
+        var document = await action();
+        Assert.Equal(
+            contentLength,
+            document.Content.Length);
+        Assert.Single(handler.Requests);
+    }
+    [Fact]
+    public async Task DownloadAsync_WhenClientNegotiatesHttp2_PreservesVersionPolicyAcrossRedirects()
+    {
+        // Arrange
+        var policies = new List<(Version Version, HttpVersionPolicy Policy)>();
+        using var handler = new RecordingImportHttpHandler((
+                request,
+                _) =>
+            {
+                policies.Add((request.Version, request.VersionPolicy));
+
+                return request.RequestUri?.AbsolutePath == "/start"
+                ? new HttpResponseMessage(HttpStatusCode.Redirect)
+                {
+                    Headers = { Location = new Uri(
+                        "/product",
+                        UriKind.Relative) }
+                }
+                : new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent("product")
+                };
+            });
+        using var httpClient = new HttpClient(handler)
+        {
+            DefaultRequestVersion = HttpVersion.Version20,
+            DefaultVersionPolicy = HttpVersionPolicy.RequestVersionOrLower
+        };
+        var client = CreateClient(httpClient);
+
+        // Act
+        await client.DownloadAsync(
+            new Uri("https://example.com/start"),
+            1024,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(
+            2,
+            handler.Requests.Count);
+        Assert.All(
+            policies,
+            policy =>
+            {
+                Assert.Equal(
+                    HttpVersion.Version20,
+                    policy.Version);
+                Assert.Equal(
+                    HttpVersionPolicy.RequestVersionOrLower,
+                    policy.Policy);
+            });
+    }
+
+    [Theory]
+    [InlineData("https://amzn.eu/d/Example")]
+    [InlineData("https://amzn.to/Example")]
+    public async Task DownloadAsync_WhenAmazonShortLinkRedirects_PreservesFinalProductUrl(string shortUrl)
+    {
+        // Arrange
+        var productUrl = new Uri("https://www.amazon.fr/Example/dp/B0EXAMPLE01?ref=sharing");
+        using var handler = new RecordingImportHttpHandler((
+                request,
+                token) =>
+            {
+                Assert.True(token.CanBeCanceled);
+
+                if (request.RequestUri?.AbsoluteUri == shortUrl)
+                    return new HttpResponseMessage(HttpStatusCode.Redirect)
+                    {
+                        Headers = { Location = productUrl }
+                    };
+
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(
+                        "<span id='productTitle'>Book</span>",
+                        Encoding.UTF8,
+                        "text/html")
+                };
+            });
+        using var httpClient = new HttpClient(handler);
+        var client = CreateClient(httpClient);
+
+        // Act
+        var document = await client.DownloadAsync(
+            new Uri(shortUrl),
+            1024,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(
+            productUrl,
+            document.Url);
+        Assert.Equal(
+            2,
+            handler.Requests.Count);
+        Assert.Equal(
+            "<span id='productTitle'>Book</span>",
+            Encoding.UTF8.GetString(document.Content));
+    }
+
     [Fact]
     public async Task DownloadAsync_WhenRedirectCannotBeResolved_ReportsRemoteFailure()
     {

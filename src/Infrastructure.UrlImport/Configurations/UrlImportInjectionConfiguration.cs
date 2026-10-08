@@ -23,6 +23,12 @@ public static class UrlImportInjectionConfiguration
         IConfiguration configuration)
     {
         services.AddSingleton<IValidateOptions<UrlImportOptions>, UrlImportOptionsValidator>();
+        services.AddSingleton<IValidateOptions<ProductCatalogOptions>, ProductCatalogOptionsValidator>();
+        services
+            .AddOptions<ProductCatalogOptions>()
+            .Bind(configuration.GetSection(ProductCatalogOptions.SectionName))
+            .ValidateOnStart();
+        services.AddScoped<IProductCatalogClient, ProductCatalogClient>();
         services
             .AddOptions<UrlImportOptions>()
             .Bind(configuration.GetSection(UrlImportOptions.SectionName))
@@ -36,9 +42,11 @@ public static class UrlImportInjectionConfiguration
             .AddHttpClient<IUrlImportClient, UrlImportClient>(client =>
             {
                 client.Timeout = Timeout.InfiniteTimeSpan;
-                client.DefaultRequestVersion = HttpVersion.Version11;
-                client.DefaultVersionPolicy = HttpVersionPolicy.RequestVersionExact;
+                client.DefaultRequestVersion = HttpVersion.Version20;
+                client.DefaultVersionPolicy = HttpVersionPolicy.RequestVersionOrLower;
                 client.DefaultRequestHeaders.UserAgent.ParseAdd("MonKado-Import/1.0");
+                client.DefaultRequestHeaders.Accept.ParseAdd("text/html, application/xhtml+xml;q=0.9");
+                client.DefaultRequestHeaders.AcceptLanguage.ParseAdd("fr-FR, fr;q=0.9");
             })
             .RemoveAllLoggers()
             .ConfigurePrimaryHttpMessageHandler(provider => new SocketsHttpHandler

@@ -32,7 +32,11 @@ public class UrlImportClient(
                 throw new WishImportUrlRejectedException();
             using var request = new HttpRequestMessage(
                 HttpMethod.Get,
-                url);
+                url)
+            {
+                Version = httpClient.DefaultRequestVersion,
+                VersionPolicy = httpClient.DefaultVersionPolicy
+            };
             using var response = await SendAsync(
                 request,
                 cancellationToken);
