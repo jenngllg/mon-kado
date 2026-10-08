@@ -13,6 +13,7 @@ public class RecordingUrlImportClient : IUrlImportClient
         get; set;
     }
     public string Html { get; set; } = "<title>Imported gift</title>";
+    public string CatalogJson { get; set; } = "{}";
     public byte[] ImageContent { get; set; } = [];
 
     public Task<ImportDocument> DownloadAsync(
@@ -25,6 +26,14 @@ public class RecordingUrlImportClient : IUrlImportClient
 
         if (Exception is not null)
             throw Exception;
+
+        if (url.Host == "ac.cnstrc.com")
+            return Task.FromResult(new ImportDocument
+            {
+                Url = url,
+                Content = Encoding.UTF8.GetBytes(CatalogJson),
+                MediaType = "application/json"
+            });
         var isImage = url.AbsolutePath.EndsWith(
             ".png",
             StringComparison.Ordinal);

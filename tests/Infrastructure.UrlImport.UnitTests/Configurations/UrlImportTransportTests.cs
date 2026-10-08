@@ -74,6 +74,18 @@ public class UrlImportTransportTests
             "MonKado-Import/1.0",
             request,
             StringComparison.Ordinal);
+        Assert.Contains(
+            "Accept: text/html, application/xhtml+xml; q=0.9",
+            request,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "Accept-Language: fr-FR, fr; q=0.9",
+            request,
+            StringComparison.Ordinal);
+        Assert.StartsWith(
+            "GET /product HTTP/1.1",
+            request,
+            StringComparison.Ordinal);
         VerifyConnection();
     }
 

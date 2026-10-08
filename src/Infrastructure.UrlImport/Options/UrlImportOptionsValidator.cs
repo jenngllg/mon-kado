@@ -11,6 +11,6 @@ public class UrlImportOptionsValidator : IValidateOptions<UrlImportOptions>
         UrlImportOptions options)
     {
 
-        return options.TimeoutSeconds is >= 1 and <= 20 && options.MaximumHtmlBytes is >= 1 and <= 2 * 1024 * 1024 && options.MaximumRedirects is >= 0 and <= 3 && options.PermitLimit is >= 1 and <= 10 ? ValidateOptionsResult.Success : ValidateOptionsResult.Fail("URL import limits must be positive and must not exceed their supported safety caps.");
+        return options.TimeoutSeconds is >= 1 and <= 20 && options.MaximumHtmlBytes is >= 1 and <= UrlImportOptions.MaximumSupportedHtmlBytes && options.MaximumRedirects is >= 0 and <= 3 && options.PermitLimit is >= 1 and <= 10 ? ValidateOptionsResult.Success : ValidateOptionsResult.Fail("URL import limits must be positive and must not exceed their supported safety caps.");
     }
 }

@@ -5,10 +5,12 @@ public class UrlImportOptions
 {
     /// <summary>Gets the configuration section name.</summary>
     public const string SectionName = "UrlImport";
+    /// <summary>Gets the maximum decompressed product document size supported by the passive parser.</summary>
+    public const int MaximumSupportedHtmlBytes = 4 * 1024 * 1024;
     /// <summary>Gets the total preview budget in seconds.</summary>
     public int TimeoutSeconds { get; init; } = 20;
     /// <summary>Gets the maximum decompressed HTML length.</summary>
-    public int MaximumHtmlBytes { get; init; } = 2 * 1024 * 1024;
+    public int MaximumHtmlBytes { get; init; } = MaximumSupportedHtmlBytes;
     /// <summary>Gets the maximum number of manually validated redirects.</summary>
     public int MaximumRedirects { get; init; } = 3;
     /// <summary>Gets the per-member preview quota per minute.</summary>
