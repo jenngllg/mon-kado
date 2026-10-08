@@ -12,14 +12,14 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 
 using Moq;
 
+using Npgsql;
+
 using SkiaSharp;
 
 using System.Net;
 using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text.Json;
-
-using Npgsql;
 
 namespace JennGllg.Fr.MonKado.Back.Api.IntegrationTests;
 
@@ -31,6 +31,7 @@ public class WishCopyIntegrationTests(PostgreSqlContainerFixture fixture)
     [InlineData("missing-secret", HttpStatusCode.NotFound)]
     [InlineData("empty-body", HttpStatusCode.BadRequest)]
     [InlineData("empty-identifiers", HttpStatusCode.BadRequest)]
+    [InlineData("missing-csrf", HttpStatusCode.BadRequest)]
     public async Task CopyAsync_WhenRequestIsInvalid_DoesNotCreateAWish(
         string scenario,
         HttpStatusCode expectedStatus)
@@ -77,6 +78,13 @@ public class WishCopyIntegrationTests(PostgreSqlContainerFixture fixture)
             request.Headers.Add(
                 "X-MonKado-Share-Token",
                 seeded.Secret);
+
+        if (scenario is not ("anonymous" or "missing-csrf"))
+            request.Headers.Add(
+                "X-CSRF-TOKEN",
+                await GetCsrfTokenAsync(
+                    client,
+                    cancellationToken));
 
         // Act
         using var response = await client.SendAsync(
@@ -852,9 +860,27 @@ public class WishCopyIntegrationTests(PostgreSqlContainerFixture fixture)
         request.Headers.Add(
             "X-MonKado-Share-Token",
             secret);
+        request.Headers.Add(
+            "X-CSRF-TOKEN",
+            await GetCsrfTokenAsync(
+                client,
+                TestContext.Current.CancellationToken));
 
         return await client.SendAsync(
             request,
             TestContext.Current.CancellationToken);
+    }
+
+    private static async Task<string> GetCsrfTokenAsync(
+        HttpClient client,
+        CancellationToken cancellationToken)
+    {
+        using var response = await client.GetAsync(
+            "/security/csrf-token",
+            cancellationToken);
+        response.EnsureSuccessStatusCode();
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken);
+
+        return body.GetProperty("token").GetString() ?? throw new InvalidOperationException("Missing CSRF token.");
     }
 }

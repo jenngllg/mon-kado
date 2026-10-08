@@ -1,5 +1,5 @@
-using JennGllg.Fr.MonKado.Back.Application.Models;
 using JennGllg.Fr.MonKado.Back.Application.Common.Exceptions;
+using JennGllg.Fr.MonKado.Back.Application.Models;
 
 namespace JennGllg.Fr.MonKado.Back.Application.Abstractions;
 

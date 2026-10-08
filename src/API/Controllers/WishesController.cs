@@ -50,6 +50,7 @@ public class WishesController(
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>The independently created wish.</returns>
     [HttpPost("copies")]
+    [ValidateAntiForgeryToken]
     [EnableRateLimiting(AuthenticationRateLimitingExtensions.GiftImageUploadPolicy)]
     [EntityTag]
     [NoStoreResponse(StatusCodes.Status201Created)]

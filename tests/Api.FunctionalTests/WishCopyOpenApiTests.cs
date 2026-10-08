@@ -30,6 +30,9 @@ public class WishCopyOpenApiTests
         Assert.Contains(
             parameters,
             parameter => parameter.GetProperty("name").GetString() == "X-MonKado-Share-Token");
+        Assert.Contains(
+            parameters,
+            parameter => parameter.GetProperty("name").GetString() == "X-CSRF-TOKEN");
         var responses = operation.GetProperty("responses");
 
         foreach (var status in new[]
