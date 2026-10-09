@@ -42,7 +42,16 @@ jobs:
           global-json-file: global.json
       - name: Verify disk guard, safe cleanup and local build integration
         shell: pwsh
-        run: ./scripts/Test-LocalDiskTools.ps1
+        run: |
+          Install-Module Pester -RequiredVersion 5.7.1 -Scope CurrentUser -Repository PSGallery -Force
+          ./tests/Operations.LocalDiskTests/Invoke-Coverage.ps1 -ReportPath TestResults/local-disk-${{ matrix.os }}.xml
+      - name: Upload local disk coverage
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: local-disk-coverage-${{ matrix.os }}
+          path: TestResults/local-disk-${{ matrix.os }}.xml
+          if-no-files-found: error
+          retention-days: 3
   performance:
     name: Isolated k6 smoke and harness coverage
     runs-on: ubuntu-latest
@@ -411,7 +420,8 @@ jobs:
           /d:sonar.python.coverage.reportPaths="TestResults/deployment-coverage.xml,TestResults/deployment-orchestration-coverage.xml,TestResults/security-coverage.xml,TestResults/frontend-publication-coverage.xml,TestResults/monitoring-coverage.xml,TestResults/backup-coverage.xml,TestResults/performance-coverage.xml"
           /d:sonar.python.version="3.13"
           /d:sonar.javascript.lcov.reportPaths="TestResults/performance.lcov"
-          /d:sonar.test.inclusions="tests/**,deployments/production/test_*.py,deployments/production/verify_compose.py"
+          /d:sonar.coverageReportPaths="TestResults/local-disk-coverage.xml"
+          /d:sonar.test.inclusions="tests/**,scripts/Test-LocalDiskTools.ps1,deployments/production/test_*.py,deployments/production/verify_compose.py"
           /d:sonar.exclusions="src/**/Migrations/**"
           /d:sonar.qualitygate.wait=true
           /d:sonar.qualitygate.timeout=300
@@ -572,6 +582,44 @@ jobs:
           JWT_SIGNING_KEY="$CI_JWT_SIGNING_KEY"
           IMAGE_TAG=ci
           docker compose -f compose.yaml -f compose.local.yaml config --quiet
+
+      - name: Download local disk coverage
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: local-disk-coverage-*
+          merge-multiple: true
+          path: TestResults
+
+      - name: Merge platform coverage and require all disk-tool lines
+        shell: pwsh
+        run: |
+          $reports = @(Get-ChildItem -LiteralPath TestResults -Filter 'local-disk-*.xml')
+          if ($reports.Count -ne 2) { throw 'Both platform coverage reports are required.' }
+          $files = @{}
+          foreach ($report in $reports) {
+            [xml] $coverage = Get-Content -LiteralPath $report.FullName -Raw
+            foreach ($file in $coverage.coverage.file) {
+              if (-not $files.ContainsKey($file.path)) { $files[$file.path] = @{} }
+              foreach ($line in $file.lineToCover) {
+                $files[$file.path][$line.lineNumber] = $files[$file.path][$line.lineNumber] -or ($line.covered -eq 'true')
+              }
+            }
+          }
+          if ($files.Count -ne 3) { throw 'Coverage must contain all three disk-tool scripts.' }
+          $merged = [xml]'<coverage version="1" />'
+          foreach ($path in $files.Keys) {
+            $file = $merged.CreateElement('file')
+            $file.SetAttribute('path', $path)
+            foreach ($number in $files[$path].Keys) {
+              if (-not $files[$path][$number]) { throw "Uncovered disk-tool line: ${path}:$number" }
+              $line = $merged.CreateElement('lineToCover')
+              $line.SetAttribute('lineNumber', $number)
+              $line.SetAttribute('covered', 'true')
+              $file.AppendChild($line) | Out-Null
+            }
+            $merged.DocumentElement.AppendChild($file) | Out-Null
+          }
+          $merged.Save((Join-Path $PWD 'TestResults/local-disk-coverage.xml'))
 
       - name: Complete SonarQube Cloud analysis
         if: >-

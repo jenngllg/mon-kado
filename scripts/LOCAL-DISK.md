@@ -22,6 +22,17 @@ Only immediate `bin` and `obj` directories of .NET projects under `src` and `tes
 
 Use PowerShell 7 for the wrapper and cleanup helper. The disk guard also supports Windows PowerShell 5.1 used by MSBuild.
 
+CI runs the deterministic scenarios through Pester 5.7.1 on Windows and Linux.
+All three production scripts remain in coverage; the test runner is classified
+as test code. Windows must exercise every instrumented command. The quality job
+merges real platform coverage, requires 100% covered lines, and imports that
+report into SonarQube without lowering the existing gates. To run locally:
+
+```powershell
+Install-Module Pester -RequiredVersion 5.7.1 -Scope CurrentUser -Repository PSGallery -Force
+./tests/Operations.LocalDiskTests/Invoke-Coverage.ps1
+```
+
 Docker is a separate source of growth. Never use volume pruning or Docker factory reset for disk housekeeping: local PostgreSQL/uploads may be lost. Check the existing Docker Engine settings first; an enabled `builder.gc` with a small `defaultKeepStorage` does not cap images, volumes, or the WSL disk. For the default Docker builder, merge the following into the existing Docker Engine JSON in Docker Desktop (do not replace unrelated settings or increase a smaller existing budget):
 
 ```json

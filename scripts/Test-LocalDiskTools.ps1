@@ -7,7 +7,7 @@ $passed = 0
 function Assert-True([bool] $Condition, [string] $Name) {
     if (-not $Condition) { throw "FAIL: $Name" }
     $script:passed++
-    Write-Host "PASS: $Name"
+    Write-Information "PASS: $Name" -InformationAction Continue
 }
 function Assert-Throws([scriptblock] $Action, [string] $Message, [string] $Name) {
     $caught = $null
@@ -72,12 +72,38 @@ try {
     Invoke-TestGit @('-c', 'user.name=Disk Tools Test', '-c', 'user.email=test@example.invalid', 'commit', '-qm', 'Untrack generated output')
     Invoke-TestGit @('update-ref', 'refs/remotes/origin/develop', 'HEAD')
     if ($IsWindows) {
+        $linkedRoot = Join-Path $fixtureRoot 'linked-root'
+        New-Item -ItemType Junction -Path $linkedRoot -Target $project | Out-Null
+        Assert-Throws { & $cleanup -Worktree $linkedRoot -Apply } 'linked worktree path' 'Linked worktree roots are refused'
+        Remove-Item -LiteralPath $linkedRoot -Force
+        function Get-CimInstance {
+            [pscustomobject]@{ ProcessId = $PID + 1; Name = 'dotnet.exe'; CommandLine = "dotnet $fixtureRoot/project.dll" }
+        }
+        try {
+            Assert-Throws { & $cleanup -Worktree $fixtureRoot -Apply } 'still references' 'Active worktree is refused'
+        } finally { Remove-Item -LiteralPath Function:Get-CimInstance }
         Remove-Item -LiteralPath $obj
         New-Item -ItemType Junction -Path $obj -Target (Join-Path $fixtureRoot 'TestResults/nested-worktree') | Out-Null
         Assert-Throws { & $cleanup -Worktree $fixtureRoot -Apply } 'filesystem links' 'Filesystem links are refused without deleting their target'
         Remove-Item -LiteralPath $obj -Force
         New-Item -ItemType Directory -Path $obj | Out-Null
     }
+    $prFixtureState = @{ State = 'MERGED'; Head = (& git -C $fixtureRoot rev-parse HEAD); ExitCode = 0 }
+    function gh {
+        $global:LASTEXITCODE = $prFixtureState.ExitCode
+        @{state=$prFixtureState.State; headRefOid=$prFixtureState.Head} | ConvertTo-Json -Compress
+    }
+    try {
+        & $cleanup -Worktree $fixtureRoot -MergedPullRequest 1 | Out-Null
+        Assert-True (Test-Path -LiteralPath $bin) 'Verified squash merge preview preserves output'
+        $prFixtureState.State = 'OPEN'
+        Assert-Throws { & $cleanup -Worktree $fixtureRoot -MergedPullRequest 1 -Apply } 'not merged at this exact' 'Open PR is refused'
+        $prFixtureState.State = 'MERGED'
+        $prFixtureState.Head = 'other-revision'
+        Assert-Throws { & $cleanup -Worktree $fixtureRoot -MergedPullRequest 1 -Apply } 'not merged at this exact' 'Different merged revision is refused'
+        $prFixtureState.ExitCode = 1
+        Assert-Throws { & $cleanup -Worktree $fixtureRoot -MergedPullRequest 1 -Apply } 'Cannot verify' 'PR lookup failure is refused'
+    } finally { Remove-Item -LiteralPath Function:gh }
     $applied = & $cleanup -Worktree $fixtureRoot -Apply
     Assert-True ($applied.Applied -and -not (Test-Path -LiteralPath $bin) -and -not (Test-Path -LiteralPath $obj)) 'Explicit apply removes only outputs'
     Assert-True ((Test-Path -LiteralPath $protectedSource) -and (Test-Path -LiteralPath (Join-Path $project 'Example.csproj'))) 'Sources and nested report worktrees survive'
@@ -103,6 +129,26 @@ try {
         $failure = & dotnet msbuild $msbuildFixture -t:CheckLocalDiskSpace -p:OS=Windows_NT '-p:CI=' "-p:LocalBuildMinimumFreeGiB=$aboveFree" "-p:LocalBuildWarningFreeGiB=$aboveFree" -nologo -v:quiet 2>&1 | Out-String
         Assert-True ($LASTEXITCODE -ne 0 -and $failure.Contains('MSB3073')) 'Insufficient space fails the MSBuild target'
     }
+    # Fake only the external dotnet process; exercise the actual wrapper and disk guard.
+    $dotnetFixtureState = @{ Arguments = @(); ExitCode = 0 }
+    function dotnet {
+        $dotnetFixtureState.Arguments = @($args)
+        $global:LASTEXITCODE = $dotnetFixtureState.ExitCode
+    }
+    try {
+        $wrapper = Join-Path $PSScriptRoot 'Invoke-LocalDotNet.ps1'
+        foreach ($command in @('restore', 'build', 'test', 'publish')) {
+            & $wrapper -Command $command -Project $msbuildFixture -AdditionalArguments @('--verbosity', 'quiet')
+            Assert-True ($dotnetFixtureState.Arguments[0] -eq $command -and $dotnetFixtureState.Arguments -contains '--verbosity') "Wrapper forwards $command and extra arguments"
+            Assert-True (($dotnetFixtureState.Arguments -contains '--configuration') -eq ($command -ne 'restore')) "Wrapper configuration for $command"
+            if ($IsWindows) {
+                Assert-True ($dotnetFixtureState.Arguments -contains '-p:LocalDiskOptimizedBuild=true' -and
+                    $dotnetFixtureState.Arguments -contains '--runtime') "Wrapper selects host assets for $command"
+            }
+        }
+        $dotnetFixtureState.ExitCode = 7
+        Assert-Throws { & $wrapper -Command test -Project $msbuildFixture } 'failed with exit code 7' 'Wrapper propagates external process failure'
+    } finally { Remove-Item -LiteralPath Function:dotnet }
 } finally {
     $resolvedFixture = (Resolve-Path -LiteralPath $fixtureRoot).Path
     $resolvedTemp = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\', '/')
