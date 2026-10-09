@@ -43,7 +43,8 @@ public class MemberProfileIntegrationTests(PostgreSqlContainerFixture fixture)
         Assert.False(initialBody.GetProperty("isVisibleInMemberSearch").GetBoolean());
         await AssertSearchCountAsync(
             publicClient,
-            0);
+            0,
+            TestContext.Current.CancellationToken);
 
         foreach (var visible in new[]
         {
@@ -97,7 +98,8 @@ public class MemberProfileIntegrationTests(PostgreSqlContainerFixture fixture)
                 sessionBody.GetProperty("isVisibleInMemberSearch").GetBoolean());
             await AssertSearchCountAsync(
                 publicClient,
-                visible ? 1 : 0);
+                visible ? 1 : 0,
+                TestContext.Current.CancellationToken);
             using var direct = await publicClient.GetAsync(
                 $"/api/v1/members/{member.Id}/profile",
                 TestContext.Current.CancellationToken);
@@ -109,12 +111,13 @@ public class MemberProfileIntegrationTests(PostgreSqlContainerFixture fixture)
 
     private static async Task AssertSearchCountAsync(
         HttpClient client,
-        int expected)
+        int expected,
+        CancellationToken cancellationToken)
     {
         using var response = await client.GetAsync(
             "/api/v1/members?displayName=Jenn",
-            TestContext.Current.CancellationToken);
-        var body = await response.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>(TestContext.Current.CancellationToken);
+            cancellationToken);
+        var body = await response.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>(cancellationToken);
         Assert.Equal(
             expected,
             body.GetProperty("totalCount").GetInt32());
