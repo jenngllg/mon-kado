@@ -315,8 +315,25 @@ public class MembersController(
     {
         string? shareUrl = null;
         string? imageUrl = null;
+        string? ownedWishPath = null;
+        _ = Guid.TryParse(
+            User.FindFirstValue(JwtRegisteredClaimNames.Sub),
+            out var memberId);
 
-        if (history.ShareLinkId is Guid shareLinkId && history.ProtectedShareSecret is string protectedSecret)
+        if (history.OwnedWishlistId is Guid ownedWishlistId)
+        {
+            ownedWishPath = $"/lists/{ownedWishlistId}/wishes/{history.WishId}";
+
+            if (history.ImageId is Guid ownedImageId)
+                imageUrl = wishImageUrlService.CreateOwnedUrl(
+                    memberId,
+                    ownedWishlistId,
+                    history.WishId,
+                    ownedImageId);
+        }
+
+        if (history.OwnerId != memberId &&
+            history.ShareLinkId is Guid shareLinkId && history.ProtectedShareSecret is string protectedSecret)
         {
             shareUrl = shareLinkUrlService.Build(
                 shareLinkId,
@@ -344,6 +361,7 @@ public class MembersController(
             history.EndedAt)
         {
             OwnerId = history.OwnerId,
+            OwnedWishPath = ownedWishPath,
             IsArchived = history.IsArchived,
             OwnerDisplayName = history.OwnerDisplayName,
             ShareUrl = shareUrl,

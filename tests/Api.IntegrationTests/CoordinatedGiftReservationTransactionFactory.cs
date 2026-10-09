@@ -11,6 +11,19 @@ public class CoordinatedGiftReservationTransactionFactory(
     Func<CancellationToken, Task> beforeLockAsync) : IGiftReservationTransactionFactory
 {
     /// <inheritdoc />
+    public Task LockOwnedWishlistAsync(
+        Guid ownerId,
+        Guid wishlistId,
+        CancellationToken cancellationToken)
+    {
+
+        return factory.LockOwnedWishlistAsync(
+            ownerId,
+            wishlistId,
+            cancellationToken);
+    }
+
+    /// <inheritdoc />
     public Task<IGiftReservationTransaction> BeginAsync(CancellationToken cancellationToken)
     {
 

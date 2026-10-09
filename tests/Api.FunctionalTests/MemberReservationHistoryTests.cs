@@ -308,6 +308,7 @@ public class MemberReservationHistoryTests
     {
         Assert.Equal(
             [
+                "ownedWishPath",
                 "id",
                 "isArchived",
                 "wishlistId",

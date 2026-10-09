@@ -37,7 +37,8 @@ public class GiftReservationIntegrationTests(PostgreSqlContainerFixture fixture)
                 new CoordinatedGiftReservationTransactionFactory(
                     new GiftReservationTransactionFactory(
                         provider.GetRequiredService<MonKadoDbContext>(),
-                        provider.GetRequiredService<IWishlistShareLinkRepository>()),
+                        provider.GetRequiredService<IWishlistShareLinkRepository>(),
+                        provider.GetRequiredService<IWishlistMutationGuard>()),
                     async token =>
                     {
                         reservationReachedLock.TrySetResult();

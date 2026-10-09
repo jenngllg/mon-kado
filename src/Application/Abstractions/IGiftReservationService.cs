@@ -7,6 +7,18 @@ namespace JennGllg.Fr.MonKado.Back.Application.Abstractions;
 /// </summary>
 public interface IGiftReservationService
 {
+    /// <summary>Gets only the authenticated owner's personal reservation, without a share link.</summary>
+    /// <param name="ownerId">The authenticated owner.</param>
+    /// <param name="wishlistId">The owned parent.</param>
+    /// <param name="wishId">The owned wish.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The owner's reservation when present.</returns>
+    Task<GiftReservationDetails?> GetOwnedAsync(
+        Guid ownerId,
+        Guid wishlistId,
+        Guid wishId,
+        CancellationToken cancellationToken);
+
     /// <summary>Gets the current participant's reservation for one gift.</summary>
     /// <param name="wishlistId">The wishlist identifier.</param>
     /// <param name="wishId">The gift-wish identifier.</param>

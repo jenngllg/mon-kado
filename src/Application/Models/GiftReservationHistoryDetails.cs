@@ -10,6 +10,12 @@ namespace JennGllg.Fr.MonKado.Back.Application.Models;
 [ExcludeFromCodeCoverage]
 public class GiftReservationHistoryDetails
 {
+    /// <summary>Gets the current owned parent only when the wish remains privately accessible.</summary>
+    public Guid? OwnedWishlistId
+    {
+        get; init;
+    }
+
     /// <summary>Gets the current public wishlist owner's identifier, when available.</summary>
     public Guid? OwnerId
     {

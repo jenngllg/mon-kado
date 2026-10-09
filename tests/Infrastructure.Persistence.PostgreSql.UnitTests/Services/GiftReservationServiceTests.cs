@@ -57,6 +57,84 @@ public class GiftReservationServiceTests
     }
 
     [Fact]
+    public async Task GetOwnedAsync_WhenWishIsMissing_ThrowsNotFoundWithoutCreatingParticipation()
+    {
+        // Arrange
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var ownerId = Guid.CreateVersion7();
+        var wishlistId = Guid.CreateVersion7();
+        var wishId = Guid.CreateVersion7();
+        _transactionFactoryMock
+            .Setup(factory => factory.BeginAsync(cancellationToken))
+            .ReturnsAsync(_transactionMock.Object);
+        _transactionFactoryMock
+            .Setup(factory => factory.LockOwnedWishlistAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken))
+            .Returns(Task.CompletedTask);
+        _transactionFactoryMock
+            .Setup(factory => factory.LockWishAsync(
+                wishlistId,
+                wishId,
+                cancellationToken))
+            .ReturnsAsync((Wish?)null);
+
+        // Act
+        var action = () => _service.GetOwnedAsync(
+            ownerId,
+            wishlistId,
+            wishId,
+            cancellationToken);
+
+        // Assert
+        await Assert.ThrowsAsync<WishNotFoundException>(action);
+        _transactionFactoryMock.Verify(
+            factory => factory.BeginAsync(cancellationToken),
+            Times.Once);
+        _transactionFactoryMock.Verify(
+            factory => factory.LockOwnedWishlistAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken),
+            Times.Once);
+        _transactionFactoryMock.Verify(
+            factory => factory.LockWishAsync(
+                wishlistId,
+                wishId,
+                cancellationToken),
+            Times.Once);
+        _transactionMock.Verify(
+            transaction => transaction.DisposeAsync(),
+            Times.Once);
+        VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task GetOwnedAsync_WhenPostgreSqlIsUnavailable_ThrowsDependencyUnavailable()
+    {
+        // Arrange
+        var cancellationToken = TestContext.Current.CancellationToken;
+        _transactionFactoryMock
+            .Setup(factory => factory.BeginAsync(cancellationToken))
+            .ThrowsAsync(new TimeoutException());
+
+        // Act
+        var action = () => _service.GetOwnedAsync(
+            Guid.CreateVersion7(),
+            Guid.CreateVersion7(),
+            Guid.CreateVersion7(),
+            cancellationToken);
+
+        // Assert
+        await Assert.ThrowsAsync<DependencyUnavailableException>(action);
+        _transactionFactoryMock.Verify(
+            factory => factory.BeginAsync(cancellationToken),
+            Times.Once);
+        VerifyNoOtherCalls();
+    }
+
+    [Fact]
     public async Task GetAsync_WhenReservationExists_ReturnsDetails()
     {
         // Arrange

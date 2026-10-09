@@ -7,6 +7,16 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Abstrac
 /// </summary>
 public interface IGiftReservationTransactionFactory
 {
+    /// <summary>Revalidates private ownership and writable parent state under account-before-parent locks.</summary>
+    /// <param name="ownerId">The authenticated owner.</param>
+    /// <param name="wishlistId">The owned parent.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A task completed when the owned parent is locked.</returns>
+    Task LockOwnedWishlistAsync(
+        Guid ownerId,
+        Guid wishlistId,
+        CancellationToken cancellationToken);
+
     /// <summary>Locks a member before acquiring wishlist and child locks.</summary>
     /// <param name="memberId">The authenticated member identifier.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
