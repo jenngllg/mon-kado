@@ -183,6 +183,12 @@ public class GiftReservationRepository(MonKadoDbContext context) : IGiftReservat
             .Select(history => new GiftReservationHistoryDetails
             {
                 Id = history.Id,
+                OwnedWishlistId = context.Wishlists
+                    .Where(wishlist => wishlist.Id == history.WishlistId &&
+                        wishlist.OwnerId == memberId && !wishlist.IsArchived && !wishlist.IsSuspended &&
+                        context.Wishes.Any(wish => wish.Id == history.WishId && wish.WishlistId == wishlist.Id))
+                    .Select(wishlist => (Guid?)wishlist.Id)
+                    .FirstOrDefault(),
                 WishlistId = history.WishlistId,
                 IsArchived = context.Wishlists.Any(wishlist => wishlist.Id == history.WishlistId && wishlist.IsArchived),
                 WishlistName = context.Wishlists

@@ -63,6 +63,51 @@ public class GiftReservationService : IGiftReservationService
     }
 
     /// <inheritdoc />
+    public async Task<GiftReservationDetails?> GetOwnedAsync(
+        Guid ownerId,
+        Guid wishlistId,
+        Guid wishId,
+        CancellationToken cancellationToken)
+    {
+        GiftReservationDetails? reservation = null;
+
+        try
+        {
+            await using var transaction = await _transactionFactory.BeginAsync(cancellationToken);
+            await _transactionFactory.LockOwnedWishlistAsync(
+                ownerId,
+                wishlistId,
+                cancellationToken);
+            _ = await _transactionFactory.LockWishAsync(
+                wishlistId,
+                wishId,
+                cancellationToken) ?? throw new WishNotFoundException();
+            var participant = await _participantRepository.GetByMemberForUpdateAsync(
+                wishlistId,
+                ownerId,
+                cancellationToken);
+
+            if (participant is not null)
+            {
+                reservation = await GetAsync(
+                    wishlistId,
+                    wishId,
+                    participant.Id,
+                    cancellationToken);
+            }
+        }
+        catch (Exception exception) when (PostgreSqlFailureClassifier.IsUnavailable(exception))
+        {
+
+            throw new DependencyUnavailableException(
+                PostgreSqlDependencyName,
+                exception);
+        }
+
+        return reservation;
+    }
+
+    /// <inheritdoc />
     public async Task<GiftReservationDetails?> GetAsync(
         Guid wishlistId,
         Guid wishId,
@@ -133,7 +178,7 @@ public class GiftReservationService : IGiftReservationService
                     cancellationToken);
             }
 
-            await ValidateShareLinkAsync(
+            await ValidateAccessAsync(
                 request,
                 cancellationToken);
             var participant = await ResolveParticipantAsync(
@@ -249,15 +294,15 @@ public class GiftReservationService : IGiftReservationService
                     cancellationToken);
             }
 
-            await ValidateShareLinkAsync(
-                request.ShareLinkId,
-                request.WishlistId,
-                request.ShareSecret,
+            await ValidateAccessAsync(
+                request,
                 cancellationToken);
             var participant = await ResolveParticipantAsync(
                 request.MemberId,
                 request.GuestToken,
                 request.WishlistId,
+                request.IsOwnerReservation,
+                false,
                 cancellationToken);
             participantId = participant.Id;
             _ = await _transactionFactory.LockWishAsync(
@@ -420,10 +465,22 @@ public class GiftReservationService : IGiftReservationService
             cancelledAt);
     }
 
-    private async Task ValidateShareLinkAsync(
+    /// <summary>Validates the server-selected access model for a reservation mutation.</summary>
+    /// <param name="request">The server-created mutation.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A task completed when the source parent is authorized and locked.</returns>
+    private async Task ValidateAccessAsync(
         GiftReservationMutationRequest request,
         CancellationToken cancellationToken)
     {
+
+        if (await ValidateOwnedAccessAsync(
+            request.IsOwnerReservation,
+            request.MemberId,
+            request.WishlistId,
+            cancellationToken))
+            return;
+
         await ValidateShareLinkAsync(
             request.ShareLinkId,
             request.WishlistId,
@@ -431,6 +488,59 @@ public class GiftReservationService : IGiftReservationService
             cancellationToken);
     }
 
+    /// <summary>Validates the server-selected access model for a cancellation.</summary>
+    /// <param name="request">The server-created cancellation.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A task completed when the parent is authorized and locked.</returns>
+    private async Task ValidateAccessAsync(
+        GiftReservationCancellationRequest request,
+        CancellationToken cancellationToken)
+    {
+
+        if (await ValidateOwnedAccessAsync(
+            request.IsOwnerReservation,
+            request.MemberId,
+            request.WishlistId,
+            cancellationToken))
+            return;
+
+        await ValidateShareLinkAsync(
+            request.ShareLinkId,
+            request.WishlistId,
+            request.ShareSecret,
+            cancellationToken);
+    }
+
+    /// <summary>Fences private owner operations without weakening shared-link validation.</summary>
+    /// <param name="isOwnerReservation">The trusted private-route discriminator.</param>
+    /// <param name="memberId">The authenticated member.</param>
+    /// <param name="wishlistId">The parent.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>Whether private ownership has been validated.</returns>
+    private async Task<bool> ValidateOwnedAccessAsync(
+        bool isOwnerReservation,
+        Guid? memberId,
+        Guid wishlistId,
+        CancellationToken cancellationToken)
+    {
+
+        if (!isOwnerReservation)
+            return false;
+
+        await _transactionFactory.LockOwnedWishlistAsync(
+            memberId.GetValueOrDefault(),
+            wishlistId,
+            cancellationToken);
+
+        return true;
+    }
+
+    /// <summary>Revalidates shared access while holding its parent lock.</summary>
+    /// <param name="shareLinkId">The shared link.</param>
+    /// <param name="wishlistId">The parent.</param>
+    /// <param name="shareSecret">The presented secret.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A task completed when access is valid.</returns>
     private async Task ValidateShareLinkAsync(
         Guid shareLinkId,
         Guid wishlistId,
@@ -451,23 +561,50 @@ public class GiftReservationService : IGiftReservationService
         }
     }
 
+    /// <summary>Resolves the server-selected participant for an explicit mutation.</summary>
+    /// <param name="request">The trusted mutation.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The authorized participation.</returns>
     private async Task<WishlistParticipant> ResolveParticipantAsync(
         GiftReservationMutationRequest request,
         CancellationToken cancellationToken)
     {
+
         return await ResolveParticipantAsync(
             request.MemberId,
             request.GuestToken,
             request.WishlistId,
+            request.IsOwnerReservation,
+            true,
             cancellationToken);
     }
 
+    /// <summary>Resolves shared participation or the privately authorized owner.</summary>
+    /// <param name="memberIdValue">The authenticated member.</param>
+    /// <param name="guestToken">The guest credential.</param>
+    /// <param name="wishlistId">The parent.</param>
+    /// <param name="isOwnerReservation">The server-selected private access mode.</param>
+    /// <param name="createOwnerParticipant">Whether this explicit write may create owner participation.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The authorized participant.</returns>
     private async Task<WishlistParticipant> ResolveParticipantAsync(
         Guid? memberIdValue,
         string? guestToken,
         Guid wishlistId,
+        bool isOwnerReservation,
+        bool createOwnerParticipant,
         CancellationToken cancellationToken)
     {
+
+        if (isOwnerReservation)
+        {
+            return await ResolveOwnerParticipantAsync(
+                memberIdValue.GetValueOrDefault(),
+                wishlistId,
+                createOwnerParticipant,
+                cancellationToken);
+        }
+
         if (memberIdValue is Guid memberId)
         {
             var displayName = await _participantRepository.GetMemberDisplayNameAsync(
@@ -510,6 +647,38 @@ public class GiftReservationService : IGiftReservationService
             wishlistId,
             guestSessionId,
             cancellationToken) ?? throw new WishlistParticipantNotFoundException();
+    }
+
+    /// <summary>Uses one member participation per parent, creating it only inside an explicit reservation write.</summary>
+    /// <param name="ownerId">The authorized owner.</param>
+    /// <param name="wishlistId">The locked parent.</param>
+    /// <param name="createIfMissing">Whether this operation may create participation.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The owner's participant.</returns>
+    private async Task<WishlistParticipant> ResolveOwnerParticipantAsync(
+        Guid ownerId,
+        Guid wishlistId,
+        bool createIfMissing,
+        CancellationToken cancellationToken)
+    {
+        var participant = await _participantRepository.GetByMemberForUpdateAsync(
+            wishlistId,
+            ownerId,
+            cancellationToken);
+
+        if (participant is not null)
+            return participant;
+
+        if (!createIfMissing)
+            throw new GiftReservationNotFoundException();
+
+        var created = WishlistParticipant.CreateMember(
+            Guid.CreateVersion7(),
+            wishlistId,
+            ownerId);
+        _participantRepository.Add(created);
+
+        return created;
     }
 
     private async Task<bool> ResolveConcurrentCancellationAsync(

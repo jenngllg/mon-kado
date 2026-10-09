@@ -8,6 +8,12 @@ namespace JennGllg.Fr.MonKado.Back.Application.Models;
 [ExcludeFromCodeCoverage]
 public class GiftReservationMutationRequest
 {
+    /// <summary>Gets whether the server authorized the private owner reservation route.</summary>
+    public bool IsOwnerReservation
+    {
+        get; init;
+    }
+
     /// <summary>Gets the generated reservation identifier.</summary>
     public Guid ReservationId
     {

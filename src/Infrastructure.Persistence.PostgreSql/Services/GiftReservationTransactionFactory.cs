@@ -12,11 +12,26 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Service
 /// </summary>
 /// <param name="context">The database context.</param>
 /// <param name="shareLinkRepository">The parent-first shared resource lock repository.</param>
+/// <param name="mutationGuard">The private parent authorization and state guard.</param>
 public class GiftReservationTransactionFactory(
     MonKadoDbContext context,
-    IWishlistShareLinkRepository shareLinkRepository)
+    IWishlistShareLinkRepository shareLinkRepository,
+    IWishlistMutationGuard mutationGuard)
     : IGiftReservationTransactionFactory
 {
+    /// <inheritdoc />
+    public Task LockOwnedWishlistAsync(
+        Guid ownerId,
+        Guid wishlistId,
+        CancellationToken cancellationToken)
+    {
+
+        return mutationGuard.LockAsync(
+            ownerId,
+            wishlistId,
+            cancellationToken);
+    }
+
     /// <inheritdoc />
     public async Task LockMemberAsync(
         Guid memberId,

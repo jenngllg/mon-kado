@@ -36,6 +36,12 @@ public class GiftReservationHistoryResponse(
     DateTime lastActivityAt,
     DateTime? endedAt)
 {
+    /// <summary>Gets the private frontend path only when this member owns an accessible source wish.</summary>
+    public string? OwnedWishPath
+    {
+        get; init;
+    }
+
     /// <summary>Gets the reservation lifecycle identifier.</summary>
     public Guid Id { get; } = id;
 

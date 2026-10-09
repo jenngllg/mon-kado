@@ -101,6 +101,8 @@ public static class AuthenticationRateLimitingExtensions
     /// Identifies shared-wishlist reservation mutation policy.
     /// </summary>
     public const string SharedWishlistReservationPolicy = "SharedWishlistReservation";
+    /// <summary>Identifies the aggregate private-owner reservation mutation quota per remote address.</summary>
+    public const string OwnedGiftReservationPolicy = "OwnedGiftReservation";
     /// <summary>
     /// Identifies anonymous shared-wishlist report policy.
     /// </summary>
@@ -265,6 +267,11 @@ public static class AuthenticationRateLimitingExtensions
                         context,
                         SharedWishlistReservationPermitLimit,
                         _window));
+                options.AddPolicy(
+                    OwnedGiftReservationPolicy,
+                    context => CreateLimiter(
+                        context,
+                        SharedWishlistReservationPermitLimit));
                 options.AddPolicy(
                     SharedWishlistReportPolicy,
                     context => CreateSharedWishlistScopedLimiter(

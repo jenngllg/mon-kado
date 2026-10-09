@@ -51,6 +51,21 @@ public class RecordingGiftReservationService : IGiftReservationService
     public Dictionary<Guid, int> Quantities { get; } = [];
 
     /// <inheritdoc />
+    public Task<GiftReservationDetails?> GetOwnedAsync(
+        Guid ownerId,
+        Guid wishlistId,
+        Guid wishId,
+        CancellationToken cancellationToken)
+    {
+
+        return GetAsync(
+            wishlistId,
+            wishId,
+            ownerId,
+            cancellationToken);
+    }
+
+    /// <inheritdoc />
     public Task<GiftReservationDetails?> GetAsync(
         Guid wishlistId,
         Guid wishId,
