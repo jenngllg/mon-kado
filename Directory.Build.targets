@@ -1,0 +1,22 @@
+<Project>
+  <PropertyGroup>
+    <LocalBuildMinimumFreeGiB Condition="'$(LocalBuildMinimumFreeGiB)' == ''">10</LocalBuildMinimumFreeGiB>
+    <LocalBuildWarningFreeGiB Condition="'$(LocalBuildWarningFreeGiB)' == ''">20</LocalBuildWarningFreeGiB>
+  </PropertyGroup>
+  <!-- Fail local Windows builds before compilation. CI/Linux production builds are unchanged. -->
+  <Target Name="CheckLocalDiskSpace"
+          BeforeTargets="PrepareForBuild"
+          Condition="'$(OS)' == 'Windows_NT' and '$(CI)' == '' and '$(DesignTimeBuild)' != 'true'">
+    <Exec Command="powershell.exe -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildThisFileDirectory)scripts\Test-LocalDiskSpace.ps1&quot; -Path &quot;$(MSBuildProjectDirectory)&quot; -MinimumGiB $(LocalBuildMinimumFreeGiB) -WarningGiB $(LocalBuildWarningFreeGiB)" />
+  </Target>
+  <!-- Keep managed PDBs for debugging/coverage; only omit Skia's large native C++ symbols locally. -->
+  <Target Name="OmitLocalSkiaNativeSymbols"
+          AfterTargets="ResolveReferences"
+          BeforeTargets="_CopyFilesMarkedCopyLocal"
+          Condition="'$(OS)' == 'Windows_NT' and '$(CI)' == '' and '$(LocalDiskOptimizedBuild)' == 'true'">
+    <ItemGroup>
+      <ReferenceCopyLocalPaths Remove="@(ReferenceCopyLocalPaths)"
+                               Condition="'%(ReferenceCopyLocalPaths.Filename)%(ReferenceCopyLocalPaths.Extension)' == 'libSkiaSharp.pdb'" />
+    </ItemGroup>
+  </Target>
+</Project>

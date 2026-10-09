@@ -59,6 +59,19 @@ Two direct dependencies are deliberately pinned and therefore appear in outdated
 
 ## Continuous integration
 
+### Local disk housekeeping — MK-995
+
+Local Windows compilation warns below 20 GiB free and stops below 10 GiB.
+Prefer `scripts/Invoke-LocalDotNet.ps1` for local builds/tests to check space before
+restore and select only host-platform native assets. It keeps managed debugging
+symbols and omits only the large Skia native debug symbols locally.
+`scripts/Clear-CompletedBuilds.ps1` previews output cleanup for clean, merged,
+inactive worktrees; deletion requires `-Apply`. It never removes Docker volumes
+or entire worktrees. See [local disk hygiene](scripts/LOCAL-DISK.md) for commands,
+limits, and Docker cache/WSL guidance. Production builds are unchanged.
+
+### Quality gates
+
 Tests use the official `xunit.v3.mtp-off` package variant to retain VSTest and the existing Coverlet/OpenCover pipeline on .NET 10. This runs the current xUnit framework without Microsoft Testing Platform, whose v2 runner does not support the repository's VSTest invocation. See the [xUnit runner selection documentation](https://xunit.net/docs/getting-started/v3/microsoft-testing-platform). Do not enable both test engines or change coverage exclusions as part of a package update.
 
 GitHub Actions validates every pull request and push targeting `develop` or `main`. The required `CI / quality` check scans the complete Git history for secrets and runs the .NET quality baseline, including PostgreSQL Testcontainers, package audits, EF migration checks, and both Compose configurations.

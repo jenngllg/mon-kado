@@ -25,6 +25,24 @@ env:
     Host=127.0.0.1;Port=1;Database=mon_kado;Username=mon_kado;Timeout=1;Command Timeout=1;Pooling=false;SSL Mode=Disable
 
 jobs:
+  local_disk_tools:
+    name: Local disk tools (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+      - name: Verify disk guard, safe cleanup and local build integration
+        shell: pwsh
+        run: ./scripts/Test-LocalDiskTools.ps1
   performance:
     name: Isolated k6 smoke and harness coverage
     runs-on: ubuntu-latest
@@ -340,7 +358,7 @@ jobs:
 
   quality:
     name: quality
-    needs: [windows_export_coverage, deployment_configuration, deployment_campaign, security_proxy, frontend_publication, local_monitoring, backup_configuration, performance]
+    needs: [windows_export_coverage, deployment_configuration, deployment_campaign, security_proxy, frontend_publication, local_monitoring, backup_configuration, performance, local_disk_tools]
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
