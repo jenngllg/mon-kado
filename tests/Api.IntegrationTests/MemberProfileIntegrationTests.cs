@@ -45,7 +45,11 @@ public class MemberProfileIntegrationTests(PostgreSqlContainerFixture fixture)
             publicClient,
             0);
 
-        foreach (var visible in new[] { true, false })
+        foreach (var visible in new[]
+        {
+            true,
+            false
+        })
         {
             using var request = new HttpRequestMessage(
                 HttpMethod.Put,
@@ -95,7 +99,7 @@ public class MemberProfileIntegrationTests(PostgreSqlContainerFixture fixture)
                 publicClient,
                 visible ? 1 : 0);
             using var direct = await publicClient.GetAsync(
-                $"/api/v1/members/{member.Id}",
+                $"/api/v1/members/{member.Id}/profile",
                 TestContext.Current.CancellationToken);
             Assert.Equal(
                 HttpStatusCode.OK,
