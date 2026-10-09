@@ -22,7 +22,8 @@ function Invoke-TestGit([string[]] $Arguments) {
 $diskCheck = Join-Path $PSScriptRoot 'Test-LocalDiskSpace.ps1'
 $cleanup = Join-Path $PSScriptRoot 'Clear-CompletedBuilds.ps1'
 $drive = [IO.DriveInfo]::new([IO.Path]::GetPathRoot($PSScriptRoot))
-$aboveFree = [Math]::Ceiling($drive.AvailableFreeSpace / 1GB) + 10
+$tempDrive = [IO.DriveInfo]::new([IO.Path]::GetPathRoot([IO.Path]::GetTempPath()))
+$aboveFree = [Math]::Ceiling([Math]::Max($drive.AvailableFreeSpace, $tempDrive.AvailableFreeSpace) / 1GB) + 10
 Assert-Throws { & $diskCheck -MinimumGiB $aboveFree -WarningGiB $aboveFree } 'Local build refused' 'Insufficient space blocks without filling the drive'
 Assert-Throws { & $diskCheck -MinimumGiB 0 } 'Thresholds' 'Invalid thresholds are rejected'
 & $diskCheck -MinimumGiB 0.001 -WarningGiB 0.001
@@ -48,7 +49,7 @@ try {
     $nestedGit = Join-Path $bin '.git'
     New-Item -ItemType Directory -Path $nestedGit | Out-Null
     Assert-Throws { & $cleanup -Worktree $fixtureRoot -Apply } 'nested Git checkout' 'Nested Git sources are refused'
-    Remove-Item -LiteralPath $nestedGit
+    Remove-Item -LiteralPath $nestedGit -Force
     New-Item -ItemType Directory -Path (Join-Path $fixtureRoot 'TestResults/nested-worktree') | Out-Null
     $protectedSource = Join-Path $fixtureRoot 'TestResults/nested-worktree/source.txt'
     [IO.File]::WriteAllText($protectedSource, 'preserve')
@@ -112,3 +113,5 @@ try {
     Remove-Item -LiteralPath $resolvedFixture -Recurse -Force
 }
 Write-Host "$passed disk-tool checks passed."
+# All expected subprocess failures were asserted above. Do not leak their exit codes to CI's pwsh epilogue.
+$global:LASTEXITCODE = 0
