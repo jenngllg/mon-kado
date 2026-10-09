@@ -40,6 +40,7 @@ public class UpdateMemberProfileCommandHandlerTests
                 memberId,
                 "Jenn",
                 42,
+                null,
                 cancellationToken))
             .ReturnsAsync(expected);
 
@@ -57,6 +58,7 @@ public class UpdateMemberProfileCommandHandlerTests
                 memberId,
                 "Jenn",
                 42,
+                null,
                 cancellationToken),
             Times.Once);
         _memberProfileServiceMock.VerifyNoOtherCalls();
@@ -77,6 +79,7 @@ public class UpdateMemberProfileCommandHandlerTests
                 memberId,
                 string.Empty,
                 42,
+                null,
                 cancellationToken))
             .ReturnsAsync((MemberProfile?)null);
 
@@ -92,6 +95,7 @@ public class UpdateMemberProfileCommandHandlerTests
                 memberId,
                 string.Empty,
                 42,
+                null,
                 cancellationToken),
             Times.Once);
         _memberProfileServiceMock.VerifyNoOtherCalls();

@@ -9,6 +9,12 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Entitie
 
 public class MonKadoUser : IdentityUser<Guid>, IAuditableEntity
 {
+    /// <summary>Gets or sets whether the member opts into public member search.</summary>
+    public bool IsVisibleInMemberSearch
+    {
+        get; set;
+    }
+
     /// <summary>
     /// Gets display name.
     /// </summary>

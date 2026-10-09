@@ -54,6 +54,7 @@ public class MemberRepository(MonKadoDbContext context) : IMemberRepository
                 member.Version)
             {
                 ProfileImageId = member.ProfileImageId,
+                IsVisibleInMemberSearch = member.IsVisibleInMemberSearch,
                 IsGoogleLinked = context.UserLogins
                     .Any(login => login.UserId == member.Id &&
                         login.LoginProvider == ExternalLoginProviders.Google)

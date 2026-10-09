@@ -219,6 +219,11 @@ public class PersonalDataExportIntegrationTests(PostgreSqlContainerFixture fixtu
             dataStream,
             cancellationToken: TestContext.Current.CancellationToken);
         var root = json.RootElement;
+        Assert.False(root
+            .GetProperty("account")
+            .GetProperty("profile")
+            .GetProperty("isVisibleInMemberSearch")
+            .GetBoolean());
         Assert.Equal(
             1,
             root

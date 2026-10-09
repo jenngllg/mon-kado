@@ -12,6 +12,12 @@ public class MemberProfile(
     string displayName,
     uint version)
 {
+    /// <summary>Gets whether the member opts into public member search.</summary>
+    public bool IsVisibleInMemberSearch
+    {
+        get; init;
+    }
+
     /// <summary>
     /// Gets the member display name.
     /// </summary>

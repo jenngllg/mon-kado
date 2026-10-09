@@ -132,7 +132,7 @@ The local launch profile listens on `http://localhost:7000` and uses the `Local`
 | `POST /api/v1/auth/google/link` | Links a verified Google identity after local password confirmation |
 | `GET /api/v1/auth/sessions/current` | Returns the current member identity and profile ETag |
 | `DELETE /api/v1/auth/sessions/current` | Ends the current browser refresh session |
-| `PUT /api/v1/members/current/profile` | Updates the current member display name with optimistic concurrency |
+| `PUT /api/v1/members/current/profile` | Updates the current member display name and search visibility with optimistic concurrency |
 | `PUT /api/v1/members/current/email` | Requests an e-mail change after password verification |
 | `PUT /api/v1/members/current/password` | Changes the current member password and ends every refresh session |
 | `POST /api/v1/auth/email-change-confirmations` | Confirms a pending e-mail change from the new address |
@@ -156,6 +156,24 @@ The local launch profile listens on `http://localhost:7000` and uses the `Local`
 Liveness never contacts PostgreSQL. Readiness allows at most two seconds for PostgreSQL to accept a connection and returns `503 Unhealthy` otherwise; it checks connectivity, not whether all migrations have been applied.
 
 The OpenAPI contract is available in every environment. No interactive Swagger or Scalar UI is installed.
+
+### Member search visibility (#996)
+
+All existing and newly created members, including Google registrations, start with
+`isVisibleInMemberSearch = false`. The migration applies this opt-out to existing
+accounts; members can enable or disable discovery from their profile with the
+normal versioned save. Public search filters both results and totals to confirmed,
+opted-in accounts. Direct member URLs and public/shared wishlist access keep their
+existing authorization rules: search visibility is not a privacy/access-control
+setting.
+
+The private current-session and profile-update responses expose the boolean.
+The profile PUT accepts it alongside `displayName` with the existing strong
+`If-Match`: omission by older clients preserves the preference, explicit null
+or a nonboolean value is rejected. The personal data export includes the setting.
+Deploy the migration/backend before the matching frontend. Frontend member routes
+retain the existing noindex policy; enabling MonKado search does not enable Google
+indexing or promise immediate removal of previously indexed URLs.
 
 ## Browser security contract
 

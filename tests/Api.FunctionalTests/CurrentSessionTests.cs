@@ -42,7 +42,8 @@ public class CurrentSessionTests
             ],
             42)
         {
-            IsGoogleLinked = isGoogleLinked
+            IsGoogleLinked = isGoogleLinked,
+            IsVisibleInMemberSearch = isGoogleLinked
         };
         using var client = factory.CreateClient();
         var accessTokenService = factory.Services.GetRequiredService<IAccessTokenService>();
@@ -79,6 +80,7 @@ public class CurrentSessionTests
                 "email",
                 "id",
                 "isGoogleLinked",
+                "isVisibleInMemberSearch",
                 "profileImageUrl",
                 "roles"
             ],
@@ -89,6 +91,9 @@ public class CurrentSessionTests
         Assert.Equal(
             isGoogleLinked,
             payload.GetProperty("isGoogleLinked").GetBoolean());
+        Assert.Equal(
+            isGoogleLinked,
+            payload.GetProperty("isVisibleInMemberSearch").GetBoolean());
         Assert.Equal(
             "jenn@example.fr",
             payload.GetProperty("email").GetString());

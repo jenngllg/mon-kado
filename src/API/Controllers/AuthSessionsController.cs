@@ -145,6 +145,7 @@ public class AuthSessionsController(
             currentSession.Roles)
         {
             IsGoogleLinked = currentSession.IsGoogleLinked,
+            IsVisibleInMemberSearch = currentSession.IsVisibleInMemberSearch,
             ProfileImageUrl = profileImageUrlService.CreateUrl(
                 currentSession.Id,
                 currentSession.ProfileImageId)
