@@ -10,7 +10,10 @@ namespace JennGllg.Fr.MonKado.Back.Api.Contracts.Responses;
 public class MemberProfileResponse(string displayName)
 {
     /// <summary>Gets whether the member opts into public member search.</summary>
-    public bool IsVisibleInMemberSearch { get; init; }
+    public bool IsVisibleInMemberSearch
+    {
+        get; init;
+    }
 
     /// <summary>
     /// Gets the member display name.

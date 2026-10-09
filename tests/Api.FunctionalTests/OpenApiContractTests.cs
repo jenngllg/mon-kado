@@ -168,6 +168,7 @@ public class OpenApiContractTests(UnavailablePostgreSqlApiFactory factory) : ICl
                 "email",
                 "id",
                 "isGoogleLinked",
+                "isVisibleInMemberSearch",
                 "profileImageUrl",
                 "roles"
             ],
@@ -259,12 +260,14 @@ public class OpenApiContractTests(UnavailablePostgreSqlApiFactory factory) : ICl
         Assert.Equal(
             [
                 "displayName",
+                "isVisibleInMemberSearch",
                 "profileImageUrl"
             ],
             responseSchema
                 .GetProperty("properties")
                 .EnumerateObject()
                 .Select(property => property.Name)
+                .OrderBy(property => property)
                 .ToArray());
         var requestSchema = ResolveSchema(
             document.RootElement,
@@ -274,12 +277,19 @@ public class OpenApiContractTests(UnavailablePostgreSqlApiFactory factory) : ICl
                 .GetProperty("application/json")
                 .GetProperty("schema"));
         Assert.Equal(
-            ["displayName"],
+            [
+                "displayName",
+                "isVisibleInMemberSearch"
+            ],
             requestSchema
                 .GetProperty("properties")
                 .EnumerateObject()
                 .Select(property => property.Name)
+                .OrderBy(property => property)
                 .ToArray());
+        Assert.Equal(
+            "boolean",
+            responseSchema.GetProperty("properties").GetProperty("isVisibleInMemberSearch").GetProperty("type").GetString());
     }
 
     [Fact]
