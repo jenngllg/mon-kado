@@ -22,6 +22,50 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Migrati
 public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
 {
     [Fact]
+    public async Task MigrateAsync_WhenMemberAlreadyExists_DefaultsSearchVisibilityToFalse()
+    {
+        // Arrange
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var provider = CreateServiceProvider();
+        await using var scope = provider.CreateAsyncScope();
+        var context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
+        await context.Database.MigrateAsync(cancellationToken);
+        var memberId = Guid.CreateVersion7();
+        context.Users.Add(CreateMigrationMember(
+            memberId,
+            "visibility-migration@example.test",
+            "Existing visibility member"));
+        await context.SaveChangesAsync(cancellationToken);
+        var migrator = context.GetService<Microsoft.EntityFrameworkCore.Migrations.IMigrator>();
+
+        try
+        {
+            // Act
+            await migrator.MigrateAsync(
+                "20261006122444_AddWishFavoriteState",
+                cancellationToken);
+            await context.Database.MigrateAsync(cancellationToken);
+            context.ChangeTracker.Clear();
+            var member = await context.Users.SingleAsync(
+                user => user.Id == memberId,
+                cancellationToken);
+
+            // Assert
+            Assert.False(member.IsVisibleInMemberSearch);
+            Assert.Equal(
+                "Existing visibility member",
+                member.DisplayName);
+        }
+        finally
+        {
+            await context.Database.MigrateAsync(cancellationToken);
+            await context.Users
+                .Where(user => user.Id == memberId)
+                .ExecuteDeleteAsync(cancellationToken);
+        }
+    }
+
+    [Fact]
     public async Task MigrateAsync_WhenWishAlreadyExists_DefaultsFavoriteToFalseAndPreservesContent()
     {
         // Arrange

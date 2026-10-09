@@ -213,10 +213,13 @@ public class MembersController(
             new UpdateMemberProfileCommand(
                 memberId,
                 request.DisplayName,
-                expectedVersion),
+                expectedVersion,
+                request.IsVisibleInMemberSearch,
+                request.HasVisibilityPreference),
             cancellationToken);
         var response = new MemberProfileResponse(profile.DisplayName)
         {
+            IsVisibleInMemberSearch = profile.IsVisibleInMemberSearch,
             ProfileImageUrl = profileImageUrlService.CreateUrl(
                 memberId,
                 profile.ProfileImageId)

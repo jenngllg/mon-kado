@@ -48,6 +48,7 @@ public class MemberProfileServiceTests
             memberId,
             "Jennifer",
             0,
+            null,
             cancellationToken);
 
         // Assert
@@ -96,6 +97,7 @@ public class MemberProfileServiceTests
             memberId,
             "Jennifer",
             0,
+            null,
             cancellationToken);
 
         // Assert
@@ -135,6 +137,7 @@ public class MemberProfileServiceTests
             memberId,
             "Jennifer",
             0,
+            null,
             cancellationToken);
 
         // Assert
@@ -176,6 +179,7 @@ public class MemberProfileServiceTests
             memberId,
             "Jennifer",
             0,
+            null,
             cancellationToken);
 
         // Assert
@@ -214,6 +218,7 @@ public class MemberProfileServiceTests
             memberId,
             "Jenn",
             0,
+            null,
             cancellationToken);
 
         // Assert
@@ -249,6 +254,7 @@ public class MemberProfileServiceTests
             memberId,
             "Jenn",
             0,
+            null,
             cancellationToken);
 
         // Assert
@@ -281,6 +287,7 @@ public class MemberProfileServiceTests
             memberId,
             "Jennifer",
             1,
+            null,
             cancellationToken);
 
         // Assert
@@ -317,6 +324,7 @@ public class MemberProfileServiceTests
             memberId,
             "Jennifer",
             0,
+            null,
             cancellationToken);
 
         // Assert
@@ -349,6 +357,7 @@ public class MemberProfileServiceTests
             memberId,
             "Jenn",
             0,
+            null,
             cancellationToken);
 
         // Assert
@@ -380,6 +389,7 @@ public class MemberProfileServiceTests
             memberId,
             "Jenn",
             0,
+            null,
             cancellationToken);
 
         // Assert
@@ -399,6 +409,64 @@ public class MemberProfileServiceTests
     {
         _memberRepositoryMock.VerifyNoOtherCalls();
         _unitOfWorkMock.VerifyNoOtherCalls();
+    }
+
+    [Theory]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, null)]
+    [InlineData(false, false)]
+    public async Task UpdateAsync_WhenSearchPreferenceIsSupplied_PreservesOrUpdatesIt(
+        bool current,
+        bool? requested)
+    {
+        // Arrange
+        var memberId = Guid.CreateVersion7();
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var member = CreateMember(
+            memberId,
+            "Jenn");
+        member.IsVisibleInMemberSearch = current;
+        var expected = requested ?? current;
+        var changed = current != expected;
+        _memberRepositoryMock
+            .Setup(repository => repository.GetForProfileUpdateAsync(
+                memberId,
+                cancellationToken))
+            .ReturnsAsync(member);
+
+        if (changed)
+        {
+            _unitOfWorkMock
+                .Setup(unitOfWork => unitOfWork.SaveChangesAsync(cancellationToken))
+                .ReturnsAsync(1);
+        }
+
+        // Act
+        var result = await _memberProfileService.UpdateAsync(
+            memberId,
+            "Jenn",
+            0,
+            requested,
+            cancellationToken);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal(
+            expected,
+            result.IsVisibleInMemberSearch);
+        Assert.Equal(
+            expected,
+            member.IsVisibleInMemberSearch);
+        _memberRepositoryMock.Verify(
+            repository => repository.GetForProfileUpdateAsync(
+                memberId,
+                cancellationToken),
+            Times.Once);
+        _unitOfWorkMock.Verify(
+            unitOfWork => unitOfWork.SaveChangesAsync(cancellationToken),
+            changed ? Times.Once() : Times.Never());
+        VerifyNoOtherCalls();
     }
 
     private static MonKadoUser CreateMember(

@@ -22,6 +22,104 @@ public class MemberProfileIntegrationTests(PostgreSqlContainerFixture fixture)
     private static readonly DateTimeOffset _referenceTime = DateTimeOffset.UtcNow;
 
     [Fact]
+    public async Task UpdateProfileAsync_WhenVisibilityChanges_ControlsSearchButPreservesDirectAccess()
+    {
+        // Arrange
+        await using var factory = await CreateMigratedFactoryAsync(new MutableTimeProvider(_referenceTime));
+        var member = await CreateMemberAsync(factory);
+        using var client = await AuthenticationTestData.CreateClientAsync(
+            factory,
+            member.Id,
+            TestContext.Current.CancellationToken);
+        using var publicClient = factory.CreateClient();
+        using var initial = await client.GetAsync(
+            "/api/v1/auth/sessions/current",
+            TestContext.Current.CancellationToken);
+        var initialBody = await initial.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>(TestContext.Current.CancellationToken);
+        var etag = initial.Headers.ETag?.Tag
+            ?? throw new InvalidOperationException("Missing profile ETag.");
+
+        // Act / Assert
+        Assert.False(initialBody.GetProperty("isVisibleInMemberSearch").GetBoolean());
+        await AssertSearchCountAsync(
+            publicClient,
+            0);
+
+        foreach (var visible in new[] { true, false })
+        {
+            using var request = new HttpRequestMessage(
+                HttpMethod.Put,
+                "/api/v1/members/current/profile")
+            {
+                Content = JsonContent.Create(new { displayName = member.DisplayName, isVisibleInMemberSearch = visible })
+            };
+            request.Headers.IfMatch.ParseAdd(etag);
+            using var response = await client.SendAsync(
+                request,
+                TestContext.Current.CancellationToken);
+            Assert.Equal(
+                HttpStatusCode.OK,
+                response.StatusCode);
+            var body = await response.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>(TestContext.Current.CancellationToken);
+            Assert.Equal(
+                visible,
+                body.GetProperty("isVisibleInMemberSearch").GetBoolean());
+            var nextTag = response.Headers.ETag?.Tag
+                ?? throw new InvalidOperationException("Missing profile ETag.");
+            Assert.NotEqual(
+                etag,
+                nextTag);
+            using var stale = await UpdateAsync(
+                client,
+                member.DisplayName,
+                etag);
+            Assert.Equal(
+                HttpStatusCode.PreconditionFailed,
+                stale.StatusCode);
+            etag = nextTag;
+            using var unchanged = await UpdateAsync(
+                client,
+                member.DisplayName,
+                etag);
+            Assert.Equal(
+                etag,
+                unchanged.Headers.ETag?.Tag);
+            using var session = await client.GetAsync(
+                "/api/v1/auth/sessions/current",
+                TestContext.Current.CancellationToken);
+            var sessionBody = await session.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>(TestContext.Current.CancellationToken);
+            Assert.Equal(
+                visible,
+                sessionBody.GetProperty("isVisibleInMemberSearch").GetBoolean());
+            await AssertSearchCountAsync(
+                publicClient,
+                visible ? 1 : 0);
+            using var direct = await publicClient.GetAsync(
+                $"/api/v1/members/{member.Id}",
+                TestContext.Current.CancellationToken);
+            Assert.Equal(
+                HttpStatusCode.OK,
+                direct.StatusCode);
+        }
+    }
+
+    private static async Task AssertSearchCountAsync(
+        HttpClient client,
+        int expected)
+    {
+        using var response = await client.GetAsync(
+            "/api/v1/members?displayName=Jenn",
+            TestContext.Current.CancellationToken);
+        var body = await response.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>(TestContext.Current.CancellationToken);
+        Assert.Equal(
+            expected,
+            body.GetProperty("totalCount").GetInt32());
+        Assert.Equal(
+            expected,
+            body.GetProperty("items").GetArrayLength());
+    }
+
+    [Fact]
     public async Task UpdateProfileAsync_WhenUsingEntityTags_UpdatesAndRejectsStaleVersion()
     {
         // Arrange

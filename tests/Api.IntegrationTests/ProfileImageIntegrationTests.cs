@@ -753,6 +753,7 @@ public class ProfileImageIntegrationTests(PostgreSqlContainerFixture fixture) : 
             Email = "profile-image@example.test",
             UserName = "profile-image@example.test",
             DisplayName = "Jennifer",
+            IsVisibleInMemberSearch = true,
             EmailConfirmed = true
         };
         Assert.True((await manager.CreateAsync(member)).Succeeded);

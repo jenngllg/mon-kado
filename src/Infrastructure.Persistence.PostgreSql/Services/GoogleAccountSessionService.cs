@@ -1051,6 +1051,7 @@ public class GoogleAccountSessionService(
                 ? DefaultDisplayName
                 : displayName.Trim(),
             EmailConfirmed = true,
+            IsVisibleInMemberSearch = false,
             UnconfirmedAccountExpiresAt = null,
             LockoutEnabled = true,
             SecurityStamp = CreateSecurityStamp(),

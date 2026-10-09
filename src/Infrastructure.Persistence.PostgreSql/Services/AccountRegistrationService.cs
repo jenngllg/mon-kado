@@ -80,6 +80,7 @@ public class AccountRegistrationService(
                         Email = email,
                         UserName = email,
                         DisplayName = displayName,
+                        IsVisibleInMemberSearch = false,
                         EmailConfirmed = false,
                         UnconfirmedAccountExpiresAt = now.Add(_unconfirmedAccountLifetime)
                     };

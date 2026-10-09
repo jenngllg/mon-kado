@@ -196,6 +196,7 @@ public class UserSearchIntegrationTests(PostgreSqlContainerFixture fixture)
             Email = email,
             UserName = email,
             DisplayName = displayName,
+            IsVisibleInMemberSearch = true,
             EmailConfirmed = confirmed
         };
         var result = await manager.CreateAsync(member);
