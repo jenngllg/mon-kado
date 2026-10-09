@@ -69,6 +69,8 @@ public class GiftReservationService : IGiftReservationService
         Guid wishId,
         CancellationToken cancellationToken)
     {
+        GiftReservationDetails? reservation = null;
+
         try
         {
             await using var transaction = await _transactionFactory.BeginAsync(cancellationToken);
@@ -85,14 +87,14 @@ public class GiftReservationService : IGiftReservationService
                 ownerId,
                 cancellationToken);
 
-            if (participant is null)
-                return null;
-
-            return await GetAsync(
-                wishlistId,
-                wishId,
-                participant.Id,
-                cancellationToken);
+            if (participant is not null)
+            {
+                reservation = await GetAsync(
+                    wishlistId,
+                    wishId,
+                    participant.Id,
+                    cancellationToken);
+            }
         }
         catch (Exception exception) when (PostgreSqlFailureClassifier.IsUnavailable(exception))
         {
@@ -101,6 +103,8 @@ public class GiftReservationService : IGiftReservationService
                 PostgreSqlDependencyName,
                 exception);
         }
+
+        return reservation;
     }
 
     /// <inheritdoc />
