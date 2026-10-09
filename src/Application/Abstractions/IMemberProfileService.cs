@@ -13,6 +13,7 @@ public interface IMemberProfileService
     /// <param name="memberId">The authenticated member identifier.</param>
     /// <param name="displayName">The normalized display name.</param>
     /// <param name="expectedVersion">The profile version supplied by the client.</param>
+    /// <param name="isVisibleInMemberSearch">The requested search preference, or null to preserve it.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>The updated profile when the member exists; otherwise, <see langword="null" />.</returns>
     /// <exception cref="Common.Exceptions.MemberProfileVersionConflictException">
@@ -23,5 +24,6 @@ public interface IMemberProfileService
         Guid memberId,
         string displayName,
         uint expectedVersion,
+        bool? isVisibleInMemberSearch,
         CancellationToken cancellationToken);
 }

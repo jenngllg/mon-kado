@@ -25,6 +25,82 @@ public class MemberProfileTests
     private const string Issuer = "MonKado.Api";
     private const string SigningKey = "AQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyA=";
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task UpdateProfileAsync_WhenVisibilityIsBoolean_PassesItToTheService(bool visible)
+    {
+        // Arrange
+        await using var factory = new RegistrationApiFactory();
+        factory.MemberProfileService.MemberProfile = new MemberProfile(
+            "Jenn",
+            43)
+        {
+            IsVisibleInMemberSearch = visible
+        };
+        using var client = CreateAuthorizedClient(
+            factory,
+            Guid.CreateVersion7());
+        using var request = new HttpRequestMessage(
+            HttpMethod.Put,
+            "/api/v1/members/current/profile")
+        {
+            Content = JsonContent.Create(new { displayName = "Jenn", isVisibleInMemberSearch = visible })
+        };
+        request.Headers.IfMatch.ParseAdd(CurrentEntityTag);
+
+        // Act
+        using var response = await client.SendAsync(
+            request,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.OK,
+            response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
+        Assert.Equal(
+            visible,
+            body.GetProperty("isVisibleInMemberSearch").GetBoolean());
+        Assert.Equal(
+            visible,
+            Assert.Single(factory.MemberProfileService.VisibilityUpdates));
+    }
+
+    [Theory]
+    [InlineData("null")]
+    [InlineData("\"true\"")]
+    [InlineData("1")]
+    public async Task UpdateProfileAsync_WhenVisibilityIsInvalid_RejectsBeforeWriting(string jsonValue)
+    {
+        // Arrange
+        await using var factory = new RegistrationApiFactory();
+        using var client = CreateAuthorizedClient(
+            factory,
+            Guid.CreateVersion7());
+        using var request = new HttpRequestMessage(
+            HttpMethod.Put,
+            "/api/v1/members/current/profile")
+        {
+            Content = new StringContent(
+                "{\"displayName\":\"Jenn\",\"isVisibleInMemberSearch\":" + jsonValue + "}",
+                Encoding.UTF8,
+                "application/json")
+        };
+        request.Headers.IfMatch.ParseAdd(CurrentEntityTag);
+
+        // Act
+        using var response = await client.SendAsync(
+            request,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(
+            HttpStatusCode.BadRequest,
+            response.StatusCode);
+        Assert.Empty(factory.MemberProfileService.Updates);
+    }
+
     [Fact]
     public async Task UpdateProfileAsync_WhenRequestIsValid_ReturnsExactProfileContractAndNewEntityTag()
     {
@@ -59,8 +135,9 @@ public class MemberProfileTests
             ?? throw new InvalidOperationException("The member profile response is empty.");
         var properties = document.RootElement.EnumerateObject().ToArray();
         Assert.Equal(
-            2,
+            3,
             properties.Length);
+        Assert.False(document.RootElement.GetProperty("isVisibleInMemberSearch").GetBoolean());
         Assert.Equal(
             JsonValueKind.Null,
             document.RootElement.GetProperty("profileImageUrl").ValueKind);

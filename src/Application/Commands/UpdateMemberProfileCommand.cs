@@ -17,11 +17,21 @@ namespace JennGllg.Fr.MonKado.Back.Application.Commands;
 /// <param name="memberId">The authenticated member identifier.</param>
 /// <param name="displayName">The requested display name.</param>
 /// <param name="expectedVersion">The profile version supplied by the client.</param>
+/// <param name="isVisibleInMemberSearch">The optional search preference.</param>
+/// <param name="hasVisibilityPreference">Whether the preference was explicitly supplied.</param>
 public class UpdateMemberProfileCommand(
     Guid memberId,
     string? displayName,
-    uint expectedVersion) : IRequest<MemberProfile>, IGenericValidationFailure
+    uint expectedVersion,
+    bool? isVisibleInMemberSearch = null,
+    bool hasVisibilityPreference = false) : IRequest<MemberProfile>, IGenericValidationFailure
 {
+    /// <summary>Gets the optional search preference.</summary>
+    public bool? IsVisibleInMemberSearch { get; } = isVisibleInMemberSearch;
+
+    /// <summary>Gets whether the client supplied the search preference.</summary>
+    public bool HasVisibilityPreference { get; } = hasVisibilityPreference;
+
     /// <summary>
     /// Gets the authenticated member identifier.
     /// </summary>
@@ -77,6 +87,7 @@ public class UpdateMemberProfileCommandHandler(
             request.MemberId,
             request.DisplayName?.Trim() ?? string.Empty,
             request.ExpectedVersion,
+            request.IsVisibleInMemberSearch,
             cancellationToken);
 
         if (profile is null)

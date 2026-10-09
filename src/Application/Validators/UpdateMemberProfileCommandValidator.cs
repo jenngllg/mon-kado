@@ -20,5 +20,9 @@ public class UpdateMemberProfileCommandValidator : AbstractValidator<UpdateMembe
             .WithMessage(ValidationMessages.MandatoryProperty);
         RuleFor(command => command.DisplayName)
             .ApplyDisplayNameRules();
+        RuleFor(command => command.IsVisibleInMemberSearch)
+            .NotNull()
+            .WithMessage(ValidationMessages.MandatoryProperty)
+            .When(command => command.HasVisibilityPreference);
     }
 }

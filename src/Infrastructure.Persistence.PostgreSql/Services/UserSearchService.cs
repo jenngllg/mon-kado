@@ -23,7 +23,7 @@ public class UserSearchService(MonKadoDbContext context) : IUserSearchService
                 .SqlQuery<int>($"""
                 SELECT count(*)::integer AS "Value"
                     FROM public.users
-                WHERE email_confirmed AND length(public.unaccent({displayName})) > 0
+                WHERE email_confirmed AND is_visible_in_member_search AND length(public.unaccent({displayName})) > 0
                 AND strpos(lower(public.unaccent(normalize(display_name, NFC))), lower(public.unaccent({displayName}))) > 0
             """)
                 .SingleAsync(cancellationToken);
@@ -32,7 +32,7 @@ public class UserSearchService(MonKadoDbContext context) : IUserSearchService
                 .SqlQuery<UserSearchResult>($"""
                 SELECT id, display_name, profile_image_id
                     FROM public.users
-                WHERE email_confirmed AND length(public.unaccent({displayName})) > 0
+                WHERE email_confirmed AND is_visible_in_member_search AND length(public.unaccent({displayName})) > 0
                 AND strpos(lower(public.unaccent(normalize(display_name, NFC))), lower(public.unaccent({displayName}))) > 0
                     ORDER BY lower(public.unaccent(normalize(display_name, NFC))), id
                 LIMIT {pageSize} OFFSET {offset}

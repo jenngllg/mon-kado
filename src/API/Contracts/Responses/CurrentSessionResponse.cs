@@ -16,6 +16,12 @@ public class CurrentSessionResponse(
     string displayName,
     IEnumerable<string> roles)
 {
+    /// <summary>Gets whether the member opts into public member search.</summary>
+    public bool IsVisibleInMemberSearch
+    {
+        get; init;
+    }
+
     /// <summary>Gets whether the member has a linked Google identity.</summary>
     public bool IsGoogleLinked
     {

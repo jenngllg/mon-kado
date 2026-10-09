@@ -132,6 +132,7 @@ public class PersonalDataExportSnapshotReader(
                 member.Email,
                 member.EmailConfirmed,
                 member.DisplayName,
+                member.IsVisibleInMemberSearch,
                 member.CreatedAt,
                 member.UpdatedAt,
                 HasPassword = member.PasswordHash != null,
@@ -159,6 +160,7 @@ public class PersonalDataExportSnapshotReader(
                 member.Email,
                 member.EmailConfirmed,
                 member.DisplayName,
+                member.IsVisibleInMemberSearch,
                 member.CreatedAt,
                 member.UpdatedAt,
                 ImagePath = member.ProfileImageId.HasValue ? PersonalDataExportArchiveNames.GetImagePath(null) : null

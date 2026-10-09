@@ -8,6 +8,9 @@ namespace JennGllg.Fr.MonKado.Back.Api.FunctionalTests;
 /// </summary>
 public class RecordingMemberProfileService : IMemberProfileService
 {
+    /// <summary>Gets the recorded optional search preferences.</summary>
+    public List<bool?> VisibilityUpdates { get; } = [];
+
     /// <summary>
     /// Gets the recorded profile update requests.
     /// </summary>
@@ -34,9 +37,11 @@ public class RecordingMemberProfileService : IMemberProfileService
         Guid memberId,
         string displayName,
         uint expectedVersion,
+        bool? isVisibleInMemberSearch,
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        VisibilityUpdates.Add(isVisibleInMemberSearch);
         Updates.Add((
             memberId,
             displayName,

@@ -21,6 +21,7 @@ public class MemberProfileService(
         Guid memberId,
         string displayName,
         uint expectedVersion,
+        bool? isVisibleInMemberSearch,
         CancellationToken cancellationToken)
     {
         try
@@ -38,25 +39,32 @@ public class MemberProfileService(
             if (string.Equals(
                 member.DisplayName,
                 displayName,
-                StringComparison.Ordinal))
+                StringComparison.Ordinal) &&
+                (isVisibleInMemberSearch is null || member.IsVisibleInMemberSearch == isVisibleInMemberSearch))
             {
 
                 return new MemberProfile(
                     member.DisplayName,
                     member.Version)
                 {
-                    ProfileImageId = member.ProfileImageId
+                    ProfileImageId = member.ProfileImageId,
+                    IsVisibleInMemberSearch = member.IsVisibleInMemberSearch
                 };
             }
 
             member.DisplayName = displayName;
+
+            if (isVisibleInMemberSearch is not null)
+                member.IsVisibleInMemberSearch = isVisibleInMemberSearch.Value;
+
             await unitOfWork.SaveChangesAsync(cancellationToken);
 
             return new MemberProfile(
                 member.DisplayName,
                 member.Version)
             {
-                ProfileImageId = member.ProfileImageId
+                ProfileImageId = member.ProfileImageId,
+                IsVisibleInMemberSearch = member.IsVisibleInMemberSearch
             };
         }
         catch (DbUpdateConcurrencyException)

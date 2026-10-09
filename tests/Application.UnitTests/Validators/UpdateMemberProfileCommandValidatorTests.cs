@@ -7,6 +7,35 @@ public class UpdateMemberProfileCommandValidatorTests
 {
     private readonly UpdateMemberProfileCommandValidator _validator = new();
 
+    [Theory]
+    [InlineData(null, false, true)]
+    [InlineData(null, true, false)]
+    [InlineData(false, true, true)]
+    [InlineData(true, true, true)]
+    public async Task ValidateAsync_WhenVisibilityIsOptional_RejectsOnlyExplicitNull(
+        bool? visible,
+        bool supplied,
+        bool valid)
+    {
+        // Arrange
+        var command = new UpdateMemberProfileCommand(
+            Guid.CreateVersion7(),
+            "Jenn",
+            42,
+            visible,
+            supplied);
+
+        // Act
+        var result = await _validator.ValidateAsync(
+            command,
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(
+            valid,
+            result.IsValid);
+    }
+
     [Fact]
     public async Task ValidateAsync_WhenDisplayNameIsValid_ReturnsSuccess()
     {

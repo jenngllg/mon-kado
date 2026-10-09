@@ -30,6 +30,9 @@ internal sealed class MonKadoUserConfiguration : IEntityTypeConfiguration<MonKad
             .IsRequired();
         builder.Property(user => user.Version)
             .IsRowVersion();
+        builder.Property(user => user.IsVisibleInMemberSearch)
+            .HasDefaultValue(false)
+            .IsRequired();
         builder.HasIndex(user => user.ProfileImageId)
             .HasDatabaseName("ux_users_profile_image_id")
             .IsUnique()
