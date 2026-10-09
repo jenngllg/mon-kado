@@ -22,4 +22,3 @@ public class GetOwnedGiftReservationQueryValidator : AbstractValidator<GetOwnedG
             .WithMessage(ValidationMessages.MandatoryProperty);
     }
 }
-

@@ -30,4 +30,3 @@ public class UpsertOwnedGiftReservationCommandValidator : AbstractValidator<Upse
             .WithMessage(ValidationMessages.InvalidGiftQuantity);
     }
 }
-

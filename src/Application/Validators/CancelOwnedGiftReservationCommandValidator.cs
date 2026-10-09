@@ -22,4 +22,3 @@ public class CancelOwnedGiftReservationCommandValidator : AbstractValidator<Canc
             .WithMessage(ValidationMessages.MandatoryProperty);
     }
 }
-
