@@ -2,9 +2,9 @@ using AutoFixture;
 
 using JennGllg.Fr.MonKado.Back.Application.Abstractions;
 using JennGllg.Fr.MonKado.Back.Application.Commands;
-using JennGllg.Fr.MonKado.Back.Application.Queries;
-using JennGllg.Fr.MonKado.Back.Application.Models;
 using JennGllg.Fr.MonKado.Back.Application.Common.Exceptions;
+using JennGllg.Fr.MonKado.Back.Application.Models;
+using JennGllg.Fr.MonKado.Back.Application.Queries;
 using JennGllg.Fr.MonKado.Back.Tests.Common;
 
 using Microsoft.Extensions.Logging.Abstractions;

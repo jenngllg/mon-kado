@@ -1,7 +1,7 @@
-using JennGllg.Fr.MonKado.Back.Application.Queries;
 using JennGllg.Fr.MonKado.Back.Application.Common.Behaviors;
 using JennGllg.Fr.MonKado.Back.Application.Common.Exceptions;
 using JennGllg.Fr.MonKado.Back.Application.Models;
+using JennGllg.Fr.MonKado.Back.Application.Queries;
 using JennGllg.Fr.MonKado.Back.Application.Validators;
 
 namespace JennGllg.Fr.MonKado.Back.Application.UnitTests.Queries;

@@ -1,7 +1,7 @@
 using FluentValidation;
 
-using JennGllg.Fr.MonKado.Back.Application.Queries;
 using JennGllg.Fr.MonKado.Back.Application.Common.Constants;
+using JennGllg.Fr.MonKado.Back.Application.Queries;
 
 namespace JennGllg.Fr.MonKado.Back.Application.Validators;
 
