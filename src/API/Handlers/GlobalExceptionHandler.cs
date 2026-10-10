@@ -330,6 +330,24 @@ public class GlobalExceptionHandler(
                 "The wishlist already has an active share link.",
                 ErrorCodes.WishlistShareLinkAlreadyExists,
                 null),
+            WishlistSubscriptionNotFoundException => new ErrorResponse(
+                StatusCodes.Status404NotFound,
+                "Wishlist subscription not found",
+                "The wishlist subscription is unavailable.",
+                ErrorCodes.WishlistSubscriptionNotFound,
+                null),
+            WishlistSubscriptionAlreadyExistsException => new ErrorResponse(
+                StatusCodes.Status409Conflict,
+                "Wishlist subscription already exists",
+                "The member already follows this wishlist.",
+                ErrorCodes.WishlistSubscriptionAlreadyExists,
+                null),
+            WishlistSubscriptionSelfException => new ErrorResponse(
+                StatusCodes.Status409Conflict,
+                "Cannot follow own wishlist",
+                "A member cannot subscribe to their own wishlist.",
+                ErrorCodes.WishlistSubscriptionSelf,
+                null),
             WishlistShareLinkVersionConflictException => new ErrorResponse(
                 StatusCodes.Status412PreconditionFailed,
                 "Wishlist share link version conflict",

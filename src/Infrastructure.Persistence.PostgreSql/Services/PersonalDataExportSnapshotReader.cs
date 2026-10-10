@@ -347,6 +347,21 @@ public class PersonalDataExportSnapshotReader(
     {
         await WriteArrayAsync(
             writer,
+            "wishlistSubscriptions",
+            context.WishlistSubscriptions
+                .AsNoTracking()
+                .Where(subscription => subscription.MemberId == memberId)
+                .OrderBy(subscription => subscription.Id)
+                .Select(subscription => new
+                {
+                    subscription.Id,
+                    subscription.WishlistId,
+                    subscription.CreatedAt,
+                    subscription.UpdatedAt
+                }),
+            cancellationToken);
+        await WriteArrayAsync(
+            writer,
             "participations",
             context.WishlistParticipants
                 .AsNoTracking()

@@ -64,6 +64,14 @@ public static class JwtAuthenticationExtensions
         services
             .AddAuthorizationBuilder()
             .AddPolicy(
+                AuthorizationPolicies.ManageWishlistSubscription,
+                policy =>
+                {
+                    policy.AddAuthenticationSchemes(JwtBearerDefaults.AuthenticationScheme);
+                    policy.RequireAuthenticatedUser();
+                    policy.AddRequirements(new WishlistSubscriptionOwnerRequirement());
+                })
+            .AddPolicy(
                 AuthorizationPolicies.ModerateWishlist,
                 policy =>
                 {
