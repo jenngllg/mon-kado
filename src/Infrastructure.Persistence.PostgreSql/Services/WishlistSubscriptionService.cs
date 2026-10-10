@@ -27,6 +27,8 @@ public class WishlistSubscriptionService(
     IWishTransactionFactory transactions,
     IUnitOfWork unitOfWork) : IWishlistSubscriptionService
 {
+    private const string PostgreSqlDependencyName = "PostgreSQL";
+
     /// <inheritdoc />
     public async Task<WishlistSubscriptionDetails> CreateAsync(
         Guid memberId,
@@ -86,7 +88,7 @@ public class WishlistSubscriptionService(
         {
 
             throw new DependencyUnavailableException(
-                "PostgreSQL",
+                PostgreSqlDependencyName,
                 exception);
         }
 
@@ -111,7 +113,7 @@ public class WishlistSubscriptionService(
         {
 
             throw new DependencyUnavailableException(
-                "PostgreSQL",
+                PostgreSqlDependencyName,
                 exception);
         }
     }
@@ -146,7 +148,7 @@ public class WishlistSubscriptionService(
         {
 
             throw new DependencyUnavailableException(
-                "PostgreSQL",
+                PostgreSqlDependencyName,
                 exception);
         }
 
@@ -173,7 +175,7 @@ public class WishlistSubscriptionService(
         {
 
             throw new DependencyUnavailableException(
-                "PostgreSQL",
+                PostgreSqlDependencyName,
                 exception);
         }
     }
@@ -208,7 +210,7 @@ public class WishlistSubscriptionService(
         {
 
             throw new DependencyUnavailableException(
-                "PostgreSQL",
+                PostgreSqlDependencyName,
                 exception);
         }
     }
