@@ -104,6 +104,8 @@ public static class InfrastructureInjectionConfiguration
         services.AddScoped<IGoogleAccountRepository, GoogleAccountRepository>();
         services.AddScoped<IMemberEmailChangeRequestRepository, MemberEmailChangeRequestRepository>();
         services.AddScoped<IWishlistRepository, WishlistRepository>();
+        services.AddScoped<IWishlistSubscriptionRepository, WishlistSubscriptionRepository>();
+        services.AddScoped<IWishlistSubscriptionService, WishlistSubscriptionService>();
         services.AddScoped<IWishRepository, WishRepository>();
         services.AddScoped<IWishlistShareLinkRepository, WishlistShareLinkRepository>();
         services.AddScoped<IGuestSessionRepository, GuestSessionRepository>();

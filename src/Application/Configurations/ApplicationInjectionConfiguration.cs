@@ -26,6 +26,9 @@ public static class ApplicationInjectionConfiguration
         services.AddTransient(
             typeof(IPipelineBehavior<,>),
             typeof(ValidationBehavior<,>));
+        services.AddScoped(
+            typeof(IPipelineBehavior<,>),
+            typeof(WishAddedNotificationBehavior<,>));
 
         return services;
     }

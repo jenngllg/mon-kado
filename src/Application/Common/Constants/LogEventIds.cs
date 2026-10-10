@@ -518,6 +518,14 @@ public static class LogEventIds
     public const int WishFavoriteChanged = 2076;
     /// <summary>Identifies a public social-preview metadata read.</summary>
     public const int WishlistSharePreviewRetrieved = 2077;
+    /// <summary>Identifies a committed subscription creation.</summary>
+    public const int WishlistSubscriptionCreated = 2078;
+    /// <summary>Identifies a committed subscription removal.</summary>
+    public const int WishlistSubscriptionRemoved = 2079;
+    /// <summary>Identifies a successful subscription read.</summary>
+    public const int WishlistSubscriptionRead = 2080;
+    /// <summary>Identifies a successful followed-list page read.</summary>
+    public const int WishlistSubscriptionsRead = 2081;
     #endregion
     #region Technical
     /// <summary>

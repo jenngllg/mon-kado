@@ -20,6 +20,9 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Context
 /// <param name="options">The options.</param>
 public class MonKadoDbContext(DbContextOptions<MonKadoDbContext> options) : IdentityDbContext<MonKadoUser, IdentityRole<Guid>, Guid>(options), IUnitOfWork
 {
+    /// <summary>Gets capability-bound member wishlist subscriptions.</summary>
+    public DbSet<WishlistSubscription> WishlistSubscriptions => Set<WishlistSubscription>();
+
     /// <summary>Gets encrypted second-factor credentials and account-wide verification defenses.</summary>
     public DbSet<MemberTwoFactor> MemberTwoFactors => Set<MemberTwoFactor>();
 
