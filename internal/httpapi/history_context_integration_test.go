@@ -98,6 +98,3 @@ func TestReservationHistory_WhenResourcesChange_UsesLiveContextAndPreservesPriva
 		}
 	}
 }
-
-
-
