@@ -390,6 +390,7 @@ public class WishlistShareLinkTests
             ?? throw new InvalidOperationException("The shared-wishlist response is empty.");
         Assert.Equal(
             [
+                "canSubscribe",
                 "id",
                 "ownerDisplayName",
                 "name",

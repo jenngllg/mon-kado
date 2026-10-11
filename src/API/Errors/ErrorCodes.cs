@@ -206,6 +206,12 @@ public static class ErrorCodes
     public const string WishlistShareLinkNotFound = "WISHLIST_SHARE_LINK_NOT_FOUND";
     /// <summary>Identifies a wishlist that already has an active share link.</summary>
     public const string WishlistShareLinkAlreadyExists = "WISHLIST_SHARE_LINK_ALREADY_EXISTS";
+    /// <summary>Identifies an inaccessible member subscription.</summary>
+    public const string WishlistSubscriptionNotFound = "WISHLIST_SUBSCRIPTION_NOT_FOUND";
+    /// <summary>Identifies an existing subscription.</summary>
+    public const string WishlistSubscriptionAlreadyExists = "WISHLIST_SUBSCRIPTION_ALREADY_EXISTS";
+    /// <summary>Identifies an attempt to follow one's own list.</summary>
+    public const string WishlistSubscriptionSelf = "WISHLIST_SUBSCRIPTION_SELF";
     /// <summary>Identifies an optimistic share-link version conflict.</summary>
     public const string WishlistShareLinkVersionConflict = "WISHLIST_SHARE_LINK_VERSION_CONFLICT";
     /// <summary>Identifies public wishlist content unavailable through a share link.</summary>

@@ -615,6 +615,10 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
             migration => Assert.EndsWith(
                 "_AddMemberSearchVisibility",
                 migration,
+                StringComparison.Ordinal),
+            migration => Assert.EndsWith(
+                "_AddWishlistSubscriptions",
+                migration,
                 StringComparison.Ordinal));
         Assert.False(context.Database.HasPendingModelChanges());
         var tables = await GetPublicTablesAsync(
@@ -655,12 +659,25 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
                 "wishlist_report_review_events",
                 "wishlist_reports",
                 "wishlist_share_links",
+                "wishlist_subscriptions",
                 "wishlists"
             ],
             tables);
         var constraints = await GetPublicConstraintsAsync(
             context,
             cancellationToken);
+        Assert.Contains(
+            "ck_wishlist_subscriptions_secret_hash",
+            constraints);
+        Assert.Contains(
+            "fk_wishlist_subscriptions_users_member_id",
+            constraints);
+        Assert.Contains(
+            "fk_wishlist_subscriptions_wishlists_wishlist_id",
+            constraints);
+        Assert.Contains(
+            "fk_wishlist_subscriptions_wishlist_share_links_share_link_id",
+            constraints);
         Assert.Contains(
             "ck_users_display_name_valid",
             constraints);
@@ -817,6 +834,15 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
         var indexes = await GetPublicIndexesAsync(
             context,
             cancellationToken);
+        Assert.Contains(
+            "ux_wishlist_subscriptions_member_wishlist",
+            indexes);
+        Assert.Contains(
+            "ix_wishlist_subscriptions_share_link_id",
+            indexes);
+        Assert.Contains(
+            "ix_wishlist_subscriptions_wishlist_id",
+            indexes);
         Assert.Contains(
             "ux_users_normalized_email",
             indexes);
@@ -1020,6 +1046,70 @@ public class PostgreSqlMigrationTests(PostgreSqlContainerFixture fixture)
             await context.Users
                 .Where(user => user.Id == ownerId)
                 .ExecuteDeleteAsync(cancellationToken);
+        }
+    }
+
+    [Fact]
+    public async Task MigrateAsync_WhenSubscriptionMigrationIsRolledBack_RemovesAndRecreatesRevocationSchema()
+    {
+        // Arrange
+        const string PreviousMigration = "20261009134545_AddMemberSearchVisibility";
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var provider = CreateServiceProvider();
+        await using var scope = provider.CreateAsyncScope();
+        var context = scope.ServiceProvider.GetRequiredService<MonKadoDbContext>();
+        await context.Database.MigrateAsync(cancellationToken);
+        var triggersQuery = context.Database.SqlQueryRaw<string>("""
+            SELECT t.tgname::text AS "Value"
+            FROM pg_trigger t
+            JOIN pg_class c ON c.oid = t.tgrelid
+            JOIN pg_namespace n ON n.oid = c.relnamespace
+            WHERE n.nspname = 'public'
+              AND t.tgname IN ('revoke_wishlist_subscriptions_for_share', 'revoke_wishlist_subscriptions_for_state')
+            ORDER BY t.tgname
+            """);
+
+        try
+        {
+            // Act
+            await context.Database.MigrateAsync(
+                PreviousMigration,
+                cancellationToken);
+            var tablesAfterDown = await GetPublicTablesAsync(
+                context,
+                cancellationToken);
+            var triggersAfterDown = await triggersQuery.ToArrayAsync(cancellationToken);
+            await context.Database.MigrateAsync(cancellationToken);
+            var tablesAfterUp = await GetPublicTablesAsync(
+                context,
+                cancellationToken);
+            var triggersAfterUp = await triggersQuery.ToArrayAsync(cancellationToken);
+
+            // Assert
+            Assert.DoesNotContain(
+                "wishlist_subscriptions",
+                tablesAfterDown);
+            Assert.Empty(triggersAfterDown);
+            Assert.Contains(
+                "wishlist_share_links",
+                tablesAfterDown);
+            Assert.Contains(
+                "wishlists",
+                tablesAfterDown);
+            Assert.Contains(
+                "wishlist_subscriptions",
+                tablesAfterUp);
+            Assert.Equal(
+                [
+                    "revoke_wishlist_subscriptions_for_share",
+                    "revoke_wishlist_subscriptions_for_state"
+                ],
+                triggersAfterUp);
+            Assert.False(context.Database.HasPendingModelChanges());
+        }
+        finally
+        {
+            await context.Database.MigrateAsync(cancellationToken);
         }
     }
 

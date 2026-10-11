@@ -710,6 +710,57 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Migrati
                         });
                 });
 
+            modelBuilder.Entity("JennGllg.Fr.MonKado.Back.Domain.Entities.WishlistSubscription", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("MemberId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("member_id");
+
+                    b.Property<Guid>("ShareLinkId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("share_link_id");
+
+                    b.Property<byte[]>("ShareSecretHash")
+                        .IsRequired()
+                        .HasColumnType("bytea")
+                        .HasColumnName("share_secret_hash");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid>("WishlistId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("wishlist_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_wishlist_subscriptions");
+
+                    b.HasIndex("ShareLinkId")
+                        .HasDatabaseName("ix_wishlist_subscriptions_share_link_id");
+
+                    b.HasIndex("WishlistId")
+                        .HasDatabaseName("ix_wishlist_subscriptions_wishlist_id");
+
+                    b.HasIndex("MemberId", "WishlistId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_wishlist_subscriptions_member_wishlist");
+
+                    b.ToTable("wishlist_subscriptions", "public", t =>
+                        {
+                            t.HasCheckConstraint("ck_wishlist_subscriptions_secret_hash", "octet_length(share_secret_hash) = 32");
+                        });
+                });
+
             modelBuilder.Entity("JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Entities.AccountErasureEmail", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2146,6 +2197,30 @@ namespace JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Migrati
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_wishlist_share_links_wishlists_wishlist_id");
+                });
+
+            modelBuilder.Entity("JennGllg.Fr.MonKado.Back.Domain.Entities.WishlistSubscription", b =>
+                {
+                    b.HasOne("JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Entities.MonKadoUser", null)
+                        .WithMany()
+                        .HasForeignKey("MemberId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_wishlist_subscriptions_users_member_id");
+
+                    b.HasOne("JennGllg.Fr.MonKado.Back.Domain.Entities.WishlistShareLink", null)
+                        .WithMany()
+                        .HasForeignKey("ShareLinkId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_wishlist_subscriptions_wishlist_share_links_share_link_id");
+
+                    b.HasOne("JennGllg.Fr.MonKado.Back.Domain.Entities.Wishlist", null)
+                        .WithMany()
+                        .HasForeignKey("WishlistId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_wishlist_subscriptions_wishlists_wishlist_id");
                 });
 
             modelBuilder.Entity("JennGllg.Fr.MonKado.Back.Infrastructure.Persistence.PostgreSql.Entities.AccountErasureEmail", b =>

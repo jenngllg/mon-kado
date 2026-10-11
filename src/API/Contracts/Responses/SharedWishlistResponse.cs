@@ -10,6 +10,12 @@ namespace JennGllg.Fr.MonKado.Back.Api.Contracts.Responses;
 [ExcludeFromCodeCoverage]
 public class SharedWishlistResponse
 {
+    /// <summary>Gets whether the caller may explicitly follow this list.</summary>
+    public bool CanSubscribe
+    {
+        get; init;
+    }
+
     /// <summary>Gets the wishlist identifier.</summary>
     public Guid Id
     {

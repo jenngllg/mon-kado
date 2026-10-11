@@ -557,6 +557,7 @@ public class WishlistShareLinkOpenApiTests
                 .GetProperty("schema"));
         Assert.Equal(
             [
+                "canSubscribe",
                 "currentParticipant",
                 "eventDate",
                 "id",

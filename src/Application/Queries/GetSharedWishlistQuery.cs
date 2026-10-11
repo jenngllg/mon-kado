@@ -139,7 +139,8 @@ public class GetSharedWishlistQueryHandler(
 
         return new SharedWishlistResult(
             enrichedWishlist,
-            currentParticipant);
+            currentParticipant,
+            request.MemberId != wishlist.OwnerId);
     }
 
     private static SharedWishlistDetails CreateWishlistDetails(

@@ -115,6 +115,7 @@ public class SharedWishlistsController(
         var wishlist = result.Wishlist;
         var response = new SharedWishlistResponse
         {
+            CanSubscribe = result.CanSubscribe,
             Id = wishlist.Id,
             OwnerDisplayName = wishlist.OwnerDisplayName,
             Name = wishlist.Name,

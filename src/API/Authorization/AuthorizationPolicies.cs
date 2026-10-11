@@ -29,6 +29,9 @@ public static class AuthorizationPolicies
 
     #region Wishlist
 
+    /// <summary>Identifies ownership of a currently accessible list subscription.</summary>
+    public const string ManageWishlistSubscription = "ManageWishlistSubscription";
+
     /// <summary>
     /// Identifies the policy for managing an owned private wishlist.
     /// </summary>
