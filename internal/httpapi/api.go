@@ -185,6 +185,8 @@ func (a *API) route(pattern string, opt options, handler endpoint) {
 			w.Header().Set("Location", result.Location)
 		}
 		for _, cookie := range result.Cookies {
+			// These response cookies carry OAuth correlation/external proofs and always require HTTPS.
+			cookie.Secure = true
 			http.SetCookie(w, cookie)
 		}
 		if result.Status == 0 {
@@ -197,7 +199,7 @@ func (a *API) route(pattern string, opt options, handler endpoint) {
 			w.Header().Set("Content-Length", strconv.FormatInt(result.ContentLength, 10))
 			w.WriteHeader(result.Status)
 			if _, err := io.Copy(w, result.Stream); err != nil {
-				a.Logger.ErrorContext(r.Context(), "Archive download interrupted", "EventId", logging.ArchiveDownloadInterrupted, "CorrelationId", w.Header().Get("X-Correlation-ID"), "TraceId", w.Header().Get("X-Trace-ID"))
+				a.Logger.ErrorContext(r.Context(), "Archive download interrupted", "EventId", logging.ArchiveDownloadInterrupted, "CorrelationId", logging.Correlation(w.Header().Get("X-Correlation-ID")), "TraceId", logging.Trace(w.Header().Get("X-Trace-ID")))
 			}
 		} else if result.Binary != nil {
 			w.Header().Set("Content-Type", result.MediaType)
@@ -210,7 +212,7 @@ func (a *API) route(pattern string, opt options, handler endpoint) {
 			a.absoluteImageURLs(r, result.Body)
 			writeJSON(w, result.Status, result.Body)
 		}
-		a.Logger.InfoContext(r.Context(), "Business operation succeeded", "EventId", logging.BusinessOperationSucceeded, "Operation", pattern, "StatusCode", result.Status, "UserId", p.MemberID, "CorrelationId", w.Header().Get("X-Correlation-ID"), "TraceId", w.Header().Get("X-Trace-ID"))
+		a.Logger.InfoContext(r.Context(), "Business operation succeeded", "EventId", logging.BusinessOperationSucceeded, "Operation", pattern, "StatusCode", result.Status, "UserId", p.MemberID, "CorrelationId", logging.Correlation(w.Header().Get("X-Correlation-ID")), "TraceId", logging.Trace(w.Header().Get("X-Trace-ID")))
 	})
 }
 
@@ -223,6 +225,7 @@ func (a *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if id, err := uuid.Parse(correlation); err != nil || id == uuid.Nil {
 		correlation = security.NewID()
 	}
+	logCorrelation := logging.Correlation(correlation)
 	trace := strings.ReplaceAll(security.NewID(), "-", "")
 	if candidate := incomingTrace(r.Header.Get("traceparent")); candidate != "" {
 		trace = candidate
@@ -233,7 +236,7 @@ func (a *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	r.Header.Set("X-Trace-ID", trace)
 	defer func() {
 		a.Telemetry.RecordHTTP(recorded.Status, time.Since(started), r.Context().Err() != nil)
-		a.Logger.InfoContext(r.Context(), "HTTP request completed", "EventId", logging.HTTPRequestCompleted, "Method", r.Method, "Operation", r.Pattern, "StatusCode", recorded.Status, "CorrelationId", correlation, "TraceId", trace)
+		a.Logger.InfoContext(r.Context(), "HTTP request completed", "EventId", logging.HTTPRequestCompleted, "Method", logging.HTTPMethod(r.Method), "Operation", r.Pattern, "StatusCode", recorded.Status, "CorrelationId", logCorrelation, "TraceId", trace)
 	}()
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
@@ -241,7 +244,7 @@ func (a *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'")
 	defer func() {
 		if recovered := recover(); recovered != nil {
-			a.Logger.ErrorContext(r.Context(), "Unhandled request panic", "EventId", logging.UnhandledRequestPanic, "StackTrace", string(debug.Stack()), "CorrelationId", correlation, "TraceId", trace)
+			a.Logger.ErrorContext(r.Context(), "Unhandled request panic", "EventId", logging.UnhandledRequestPanic, "StackTrace", string(debug.Stack()), "CorrelationId", logCorrelation, "TraceId", trace)
 			writeJSON(w, 500, domain.ErrorResponse{StatusCode: 500, Title: ptr("Internal Server Error"), Message: ptr("An unexpected error occurred.")})
 		}
 	}()
@@ -316,13 +319,13 @@ func (a *API) writeError(w http.ResponseWriter, r *http.Request, err error) {
 		if errors.As(err, &connection) || errors.As(err, &network) || errors.As(err, &postgres) && (strings.HasPrefix(postgres.Code, "08") || strings.HasPrefix(postgres.Code, "53") || strings.HasPrefix(postgres.Code, "57P")) {
 			business = domain.Failure(503, domain.TechnicalDependencyUnavailable, "A required dependency is unavailable.")
 		} else {
-			a.Logger.ErrorContext(r.Context(), "Unhandled request failure", "EventId", logging.UnhandledRequestFailure, "ExceptionType", fmt.Sprintf("%T", err), "StackTrace", string(debug.Stack()), "CorrelationId", w.Header().Get("X-Correlation-ID"), "TraceId", w.Header().Get("X-Trace-ID"))
+			a.Logger.ErrorContext(r.Context(), "Unhandled request failure", "EventId", logging.UnhandledRequestFailure, "ExceptionType", fmt.Sprintf("%T", err), "StackTrace", string(debug.Stack()), "CorrelationId", logging.Correlation(w.Header().Get("X-Correlation-ID")), "TraceId", logging.Trace(w.Header().Get("X-Trace-ID")))
 			writeJSON(w, 500, domain.ErrorResponse{StatusCode: 500, Title: ptr("Internal Server Error"), Message: ptr("An unexpected error occurred.")})
 			return
 		}
-		a.Logger.ErrorContext(r.Context(), "Unexpected dependency failure", "EventId", logging.UnexpectedDependencyFailure, "ExceptionType", fmt.Sprintf("%T", err), "StackTrace", string(debug.Stack()), "CorrelationId", w.Header().Get("X-Correlation-ID"), "TraceId", w.Header().Get("X-Trace-ID"))
+		a.Logger.ErrorContext(r.Context(), "Unexpected dependency failure", "EventId", logging.UnexpectedDependencyFailure, "ExceptionType", fmt.Sprintf("%T", err), "StackTrace", string(debug.Stack()), "CorrelationId", logging.Correlation(w.Header().Get("X-Correlation-ID")), "TraceId", logging.Trace(w.Header().Get("X-Trace-ID")))
 	} else {
-		a.Logger.ErrorContext(r.Context(), "Business operation failed", "EventId", logging.BusinessOperationFailed, "StatusCode", business.Status, "ErrorCode", business.Code, "Operation", r.Pattern, "CorrelationId", w.Header().Get("X-Correlation-ID"), "TraceId", w.Header().Get("X-Trace-ID"))
+		a.Logger.ErrorContext(r.Context(), "Business operation failed", "EventId", logging.BusinessOperationFailed, "StatusCode", business.Status, "ErrorCode", business.Code, "Operation", r.Pattern, "CorrelationId", logging.Correlation(w.Header().Get("X-Correlation-ID")), "TraceId", logging.Trace(w.Header().Get("X-Trace-ID")))
 	}
 	writeJSON(w, business.Status, domain.ErrorResponse{StatusCode: business.Status, Title: ptr(http.StatusText(business.Status)), Message: ptr(business.Message), ErrorCode: ptr(business.Code), ValidationErrors: business.Validation})
 }
@@ -403,7 +406,8 @@ func incomingTrace(value string) string {
 			return ""
 		}
 	}
-	return parts[1]
+	decoded, _ := hex.DecodeString(parts[1])
+	return hex.EncodeToString(decoded)
 }
 
 func entityTag(r *request, required bool) (*uint32, error) {

@@ -3,6 +3,7 @@ package images
 import (
 	"context"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 
@@ -75,19 +76,48 @@ func Remove(root, id string) error {
 
 // Read returns only a regular normalized image file and respects caller cancellation.
 func Read(ctx context.Context, root, id string) ([]byte, error) {
-	if _, err := uuid.Parse(id); err != nil {
+	identifier, err := uuid.Parse(id)
+	if err != nil {
 		return nil, os.ErrNotExist
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	path := filepath.Join(root, id+".webp")
-	info, err := os.Lstat(path)
+	directory, err := os.OpenRoot(root)
+	if err != nil {
+		return nil, err
+	}
+	defer directory.Close()
+	name := identifier.String() + ".webp"
+	info, err := directory.Lstat(name)
 	if err != nil {
 		return nil, err
 	}
 	if !info.Mode().IsRegular() || info.Size() > MaximumInputBytes {
 		return nil, os.ErrNotExist
 	}
-	return os.ReadFile(path)
+	file, err := directory.Open(name)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+	// The descriptor may differ from Lstat after a local replacement; enforce its own bounds too.
+	info, err = file.Stat()
+	if err != nil {
+		return nil, err
+	}
+	if !info.Mode().IsRegular() || info.Size() > MaximumInputBytes {
+		return nil, os.ErrNotExist
+	}
+	content, err := io.ReadAll(io.LimitReader(file, MaximumInputBytes+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(content) > MaximumInputBytes {
+		return nil, os.ErrNotExist
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	return content, nil
 }

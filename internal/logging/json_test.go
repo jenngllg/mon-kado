@@ -171,3 +171,35 @@ func TestJSONLogger_WhenRecordsAreConcurrent_ProducesCompleteIndependentJSONLine
 		t.Fatal("concurrent records were lost")
 	}
 }
+
+func TestHTTPMethod_WhenRequestTokenIsUnknown_UsesCompiledClassification(t *testing.T) {
+	for _, method := range []string{"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS", "private\nrequest"} {
+		// Arrange
+		want := method
+		if method == "private\nrequest" {
+			want = "Other"
+		}
+		// Act
+		classification := logging.HTTPMethod(method)
+		// Assert
+		if classification != want {
+			t.Fatal("request text entered method classification")
+		}
+	}
+}
+
+func TestIdentities_WhenHeadersContainUntrustedValues_EmitsCanonicalTechnicalStrings(t *testing.T) {
+	// Arrange
+	id := security.NewID()
+	// Act
+	if logging.Correlation(strings.ToUpper(id)) != id || logging.Trace(strings.ToUpper(strings.ReplaceAll(id, "-", ""))) != strings.ReplaceAll(id, "-", "") {
+		t.Fatal("technical identity canonicalization differs")
+	}
+	// Assert
+	for _, untrusted := range []string{"", "private\nheader", "00000000-0000-0000-0000-000000000000", strings.Repeat("0", 32)} {
+		correlation, trace := logging.Correlation(untrusted), logging.Trace(untrusted)
+		if correlation == untrusted || len(correlation) != 36 || trace == untrusted || len(trace) != 32 || strings.ContainsAny(correlation+trace, "\r\n") {
+			t.Fatal("untrusted identity was rendered")
+		}
+	}
+}

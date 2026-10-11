@@ -47,6 +47,21 @@ func TestIncomingTrace_WhenW3CParentInvalid_DoesNotAcceptPartialHex(t *testing.T
 	}
 }
 
+func TestServeHTTP_WhenClientCorrelationUsesValidAlternateCase_PreservesItsOriginalHeaderValue(t *testing.T) {
+	// Arrange
+	cfg := config.Config{AllowedHosts: []string{"example.com"}, SigningKey: make([]byte, 32), EncryptionKey: make([]byte, 32)}
+	api := New(application.New(nil, cfg, time.Now), slog.New(slog.NewJSONHandler(io.Discard, nil)))
+	r := httptest.NewRequest("GET", "http://example.com/liveness", nil)
+	r.Header.Set("X-Correlation-ID", "019A0983-3456-7000-8000-000000000001")
+	w := httptest.NewRecorder()
+	// Act
+	api.ServeHTTP(w, r)
+	// Assert
+	if w.Code != 200 || w.Header().Get("X-Correlation-ID") != "019A0983-3456-7000-8000-000000000001" {
+		t.Fatal("valid client correlation representation was changed")
+	}
+}
+
 func TestClientAddress_WhenPeerIsUntrusted_IgnoresForgedForwardedAddresses(t *testing.T) {
 	// Arrange
 	a := &API{Service: &application.Service{Config: config.Config{TrustedProxies: []netip.Prefix{netip.MustParsePrefix("127.0.0.1/32")}}}}

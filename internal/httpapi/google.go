@@ -89,7 +89,7 @@ func (a *API) googleCallback(r *request) (response, error) {
 		if errors.As(err, &failure) && failure.Status == 503 {
 			result.Location = a.Service.Config.FrontendOrigin + "/login/google-return#error=unavailable"
 		}
-		a.Logger.ErrorContext(r.Context(), "Google callback rejected", "EventId", logging.GoogleCallbackRejected, "CorrelationId", r.Header.Get("X-Correlation-ID"), "TraceId", r.Header.Get("X-Trace-ID"))
+		a.Logger.ErrorContext(r.Context(), "Google callback rejected", "EventId", logging.GoogleCallbackRejected, "CorrelationId", logging.Correlation(r.Header.Get("X-Correlation-ID")), "TraceId", logging.Trace(r.Header.Get("X-Trace-ID")))
 		return result, nil
 	}
 	result.Location = a.Service.Config.FrontendOrigin + "/login/google-return#flow=" + url.QueryEscape(proof)

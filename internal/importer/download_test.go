@@ -82,6 +82,34 @@ func TestDownload_WhenPublicHostRedirects_RevalidatesDNSAndPinsEachConnection(t 
 	}
 }
 
+func TestDownload_WhenRedirectIsRelative_PreservesMerchantAuthorityAndRevalidatesItsAddress(t *testing.T) {
+	// Arrange
+	client := importer.New()
+	hosts := []string{}
+	client.Resolver = resolverFunc(func(ctx context.Context, network, host string) ([]netip.Addr, error) {
+		hosts = append(hosts, host)
+		return []netip.Addr{netip.MustParseAddr("8.8.8.8")}, ctx.Err()
+	})
+	calls := pipeMerchant(t, client, func(req *http.Request) *http.Response {
+		if req.Host != "merchant.test" {
+			t.Error("numeric transport destination replaced merchant Host")
+		}
+		if req.URL.Path == "/products/start" {
+			return &http.Response{StatusCode: 302, Header: http.Header{"Location": []string{"../final?variant=123"}}, Body: io.NopCloser(strings.NewReader(""))}
+		}
+		if req.URL.Path != "/final" || req.URL.RawQuery != "variant=123" {
+			t.Error("relative redirect path or variant changed")
+		}
+		return &http.Response{StatusCode: 200, Header: http.Header{"Content-Type": []string{"text/html"}}, Body: io.NopCloser(strings.NewReader("product"))}
+	})
+	// Act
+	_, final, _, err := client.Download(t.Context(), "http://merchant.test/products/start", 100)
+	// Assert
+	if err != nil || final.String() != "http://merchant.test/final?variant=123" || *calls != 2 || len(hosts) != 2 || hosts[0] != "merchant.test" || hosts[1] != "merchant.test" {
+		t.Fatal("relative redirect escaped original authority or connection validation")
+	}
+}
+
 func TestPreview_WhenDNSRebindsAfterValidation_RefusesPrivateConnection(t *testing.T) {
 	// Arrange
 	client := importer.New()

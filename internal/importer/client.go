@@ -4,9 +4,11 @@ package importer
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"errors"
 	"github.com/JennGllg/mon-kado/internal/domain"
 	"golang.org/x/net/html/charset"
+	"golang.org/x/net/idna"
 	"io"
 	"mime"
 	"net"
@@ -110,51 +112,22 @@ func (c *Client) Validate(ctx context.Context, value string) error {
 
 // Download validates each actual connection and manually follows bounded redirects.
 func (c *Client) Download(ctx context.Context, value string, limit int64) ([]byte, *url.URL, string, error) {
-	transport := &http.Transport{Proxy: nil, DisableKeepAlives: true, ResponseHeaderTimeout: c.Timeout, DialContext: func(ctx context.Context, network, address string) (net.Conn, error) {
-		host, port, err := net.SplitHostPort(address)
-		if err != nil {
-			return nil, err
-		}
-		addresses, err := c.addresses(ctx, host)
-		if err != nil {
-			return nil, err
-		}
-		var last error
-		for _, ip := range addresses {
-			connection, err := c.Dialer.DialContext(ctx, network, net.JoinHostPort(ip.String(), port))
-			if err == nil {
-				return connection, nil
-			}
-			last = err
-			if ctx.Err() != nil {
-				return nil, ctx.Err()
-			}
-		}
-		return nil, last
-	}}
-	defer transport.CloseIdleConnections()
-	client := &http.Client{Transport: transport, Timeout: c.Timeout, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	for redirects := 0; ; redirects++ {
 		u, err := webURL(value)
 		if err != nil {
 			return nil, nil, "", err
 		}
-		req, err := http.NewRequestWithContext(ctx, "GET", u.String(), nil)
-		if err != nil {
-			return nil, nil, "", err
-		}
-		req.Header.Set("User-Agent", "MonKado/1.0 (+product preview)")
-		response, err := client.Do(req)
+		response, err := c.request(ctx, u)
 		if err != nil {
 			return nil, nil, "", err
 		}
 		if response.StatusCode >= 300 && response.StatusCode <= 399 {
-			location, err := response.Location()
+			location, err := url.Parse(response.Header.Get("Location"))
 			response.Body.Close()
-			if err != nil || redirects >= c.MaximumRedirects {
+			if err != nil || response.Header.Get("Location") == "" || redirects >= c.MaximumRedirects {
 				return nil, nil, "", errors.New("merchant redirect limit exceeded")
 			}
-			value = location.String()
+			value = u.ResolveReference(location).String()
 			continue
 		}
 		content, err := io.ReadAll(io.LimitReader(response.Body, limit+1))
@@ -176,4 +149,50 @@ func (c *Client) Download(ctx context.Context, value string, limit int64) ([]byt
 		}
 		return content, u, media, nil
 	}
+}
+
+func (c *Client) request(ctx context.Context, target *url.URL) (*http.Response, error) {
+	host, err := idna.Lookup.ToASCII(target.Hostname())
+	if err != nil {
+		return nil, rejected()
+	}
+	addresses, err := c.addresses(ctx, host)
+	if err != nil {
+		return nil, err
+	}
+	scheme, port := "http", "80"
+	if target.Scheme == "https" {
+		scheme, port = "https", "443"
+	}
+	destination := net.JoinHostPort(addresses[0].String(), port)
+	transport := &http.Transport{Proxy: nil, DisableKeepAlives: true, ResponseHeaderTimeout: c.Timeout,
+		TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12, ServerName: host},
+		DialContext: func(ctx context.Context, network, address string) (net.Conn, error) {
+			if address != destination {
+				return nil, rejected()
+			}
+			var last error
+			for _, ip := range addresses {
+				connection, err := c.Dialer.DialContext(ctx, network, net.JoinHostPort(ip.String(), port))
+				if err == nil {
+					return connection, nil
+				}
+				last = err
+				if ctx.Err() != nil {
+					return nil, ctx.Err()
+				}
+			}
+			return nil, last
+		}}
+	defer transport.CloseIdleConnections()
+	client := &http.Client{Transport: transport, Timeout: c.Timeout, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	// Only the validated numeric destination reaches the transport URL; preserve merchant authority for Host and TLS.
+	pinned := &url.URL{Scheme: scheme, Host: destination, Path: target.Path, RawPath: target.RawPath, RawQuery: target.RawQuery, ForceQuery: target.ForceQuery}
+	req, err := http.NewRequestWithContext(ctx, "GET", pinned.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Host = target.Host
+	req.Header.Set("User-Agent", "MonKado/1.0 (+product preview)")
+	return client.Do(req)
 }

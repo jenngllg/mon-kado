@@ -2,6 +2,7 @@ package logging
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"io"
 	"log/slog"
@@ -139,6 +140,45 @@ func (h *jsonHandler) Handle(_ context.Context, record slog.Record) error {
 
 func exceptionalEvent(id int64) bool {
 	return id == UnhandledRequestPanic || id == UnhandledRequestFailure || id == UnexpectedDependencyFailure || id == WorkerPassFailed || id == APIStopped || id == WorkerStopped || id == MigrationFailed
+}
+
+// HTTPMethod returns a compiled method classification without retaining arbitrary request text.
+func HTTPMethod(method string) string {
+	switch method {
+	case "GET":
+		return "GET"
+	case "POST":
+		return "POST"
+	case "PUT":
+		return "PUT"
+	case "PATCH":
+		return "PATCH"
+	case "DELETE":
+		return "DELETE"
+	case "HEAD":
+		return "HEAD"
+	case "OPTIONS":
+		return "OPTIONS"
+	default:
+		return "Other"
+	}
+}
+
+// Correlation returns a canonical technical identifier for log properties.
+// HTTP response headers may preserve the client's valid original representation independently.
+func Correlation(value string) string {
+	if id, err := uuid.Parse(value); err == nil && id != uuid.Nil {
+		return id.String()
+	}
+	return security.NewID()
+}
+
+// Trace returns a canonical W3C identity without retaining arbitrary header text.
+func Trace(value string) string {
+	if decoded, err := hex.DecodeString(value); err == nil && len(decoded) == 16 && strings.Trim(value, "0") != "" {
+		return hex.EncodeToString(decoded)
+	}
+	return strings.ReplaceAll(security.NewID(), "-", "")
 }
 
 func safeFrames(stack string) string {
