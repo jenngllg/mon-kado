@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/JennGllg/mon-kado/internal/domain"
+	"github.com/JennGllg/mon-kado/internal/telemetry"
 	"github.com/JennGllg/mon-kado/internal/worker"
 )
 
@@ -63,6 +64,9 @@ func TestExports_WhenGenerationFails_RecordsBoundedAttemptsAndStableFailureCode(
 			}
 			if attempts != test.attempts || notifications != 0 {
 				t.Fatal("failed export attempts or publication notification are incorrect")
+			}
+			if w.Telemetry.Capture().Jobs[telemetry.PersonalDataExport].TerminalFailures != 1 {
+				t.Fatal("terminal export telemetry differs from its persisted outcome")
 			}
 			requireStatus(t, f.send(t, "GET", "/api/v1/members/current/data-exports/"+result.Id+"/archive", "", nil), 409, nil)
 		})

@@ -24,6 +24,7 @@ import (
 	"github.com/JennGllg/mon-kado/internal/application"
 	"github.com/JennGllg/mon-kado/internal/domain"
 	"github.com/JennGllg/mon-kado/internal/security"
+	"github.com/JennGllg/mon-kado/internal/telemetry"
 	"github.com/JennGllg/mon-kado/internal/validation"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -38,6 +39,7 @@ type API struct {
 	Google         application.GoogleClient
 	Importer       application.WishImportClient
 	ImageAdmission *admission.Limiter
+	Telemetry      *telemetry.Collector
 	operations     map[string]options
 }
 
@@ -78,6 +80,7 @@ type options struct {
 func New(service *application.Service, logger *slog.Logger) *API {
 	a := &API{Service: service, Logger: logger, mux: http.NewServeMux(), limiter: rateLimiter{windows: map[string]rateWindow{}}, operations: map[string]options{}}
 	a.ImageAdmission = admission.New(nil)
+	a.Telemetry = telemetry.New("api", func() time.Time { return service.Now() }, time.Now)
 	imports := service.Config.Imports()
 	client := importer.New()
 	client.Timeout, client.MaximumRedirects, client.MaximumHTMLBytes = imports.Timeout, imports.MaximumRedirects, imports.MaximumHTMLBytes
@@ -213,6 +216,7 @@ func (a *API) route(pattern string, opt options, handler endpoint) {
 
 // ServeHTTP applies origin and host allowlists, tracing and centralized exception recovery.
 func (a *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	started := time.Now()
 	recorded := &statusWriter{ResponseWriter: w, Status: 200}
 	w = recorded
 	correlation := r.Header.Get("X-Correlation-ID")
@@ -228,6 +232,7 @@ func (a *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	r.Header.Set("X-Correlation-ID", correlation)
 	r.Header.Set("X-Trace-ID", trace)
 	defer func() {
+		a.Telemetry.RecordHTTP(recorded.Status, time.Since(started), r.Context().Err() != nil)
 		a.Logger.InfoContext(r.Context(), "HTTP request completed", "EventId", logging.HTTPRequestCompleted, "Method", r.Method, "Operation", r.Pattern, "StatusCode", recorded.Status, "CorrelationId", correlation, "TraceId", trace)
 	}()
 	w.Header().Set("Cache-Control", "no-store")

@@ -6,6 +6,7 @@ import (
 	"github.com/JennGllg/mon-kado/internal/application"
 	"github.com/JennGllg/mon-kado/internal/logging"
 	"github.com/JennGllg/mon-kado/internal/security"
+	"github.com/JennGllg/mon-kado/internal/telemetry"
 	"github.com/jackc/pgx/v5"
 	"strings"
 )
@@ -98,6 +99,7 @@ func (w *Worker) deliverNotifications(ctx context.Context, erasure bool) error {
 		if !failure.Retryable {
 			count = w.Service.Config.MaximumAttempts
 		}
+		var finalized int64
 		if erasure && count >= w.Service.Config.MaximumAttempts {
 			err = w.Service.Store.Transaction(ctx, func(tx pgx.Tx) error {
 				command, err := tx.Exec(ctx, `DELETE FROM account_erasure_email_outbox WHERE id=$1 AND lease_id=$2`, id, lease)
@@ -107,6 +109,7 @@ func (w *Worker) deliverNotifications(ctx context.Context, erasure bool) error {
 				if command.RowsAffected() != 1 {
 					return nil
 				}
+				finalized = command.RowsAffected()
 				_, err = tx.Exec(ctx, `UPDATE administrative_account_erasure_events SET notification_status='Failed' WHERE id=$1`, id)
 				return err
 			})
@@ -115,7 +118,11 @@ func (w *Worker) deliverNotifications(ctx context.Context, erasure bool) error {
 			update := `UPDATE ` + table + ` SET available_at=$3,attempt_count=$4,locked_until=NULL,lease_id=NULL`
 			if !erasure {
 				update += `,last_error=$5,processed_at=CASE WHEN $4::integer>=$6::integer THEN $7::timestamptz ELSE NULL END WHERE id=$1 AND lease_id=$2`
-				_, err = w.Service.Store.Pool.Exec(ctx, update, id, lease, w.Service.Now().UTC().Add(delay), count, failure.Category, w.Service.Config.MaximumAttempts, w.Service.Now().UTC())
+				command, updateErr := w.Service.Store.Pool.Exec(ctx, update, id, lease, w.Service.Now().UTC().Add(delay), count, failure.Category, w.Service.Config.MaximumAttempts, w.Service.Now().UTC())
+				err = updateErr
+				if count >= w.Service.Config.MaximumAttempts {
+					finalized = command.RowsAffected()
+				}
 			} else {
 				update += ` WHERE id=$1 AND lease_id=$2`
 				_, err = w.Service.Store.Pool.Exec(ctx, update, id, lease, w.Service.Now().UTC().Add(delay), count)
@@ -124,14 +131,25 @@ func (w *Worker) deliverNotifications(ctx context.Context, erasure bool) error {
 		if err != nil {
 			return err
 		}
+		operation := telemetry.WishlistModerationEmailDelivery
+		if erasure {
+			operation = telemetry.AccountErasureProcessing
+		}
+		w.Telemetry.RecordTerminalFailures(operation, finalized)
 		w.Logger.ErrorContext(ctx, "Notification attempt failed", "EventId", logging.NotificationAttemptFailed, "OutboxId", id, "FailureCategory", failure.Category, "CorrelationId", lease, "TraceId", strings.ReplaceAll(lease, "-", ""))
 	}
 	return nil
 }
 
 func (w *Worker) cleanupExpiredErasure(ctx context.Context) error {
-	return w.Service.Store.Transaction(ctx, func(tx pgx.Tx) error {
-		_, err := tx.Exec(ctx, `WITH expired AS(DELETE FROM account_erasure_email_outbox WHERE id IN(SELECT id FROM account_erasure_email_outbox WHERE expires_at<=$1 ORDER BY expires_at LIMIT $2) RETURNING id) UPDATE administrative_account_erasure_events SET notification_status='Failed' WHERE id IN(SELECT id FROM expired)`, w.Service.Now().UTC(), w.Service.Config.Jobs().BatchSize)
+	var finalized int64
+	err := w.Service.Store.Transaction(ctx, func(tx pgx.Tx) error {
+		command, err := tx.Exec(ctx, `WITH expired AS(DELETE FROM account_erasure_email_outbox WHERE id IN(SELECT id FROM account_erasure_email_outbox WHERE expires_at<=$1 ORDER BY expires_at LIMIT $2) RETURNING id) UPDATE administrative_account_erasure_events SET notification_status='Failed' WHERE id IN(SELECT id FROM expired)`, w.Service.Now().UTC(), w.Service.Config.Jobs().BatchSize)
+		finalized = command.RowsAffected()
 		return err
 	})
+	if err == nil {
+		w.Telemetry.RecordTerminalFailures(telemetry.AccountErasureProcessing, finalized)
+	}
+	return err
 }

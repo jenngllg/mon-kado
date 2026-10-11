@@ -14,17 +14,20 @@ import (
 	"github.com/JennGllg/mon-kado/internal/application"
 	"github.com/JennGllg/mon-kado/internal/images"
 	"github.com/JennGllg/mon-kado/internal/security"
+	"github.com/JennGllg/mon-kado/internal/telemetry"
 	"github.com/jackc/pgx/v5"
 )
 
 // Worker composes application jobs and an explicitly substituted external email provider.
 type Worker struct {
-	Service     *application.Service
-	Sender      application.EmailSender
-	Logger      *slog.Logger
-	tickLock    sync.Mutex
-	scanLock    sync.Mutex
-	directories map[string]*os.File
+	Telemetry     *telemetry.Collector
+	telemetryOnce sync.Once
+	Service       *application.Service
+	Sender        application.EmailSender
+	Logger        *slog.Logger
+	tickLock      sync.Mutex
+	scanLock      sync.Mutex
+	directories   map[string]*os.File
 }
 
 // Run waits on context cancellation between native worker passes.
@@ -33,31 +36,14 @@ func (w *Worker) Run(ctx context.Context) error {
 	if ctx.Err() != nil {
 		return nil
 	}
-	jobs := []struct {
-		Name    string
-		Execute func(context.Context) error
-	}{
-		{"exports", w.generateExports}, {"imageDeletion", w.cleanupImages}, {"files", w.reconcileFiles}, {"authenticationCleanup", w.cleanupAuthentication}, {"erasureExpiry", w.cleanupExpiredErasure},
-	}
-	if w.Sender != nil {
-		jobs = append(jobs, struct {
-			Name    string
-			Execute func(context.Context) error
-		}{"authenticationEmail", w.deliverAuthentication}, struct {
-			Name    string
-			Execute func(context.Context) error
-		}{"moderationEmail", func(ctx context.Context) error { return w.deliverNotifications(ctx, false) }}, struct {
-			Name    string
-			Execute func(context.Context) error
-		}{"erasureEmail", func(ctx context.Context) error { return w.deliverNotifications(ctx, true) }})
-	}
+	jobs := w.jobs()
 	var running sync.WaitGroup
 	for _, job := range jobs {
 		running.Go(func() {
 			ticker := time.NewTicker(w.Service.Config.WorkerInterval)
 			defer ticker.Stop()
 			for ctx.Err() == nil {
-				err := job.Execute(ctx)
+				err := w.executeJob(ctx, job)
 				if err != nil && ctx.Err() == nil {
 					id := security.NewID()
 					w.Logger.ErrorContext(ctx, "Worker pass failed", "EventId", logging.WorkerPassFailed, "Job", job.Name, "ExceptionType", "dependency", "CorrelationId", id, "TraceId", strings.ReplaceAll(id, "-", ""))
@@ -81,30 +67,12 @@ func (w *Worker) Run(ctx context.Context) error {
 func (w *Worker) Tick(ctx context.Context) error {
 	w.tickLock.Lock()
 	defer w.tickLock.Unlock()
-	if err := w.generateExports(ctx); err != nil {
-		return err
-	}
-	if w.Sender != nil {
-		if err := w.deliverAuthentication(ctx); err != nil {
-			return err
-		}
-		if err := w.deliverNotifications(ctx, false); err != nil {
-			return err
-		}
-		if err := w.deliverNotifications(ctx, true); err != nil {
+	for _, job := range w.jobs() {
+		if err := w.executeJob(ctx, job); err != nil {
 			return err
 		}
 	}
-	if err := w.cleanupImages(ctx); err != nil {
-		return err
-	}
-	if err := w.reconcileFiles(ctx); err != nil {
-		return err
-	}
-	if err := w.cleanupExpiredErasure(ctx); err != nil {
-		return err
-	}
-	return w.cleanupAuthentication(ctx)
+	return nil
 }
 
 // Close releases directory scan cursors after native worker execution stops.
@@ -171,8 +139,12 @@ func (w *Worker) deliverAuthentication(ctx context.Context) error {
 		if !failure.Retryable {
 			attempts = w.Service.Config.MaximumAttempts
 		}
-		if _, err = w.Service.Store.Pool.Exec(ctx, `UPDATE authentication_email_outbox SET available_at=$3,locked_until=NULL,lease_id=NULL,last_error=$4,attempt_count=$5::integer,processed_at=CASE WHEN $5::integer>=$6::integer THEN $7::timestamptz ELSE NULL END,protected_payload=CASE WHEN $5::integer>=$6::integer THEN NULL ELSE protected_payload END WHERE id=$1 AND lease_id=$2`, id, lease, w.Service.Now().UTC().Add(delay), failure.Category, attempts, w.Service.Config.MaximumAttempts, w.Service.Now().UTC()); err != nil {
+		command, err := w.Service.Store.Pool.Exec(ctx, `UPDATE authentication_email_outbox SET available_at=$3,locked_until=NULL,lease_id=NULL,last_error=$4,attempt_count=$5::integer,processed_at=CASE WHEN $5::integer>=$6::integer THEN $7::timestamptz ELSE NULL END,protected_payload=CASE WHEN $5::integer>=$6::integer THEN NULL ELSE protected_payload END WHERE id=$1 AND lease_id=$2`, id, lease, w.Service.Now().UTC().Add(delay), failure.Category, attempts, w.Service.Config.MaximumAttempts, w.Service.Now().UTC())
+		if err != nil {
 			return err
+		}
+		if attempts >= w.Service.Config.MaximumAttempts {
+			w.Telemetry.RecordTerminalFailures(telemetry.AuthenticationEmailDelivery, command.RowsAffected())
 		}
 		w.Logger.ErrorContext(ctx, "Authentication email attempt failed", "EventId", logging.AuthenticationEmailAttemptFailed, "OutboxId", id, "Category", failure.Category, "AttemptCount", attempts, "CorrelationId", lease, "TraceId", strings.ReplaceAll(lease, "-", ""))
 	}
@@ -222,9 +194,11 @@ func (w *Worker) cleanupImages(ctx context.Context) error {
 func (w *Worker) cleanupAuthentication(ctx context.Context) error {
 	now := w.Service.Now().UTC()
 	batch := w.Service.Config.Jobs().BatchSize
-	if _, err := w.Service.Store.Pool.Exec(ctx, `UPDATE authentication_email_outbox SET processed_at=$1,protected_payload=NULL,lease_id=NULL,locked_until=NULL,last_error=COALESCE(last_error,'expired') WHERE id IN(SELECT id FROM authentication_email_outbox WHERE processed_at IS NULL AND (locked_until IS NULL OR locked_until<=$1) AND (created_at<=$1::timestamptz-interval '1 day' OR attempt_count>=$3) ORDER BY created_at LIMIT $2)`, now, batch, w.Service.Config.MaximumAttempts); err != nil {
+	command, err := w.Service.Store.Pool.Exec(ctx, `UPDATE authentication_email_outbox SET processed_at=$1,protected_payload=NULL,lease_id=NULL,locked_until=NULL,last_error=COALESCE(last_error,'expired') WHERE id IN(SELECT id FROM authentication_email_outbox WHERE processed_at IS NULL AND (locked_until IS NULL OR locked_until<=$1) AND (created_at<=$1::timestamptz-interval '1 day' OR attempt_count>=$3) ORDER BY created_at LIMIT $2)`, now, batch, w.Service.Config.MaximumAttempts)
+	if err != nil {
 		return err
 	}
+	w.Telemetry.RecordTerminalFailures(telemetry.AuthenticationEmailDelivery, command.RowsAffected())
 	for _, item := range []struct{ Table, Predicate string }{
 		{"authentication_access_tokens", `expires_at<=$1`},
 		{"authentication_sessions", `expires_at<=$1 OR revoked_at<=$1::timestamptz-interval '30 days'`},

@@ -44,6 +44,7 @@ type Config struct {
 	JobOptions               JobOptions
 	ImportOptions            ImportOptions
 	PerimeterOptions         PerimeterOptions
+	ObservabilityOptions     ObservabilityOptions
 	ProviderFailureThreshold int
 	ProviderBreakDuration    time.Duration
 }
@@ -90,6 +91,10 @@ func Load() (Config, error) {
 		return c, err
 	}
 	c.PerimeterOptions, err = loadPerimeter()
+	if err != nil {
+		return c, err
+	}
+	c.ObservabilityOptions, err = loadObservability()
 	if err != nil {
 		return c, err
 	}

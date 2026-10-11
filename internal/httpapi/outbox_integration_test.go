@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/JennGllg/mon-kado/internal/application"
+	"github.com/JennGllg/mon-kado/internal/telemetry"
 	"github.com/JennGllg/mon-kado/internal/worker"
 )
 
@@ -137,6 +138,9 @@ func TestOutbox_WhenDeliveryPermanentlyFails_ClearsProtectedPayloadAndNeverRetri
 	if len(sender.IDs) != 1 || protected != nil || processed == nil || category != "authorization" || attempts != 3 {
 		t.Fatal("terminal delivery retained protected content or was retried")
 	}
+	if w.Telemetry.Capture().Jobs[telemetry.AuthenticationEmailDelivery].TerminalFailures != 1 {
+		t.Fatal("terminal delivery was missing or counted again during later cleanup")
+	}
 }
 
 func TestCleanup_WhenProviderDisabled_PurgesExpiredAuthenticationProofsInBoundedBatches(t *testing.T) {
@@ -181,6 +185,10 @@ func TestCleanup_WhenProviderDisabled_PurgesExpiredAuthenticationProofsInBounded
 	// Assert
 	if retained != 1 {
 		t.Fatal("cleanup did not honor its configured batch bound")
+	}
+	progress := w.Telemetry.Capture().Jobs
+	if progress[telemetry.AuthenticationEmailDelivery].State != "disabled" || progress[telemetry.ProcessedAuthenticationEmailCleanup].Successes != 1 || progress[telemetry.AuthenticationEmailDelivery].TerminalFailures != 1 {
+		t.Fatal("provider-independent cleanup or disabled delivery telemetry differs")
 	}
 	if err = w.Tick(t.Context()); err != nil {
 		t.Fatal(err)

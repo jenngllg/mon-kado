@@ -11,6 +11,7 @@ import (
 
 	"github.com/JennGllg/mon-kado/internal/application"
 	"github.com/JennGllg/mon-kado/internal/domain"
+	"github.com/JennGllg/mon-kado/internal/telemetry"
 	"github.com/JennGllg/mon-kado/internal/worker"
 )
 
@@ -98,6 +99,13 @@ func TestErasureNotification_WhenProviderCompletesOrFails_RecordsOutcomeAndPurge
 			}
 			if len(sender.IDs) != tc.attempts {
 				t.Fatal("terminal notification was replayed")
+			}
+			expectedFailures := int64(1)
+			if tc.accepted {
+				expectedFailures = 0
+			}
+			if w.Telemetry.Capture().Jobs[telemetry.AccountErasureProcessing].TerminalFailures != expectedFailures {
+				t.Fatal("terminal notification telemetry differs from its persisted outcome")
 			}
 		})
 	}

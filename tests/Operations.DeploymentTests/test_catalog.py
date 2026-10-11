@@ -13,6 +13,28 @@ from release_catalog import canonical, fingerprint, generate, main, validate_cat
 
 
 class CatalogTests(unittest.TestCase):
+    def test_native_sql_catalog_preserves_order_normalization_and_all_source_digests(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            first = root / "001_baseline.sql"
+            first.write_bytes(b"CREATE TABLE sample(id integer);\n")
+            second = root / "002_next.sql"
+            second.write_bytes(b"ALTER TABLE sample ADD active boolean;\n")
+            value = generate(root)
+            self.assertEqual(2, value["schemaVersion"])
+            self.assertEqual(["001_baseline.sql", "002_next.sql"], [item["id"] for item in value["migrations"]])
+            first.write_bytes(first.read_bytes().replace(b"\n", b"\r\n"))
+            self.assertEqual(value, generate(root))
+            first.write_bytes(b"rewritten source\n")
+            changed = generate(root)
+            self.assertNotEqual(value["modelHash"], changed["modelHash"])
+            self.assertNotEqual(value["migrations"][0]["sha256"], changed["migrations"][0]["sha256"])
+            self.assertEqual(value["migrations"][1], changed["migrations"][1])
+            for identity in ("../001_escape.sql", "001_Éléphant.sql", "20260101000000_Legacy", "００１_baseline.sql"):
+                invalid = value | {"migrations": [{"id": identity, "sha256": "a" * 64}]}
+                with self.subTest(identity=identity), self.assertRaises(ValueError):
+                    validate_catalog(invalid)
+
     def test_build_catalog_tracks_both_migration_and_model_sources(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

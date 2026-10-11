@@ -5,6 +5,7 @@ import (
 	"errors"
 	"github.com/JennGllg/mon-kado/internal/application"
 	"github.com/JennGllg/mon-kado/internal/security"
+	"github.com/JennGllg/mon-kado/internal/telemetry"
 	"github.com/jackc/pgx/v5"
 	"os"
 	"path/filepath"
@@ -101,9 +102,12 @@ func (w *Worker) generateExports(ctx context.Context) error {
 			value := "GenerationFailed"
 			failure = &value
 		}
-		_, err = w.Service.Store.Pool.Exec(ctx, `UPDATE member_data_exports SET status=$3,failure=$4,lease_id=NULL,locked_until=NULL,available_at=$5 WHERE id=$1 AND lease_id=$2`, id, lease, status, failure, w.Service.Now().UTC().Add(retryDelay(attempts, w.Service.Config.Jobs().FirstRetryDelay, w.Service.Config.Jobs().MaximumRetryDelay)))
+		command, err := w.Service.Store.Pool.Exec(ctx, `UPDATE member_data_exports SET status=$3,failure=$4,lease_id=NULL,locked_until=NULL,available_at=$5 WHERE id=$1 AND lease_id=$2`, id, lease, status, failure, w.Service.Now().UTC().Add(retryDelay(attempts, w.Service.Config.Jobs().FirstRetryDelay, w.Service.Config.Jobs().MaximumRetryDelay)))
 		if err != nil {
 			return err
+		}
+		if status == "Failed" {
+			w.Telemetry.RecordTerminalFailures(telemetry.PersonalDataExport, command.RowsAffected())
 		}
 	}
 	return w.cleanupExports(ctx)
@@ -111,9 +115,11 @@ func (w *Worker) generateExports(ctx context.Context) error {
 
 func (w *Worker) cleanupExports(ctx context.Context) error {
 	now := w.Service.Now().UTC()
-	if _, err := w.Service.Store.Pool.Exec(ctx, `UPDATE member_data_exports SET status='Failed',failure='GenerationFailed',lease_id=NULL,locked_until=NULL WHERE status='Processing' AND locked_until<=$1 AND attempt_count>=$2`, now, w.Service.Config.Jobs().ExportMaximumAttempts); err != nil {
+	command, err := w.Service.Store.Pool.Exec(ctx, `UPDATE member_data_exports SET status='Failed',failure='GenerationFailed',lease_id=NULL,locked_until=NULL WHERE status='Processing' AND locked_until<=$1 AND attempt_count>=$2`, now, w.Service.Config.Jobs().ExportMaximumAttempts)
+	if err != nil {
 		return err
 	}
+	w.Telemetry.RecordTerminalFailures(telemetry.PersonalDataExport, command.RowsAffected())
 	if _, err := w.Service.Store.Pool.Exec(ctx, `UPDATE member_data_exports SET status='Expired' WHERE status='Ready' AND expires_at<=$1`, now); err != nil {
 		return err
 	}

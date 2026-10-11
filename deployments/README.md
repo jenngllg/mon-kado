@@ -16,6 +16,10 @@ Back up PostgreSQL, durable image storage, runtime keys and configuration togeth
 
 Logs are structured JSON with correlation/trace identifiers. They exclude email addresses, credentials, share secrets and request contents. `EMAIL_PROVIDER=Disabled` disables network delivery while preserving queued messages; expired protected erasure recipients are still purged.
 
+Production logging uses a compiled event catalog and a technical property allowlist. Raw messages and dependency error contents are discarded; unexpected HTTP exceptions retain their type and technical call chain without filesystem paths or argument values. Set `APP_VERSION` to the approved forty-character source revision.
+
+Enable `OBSERVABILITY_ENABLED=true` for private monitoring evidence. API and worker replace their respective `/var/lib/monkado-observability/{api,worker}/snapshot.json` files with mode 0600 in mode 0700 directories. `OBSERVABILITY_INTERVAL` defaults to 30 seconds and must remain within 5–60 seconds. The versioned snapshots preserve HTTP outcome/latency counters and all ten worker operations, including confirmed terminal failures. They contain no user or resource labels. The systemd templates allow each process to write its own evidence directory; do not expose the directory through Caddy.
+
 ## Operational notes
 
 - [Administrator two-factor authentication](administrator-two-factor.md)

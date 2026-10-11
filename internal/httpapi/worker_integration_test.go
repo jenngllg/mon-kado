@@ -6,6 +6,7 @@ import (
 	"context"
 	"github.com/JennGllg/mon-kado/internal/application"
 	"github.com/JennGllg/mon-kado/internal/security"
+	"github.com/JennGllg/mon-kado/internal/telemetry"
 	"github.com/JennGllg/mon-kado/internal/worker"
 	"log/slog"
 	"sync"
@@ -90,5 +91,8 @@ func TestWorker_WhenEmailSendBlocked_StillPurgesExpiredErasureAndStopsOnCancella
 	// Assert
 	if count != 0 || err != nil {
 		t.Fatal("independent cleanup or cooperative worker cancellation failed")
+	}
+	if w.Telemetry.Capture().Jobs[telemetry.AccountErasureProcessing].TerminalFailures != 1 {
+		t.Fatal("expired recipient outcome was not recorded")
 	}
 }

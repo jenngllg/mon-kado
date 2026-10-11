@@ -27,4 +27,5 @@ const (
 	WorkerPassCompleted              = 6003
 	ArchiveDownloadInterrupted       = 6101
 	NotificationAttemptFailed        = 6201
+	TelemetrySnapshotFailed          = 6500
 )

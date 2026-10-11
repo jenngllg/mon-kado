@@ -4,7 +4,7 @@ MonKado runs as native Go executables backed by PostgreSQL. The API, worker, mig
 
 ## Migration compatibility status
 
-All 99 HTTP operations from consolidated develop are implemented in Go, including archives, favorites, surprise mode, independent wish copies, owner reservations, public member profiles, opt-in member search, public social previews and revocable subscriptions. Targeted tests verify their JSON, authorization, concurrency and lifecycle contracts. Merchant extraction includes exact variant selection, microdata, Amazon, FNAC and the optional public Sephora catalog. Native deployment, backup, monitoring, performance tooling and private operational telemetry still require reconciliation before the final merge.
+All 99 HTTP operations from consolidated develop are implemented in Go, including archives, favorites, surprise mode, independent wish copies, owner reservations, public member profiles, opt-in member search, public social previews and revocable subscriptions. Targeted tests verify their JSON, authorization, concurrency and lifecycle contracts. Merchant extraction includes exact variant selection, microdata, Amazon, FNAC and the optional public Sephora catalog. Private operational telemetry and filtered structured logs are implemented in Go. Deployment, backup, monitoring and performance tooling still require native reconciliation before the final merge.
 
 ## Native development on Windows
 
