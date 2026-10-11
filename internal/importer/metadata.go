@@ -3,6 +3,7 @@ package importer
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"github.com/JennGllg/mon-kado/internal/validation"
 	"golang.org/x/net/html"
 	"net/url"
@@ -18,165 +19,433 @@ type Metadata struct {
 }
 type price struct{ Amount, Currency string }
 
-// Extract prefers JSON-LD product metadata, then OpenGraph, and rejects ambiguous euro prices.
+// Extract reads passive metadata, selecting only unambiguous page identities and euro amounts.
 func Extract(content []byte, base *url.URL) Metadata {
 	root, err := html.Parse(bytes.NewReader(content))
 	if err != nil {
 		return Metadata{}
 	}
-	meta := map[string]string{}
-	title := ""
-	var productNames, productImages []string
-	var prices []price
-	var nodes func(*html.Node)
-	nodes = func(node *html.Node) {
-		attributes := map[string]string{}
-		for _, attribute := range node.Attr {
-			attributes[strings.ToLower(attribute.Key)] = attribute.Val
-		}
-		if node.Type == html.ElementNode {
-			if node.Data == "meta" {
-				key := attributes["property"]
-				if key == "" {
-					key = attributes["name"]
-				}
-				if _, exists := meta[key]; !exists {
-					meta[key] = attributes["content"]
-				}
-			}
-			if node.Data == "title" && node.FirstChild != nil {
-				title = node.FirstChild.Data
-			}
-			if node.Data == "script" && strings.EqualFold(attributes["type"], "application/ld+json") && node.FirstChild != nil {
-				var value any
-				decoder := json.NewDecoder(strings.NewReader(node.FirstChild.Data))
-				decoder.UseNumber()
-				if decoder.Decode(&value) == nil {
-					var visit func(any, int)
-					visit = func(value any, depth int) {
-						if depth > 32 {
-							return
-						}
-						switch object := value.(type) {
-						case []any:
-							for _, item := range object {
-								visit(item, depth+1)
-							}
-						case map[string]any:
-							product := false
-							switch kind := object["@type"].(type) {
-							case string:
-								product = strings.EqualFold(kind, "Product")
-							case []any:
-								for _, v := range kind {
-									if s, ok := v.(string); ok && strings.EqualFold(s, "Product") {
-										product = true
-									}
-								}
-							}
-							if product {
-								if name, ok := object["name"].(string); ok {
-									productNames = append(productNames, name)
-								}
-								switch image := object["image"].(type) {
-								case string:
-									productImages = append(productImages, image)
-								case []any:
-									if len(image) > 0 {
-										if s, ok := image[0].(string); ok {
-											productImages = append(productImages, s)
-										}
-									}
-								case map[string]any:
-									if s, ok := image["url"].(string); ok {
-										productImages = append(productImages, s)
-									}
-								}
-								var offers func(any)
-								offers = func(value any) {
-									switch offer := value.(type) {
-									case []any:
-										for _, item := range offer {
-											offers(item)
-										}
-									case map[string]any:
-										amount := ""
-										switch p := offer["price"].(type) {
-										case string:
-											amount = p
-										case json.Number:
-											amount = p.String()
-										}
-										currency, _ := offer["priceCurrency"].(string)
-										if amount != "" {
-											prices = append(prices, price{amount, currency})
-										}
-									}
-								}
-								offers(object["offers"])
-							}
-							for _, child := range object {
-								visit(child, depth+1)
-							}
-						}
-					}
-					visit(value, 0)
-				}
-			}
-		}
-		for child := node.FirstChild; child != nil; child = child.NextSibling {
-			nodes(child)
+	if amazonHost(base.Hostname()) {
+		return extractAmazon(root, base)
+	}
+	var products []map[string]any
+	for _, script := range selectNodes(root, func(n *html.Node) bool {
+		return n.Data == "script" && strings.EqualFold(attr(n, "type"), "application/ld+json")
+	}) {
+		var value any
+		text := escapeControls(nodeText(script))
+		decoder := json.NewDecoder(strings.NewReader(text))
+		decoder.UseNumber()
+		if json.Valid([]byte(text)) && decoder.Decode(&value) == nil {
+			products = append(products, findProducts(value, 0)...)
 		}
 	}
-	nodes(root)
+	if len(products) == 0 {
+		products = microdata(root)
+	}
+	if len(products) == 0 && browserChallenge(root) {
+		return Metadata{}
+	}
+	if len(products) == 0 && (base.Hostname() == "fnac.com" || strings.HasSuffix(base.Hostname(), ".fnac.com")) {
+		return extractFnac(root, base)
+	}
+	var matching []map[string]any
+	for _, p := range products {
+		matched := matchesDocument(scalar(p, "url"), base)
+		for _, offer := range offerNodes(p) {
+			matched = matched || matchesDocument(scalar(offer, "url"), base)
+		}
+		if matched {
+			matching = append(matching, p)
+		}
+	}
+	if len(products) > 1 && len(matching) != 1 {
+		return Metadata{}
+	}
+	var product map[string]any
+	if len(matching) == 1 {
+		product = matching[0]
+	} else if len(products) == 1 {
+		product = products[0]
+	}
 	result := Metadata{}
-	for _, name := range append(productNames, meta["og:title"], title) {
-		name = strings.Join(strings.Fields(name), " ")
-		if name != "" && validation.Text(name, 100, false) {
-			result.Name = &name
+	for _, name := range []string{scalar(product, "name"), readMeta(root, "og:title"), firstText(root, func(n *html.Node) bool { return n.Data == "title" })} {
+		if result.Name = cleanName(name); result.Name != nil {
 			break
 		}
 	}
-	for _, image := range append(productImages, meta["og:image"]) {
-		relative, err := url.Parse(strings.TrimSpace(image))
-		if err == nil && image != "" {
-			resolved := base.ResolveReference(relative).String()
-			if validation.HTTPURL(resolved) {
-				result.Image = &resolved
-				break
+	image := readImage(product["image"])
+	if strings.TrimSpace(image) == "" {
+		image = readMeta(root, "og:image")
+	}
+	result.Image = resolveImage(root, base, image)
+	offers := offerNodes(product)
+	var selected []map[string]any
+	for _, offer := range offers {
+		if matchesDocument(scalar(offer, "url"), base) {
+			selected = append(selected, offer)
+		}
+	}
+	if len(selected) == 0 && strings.TrimSpace(scalar(product, "sku")) != "" {
+		for _, offer := range offers {
+			if scalar(offer, "sku") == scalar(product, "sku") {
+				selected = append(selected, offer)
 			}
 		}
 	}
-	if len(prices) == 0 && meta["product:price:amount"] != "" {
-		prices = append(prices, price{meta["product:price:amount"], meta["product:price:currency"]})
+	if len(selected) > 0 {
+		offers = selected
 	}
+	var prices []price
+	hasAmount := false
+	for _, offer := range offers {
+		p := price{scalar(offer, "price"), scalar(offer, "priceCurrency")}
+		prices = append(prices, p)
+		hasAmount = hasAmount || strings.TrimSpace(p.Amount) != ""
+	}
+	if !hasAmount {
+		prices = []price{{readMeta(root, "product:price:amount"), readMeta(root, "product:price:currency")}}
+	}
+	result.Price, result.UnsupportedCurrency = choosePrice(prices, false)
+	return result
+}
+
+func attr(n *html.Node, key string) string {
+	if n == nil {
+		return ""
+	}
+	for _, a := range n.Attr {
+		if a.Key == key {
+			return a.Val
+		}
+	}
+	return ""
+}
+func hasAttr(n *html.Node, key string) bool {
+	if n == nil {
+		return false
+	}
+	for _, a := range n.Attr {
+		if a.Key == key {
+			return true
+		}
+	}
+	return false
+}
+func token(value, key string) bool {
+	for _, part := range strings.Fields(value) {
+		if part == key {
+			return true
+		}
+	}
+	return false
+}
+func selectNodes(root *html.Node, predicate func(*html.Node) bool) []*html.Node {
+	var result []*html.Node
+	var visit func(*html.Node)
+	visit = func(n *html.Node) {
+		if n.Type == html.ElementNode && predicate(n) {
+			result = append(result, n)
+		}
+		for child := n.FirstChild; child != nil; child = child.NextSibling {
+			visit(child)
+		}
+	}
+	visit(root)
+	return result
+}
+func nodeText(root *html.Node) string {
+	if root == nil {
+		return ""
+	}
+	var text strings.Builder
+	var visit func(*html.Node)
+	visit = func(n *html.Node) {
+		if n.Type == html.TextNode {
+			text.WriteString(n.Data)
+		}
+		for child := n.FirstChild; child != nil; child = child.NextSibling {
+			visit(child)
+		}
+	}
+	visit(root)
+	return text.String()
+}
+func normalizeText(value string) string { return strings.Join(strings.Fields(value), " ") }
+func firstText(root *html.Node, predicate func(*html.Node) bool) string {
+	nodes := selectNodes(root, predicate)
+	if len(nodes) == 0 {
+		return ""
+	}
+	return nodeText(nodes[0])
+}
+func unique(values []string) string {
 	distinct := map[string]bool{}
-	pattern := regexp.MustCompile(`^[0-9]{1,8}(?:\.[0-9]{1,2})?$`)
-	for _, price := range prices {
-		if !strings.EqualFold(strings.TrimSpace(price.Currency), "EUR") {
-			result.UnsupportedCurrency = true
-			continue
-		}
-		amount := strings.TrimSpace(price.Amount)
-		if pattern.MatchString(amount) && strings.Trim(amount, "0.") != "" {
-			whole, fraction, _ := strings.Cut(amount, ".")
-			whole = strings.TrimLeft(whole, "0")
-			if whole == "" {
-				whole = "0"
-			}
-			fraction = strings.TrimRight(fraction, "0")
-			canonical := whole
-			if fraction != "" {
-				canonical += "." + fraction
-			}
-			distinct[canonical] = true
+	for _, v := range values {
+		if v != "" {
+			distinct[v] = true
 		}
 	}
-	if len(distinct) == 1 && !result.UnsupportedCurrency {
-		for value := range distinct {
-			number := json.Number(value)
-			result.Price = &number
+	if len(distinct) == 1 {
+		for v := range distinct {
+			return v
+		}
+	}
+	return ""
+}
+func cleanName(name string) *string {
+	name = strings.TrimSpace(name)
+	if name == "" || !validation.Text(name, 100, false) {
+		return nil
+	}
+	return &name
+}
+func readMeta(root *html.Node, key string) string {
+	var values []string
+	for _, n := range selectNodes(root, func(n *html.Node) bool { return n.Data == "meta" }) {
+		property := attr(n, "property")
+		if !hasAttr(n, "property") {
+			property = attr(n, "name")
+		}
+		if strings.EqualFold(property, key) {
+			values = append(values, strings.TrimSpace(attr(n, "content")))
+		}
+	}
+	return unique(values)
+}
+func scalar(object map[string]any, key string) string {
+	switch value := object[key].(type) {
+	case string:
+		return value
+	case json.Number:
+		return value.String()
+	}
+	return ""
+}
+func findProducts(value any, depth int) []map[string]any {
+	if depth > 64 {
+		return nil
+	}
+	var products []map[string]any
+	switch object := value.(type) {
+	case []any:
+		for _, item := range object {
+			products = append(products, findProducts(item, depth+1)...)
+		}
+	case map[string]any:
+		if productType(object["@type"]) {
+			products = append(products, object)
+		} else {
+			products = append(products, findProducts(object["@graph"], depth+1)...)
+		}
+	}
+	return products
+}
+func productType(value any) bool {
+	switch kind := value.(type) {
+	case string:
+		return kind == "Product" || kind == "https://schema.org/Product" || kind == "http://schema.org/Product"
+	case []any:
+		for _, v := range kind {
+			if productType(v) {
+				return true
+			}
+		}
+	}
+	return false
+}
+func escapeControls(value string) string {
+	var result strings.Builder
+	inside, escaped := false, false
+	for _, r := range value {
+		if inside && !escaped && r < ' ' {
+			fmt.Fprintf(&result, `\u%04x`, r)
+		} else {
+			result.WriteRune(r)
+		}
+		if r == '"' && !escaped {
+			inside = !inside
+		}
+		escaped = inside && r == '\\' && !escaped
+	}
+	return result.String()
+}
+func offerNodes(product map[string]any) []map[string]any {
+	var result []map[string]any
+	switch offers := product["offers"].(type) {
+	case map[string]any:
+		result = append(result, offers)
+	case []any:
+		for _, raw := range offers {
+			offer, _ := raw.(map[string]any)
+			result = append(result, offer)
 		}
 	}
 	return result
+}
+func matchesDocument(candidate string, base *url.URL) bool {
+	if strings.TrimSpace(candidate) == "" {
+		return false
+	}
+	u, err := url.Parse(candidate)
+	if err != nil {
+		return false
+	}
+	u = base.ResolveReference(u)
+	return u.Scheme == base.Scheme && u.Host == base.Host && u.EscapedPath() == base.EscapedPath() && (u.RawQuery == "" || u.RawQuery == base.RawQuery)
+}
+func readImage(value any) string {
+	if list, ok := value.([]any); ok {
+		if len(list) == 0 {
+			return ""
+		}
+		value = list[0]
+	}
+	switch image := value.(type) {
+	case string:
+		return image
+	case map[string]any:
+		return scalar(image, "url")
+	}
+	return ""
+}
+func resolveImage(root *html.Node, base *url.URL, value string) *string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return nil
+	}
+	u, err := url.Parse(value)
+	if err != nil {
+		return nil
+	}
+	resolved := base.ResolveReference(u).String()
+	if !u.IsAbs() {
+		var visible []string
+		for _, n := range selectNodes(root, func(n *html.Node) bool { return n.Data == "img" && hasAttr(n, "src") && attr(n, "alt") == value }) {
+			v, err := url.Parse(attr(n, "src"))
+			if err == nil {
+				address := base.ResolveReference(v).String()
+				if validation.HTTPURL(address) {
+					visible = append(visible, address)
+				}
+			}
+		}
+		if equivalent := unique(visible); equivalent != "" {
+			resolved = equivalent
+		}
+	}
+	if !validation.HTTPURL(resolved) {
+		return nil
+	}
+	return &resolved
+}
+
+var decimalAmount = regexp.MustCompile(`^[0-9]*(?:\.[0-9]*)?$`)
+
+func parseAmount(value string) *json.Number {
+	if !decimalAmount.MatchString(value) {
+		return nil
+	}
+	whole, fraction, _ := strings.Cut(value, ".")
+	whole = strings.TrimLeft(whole, "0")
+	fraction = strings.TrimRight(fraction, "0")
+	if len(whole) > 8 || len(fraction) > 2 || whole == "" && fraction == "" {
+		return nil
+	}
+	if whole == "" {
+		whole = "0"
+	}
+	canonical := whole
+	if fraction != "" {
+		canonical += "." + fraction
+	}
+	number := json.Number(canonical)
+	return &number
+}
+func choosePrice(prices []price, localized bool) (*json.Number, bool) {
+	distinct := map[string]*json.Number{}
+	unsupported := false
+	for _, p := range prices {
+		if p.Amount != "" && !strings.EqualFold(p.Currency, "EUR") {
+			unsupported = true
+		}
+		var amount *json.Number
+		if localized {
+			amount = parseLocalizedPrice(p.Amount)
+		} else {
+			amount = parseAmount(p.Amount)
+		}
+		key := "invalid"
+		if amount != nil {
+			key = amount.String()
+		}
+		distinct[key] = amount
+	}
+	if !unsupported && len(distinct) == 1 {
+		for _, amount := range distinct {
+			return amount, false
+		}
+	}
+	return nil, unsupported
+}
+func nearestScope(n *html.Node) *html.Node {
+	for ; n != nil; n = n.Parent {
+		if hasAttr(n, "itemscope") {
+			return n
+		}
+	}
+	return nil
+}
+func microValue(scope *html.Node, key string) string {
+	var values []string
+	for _, n := range selectNodes(scope, func(n *html.Node) bool {
+		return !hasAttr(n, "itemscope") && token(attr(n, "itemprop"), key) && nearestScope(n) == scope
+	}) {
+		value := nodeText(n)
+		for _, a := range []string{"content", "href", "src"} {
+			if hasAttr(n, a) {
+				value = attr(n, a)
+				break
+			}
+		}
+		values = append(values, normalizeText(value))
+	}
+	return unique(values)
+}
+func schemaType(n *html.Node, kind string) bool {
+	return hasAttr(n, "itemscope") && (token(attr(n, "itemtype"), "https://schema.org/"+kind) || token(attr(n, "itemtype"), "http://schema.org/"+kind))
+}
+func microdata(root *html.Node) []map[string]any {
+	var products []map[string]any
+	for _, node := range selectNodes(root, func(n *html.Node) bool { return schemaType(n, "Product") }) {
+		product := map[string]any{}
+		for _, key := range []string{"name", "url", "image", "sku"} {
+			product[key] = microValue(node, key)
+		}
+		if product["sku"] == "" {
+			product["sku"] = normalizeText(attr(node, "data-product-sku"))
+		}
+		var offers []any
+		for _, offer := range selectNodes(node, func(n *html.Node) bool {
+			return schemaType(n, "Offer") && token(attr(n, "itemprop"), "offers") && nearestScope(n.Parent) == node
+		}) {
+			data := map[string]any{}
+			for _, key := range []string{"price", "priceCurrency", "url", "sku"} {
+				data[key] = microValue(offer, key)
+			}
+			offers = append(offers, data)
+		}
+		product["offers"] = offers
+		products = append(products, product)
+	}
+	return products
+}
+func browserChallenge(root *html.Node) bool {
+	return len(selectNodes(root, func(n *html.Node) bool {
+		switch attr(n, "id") {
+		case "challenge-form", "cf-challenge-running", "px-captcha", "sec-if-cpt-container":
+			return true
+		}
+		return n.Data == "script" && (strings.Contains(attr(n, "src"), "/cdn-cgi/challenge-platform/") || strings.Contains(nodeText(n), "/cdn-cgi/challenge-platform/"))
+	})) > 0
 }

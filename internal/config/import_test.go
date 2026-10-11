@@ -11,6 +11,7 @@ func TestLoad_WhenImportBudgetInvalid_RejectsUnsupportedSecurityLimits(t *testin
 		{"WISH_IMPORT_MAXIMUM_HTML_BYTES", "bad"}, {"WISH_IMPORT_MAXIMUM_HTML_BYTES", "0"}, {"WISH_IMPORT_MAXIMUM_HTML_BYTES", "2097153"},
 		{"WISH_IMPORT_MAXIMUM_REDIRECTS", "-1"}, {"WISH_IMPORT_MAXIMUM_REDIRECTS", "4"},
 		{"WISH_IMPORT_PERMIT_LIMIT", "0"}, {"WISH_IMPORT_PERMIT_LIMIT", "11"},
+		{"WISH_IMPORT_CATALOG_ENABLED", "invalid"},
 	} {
 		t.Run(test.key+"="+test.value, func(t *testing.T) {
 			// Arrange
@@ -21,6 +22,29 @@ func TestLoad_WhenImportBudgetInvalid_RejectsUnsupportedSecurityLimits(t *testin
 			// Assert
 			if err == nil {
 				t.Fatal("unsupported import budget accepted")
+			}
+		})
+	}
+}
+
+func TestLoad_WhenPublicCatalogIsEnabled_RequiresBoundedPublicIndexIdentifier(t *testing.T) {
+	for _, test := range []struct {
+		key   string
+		valid bool
+	}{{"key_public", true}, {"", false}, {"key_", false}, {"admin_secret", false}, {"key_bad-characters", false}} {
+		t.Run(test.key, func(t *testing.T) {
+			// Arrange
+			validEnvironment(t)
+			t.Setenv("WISH_IMPORT_CATALOG_ENABLED", "true")
+			t.Setenv("WISH_IMPORT_CATALOG_INDEX_KEY", test.key)
+			// Act
+			configuration, err := Load()
+			// Assert
+			if (err == nil) != test.valid {
+				t.Fatal("public catalog configuration was accepted incorrectly")
+			}
+			if test.valid && (!configuration.Imports().CatalogEnabled || configuration.Imports().CatalogIndexKey != test.key) {
+				t.Fatal("catalog configuration lost")
 			}
 		})
 	}

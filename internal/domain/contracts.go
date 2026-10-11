@@ -34,19 +34,21 @@ type CreateWishImportPreviewRequest struct {
 
 // CreateWishlistRequest preserves the versioned JSON contract.
 type CreateWishlistRequest struct {
-	Name      *string `json:"name"`
-	Occasion  *string `json:"occasion"`
-	EventDate *string `json:"eventDate"`
-	Message   *string `json:"message"`
+	Name         *string `json:"name"`
+	Occasion     *string `json:"occasion"`
+	EventDate    *string `json:"eventDate"`
+	Message      *string `json:"message"`
+	SurpriseMode *bool   `json:"surpriseMode"`
 }
 
 // CreateWishRequest preserves the versioned JSON contract.
 type CreateWishRequest struct {
-	Name     *string      `json:"name"`
-	Note     *string      `json:"note"`
-	Url      *string      `json:"url"`
-	Price    *json.Number `json:"price"`
-	Quantity *int         `json:"quantity"`
+	Name       *string      `json:"name"`
+	Note       *string      `json:"note"`
+	Url        *string      `json:"url"`
+	Price      *json.Number `json:"price"`
+	Quantity   *int         `json:"quantity"`
+	IsFavorite *bool        `json:"isFavorite"`
 }
 
 // ExecuteAdministrativeAccountErasureRequest preserves the versioned JSON contract.
@@ -158,7 +160,9 @@ type UpdateMemberPasswordRequest struct {
 
 // UpdateMemberProfileRequest preserves the versioned JSON contract.
 type UpdateMemberProfileRequest struct {
-	DisplayName *string `json:"displayName"`
+	DisplayName             *string `json:"displayName"`
+	IsVisibleInMemberSearch *bool   `json:"isVisibleInMemberSearch"`
+	HasVisibilityPreference bool    `json:"-"`
 }
 
 // UpdateWishlistModerationRequest preserves the versioned JSON contract.
@@ -175,19 +179,31 @@ type UpdateWishlistReportReviewRequest struct {
 
 // UpdateWishlistRequest preserves the versioned JSON contract.
 type UpdateWishlistRequest struct {
-	Name      *string `json:"name"`
-	Occasion  *string `json:"occasion"`
-	EventDate *string `json:"eventDate"`
-	Message   *string `json:"message"`
+	Name         *string `json:"name"`
+	Occasion     *string `json:"occasion"`
+	EventDate    *string `json:"eventDate"`
+	Message      *string `json:"message"`
+	SurpriseMode *bool   `json:"surpriseMode"`
 }
 
 // UpdateWishRequest preserves the versioned JSON contract.
 type UpdateWishRequest struct {
-	Name     *string      `json:"name"`
-	Note     *string      `json:"note"`
-	Url      *string      `json:"url"`
-	Price    *json.Number `json:"price"`
-	Quantity *int         `json:"quantity"`
+	Name       *string      `json:"name"`
+	Note       *string      `json:"note"`
+	Url        *string      `json:"url"`
+	Price      *json.Number `json:"price"`
+	Quantity   *int         `json:"quantity"`
+	IsFavorite *bool        `json:"isFavorite"`
+}
+
+// SetWishlistArchivedRequest changes only the owner's archive preference.
+type SetWishlistArchivedRequest struct {
+	IsArchived *bool `json:"isArchived"`
+}
+
+// SetWishFavoriteRequest changes only the owner's favorite preference.
+type SetWishFavoriteRequest struct {
+	IsFavorite *bool `json:"isFavorite"`
 }
 
 // UpsertGiftReservationRequest preserves the versioned JSON contract.
@@ -223,27 +239,34 @@ type CsrfTokenResponse struct {
 
 // CurrentSessionResponse preserves the versioned JSON contract.
 type CurrentSessionResponse struct {
-	Id              string   `json:"id"`
-	Email           string   `json:"email"`
-	DisplayName     string   `json:"displayName"`
-	ProfileImageUrl *string  `json:"profileImageUrl"`
-	Roles           []string `json:"roles"`
-	IsGoogleLinked  bool     `json:"isGoogleLinked"`
+	Id                      string   `json:"id"`
+	Email                   string   `json:"email"`
+	DisplayName             string   `json:"displayName"`
+	ProfileImageUrl         *string  `json:"profileImageUrl"`
+	Roles                   []string `json:"roles"`
+	IsGoogleLinked          bool     `json:"isGoogleLinked"`
+	IsVisibleInMemberSearch bool     `json:"isVisibleInMemberSearch"`
 }
 
 // GiftReservationHistoryResponse preserves the versioned JSON contract.
 type GiftReservationHistoryResponse struct {
-	Id             string     `json:"id"`
-	WishlistId     string     `json:"wishlistId"`
-	WishlistName   string     `json:"wishlistName"`
-	WishId         string     `json:"wishId"`
-	WishName       string     `json:"wishName"`
-	ShareLinkId    *string    `json:"shareLinkId"`
-	Quantity       int        `json:"quantity"`
-	Status         string     `json:"status"`
-	CreatedAt      time.Time  `json:"createdAt"`
-	LastActivityAt time.Time  `json:"lastActivityAt"`
-	EndedAt        *time.Time `json:"endedAt"`
+	OwnerId          *string    `json:"ownerId"`
+	OwnerDisplayName *string    `json:"ownerDisplayName"`
+	ShareUrl         *string    `json:"shareUrl"`
+	ImageUrl         *string    `json:"imageUrl"`
+	OwnedWishPath    *string    `json:"ownedWishPath"`
+	IsArchived       bool       `json:"isArchived"`
+	Id               string     `json:"id"`
+	WishlistId       string     `json:"wishlistId"`
+	WishlistName     string     `json:"wishlistName"`
+	WishId           string     `json:"wishId"`
+	WishName         string     `json:"wishName"`
+	ShareLinkId      *string    `json:"shareLinkId"`
+	Quantity         int        `json:"quantity"`
+	Status           string     `json:"status"`
+	CreatedAt        time.Time  `json:"createdAt"`
+	LastActivityAt   time.Time  `json:"lastActivityAt"`
+	EndedAt          *time.Time `json:"endedAt"`
 }
 
 // GiftReservationResponse preserves the versioned JSON contract.
@@ -257,8 +280,9 @@ type GiftReservationResponse struct {
 
 // MemberProfileResponse preserves the versioned JSON contract.
 type MemberProfileResponse struct {
-	DisplayName     string  `json:"displayName"`
-	ProfileImageUrl *string `json:"profileImageUrl"`
+	DisplayName             string  `json:"displayName"`
+	ProfileImageUrl         *string `json:"profileImageUrl"`
+	IsVisibleInMemberSearch bool    `json:"isVisibleInMemberSearch"`
 }
 
 // PersonalDataExportResponse preserves the versioned JSON contract.
@@ -312,14 +336,16 @@ type SharedWishDetailResponse struct {
 	Url                                *string      `json:"url"`
 	Price                              *json.Number `json:"price"`
 	Quantity                           int          `json:"quantity"`
-	ReservedQuantity                   int          `json:"reservedQuantity"`
-	AvailableQuantity                  int          `json:"availableQuantity"`
+	IsFavorite                         bool         `json:"isFavorite"`
+	ReservedQuantity                   *int         `json:"reservedQuantity"`
+	AvailableQuantity                  *int         `json:"availableQuantity"`
 	CurrentParticipantReservedQuantity *int         `json:"currentParticipantReservedQuantity"`
 	ImageUrl                           *string      `json:"imageUrl"`
 }
 
 // SharedWishlistResponse preserves the versioned JSON contract.
 type SharedWishlistResponse struct {
+	CanSubscribe       bool                         `json:"canSubscribe"`
 	Id                 string                       `json:"id"`
 	OwnerDisplayName   string                       `json:"ownerDisplayName"`
 	Name               string                       `json:"name"`
@@ -337,8 +363,9 @@ type SharedWishResponse struct {
 	Url                                *string      `json:"url"`
 	Price                              *json.Number `json:"price"`
 	Quantity                           int          `json:"quantity"`
-	ReservedQuantity                   int          `json:"reservedQuantity"`
-	AvailableQuantity                  int          `json:"availableQuantity"`
+	IsFavorite                         bool         `json:"isFavorite"`
+	ReservedQuantity                   *int         `json:"reservedQuantity"`
+	AvailableQuantity                  *int         `json:"availableQuantity"`
 	CurrentParticipantReservedQuantity *int         `json:"currentParticipantReservedQuantity"`
 	ImageUrl                           *string      `json:"imageUrl"`
 }
@@ -350,20 +377,52 @@ type UserSearchResponse struct {
 	ProfileImageUrl *string `json:"profileImageUrl"`
 }
 
+// PublicMemberProfileResponse exposes a confirmed identity and its discoverable shared lists.
+type PublicMemberProfileResponse struct {
+	Id              string                         `json:"id"`
+	DisplayName     string                         `json:"displayName"`
+	ProfileImageUrl *string                        `json:"profileImageUrl"`
+	Wishlists       []PublicMemberWishlistResponse `json:"wishlists"`
+}
+
+// PublicMemberWishlistResponse contains only the public metadata and active frontend capability.
+type PublicMemberWishlistResponse struct {
+	Id        string  `json:"id"`
+	Name      string  `json:"name"`
+	Occasion  string  `json:"occasion"`
+	EventDate *string `json:"eventDate"`
+	ShareUrl  string  `json:"shareUrl"`
+}
+
+// WishlistSubscriptionResponse exposes accessible followed-list metadata without participant data.
+type WishlistSubscriptionResponse struct {
+	Id               string    `json:"id"`
+	WishlistId       string    `json:"wishlistId"`
+	Name             string    `json:"name"`
+	OwnerDisplayName string    `json:"ownerDisplayName"`
+	Occasion         string    `json:"occasion"`
+	EventDate        *string   `json:"eventDate"`
+	CreatedAt        time.Time `json:"createdAt"`
+	ShareUrl         string    `json:"shareUrl"`
+}
+
 // WishCollectionItemResponse preserves the versioned JSON contract.
 type WishCollectionItemResponse struct {
-	Id         string       `json:"id"`
-	WishlistId string       `json:"wishlistId"`
-	Name       string       `json:"name"`
-	Note       *string      `json:"note"`
-	Url        *string      `json:"url"`
-	Price      *json.Number `json:"price"`
-	Quantity   int          `json:"quantity"`
-	ImageUrl   *string      `json:"imageUrl"`
-	Position   int64        `json:"position"`
-	CreatedAt  time.Time    `json:"createdAt"`
-	UpdatedAt  *time.Time   `json:"updatedAt"`
-	EntityTag  string       `json:"entityTag"`
+	Id                string       `json:"id"`
+	WishlistId        string       `json:"wishlistId"`
+	Name              string       `json:"name"`
+	Note              *string      `json:"note"`
+	Url               *string      `json:"url"`
+	Price             *json.Number `json:"price"`
+	Quantity          int          `json:"quantity"`
+	IsFavorite        bool         `json:"isFavorite"`
+	ReservedQuantity  *int         `json:"reservedQuantity"`
+	AvailableQuantity *int         `json:"availableQuantity"`
+	ImageUrl          *string      `json:"imageUrl"`
+	Position          int64        `json:"position"`
+	CreatedAt         time.Time    `json:"createdAt"`
+	UpdatedAt         *time.Time   `json:"updatedAt"`
+	EntityTag         string       `json:"entityTag"`
 }
 
 // WishCollectionResponse preserves the versioned JSON contract.
@@ -403,6 +462,8 @@ type WishlistResponse struct {
 	Message          *string    `json:"message"`
 	CreatedAt        time.Time  `json:"createdAt"`
 	UpdatedAt        *time.Time `json:"updatedAt"`
+	SurpriseMode     bool       `json:"surpriseMode"`
+	IsArchived       bool       `json:"isArchived"`
 	IsSuspended      bool       `json:"isSuspended"`
 	SuspensionReason *string    `json:"suspensionReason"`
 	SuspendedAt      *time.Time `json:"suspendedAt"`
@@ -430,17 +491,20 @@ type WishOrderResponse struct {
 
 // WishResponse preserves the versioned JSON contract.
 type WishResponse struct {
-	Id         string       `json:"id"`
-	WishlistId string       `json:"wishlistId"`
-	Name       string       `json:"name"`
-	Note       *string      `json:"note"`
-	Url        *string      `json:"url"`
-	Price      *json.Number `json:"price"`
-	Quantity   int          `json:"quantity"`
-	Position   int64        `json:"position"`
-	CreatedAt  time.Time    `json:"createdAt"`
-	UpdatedAt  *time.Time   `json:"updatedAt"`
-	ImageUrl   *string      `json:"imageUrl"`
+	Id                string       `json:"id"`
+	WishlistId        string       `json:"wishlistId"`
+	Name              string       `json:"name"`
+	Note              *string      `json:"note"`
+	Url               *string      `json:"url"`
+	Price             *json.Number `json:"price"`
+	Quantity          int          `json:"quantity"`
+	IsFavorite        bool         `json:"isFavorite"`
+	ReservedQuantity  *int         `json:"reservedQuantity"`
+	AvailableQuantity *int         `json:"availableQuantity"`
+	Position          int64        `json:"position"`
+	CreatedAt         time.Time    `json:"createdAt"`
+	UpdatedAt         *time.Time   `json:"updatedAt"`
+	ImageUrl          *string      `json:"imageUrl"`
 }
 
 // TwoFactorChallengeResponse preserves the versioned JSON contract.
@@ -487,4 +551,15 @@ type WishlistReportReviewEventDetails struct {
 	Note            *string   `json:"note"`
 	AdministratorId *string   `json:"administratorId"`
 	OccurredAt      time.Time `json:"occurredAt"`
+}
+
+// CopyOwnedWishRequest identifies the owned destination for an independent wish copy.
+type CopyOwnedWishRequest struct {
+	DestinationWishlistId *string `json:"destinationWishlistId"`
+}
+
+// CopyWishRequest identifies a capability-authorized shared wish to copy.
+type CopyWishRequest struct {
+	SourceShareLinkId *string `json:"sourceShareLinkId"`
+	SourceWishId      *string `json:"sourceWishId"`
 }

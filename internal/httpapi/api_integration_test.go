@@ -27,6 +27,7 @@ import (
 )
 
 type fixture struct {
+	api          *httpapi.API
 	server       *httptest.Server
 	store        *persistence.Store
 	service      *application.Service
@@ -74,10 +75,11 @@ func newFixture(t *testing.T) *fixture {
 	service := application.New(store, cfg, time.Now)
 	service.Config.MaximumAttempts = 10
 	service.Config.WorkerInterval = time.Second
-	server := httptest.NewServer(httpapi.New(service, slog.New(slog.NewJSONHandler(io.Discard, nil))))
+	api := httpapi.New(service, slog.New(slog.NewJSONHandler(io.Discard, nil)))
+	server := httptest.NewServer(api)
 	t.Cleanup(server.Close)
 	jar, _ := cookiejar.New(nil)
-	f := &fixture{store: store, service: service, server: server, client: &http.Client{Jar: jar}}
+	f := &fixture{api: api, store: store, service: service, server: server, client: &http.Client{Jar: jar}}
 	f.csrfToken(t)
 	return f
 }
@@ -301,7 +303,7 @@ func TestReservations_WhenVisitorsCompeteForLastUnit_OnlyOneSucceeds(t *testing.
 	}
 	var shared domain.SharedWishlistResponse
 	requireStatus(t, first.send(t, "GET", path, "", headers), 200, &shared)
-	if len(shared.Wishes) != 1 || shared.Wishes[0].ReservedQuantity != 1 || shared.Wishes[0].AvailableQuantity != 0 {
+	if len(shared.Wishes) != 1 || shared.Wishes[0].ReservedQuantity == nil || *shared.Wishes[0].ReservedQuantity != 1 || shared.Wishes[0].AvailableQuantity == nil || *shared.Wishes[0].AvailableQuantity != 0 {
 		t.Fatal("reservation quantity invariant violated")
 	}
 	rotated := f.send(t, "PUT", "/api/v1/wishlists/"+list.Id+"/share-link", "", map[string]string{"If-Match": etag})

@@ -60,8 +60,8 @@ func TestWishUpdates_WhenQuantityFallsBelowReservations_RollsBackAndPreservesCur
 	requireStatus(t, f.send(t, "PUT", "/api/v1/wishlists/"+list.Id+"/wishes/"+security.NewID(), `{"name":"Missing wish","quantity":2}`, map[string]string{"If-Match": next}), 404, nil)
 	var available domain.SharedWishlistResponse
 	requireStatus(t, visitor.send(t, "GET", base+"?availableOnly=TRUE", "", headers), 200, &available)
-	if available.Wishes == nil || len(available.Wishes) != 0 {
-		t.Fatal("fully reserved gift was shown in available-only mode")
+	if available.Wishes == nil || len(available.Wishes) != 1 || available.Wishes[0].CurrentParticipantReservedQuantity == nil || *available.Wishes[0].CurrentParticipantReservedQuantity != 2 {
+		t.Fatal("available-only mode hid the participant's own reserved gift")
 	}
 	requireStatus(t, visitor.send(t, "GET", base+"?availableOnly=1", "", headers), 400, nil)
 	requireStatus(t, visitor.send(t, "GET", base+"?availableOnly=true&availableOnly=false", "", headers), 400, nil)

@@ -31,7 +31,7 @@ func TestOpenAPI_WhenReadingDocument_ContainsVersionedOperationsAndExactErrorEnv
 	}
 	err := json.Unmarshal(recorder.Body.Bytes(), &document)
 	// Assert
-	if err != nil || recorder.Code != 200 || document.OpenAPI != "3.1.0" || len(api.Patterns()) != 82 {
+	if err != nil || recorder.Code != 200 || document.OpenAPI != "3.1.0" || len(api.Patterns()) != 99 {
 		t.Fatalf("invalid specification: status %d patterns %d error %v", recorder.Code, len(api.Patterns()), err)
 	}
 	fields := document.Components.Schemas["ErrorResponse"].Properties
@@ -45,6 +45,14 @@ func TestOpenAPI_WhenReadingDocument_ContainsVersionedOperationsAndExactErrorEnv
 	}
 	if len(document.Components.Schemas["ValidationError"].Properties) != 2 {
 		t.Fatal("validation error contract changed")
+	}
+	for _, field := range []struct{ schema, name string }{{"CurrentSessionResponse", "isGoogleLinked"}, {"CurrentSessionResponse", "isVisibleInMemberSearch"}, {"MemberProfileResponse", "isVisibleInMemberSearch"}} {
+		var property struct {
+			Type string `json:"type"`
+		}
+		if json.Unmarshal(document.Components.Schemas[field.schema].Properties[field.name], &property) != nil || property.Type != "boolean" {
+			t.Fatalf("missing boolean %s.%s", field.schema, field.name)
+		}
 	}
 	for _, endpoint := range []struct{ Path, Method string }{{"/api/v1/auth/google/callback", "post"}, {"/api/v1/admin/audit-events", "get"}, {"/api/v1/members/current/data-exports/{exportId}/archive", "get"}, {"/api/v1/auth/two-factor/completions", "post"}} {
 		if document.Paths[endpoint.Path][endpoint.Method] == nil {

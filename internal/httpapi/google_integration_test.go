@@ -317,7 +317,7 @@ func TestGoogle_WhenClaimingPendingAccount_ConfirmsAndReplacesNameBeforeCreating
 	var current domain.CurrentSessionResponse
 	requireStatus(t, f.send(t, "GET", "/api/v1/auth/sessions/current", "", nil), 200, &current)
 	// Assert
-	if current.DisplayName != "MonKado member" || current.Email != provider.Identity.Email {
+	if current.DisplayName != "MonKado member" || current.Email != provider.Identity.Email || !current.IsGoogleLinked {
 		t.Fatal("pending account was not replaced by the verified identity")
 	}
 	var hash *string

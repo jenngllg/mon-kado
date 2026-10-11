@@ -1,10 +1,10 @@
 # MonKado backend
 
-MonKado runs as native Go executables backed by PostgreSQL. The API, worker, migrations and Gmail OAuth bootstrap tool require neither .NET nor Docker. This migration currently targets the contracts on the source branch at `f269457`; it is not yet compatible with the newer `develop` branch.
+MonKado runs as native Go executables backed by PostgreSQL. The API, worker, migrations and Gmail OAuth bootstrap tool require neither .NET nor Docker. The migration is based on consolidated `develop` at `89ffcc0`.
 
 ## Migration compatibility status
 
-The merge audit against `develop` at `89ffcc0` found 89 commits absent from the migration source branch. The Go implementation must preserve those changes before this branch can be merged. Confirmed gaps include wishlist archives and surprise mode, wish favorites and copies, owner reservations, public member profiles, opt-in member search visibility, public share previews and revocable wishlist subscriptions. Deployment, backup, monitoring and performance changes also need reconciliation with the native runtime. Passing the current tests establishes compatibility with the older source contracts only.
+All 99 HTTP operations from consolidated develop are implemented in Go, including archives, favorites, surprise mode, independent wish copies, owner reservations, public member profiles, opt-in member search, public social previews and revocable subscriptions. Targeted tests verify their JSON, authorization, concurrency and lifecycle contracts. Merchant extraction includes exact variant selection, microdata, Amazon, FNAC and the optional public Sephora catalog. Native deployment, backup, monitoring, performance tooling and private operational telemetry still require reconciliation before the final merge.
 
 ## Native development on Windows
 
@@ -86,7 +86,7 @@ Set its OAuth desktop client credentials in the environment first. It prints a s
 
 `cmd/api`, `cmd/worker` and `cmd/migrate` are the composition roots. `internal` separates HTTP, application transactions, domain contracts, validation, persistence, security, images, merchant imports, providers and background jobs. The Gmail bootstrap tool is an independent standard-library Go module.
 
-Operations from the migration source branch are retained: authentication/refresh, Google linking, administrator two-factor enrollment/recovery, profiles, wishlists, wishes, sharing, guest participation, reservations/history, images, merchant previews, reports/moderation, audits, account erasure, session revocation and personal data exports. See the compatibility status above for changes on newer `develop` commits.
+Operations from the migration source branch are retained: authentication/refresh, Google linking, administrator two-factor enrollment/recovery, profiles, wishlists, wishes, sharing, guest participation, reservations/history, images, merchant previews, reports/moderation, audits, account erasure, session revocation and personal data exports. The newer develop operations are listed in the compatibility status above.
 
 `/openapi/v1.json` documents the API. `/liveness` checks the process; `/readiness` checks PostgreSQL. API startup never migrates. Run `migrate` before upgrading API and worker together. Embedded SQL migrations use a PostgreSQL advisory lock. The initial baseline retains historical schema identifiers with no EF Core runtime dependency.
 
@@ -119,4 +119,4 @@ Several defensive returns cannot be reached through their public contracts: `Sto
 
 Native executable startup and the local mailbox workflow are additionally verified through real binaries. PostgreSQL tests cover a fresh schema, migration idempotence, rollback after a conflicting schema, request transactions, access isolation, stale versions and concurrent reservations. Provider and worker tests cover explicit retry deadlines, terminal failures, protected-data cleanup and cancellation without contacting Google or Gmail. Future changes must keep both module gates passing and add explicit scenarios for their affected behavior.
 
-See [native deployment](deployments/README.md). Existing audit documents and prototypes are preserved. Old C# build outputs, empty project directories and .NET disk-management helpers have been removed. Historical result/archive directories can contain source checkouts and must not be deleted wholesale; `.local` contains the active native database, secrets, files and toolchains.
+See [native deployment](deployments/README.md). Existing audit documents and prototypes are preserved. Old backend C# build outputs and unused project directories have been removed. Historical local disk tools are retained separately, as requested in AGENTS.md; they are optional and are not part of the Go build or quality gate. Historical result/archive directories can contain source checkouts and must not be deleted wholesale; `.local` contains the active native database, secrets, files and toolchains.

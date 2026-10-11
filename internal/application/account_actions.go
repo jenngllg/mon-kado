@@ -233,15 +233,28 @@ func (s *Service) UpdatePassword(ctx context.Context, user string, request domai
 	})
 }
 
-// UpdateProfile changes the display name using the profile's optimistic version.
+// UpdateProfile changes profile preferences using the profile's optimistic version.
 func (s *Service) UpdateProfile(ctx context.Context, user string, request domain.UpdateMemberProfileRequest, version uint32) (domain.MemberProfileResponse, uint32, error) {
 	var result domain.MemberProfileResponse
 	var current uint32
 	var image *string
-	err := s.Store.Pool.QueryRow(ctx, `UPDATE users SET display_name=$2,updated_at=$3 WHERE id=$1 AND xmin::text::bigint=$4 RETURNING display_name,profile_image_id::text,xmin::text::bigint`, user, strings.TrimSpace(text(request.DisplayName)), s.Now().UTC(), version).Scan(&result.DisplayName, &image, &current)
-	if errors.Is(err, pgx.ErrNoRows) {
-		err = stale(domain.MemberProfileVersionConflict)
-	}
+	err := s.Store.Transaction(ctx, func(tx pgx.Tx) error {
+		err := tx.QueryRow(ctx, `SELECT display_name,profile_image_id::text,xmin::text::bigint,is_visible_in_member_search FROM users WHERE id=$1 FOR UPDATE`, user).Scan(&result.DisplayName, &image, &current, &result.IsVisibleInMemberSearch)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return unauthorized()
+		}
+		if err != nil {
+			return err
+		}
+		if current != version {
+			return stale(domain.MemberProfileVersionConflict)
+		}
+		name := strings.TrimSpace(text(request.DisplayName))
+		if result.DisplayName == name && (request.IsVisibleInMemberSearch == nil || result.IsVisibleInMemberSearch == *request.IsVisibleInMemberSearch) {
+			return nil
+		}
+		return tx.QueryRow(ctx, `UPDATE users SET display_name=$2,updated_at=$3,is_visible_in_member_search=COALESCE($4,is_visible_in_member_search) WHERE id=$1 RETURNING display_name,profile_image_id::text,xmin::text::bigint,is_visible_in_member_search`, user, name, s.Now().UTC(), request.IsVisibleInMemberSearch).Scan(&result.DisplayName, &image, &current, &result.IsVisibleInMemberSearch)
+	})
 	if image != nil {
 		result.ProfileImageUrl = ptrString("/api/v1/members/" + user + "/profile/image?imageId=" + *image)
 	}

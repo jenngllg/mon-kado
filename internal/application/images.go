@@ -127,7 +127,7 @@ func (s *Service) ReadWishImage(ctx context.Context, wishlist, link, wish, token
 	if link == "" {
 		err = s.Store.Pool.QueryRow(ctx, `SELECT true,w.image_content_hash FROM wishes w JOIN wishlists l ON l.id=w.wishlist_id WHERE w.id=$1 AND w.wishlist_id=$2 AND w.image_id=$3 AND l.owner_id=$4`, wish, grant.Wishlist, grant.Image, grant.Owner).Scan(&valid, &hash)
 	} else {
-		err = s.Store.Pool.QueryRow(ctx, `SELECT true,w.image_content_hash FROM wishes w JOIN wishlists l ON l.id=w.wishlist_id JOIN wishlist_share_links sl ON sl.wishlist_id=l.id WHERE w.id=$1 AND w.wishlist_id=$2 AND w.image_id=$3 AND sl.id=$4 AND NOT l.is_suspended`, wish, grant.Wishlist, grant.Image, link).Scan(&valid, &hash)
+		err = s.Store.Pool.QueryRow(ctx, `SELECT true,w.image_content_hash FROM wishes w JOIN wishlists l ON l.id=w.wishlist_id JOIN wishlist_share_links sl ON sl.wishlist_id=l.id WHERE w.id=$1 AND w.wishlist_id=$2 AND w.image_id=$3 AND sl.id=$4 AND NOT l.is_suspended AND NOT l.is_archived`, wish, grant.Wishlist, grant.Image, link).Scan(&valid, &hash)
 	}
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil, missing(domain.WishImageNotFound)
@@ -177,7 +177,7 @@ func (s *Service) ProfileImage(ctx context.Context, user string, source []byte, 
 				return err
 			}
 		}
-		return tx.QueryRow(ctx, `UPDATE users SET profile_image_id=$2,profile_image_hash=$3,updated_at=$4 WHERE id=$1 RETURNING display_name,xmin::text::bigint`, user, id, normalized.Hash, s.Now().UTC()).Scan(&result.DisplayName, &version)
+		return tx.QueryRow(ctx, `UPDATE users SET profile_image_id=$2,profile_image_hash=$3,updated_at=$4 WHERE id=$1 RETURNING display_name,xmin::text::bigint,is_visible_in_member_search`, user, id, normalized.Hash, s.Now().UTC()).Scan(&result.DisplayName, &version, &result.IsVisibleInMemberSearch)
 	})
 	if id != nil {
 		if err != nil {

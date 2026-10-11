@@ -9,6 +9,10 @@ import (
 )
 
 func (a *API) accountRoutes() {
+	a.route("GET /api/v1/members/{memberId}/profile", options{Rate: 60}, func(r *request) (response, error) {
+		result, err := a.Service.PublicMemberProfile(r.Context(), r.PathValue("memberId"))
+		return response{Body: result}, err
+	})
 	a.route("GET /api/v1/members", options{Rate: 60}, func(r *request) (response, error) {
 		page, size, err := pagination(r)
 		if err != nil {

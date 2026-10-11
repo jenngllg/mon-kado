@@ -2,9 +2,11 @@
 package importer
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"github.com/JennGllg/mon-kado/internal/domain"
+	"golang.org/x/net/html/charset"
 	"io"
 	"mime"
 	"net"
@@ -29,6 +31,7 @@ type Dialer interface {
 
 // Client owns the resolver and dialer used for every redirect and image request.
 type Client struct {
+	Catalog          Catalog
 	Resolver         Resolver
 	Dialer           Dialer
 	Timeout          time.Duration
@@ -162,7 +165,15 @@ func (c *Client) Download(ctx context.Context, value string, limit int64) ([]byt
 		if response.StatusCode < 200 || response.StatusCode >= 300 || int64(len(content)) > limit {
 			return nil, nil, "", errors.New("merchant response is unavailable or too large")
 		}
-		media, _, _ := mime.ParseMediaType(response.Header.Get("Content-Type"))
+		media, parameters, _ := mime.ParseMediaType(response.Header.Get("Content-Type"))
+		if (media == "text/html" || media == "application/xhtml+xml") && parameters["charset"] != "" {
+			if reader, err := charset.NewReaderLabel(strings.Trim(parameters["charset"], `"`), bytes.NewReader(content)); err == nil {
+				content, err = io.ReadAll(io.LimitReader(reader, 3*limit+1))
+				if err != nil || int64(len(content)) > 3*limit {
+					return nil, nil, "", errors.New("merchant text is unavailable or too large")
+				}
+			}
+		}
 		return content, u, media, nil
 	}
 }

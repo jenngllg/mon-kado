@@ -2,12 +2,15 @@ package config
 
 import (
 	"errors"
+	"regexp"
 	"strconv"
 	"time"
 )
 
 // ImportOptions bounds merchant previews within the supported security limits.
 type ImportOptions struct {
+	CatalogEnabled                                  bool
+	CatalogIndexKey                                 string
 	Timeout                                         time.Duration
 	MaximumHTMLBytes, MaximumRedirects, PermitLimit int
 }
@@ -15,7 +18,7 @@ type ImportOptions struct {
 // Imports returns the startup-validated merchant settings or the composition defaults.
 func (c Config) Imports() ImportOptions {
 	if c.ImportOptions.Timeout == 0 {
-		return ImportOptions{Timeout: 20 * time.Second, MaximumHTMLBytes: 2 * 1024 * 1024, MaximumRedirects: 3, PermitLimit: 10}
+		return ImportOptions{Timeout: 20 * time.Second, MaximumHTMLBytes: 2 * 1024 * 1024, MaximumRedirects: 3, PermitLimit: 10, CatalogEnabled: c.ImportOptions.CatalogEnabled, CatalogIndexKey: c.ImportOptions.CatalogIndexKey}
 	}
 	return c.ImportOptions
 }
@@ -23,6 +26,14 @@ func (c Config) Imports() ImportOptions {
 func loadImports() (ImportOptions, error) {
 	options := Config{}.Imports()
 	var err error
+	options.CatalogEnabled, err = strconv.ParseBool(value("WISH_IMPORT_CATALOG_ENABLED", "false"))
+	if err != nil {
+		return options, errors.New("WISH_IMPORT_CATALOG_ENABLED must be a boolean")
+	}
+	options.CatalogIndexKey = value("WISH_IMPORT_CATALOG_INDEX_KEY", "")
+	if options.CatalogEnabled && !regexp.MustCompile(`^key_[A-Za-z0-9_]{1,96}$`).MatchString(options.CatalogIndexKey) {
+		return options, errors.New("WISH_IMPORT_CATALOG_INDEX_KEY must identify the public storefront search index")
+	}
 	options.Timeout, err = time.ParseDuration(value("WISH_IMPORT_TIMEOUT", "20s"))
 	if err != nil || options.Timeout < time.Second || options.Timeout > 20*time.Second {
 		return options, errors.New("WISH_IMPORT_TIMEOUT must be between one and twenty seconds")

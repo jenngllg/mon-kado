@@ -89,7 +89,7 @@ func TestGoogleBrowser_WhenReturningFormPOST_AcceptsGoogleOriginAndConsumesSecur
 	var current domain.CurrentSessionResponse
 	requireStatus(t, f.send(t, "GET", "/api/v1/auth/sessions/current", "", nil), 200, &current)
 	// Assert
-	if provider.Calls != 1 || current.Email != "browser@gmail.com" || external == nil || external.SameSite != http.SameSiteStrictMode || !external.Secure || proof.Get("flow") == "" {
+	if provider.Calls != 1 || current.Email != "browser@gmail.com" || !current.IsGoogleLinked || external == nil || external.SameSite != http.SameSiteStrictMode || !external.Secure || proof.Get("flow") == "" {
 		t.Fatal("Google callback browser binding or new account differs")
 	}
 	f.access = ""

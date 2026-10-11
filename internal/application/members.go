@@ -16,7 +16,7 @@ import (
 func (s *Service) SearchMembers(ctx context.Context, displayName string, page, size int) (domain.PaginatedResponse[domain.UserSearchResponse], error) {
 	items := []domain.UserSearchResponse{}
 	var total int
-	filter := `email_confirmed AND length(public.unaccent($1)) > 0 AND strpos(lower(public.unaccent(normalize(display_name,NFC))),lower(public.unaccent($1))) > 0`
+	filter := `email_confirmed AND is_visible_in_member_search AND length(public.unaccent($1)) > 0 AND strpos(lower(public.unaccent(normalize(display_name,NFC))),lower(public.unaccent($1))) > 0`
 	err := s.Store.Pool.QueryRow(ctx, `SELECT count(*) FROM users WHERE `+filter, strings.TrimSpace(displayName)).Scan(&total)
 	if err != nil || total == 0 || int64(page) > (int64(total)+int64(size)-1)/int64(size) {
 		return domain.Page(items, page, size, total), err

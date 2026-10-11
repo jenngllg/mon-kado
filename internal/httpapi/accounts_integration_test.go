@@ -13,6 +13,73 @@ import (
 	"github.com/JennGllg/mon-kado/internal/domain"
 )
 
+func TestProfile_WhenSearchVisibilityChanges_PersistsPreferenceWithoutHidingPublicPhoto(t *testing.T) {
+	// Arrange
+	f := newFixture(t)
+	member := f.member(t, "visibility@example.test")
+	var identity domain.CurrentSessionResponse
+	initial := f.send(t, "GET", "/api/v1/auth/sessions/current", "", nil)
+	etag := initial.Header.Get("ETag")
+	requireStatus(t, initial, 200, &identity)
+	if identity.IsVisibleInMemberSearch {
+		t.Fatal("new accounts must be hidden from member search by default")
+	}
+	var photo domain.MemberProfileResponse
+	uploaded := f.upload(t, "/api/v1/members/current/profile/image", etag, 42)
+	etag = uploaded.Header.Get("ETag")
+	requireStatus(t, uploaded, 200, &photo)
+	if photo.ProfileImageUrl == nil || photo.IsVisibleInMemberSearch {
+		t.Fatal("photo update lost profile visibility")
+	}
+	photoURL, err := url.Parse(*photo.ProfileImageUrl)
+	if err != nil || photoURL.Path != "/api/v1/members/"+member+"/profile/image" {
+		t.Fatal("public photo URL missing")
+	}
+	for _, visible := range []bool{false, true} {
+		// Act
+		var profile domain.MemberProfileResponse
+		updated := f.send(t, "PUT", "/api/v1/members/current/profile", jsonInput(t, map[string]any{"displayName": "Visibility member", "isVisibleInMemberSearch": visible}), map[string]string{"If-Match": etag})
+		next := updated.Header.Get("ETag")
+		requireStatus(t, updated, 200, &profile)
+		// Assert
+		if profile.IsVisibleInMemberSearch != visible || next == etag || next == "" {
+			t.Fatal("profile visibility or version was not updated")
+		}
+		requireStatus(t, f.send(t, "PUT", "/api/v1/members/current/profile", `{"displayName":"Stale","isVisibleInMemberSearch":true}`, map[string]string{"If-Match": etag}), 412, nil)
+		etag = next
+		requireStatus(t, f.send(t, "GET", "/api/v1/auth/sessions/current", "", nil), 200, &identity)
+		if identity.IsVisibleInMemberSearch != visible {
+			t.Fatal("session lost the saved visibility preference")
+		}
+		var found domain.PaginatedResponse[domain.UserSearchResponse]
+		requireStatus(t, f.send(t, "GET", "/api/v1/members?displayName=Visibility", "", nil), 200, &found)
+		if (found.TotalCount == 1) != visible || (len(found.Items) == 1) != visible {
+			t.Fatal("member search did not apply visibility to items and metadata")
+		}
+		access := f.access
+		f.access = ""
+		requireStatus(t, f.send(t, "GET", photoURL.RequestURI(), "", nil), 200, nil)
+		f.access = access
+		// Omitted preference must preserve the saved value rather than restoring true.
+		nameOnly := f.send(t, "PUT", "/api/v1/members/current/profile", `{"displayName":"Visibility member"}`, map[string]string{"If-Match": etag})
+		etag = nameOnly.Header.Get("ETag")
+		requireStatus(t, nameOnly, 200, &profile)
+		if profile.IsVisibleInMemberSearch != visible {
+			t.Fatal("display-name change overwrote the search preference")
+		}
+	}
+	for _, invalid := range []string{`"false"`, `1`, `null`} {
+		requireStatus(t, f.send(t, "PUT", "/api/v1/members/current/profile", `{"displayName":"Visibility member","isVisibleInMemberSearch":`+invalid+`}`, map[string]string{"If-Match": etag}), 400, nil)
+	}
+	for _, payload := range []string{`{"displayName":"Visibility member"}`, `{"displayName":"Visibility member","isVisibleInMemberSearch":true}`} {
+		unchanged := f.send(t, "PUT", "/api/v1/members/current/profile", payload, map[string]string{"If-Match": etag})
+		if unchanged.Header.Get("ETag") != etag {
+			t.Fatal("unchanged member profile changed its version")
+		}
+		requireStatus(t, unchanged, 200, nil)
+	}
+}
+
 func TestLogin_WhenAccountLocked_CannotClearLockoutWithAnotherAttempt(t *testing.T) {
 	// Arrange
 	f := newFixture(t)
@@ -143,7 +210,7 @@ func TestMembers_WhenProfileChanges_SearchesConfirmedNamesWithoutAccentSensitivi
 	version := current.Header.Get("ETag")
 	requireStatus(t, current, 200, nil)
 	// Act
-	updated := f.send(t, "PUT", "/api/v1/members/current/profile", `{"displayName":" Élodie 🎁 "}`, map[string]string{"If-Match": version})
+	updated := f.send(t, "PUT", "/api/v1/members/current/profile", `{"displayName":" Élodie 🎁 ","isVisibleInMemberSearch":true}`, map[string]string{"If-Match": version})
 	nextVersion := updated.Header.Get("ETag")
 	var profile domain.MemberProfileResponse
 	requireStatus(t, updated, 200, &profile)

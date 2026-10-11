@@ -6,6 +6,7 @@ import (
 	"errors"
 	"github.com/JennGllg/mon-kado/internal/domain"
 	"github.com/JennGllg/mon-kado/internal/images"
+	"net/url"
 )
 
 // Preview downloads suggestions without persisting any resource or source image.
@@ -20,15 +21,24 @@ func (c *Client) Preview(ctx context.Context, value string) (domain.WishImportPr
 	}
 	var metadata Metadata
 	if validationErr == nil {
-		maximum := c.MaximumHTMLBytes
-		if maximum == 0 {
-			maximum = 2 * 1024 * 1024
-		}
-		content, base, media, err := c.Download(budget, value, int64(maximum))
-		if err == nil && (media == "text/html" || media == "application/xhtml+xml") {
-			metadata = Extract(content, base)
+		original, _ := url.Parse(value)
+		if c.Catalog != nil && c.Catalog.CanHandle(original) {
+			var err error
+			metadata, err = c.Catalog.Get(budget, original)
+			if err != nil {
+				result.Warnings = append(result.Warnings, "WISH_IMPORT_PAGE_UNAVAILABLE")
+			}
 		} else {
-			result.Warnings = append(result.Warnings, "WISH_IMPORT_PAGE_UNAVAILABLE")
+			maximum := c.MaximumHTMLBytes
+			if maximum == 0 {
+				maximum = 2 * 1024 * 1024
+			}
+			content, base, media, err := c.Download(budget, value, int64(maximum))
+			if err == nil && (media == "text/html" || media == "application/xhtml+xml") {
+				metadata = Extract(content, base)
+			} else {
+				result.Warnings = append(result.Warnings, "WISH_IMPORT_PAGE_UNAVAILABLE")
+			}
 		}
 	} else {
 		result.Warnings = append(result.Warnings, "WISH_IMPORT_PAGE_UNAVAILABLE")

@@ -21,7 +21,7 @@ func (a *API) requestScheme(r *http.Request) string {
 	}
 	// TLS may terminate at the proxy, but clients cannot assert their own scheme.
 	peer, err := netip.ParseAddrPort(r.RemoteAddr)
-	if err == nil && a.trustedProxy(peer.Addr()) && r.Header.Get("X-Forwarded-Proto") == "https" {
+	if err == nil && a.trustedProxy(peer.Addr()) && len(r.Header.Values("X-Forwarded-Proto")) == 1 && r.Header.Get("X-Forwarded-Proto") == "https" {
 		return "https"
 	}
 	return "http"

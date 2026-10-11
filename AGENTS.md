@@ -5,8 +5,7 @@
 - Le backend est en Go. Exécuter PostgreSQL, API, worker, outils et tests nativement ; utiliser Docker uniquement si un besoin concret le rend nécessaire et expliquer ce besoin.
 - Conserver les contrats HTTP/JSON, règles d'accès et invariants métier lors d'un changement technique.
 - Garder `GmailOAuthBootstrap` dans `src/Tools.GmailOAuthBootstrap` comme module autonome, sans déplacement sans demande explicite de Jenn. Les outils autonomes appelant un provider externe restent sous `src/`.
-- Préserver les audits historiques et les prototypes ; ils ne sont pas nécessaires au backend Go.
-- Ne pas réintroduire les anciens outils .NET de gestion de disque ni leurs garde-fous MSBuild, supprimés à la demande de Jenn.
+- Préserver les audits historiques, prototypes et outils locaux .NET de gestion de disque existants ; ils ne sont pas nécessaires au backend Go.
 - Organiser les packages par responsabilité technique. Garder les composition roots `cmd/*` concises et injecter explicitement leurs dépendances.
 - Utiliser `gofmt` et `go vet`. Préférer les sorties rapides et les opérations lisibles, sans imbrication inutile.
 - Documenter en anglais les packages, types/interfaces exportés et leurs fonctions avec GoDoc. Les commentaires internes expliquent le pourquoi ; tout TODO référence un ticket.

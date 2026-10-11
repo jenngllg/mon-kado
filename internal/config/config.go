@@ -43,6 +43,7 @@ type Config struct {
 	TrustedProxies           []netip.Prefix
 	JobOptions               JobOptions
 	ImportOptions            ImportOptions
+	PerimeterOptions         PerimeterOptions
 	ProviderFailureThreshold int
 	ProviderBreakDuration    time.Duration
 }
@@ -85,6 +86,10 @@ func Load() (Config, error) {
 		return c, err
 	}
 	c.ImportOptions, err = loadImports()
+	if err != nil {
+		return c, err
+	}
+	c.PerimeterOptions, err = loadPerimeter()
 	if err != nil {
 		return c, err
 	}

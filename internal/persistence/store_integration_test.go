@@ -64,12 +64,16 @@ func TestMigrate_WhenDatabaseEmpty_AppliesAllMigrationsExactlyOnce(t *testing.T)
 	}
 	// Assert
 	var count int
-	if err := store.Pool.QueryRow(t.Context(), `SELECT count(*) FROM mon_kado_migrations`).Scan(&count); err != nil || count != 6 {
+	if err := store.Pool.QueryRow(t.Context(), `SELECT count(*) FROM mon_kado_migrations`).Scan(&count); err != nil || count != 10 {
 		t.Fatal("native migration ledger differs")
 	}
 	var leaseColumn bool
 	if err := store.Pool.QueryRow(t.Context(), `SELECT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name='gift_image_deletion_outbox' AND column_name='lease_id')`).Scan(&leaseColumn); err != nil || !leaseColumn {
 		t.Fatal("final migration was not applied")
+	}
+	var visibilityColumn bool
+	if err := store.Pool.QueryRow(t.Context(), `SELECT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='is_visible_in_member_search' AND is_nullable='NO' AND column_default='false')`).Scan(&visibilityColumn); err != nil || !visibilityColumn {
+		t.Fatal("new accounts must be hidden from search until they opt in")
 	}
 }
 

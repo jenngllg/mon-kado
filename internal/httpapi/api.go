@@ -20,6 +20,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/JennGllg/mon-kado/internal/admission"
 	"github.com/JennGllg/mon-kado/internal/application"
 	"github.com/JennGllg/mon-kado/internal/domain"
 	"github.com/JennGllg/mon-kado/internal/security"
@@ -30,13 +31,14 @@ import (
 
 // API is the HTTP composition root with injected business services and structured logging.
 type API struct {
-	Service    *application.Service
-	Logger     *slog.Logger
-	mux        *http.ServeMux
-	limiter    rateLimiter
-	Google     application.GoogleClient
-	Importer   application.WishImportClient
-	operations map[string]options
+	Service        *application.Service
+	Logger         *slog.Logger
+	mux            *http.ServeMux
+	limiter        rateLimiter
+	Google         application.GoogleClient
+	Importer       application.WishImportClient
+	ImageAdmission *admission.Limiter
+	operations     map[string]options
 }
 
 type request struct {
@@ -61,19 +63,25 @@ type response struct {
 }
 type endpoint func(*request) (response, error)
 type options struct {
-	Auth         bool
-	Admin        bool
-	CSRF         bool
-	Rate         int
-	RateByMember bool
+	RatePolicy     string
+	RateWindow     time.Duration
+	RateByShare    bool
+	ImageAdmission bool
+	Auth           bool
+	Admin          bool
+	CSRF           bool
+	Rate           int
+	RateByMember   bool
 }
 
 // New registers all endpoints before accepting requests.
 func New(service *application.Service, logger *slog.Logger) *API {
 	a := &API{Service: service, Logger: logger, mux: http.NewServeMux(), limiter: rateLimiter{windows: map[string]rateWindow{}}, operations: map[string]options{}}
+	a.ImageAdmission = admission.New(nil)
 	imports := service.Config.Imports()
 	client := importer.New()
 	client.Timeout, client.MaximumRedirects, client.MaximumHTMLBytes = imports.Timeout, imports.MaximumRedirects, imports.MaximumHTMLBytes
+	client.Catalog = &importer.ProductCatalog{Client: client, Enabled: imports.CatalogEnabled, IndexKey: imports.CatalogIndexKey}
 	a.Importer = client
 	a.routes()
 	a.registerOpenAPI()
@@ -101,13 +109,26 @@ func (a *API) route(pattern string, opt options, handler endpoint) {
 			a.writeError(w, r, domain.Failure(401, domain.SecurityUnauthorized, "Authentication is required."))
 			return
 		}
+		if opt.ImageAdmission {
+			release, accepted, err := a.ImageAdmission.Acquire(r.Context())
+			if err != nil {
+				a.writeError(w, r, err)
+				return
+			}
+			if !accepted {
+				w.Header().Set("Retry-After", "60")
+				a.writeError(w, r, domain.Failure(429, domain.RequestRateLimitExceeded, "The request rate limit has been exceeded."))
+				return
+			}
+			defer release()
+		}
 		if opt.Admin {
 			if err := application.AuthorizeAdministrator(p); err != nil {
 				a.writeError(w, r, err)
 				return
 			}
 		}
-		for _, key := range []string{"wishlistId", "wishId", "shareLinkId", "memberId", "reportId", "exportId"} {
+		for _, key := range []string{"wishlistId", "wishId", "shareLinkId", "memberId", "reportId", "exportId", "id"} {
 			if value := r.PathValue(key); value != "" {
 				id, err := uuid.Parse(value)
 				if err != nil || id == uuid.Nil {
@@ -119,11 +140,22 @@ func (a *API) route(pattern string, opt options, handler endpoint) {
 		}
 		if opt.Rate > 0 {
 			ip := a.clientAddress(r)
+			policy := pattern
+			if opt.RatePolicy != "" {
+				policy = opt.RatePolicy
+			}
 			if opt.RateByMember {
 				ip = p.MemberID
 			}
-			if !a.limiter.allow(pattern+"|"+ip, opt.Rate, a.Service.Now()) {
-				w.Header().Set("Retry-After", "60")
+			if opt.RateByShare {
+				ip += "|" + r.PathValue("shareLinkId")
+			}
+			window := opt.RateWindow
+			if window == 0 {
+				window = time.Minute
+			}
+			if !a.limiter.allowWindow(policy+"|"+ip, opt.Rate, window, a.Service.Now()) {
+				w.Header().Set("Retry-After", strconv.FormatInt(int64(window/time.Second), 10))
 				a.writeError(w, r, domain.Failure(429, domain.RequestRateLimitExceeded, "The request rate limit has been exceeded."))
 				return
 			}
@@ -166,6 +198,9 @@ func (a *API) route(pattern string, opt options, handler endpoint) {
 			}
 		} else if result.Binary != nil {
 			w.Header().Set("Content-Type", result.MediaType)
+			if result.ContentLength > 0 {
+				w.Header().Set("Content-Length", strconv.FormatInt(result.ContentLength, 10))
+			}
 			w.WriteHeader(result.Status)
 			w.Write(result.Binary)
 		} else {
@@ -241,6 +276,19 @@ func (a *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-CSRF-TOKEN, X-Correlation-ID, X-MonKado-Share-Token, If-Match")
 		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	if r.URL.Path == "/api/v1" || strings.HasPrefix(r.URL.Path, "/api/v1/") || r.URL.Path == "/security/csrf-token" || strings.HasPrefix(r.URL.Path, "/security/csrf-token/") {
+		quota := a.Service.Config.Perimeter()
+		if !a.limiter.allowWindow("perimeter|"+a.clientAddress(r), quota.PermitLimit, quota.Window, a.Service.Now()) {
+			w.Header().Set("Retry-After", strconv.FormatInt(int64(quota.Window/time.Second), 10))
+			a.writeError(w, r, domain.Failure(429, domain.RequestRateLimitExceeded, "The request rate limit has been exceeded."))
+			return
+		}
+	}
+	if strings.HasPrefix(r.URL.Path, "/api/v1/shared-wishlists/") && !a.limiter.allow("shared|"+a.clientAddress(r), 60, a.Service.Now()) {
+		w.Header().Set("Retry-After", "60")
+		a.writeError(w, r, domain.Failure(429, domain.RequestRateLimitExceeded, "The request rate limit has been exceeded."))
 		return
 	}
 	_, pattern := a.mux.Handler(r)
@@ -393,8 +441,9 @@ func pagination(r *request) (int, int, error) {
 }
 
 type rateWindow struct {
-	start time.Time
-	count int
+	duration time.Duration
+	start    time.Time
+	count    int
 }
 type rateLimiter struct {
 	mu      sync.Mutex
@@ -402,11 +451,15 @@ type rateLimiter struct {
 }
 
 func (l *rateLimiter) allow(key string, limit int, now time.Time) bool {
+	return l.allowWindow(key, limit, time.Minute, now)
+}
+
+func (l *rateLimiter) allowWindow(key string, limit int, duration time.Duration, now time.Time) bool {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	if len(l.windows) > 10000 {
 		for k, w := range l.windows {
-			if now.Sub(w.start) >= time.Minute {
+			if now.Sub(w.start) >= w.duration {
 				delete(l.windows, k)
 			}
 		}
@@ -415,8 +468,8 @@ func (l *rateLimiter) allow(key string, limit int, now time.Time) bool {
 		}
 	}
 	w := l.windows[key]
-	if now.Sub(w.start) >= time.Minute {
-		w = rateWindow{start: now}
+	if now.Sub(w.start) >= duration {
+		w = rateWindow{start: now, duration: duration}
 	}
 	w.count++
 	l.windows[key] = w

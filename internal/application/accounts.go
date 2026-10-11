@@ -203,7 +203,7 @@ func (s *Service) CurrentSession(ctx context.Context, principal Principal) (doma
 	r := domain.CurrentSessionResponse{Roles: principal.Roles}
 	var version uint32
 	var image *string
-	err := s.Store.Pool.QueryRow(ctx, `SELECT id::text,email,display_name,profile_image_id::text,xmin::text::bigint,EXISTS(SELECT 1 FROM user_logins WHERE user_id=users.id AND login_provider='Google') FROM users WHERE id=$1`, principal.MemberID).Scan(&r.Id, &r.Email, &r.DisplayName, &image, &version, &r.IsGoogleLinked)
+	err := s.Store.Pool.QueryRow(ctx, `SELECT id::text,email,display_name,profile_image_id::text,xmin::text::bigint,EXISTS(SELECT 1 FROM user_logins WHERE user_id=users.id AND login_provider='Google'),is_visible_in_member_search FROM users WHERE id=$1`, principal.MemberID).Scan(&r.Id, &r.Email, &r.DisplayName, &image, &version, &r.IsGoogleLinked, &r.IsVisibleInMemberSearch)
 	if image != nil {
 		url := "/api/v1/members/" + r.Id + "/profile/image?imageId=" + *image
 		r.ProfileImageUrl = &url

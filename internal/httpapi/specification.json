@@ -68,14 +68,22 @@
             }
           },
           "429": {
-            "description": "429TooManyRequests",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "description": "The request quota was exceeded. Retry-After gives the remaining wait in seconds."
           },
           "503": {
             "description": "503ServiceUnavailable",
@@ -213,6 +221,24 @@
                 }
               }
             }
+          },
+          "429": {
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The request quota was exceeded. Retry-After gives the remaining wait in seconds."
           }
         },
         "parameters": [
@@ -428,14 +454,22 @@
             }
           },
           "429": {
-            "description": "429TooManyRequests",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "description": "The request quota was exceeded. Retry-After gives the remaining wait in seconds."
           },
           "503": {
             "description": "503ServiceUnavailable",
@@ -545,14 +579,22 @@
             }
           },
           "429": {
-            "description": "429TooManyRequests",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "description": "The request quota was exceeded. Retry-After gives the remaining wait in seconds."
           },
           "503": {
             "description": "503ServiceUnavailable",
@@ -652,14 +694,22 @@
             }
           },
           "429": {
-            "description": "429TooManyRequests",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "description": "The request quota was exceeded. Retry-After gives the remaining wait in seconds."
           },
           "503": {
             "description": "503ServiceUnavailable",
@@ -778,14 +828,22 @@
             }
           },
           "429": {
-            "description": "429TooManyRequests",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "description": "The request quota was exceeded. Retry-After gives the remaining wait in seconds."
           },
           "503": {
             "description": "503ServiceUnavailable",
@@ -917,14 +975,22 @@
             }
           },
           "429": {
-            "description": "429TooManyRequests",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "description": "The request quota was exceeded. Retry-After gives the remaining wait in seconds."
           },
           "503": {
             "description": "503ServiceUnavailable",
@@ -1037,14 +1103,22 @@
             }
           },
           "429": {
-            "description": "429TooManyRequests",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "description": "The request quota was exceeded. Retry-After gives the remaining wait in seconds."
           },
           "503": {
             "description": "503ServiceUnavailable",
@@ -1159,14 +1233,22 @@
             }
           },
           "429": {
-            "description": "429TooManyRequests",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "description": "The request quota was exceeded. Retry-After gives the remaining wait in seconds."
           },
           "503": {
             "description": "503ServiceUnavailable",
@@ -1251,14 +1333,22 @@
             }
           },
           "429": {
-            "description": "429TooManyRequests",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "description": "The request quota was exceeded. Retry-After gives the remaining wait in seconds."
           },
           "503": {
             "description": "503ServiceUnavailable",
@@ -1359,6 +1449,24 @@
                 }
               }
             }
+          },
+          "429": {
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The request quota was exceeded. Retry-After gives the remaining wait in seconds."
           }
         },
         "parameters": [],
@@ -1389,14 +1497,22 @@
             }
           },
           "429": {
-            "description": "429TooManyRequests",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "description": "The request quota was exceeded. Retry-After gives the remaining wait in seconds."
           },
           "503": {
             "description": "503ServiceUnavailable",
@@ -1474,14 +1590,22 @@
             }
           },
           "429": {
-            "description": "429TooManyRequests",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "description": "The request quota was exceeded. Retry-After gives the remaining wait in seconds."
           },
           "503": {
             "description": "503ServiceUnavailable",
@@ -1569,14 +1693,22 @@
             }
           },
           "429": {
-            "description": "429TooManyRequests",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "description": "The request quota was exceeded. Retry-After gives the remaining wait in seconds."
           },
           "503": {
             "description": "503ServiceUnavailable",
@@ -1674,14 +1806,22 @@
             }
           },
           "429": {
-            "description": "429TooManyRequests",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "description": "The request quota was exceeded. Retry-After gives the remaining wait in seconds."
           },
           "503": {
             "description": "503ServiceUnavailable",
@@ -1749,14 +1889,22 @@
             }
           },
           "429": {
-            "description": "429TooManyRequests",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "description": "The request quota was exceeded. Retry-After gives the remaining wait in seconds."
           },
           "503": {
             "description": "503ServiceUnavailable",
@@ -1816,14 +1964,22 @@
             "description": "302Found"
           },
           "429": {
-            "description": "429TooManyRequests",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "description": "The request quota was exceeded. Retry-After gives the remaining wait in seconds."
           },
           "413": {
             "description": "413PayloadTooLarge",
@@ -1982,14 +2138,22 @@
             }
           },
           "429": {
-            "description": "429TooManyRequests",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "description": "The request quota was exceeded. Retry-After gives the remaining wait in seconds."
           },
           "503": {
             "description": "503ServiceUnavailable",
@@ -2114,14 +2278,22 @@
             }
           },
           "429": {
-            "description": "429TooManyRequests",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "description": "The request quota was exceeded. Retry-After gives the remaining wait in seconds."
           },
           "503": {
             "description": "503ServiceUnavailable",
@@ -2196,14 +2368,22 @@
             }
           },
           "429": {
-            "description": "429TooManyRequests",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "description": "The request quota was exceeded. Retry-After gives the remaining wait in seconds."
           },
           "503": {
             "description": "503ServiceUnavailable",
@@ -2275,14 +2455,22 @@
             "description": "202Accepted"
           },
           "429": {
-            "description": "429TooManyRequests",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "description": "The request quota was exceeded. Retry-After gives the remaining wait in seconds."
           },
           "503": {
             "description": "503ServiceUnavailable",
@@ -2375,14 +2563,22 @@
             }
           },
           "429": {
-            "description": "429TooManyRequests",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "description": "The request quota was exceeded. Retry-After gives the remaining wait in seconds."
           },
           "503": {
             "description": "503ServiceUnavailable",
@@ -2510,6 +2706,24 @@
                 }
               }
             }
+          },
+          "429": {
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The request quota was exceeded. Retry-After gives the remaining wait in seconds."
           }
         },
         "parameters": [
@@ -2669,6 +2883,24 @@
                 }
               }
             }
+          },
+          "429": {
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The request quota was exceeded. Retry-After gives the remaining wait in seconds."
           }
         },
         "parameters": [
@@ -2781,14 +3013,22 @@
             }
           },
           "429": {
-            "description": "429TooManyRequests",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "description": "The request quota was exceeded. Retry-After gives the remaining wait in seconds."
           },
           "503": {
             "description": "503ServiceUnavailable",
@@ -2901,14 +3141,22 @@
             }
           },
           "429": {
-            "description": "429TooManyRequests",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "description": "The request quota was exceeded. Retry-After gives the remaining wait in seconds."
           },
           "503": {
             "description": "503ServiceUnavailable",
@@ -3016,6 +3264,24 @@
                 }
               }
             }
+          },
+          "429": {
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The request quota was exceeded. Retry-After gives the remaining wait in seconds."
           }
         },
         "parameters": [],
@@ -3085,14 +3351,22 @@
             }
           },
           "429": {
-            "description": "429TooManyRequests",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "description": "The request quota was exceeded. Retry-After gives the remaining wait in seconds."
           },
           "503": {
             "description": "503ServiceUnavailable",
@@ -3195,14 +3469,22 @@
             }
           },
           "429": {
-            "description": "429TooManyRequests",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "description": "The request quota was exceeded. Retry-After gives the remaining wait in seconds."
           },
           "503": {
             "description": "503ServiceUnavailable",
@@ -3290,14 +3572,22 @@
             }
           },
           "429": {
-            "description": "429TooManyRequests",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "description": "The request quota was exceeded. Retry-After gives the remaining wait in seconds."
           },
           "503": {
             "description": "503ServiceUnavailable",
@@ -3382,14 +3672,22 @@
             }
           },
           "429": {
-            "description": "429TooManyRequests",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "description": "The request quota was exceeded. Retry-After gives the remaining wait in seconds."
           },
           "503": {
             "description": "503ServiceUnavailable",
@@ -3469,14 +3767,22 @@
             }
           },
           "429": {
-            "description": "429TooManyRequests",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "description": "The request quota was exceeded. Retry-After gives the remaining wait in seconds."
           },
           "503": {
             "description": "503ServiceUnavailable",
@@ -3566,14 +3872,22 @@
             }
           },
           "429": {
-            "description": "429TooManyRequests",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "description": "The request quota was exceeded. Retry-After gives the remaining wait in seconds."
           },
           "503": {
             "description": "503ServiceUnavailable",
@@ -3683,14 +3997,22 @@
             }
           },
           "429": {
-            "description": "429TooManyRequests",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "description": "The request quota was exceeded. Retry-After gives the remaining wait in seconds."
           },
           "503": {
             "description": "503ServiceUnavailable",
@@ -3820,14 +4142,22 @@
             }
           },
           "429": {
-            "description": "429TooManyRequests",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "description": "The request quota was exceeded. Retry-After gives the remaining wait in seconds."
           },
           "503": {
             "description": "503ServiceUnavailable",
@@ -3957,14 +4287,22 @@
             }
           },
           "429": {
-            "description": "429TooManyRequests",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "description": "The request quota was exceeded. Retry-After gives the remaining wait in seconds."
           },
           "503": {
             "description": "503ServiceUnavailable",
@@ -4064,14 +4402,22 @@
             }
           },
           "429": {
-            "description": "429TooManyRequests",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "description": "The request quota was exceeded. Retry-After gives the remaining wait in seconds."
           },
           "503": {
             "description": "503ServiceUnavailable",
@@ -4169,14 +4515,22 @@
             }
           },
           "429": {
-            "description": "429TooManyRequests",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "description": "The request quota was exceeded. Retry-After gives the remaining wait in seconds."
           },
           "500": {
             "description": "Request failed",
@@ -4329,14 +4683,22 @@
             }
           },
           "429": {
-            "description": "429TooManyRequests",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "description": "The request quota was exceeded. Retry-After gives the remaining wait in seconds."
           },
           "500": {
             "description": "Request failed",
@@ -4444,14 +4806,22 @@
             }
           },
           "429": {
-            "description": "429TooManyRequests",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "description": "The request quota was exceeded. Retry-After gives the remaining wait in seconds."
           },
           "500": {
             "description": "Request failed",
@@ -4607,14 +4977,22 @@
             }
           },
           "429": {
-            "description": "429TooManyRequests",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "description": "The request quota was exceeded. Retry-After gives the remaining wait in seconds."
           },
           "500": {
             "description": "Request failed",
@@ -4734,14 +5112,22 @@
             }
           },
           "429": {
-            "description": "429TooManyRequests",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "description": "The request quota was exceeded. Retry-After gives the remaining wait in seconds."
           },
           "503": {
             "description": "503ServiceUnavailable",
@@ -4861,14 +5247,22 @@
             }
           },
           "429": {
-            "description": "429TooManyRequests",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "description": "The request quota was exceeded. Retry-After gives the remaining wait in seconds."
           },
           "503": {
             "description": "503ServiceUnavailable",
@@ -4976,14 +5370,22 @@
             }
           },
           "429": {
-            "description": "429TooManyRequests",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "description": "The request quota was exceeded. Retry-After gives the remaining wait in seconds."
           },
           "503": {
             "description": "503ServiceUnavailable",
@@ -5147,14 +5549,22 @@
             }
           },
           "429": {
-            "description": "429TooManyRequests",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "description": "The request quota was exceeded. Retry-After gives the remaining wait in seconds."
           },
           "503": {
             "description": "503ServiceUnavailable",
@@ -5254,14 +5664,22 @@
             }
           },
           "429": {
-            "description": "429TooManyRequests",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "description": "The request quota was exceeded. Retry-After gives the remaining wait in seconds."
           },
           "503": {
             "description": "503ServiceUnavailable",
@@ -5362,14 +5780,22 @@
             }
           },
           "429": {
-            "description": "429TooManyRequests",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "description": "The request quota was exceeded. Retry-After gives the remaining wait in seconds."
           },
           "503": {
             "description": "503ServiceUnavailable",
@@ -5551,14 +5977,22 @@
             }
           },
           "429": {
-            "description": "429TooManyRequests",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "description": "The request quota was exceeded. Retry-After gives the remaining wait in seconds."
           },
           "503": {
             "description": "503ServiceUnavailable",
@@ -5699,14 +6133,22 @@
             }
           },
           "429": {
-            "description": "429TooManyRequests",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "description": "The request quota was exceeded. Retry-After gives the remaining wait in seconds."
           },
           "503": {
             "description": "503ServiceUnavailable",
@@ -5856,14 +6298,22 @@
             }
           },
           "429": {
-            "description": "429TooManyRequests",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "description": "The request quota was exceeded. Retry-After gives the remaining wait in seconds."
           },
           "503": {
             "description": "503ServiceUnavailable",
@@ -5978,14 +6428,22 @@
             }
           },
           "429": {
-            "description": "429TooManyRequests",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "description": "The request quota was exceeded. Retry-After gives the remaining wait in seconds."
           },
           "503": {
             "description": "503ServiceUnavailable",
@@ -6100,14 +6558,22 @@
             }
           },
           "429": {
-            "description": "429TooManyRequests",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "description": "The request quota was exceeded. Retry-After gives the remaining wait in seconds."
           },
           "503": {
             "description": "503ServiceUnavailable",
@@ -6212,14 +6678,22 @@
             }
           },
           "429": {
-            "description": "429TooManyRequests",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "description": "The request quota was exceeded. Retry-After gives the remaining wait in seconds."
           },
           "503": {
             "description": "503ServiceUnavailable",
@@ -6355,6 +6829,24 @@
                 }
               }
             }
+          },
+          "429": {
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The request quota was exceeded. Retry-After gives the remaining wait in seconds."
           }
         },
         "parameters": [
@@ -6508,6 +7000,24 @@
                 }
               }
             }
+          },
+          "429": {
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The request quota was exceeded. Retry-After gives the remaining wait in seconds."
           }
         },
         "parameters": [
@@ -6666,6 +7176,24 @@
                 }
               }
             }
+          },
+          "429": {
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The request quota was exceeded. Retry-After gives the remaining wait in seconds."
           }
         },
         "parameters": [
@@ -6771,6 +7299,24 @@
                 }
               }
             }
+          },
+          "429": {
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The request quota was exceeded. Retry-After gives the remaining wait in seconds."
           }
         },
         "parameters": [
@@ -6933,6 +7479,24 @@
                 }
               }
             }
+          },
+          "429": {
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The request quota was exceeded. Retry-After gives the remaining wait in seconds."
           }
         },
         "parameters": [
@@ -7079,6 +7643,24 @@
                 }
               }
             }
+          },
+          "429": {
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The request quota was exceeded. Retry-After gives the remaining wait in seconds."
           }
         },
         "parameters": [
@@ -7115,6 +7697,205 @@
             "bearerAuth": []
           }
         ]
+      },
+      "patch": {
+        "operationId": "SetWishFavoriteRequest",
+        "summary": "Sets the favorite preference of an owned wish.",
+        "tags": [
+          "Wishes"
+        ],
+        "responses": {
+          "200": {
+            "description": "200OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WishResponse"
+                }
+              }
+            },
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Quoted lowercase hexadecimal PostgreSQL xmin version."
+              }
+            }
+          },
+          "400": {
+            "description": "400BadRequest",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "404NotFound",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "409Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "412PreconditionFailed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "413PayloadTooLarge",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "415UnsupportedMediaType",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "428PreconditionRequired",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "503ServiceUnavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Request failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Request failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Request failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The request quota was exceeded. Retry-After gives the remaining wait in seconds."
+          }
+        },
+        "parameters": [
+          {
+            "name": "wishlistId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "wishId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^\"[0-9a-f]{8}\"$"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetWishFavoriteRequest"
+              }
+            }
+          }
+        }
       }
     },
     "/api/v1/wishlists/{wishlistId}/wishes/{wishId}/image": {
@@ -7214,14 +7995,22 @@
             }
           },
           "429": {
-            "description": "429TooManyRequests",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "description": "The request quota was exceeded. Retry-After gives the remaining wait in seconds."
           },
           "503": {
             "description": "503ServiceUnavailable",
@@ -7326,14 +8115,22 @@
         ],
         "responses": {
           "429": {
-            "description": "429TooManyRequests",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "description": "The request quota was exceeded. Retry-After gives the remaining wait in seconds."
           },
           "204": {
             "description": "204NoContent"
@@ -7500,6 +8297,24 @@
                 }
               }
             }
+          },
+          "429": {
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The request quota was exceeded. Retry-After gives the remaining wait in seconds."
           }
         },
         "parameters": [
@@ -7583,6 +8398,24 @@
                 }
               }
             }
+          },
+          "429": {
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The request quota was exceeded. Retry-After gives the remaining wait in seconds."
           }
         },
         "parameters": [
@@ -7706,14 +8539,22 @@
             }
           },
           "429": {
-            "description": "429TooManyRequests",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
-            }
+            },
+            "description": "The request quota was exceeded. Retry-After gives the remaining wait in seconds."
           },
           "503": {
             "description": "503ServiceUnavailable",
@@ -7869,6 +8710,24 @@
                 }
               }
             }
+          },
+          "429": {
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The request quota was exceeded. Retry-After gives the remaining wait in seconds."
           }
         },
         "parameters": [
@@ -8012,6 +8871,24 @@
                 }
               }
             }
+          },
+          "429": {
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The request quota was exceeded. Retry-After gives the remaining wait in seconds."
           }
         },
         "parameters": [
@@ -8136,6 +9013,24 @@
                 }
               }
             }
+          },
+          "429": {
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The request quota was exceeded. Retry-After gives the remaining wait in seconds."
           }
         },
         "parameters": [
@@ -8260,6 +9155,24 @@
                 }
               }
             }
+          },
+          "429": {
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The request quota was exceeded. Retry-After gives the remaining wait in seconds."
           }
         },
         "parameters": [
@@ -8412,6 +9325,24 @@
                 }
               }
             }
+          },
+          "429": {
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The request quota was exceeded. Retry-After gives the remaining wait in seconds."
           }
         },
         "parameters": [
@@ -8545,6 +9476,24 @@
                 }
               }
             }
+          },
+          "429": {
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The request quota was exceeded. Retry-After gives the remaining wait in seconds."
           }
         },
         "parameters": [
@@ -8661,9 +9610,38 @@
                 }
               }
             }
+          },
+          "429": {
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The request quota was exceeded. Retry-After gives the remaining wait in seconds."
           }
         },
-        "parameters": [],
+        "parameters": [
+          {
+            "schema": {
+              "type": "boolean",
+              "default": false
+            },
+            "name": "isArchived",
+            "in": "query",
+            "required": false,
+            "description": "Omission returns active lists; true returns archived lists."
+          }
+        ],
         "security": [
           {
             "bearerAuth": []
@@ -8780,6 +9758,24 @@
                 }
               }
             }
+          },
+          "429": {
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The request quota was exceeded. Retry-After gives the remaining wait in seconds."
           }
         },
         "parameters": [],
@@ -8935,6 +9931,24 @@
                 }
               }
             }
+          },
+          "429": {
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The request quota was exceeded. Retry-After gives the remaining wait in seconds."
           }
         },
         "parameters": [
@@ -9072,6 +10086,24 @@
                 }
               }
             }
+          },
+          "429": {
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The request quota was exceeded. Retry-After gives the remaining wait in seconds."
           }
         },
         "parameters": [
@@ -9174,6 +10206,24 @@
                 }
               }
             }
+          },
+          "429": {
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The request quota was exceeded. Retry-After gives the remaining wait in seconds."
           }
         },
         "parameters": [
@@ -9192,6 +10242,196 @@
             "bearerAuth": []
           }
         ]
+      },
+      "patch": {
+        "operationId": "SetWishlistArchivedRequest",
+        "summary": "Archives or restores an owned wishlist.",
+        "tags": [
+          "Wishlists"
+        ],
+        "responses": {
+          "200": {
+            "description": "200OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WishlistResponse"
+                }
+              }
+            },
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Quoted lowercase hexadecimal PostgreSQL xmin version."
+              }
+            }
+          },
+          "400": {
+            "description": "400BadRequest",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "404NotFound",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "409Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "412PreconditionFailed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "413PayloadTooLarge",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "415UnsupportedMediaType",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "428PreconditionRequired",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "503ServiceUnavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Request failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Request failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Request failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The request quota was exceeded. Retry-After gives the remaining wait in seconds."
+          }
+        },
+        "parameters": [
+          {
+            "name": "wishlistId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^\"[0-9a-f]{8}\"$"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetWishlistArchivedRequest"
+              }
+            }
+          }
+        }
       }
     },
     "/api/v1/wishlists/{wishlistId}/share-link": {
@@ -9285,6 +10525,24 @@
                 }
               }
             }
+          },
+          "429": {
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The request quota was exceeded. Retry-After gives the remaining wait in seconds."
           }
         },
         "parameters": [
@@ -9388,6 +10646,24 @@
                 }
               }
             }
+          },
+          "429": {
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The request quota was exceeded. Retry-After gives the remaining wait in seconds."
           }
         },
         "parameters": [
@@ -9521,6 +10797,24 @@
                 }
               }
             }
+          },
+          "429": {
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The request quota was exceeded. Retry-After gives the remaining wait in seconds."
           }
         },
         "parameters": [
@@ -9648,6 +10942,24 @@
                 }
               }
             }
+          },
+          "429": {
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The request quota was exceeded. Retry-After gives the remaining wait in seconds."
           }
         },
         "parameters": [
@@ -9690,6 +11002,24 @@
                 }
               }
             }
+          },
+          "429": {
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The request quota was exceeded. Retry-After gives the remaining wait in seconds."
           }
         }
       }
@@ -9746,6 +11076,1878 @@
             }
           }
         }
+      }
+    },
+    "/api/v1/members/{memberId}/profile": {
+      "get": {
+        "operationId": "GetPublicMemberProfile",
+        "summary": "Retrieves a confirmed public identity and its active shared lists.",
+        "tags": [
+          "Wishlists"
+        ],
+        "responses": {
+          "200": {
+            "description": "200OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicMemberProfileResponse"
+                }
+              }
+            },
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Quoted lowercase hexadecimal PostgreSQL xmin version."
+              }
+            }
+          },
+          "404": {
+            "description": "404NotFound",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "503ServiceUnavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Request failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Request failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Request failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The request quota was exceeded. Retry-After gives the remaining wait in seconds."
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "memberId",
+            "in": "path"
+          }
+        ],
+        "security": []
+      }
+    },
+    "/api/v1/shared-wishlists/{shareLinkId}/subscriptions": {
+      "post": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "operationId": "CreateWishlistSubscription",
+        "summary": "CreateWishlistSubscription",
+        "responses": {
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          },
+          "429": {
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The request quota was exceeded. Retry-After gives the remaining wait in seconds."
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WishlistSubscriptionResponse"
+                }
+              }
+            },
+            "description": "Success",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "The created subscription URL."
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "name": "shareLinkId",
+            "required": true
+          },
+          {
+            "in": "header",
+            "schema": {
+              "type": "string"
+            },
+            "name": "X-MonKado-Share-Token",
+            "description": "Capability received from the frontend fragment, never a server URL.",
+            "required": true
+          },
+          {
+            "in": "header",
+            "schema": {
+              "type": "string"
+            },
+            "name": "X-CSRF-TOKEN",
+            "required": true
+          }
+        ]
+      }
+    },
+    "/api/v1/shared-wishlists/{shareLinkId}/subscriptions/current": {
+      "get": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "operationId": "GetCurrentWishlistSubscription",
+        "summary": "GetCurrentWishlistSubscription",
+        "responses": {
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          },
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WishlistSubscriptionResponse"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          },
+          "429": {
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The request quota was exceeded. Retry-After gives the remaining wait in seconds."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "name": "shareLinkId",
+            "required": true
+          },
+          {
+            "in": "header",
+            "schema": {
+              "type": "string"
+            },
+            "name": "X-MonKado-Share-Token",
+            "description": "Capability received from the frontend fragment, never a server URL.",
+            "required": true
+          }
+        ]
+      }
+    },
+    "/api/v1/wishlist-subscriptions": {
+      "get": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "operationId": "GetWishlistSubscriptions",
+        "summary": "GetWishlistSubscriptions",
+        "responses": {
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          },
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "totalPages": {
+                      "type": "integer"
+                    },
+                    "items": {
+                      "items": {
+                        "$ref": "#/components/schemas/WishlistSubscriptionResponse"
+                      },
+                      "type": "array"
+                    },
+                    "pageSize": {
+                      "type": "integer"
+                    },
+                    "totalCount": {
+                      "type": "integer"
+                    },
+                    "currentPage": {
+                      "type": "integer"
+                    },
+                    "hasPreviousPage": {
+                      "type": "boolean"
+                    },
+                    "hasNextPage": {
+                      "type": "boolean"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          },
+          "429": {
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The request quota was exceeded. Retry-After gives the remaining wait in seconds."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "parameters": [
+          {
+            "in": "query",
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "type": "integer"
+            },
+            "name": "page"
+          },
+          {
+            "in": "query",
+            "schema": {
+              "maximum": 100,
+              "default": 20,
+              "minimum": 1,
+              "type": "integer"
+            },
+            "name": "pageSize"
+          }
+        ]
+      }
+    },
+    "/api/v1/wishlist-subscriptions/{id}": {
+      "delete": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "operationId": "DeleteWishlistSubscription",
+        "summary": "DeleteWishlistSubscription",
+        "responses": {
+          "204": {
+            "description": "Success"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          },
+          "429": {
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The request quota was exceeded. Retry-After gives the remaining wait in seconds."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "name": "id",
+            "required": true
+          }
+        ]
+      },
+      "get": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "operationId": "GetWishlistSubscription",
+        "summary": "GetWishlistSubscription",
+        "responses": {
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          },
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WishlistSubscriptionResponse"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          },
+          "429": {
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The request quota was exceeded. Retry-After gives the remaining wait in seconds."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "name": "id",
+            "required": true
+          }
+        ]
+      }
+    },
+    "/api/v1/wishlists/{wishlistId}/wishes/{wishId}/reservations/current": {
+      "get": {
+        "operationId": "OwnedSharedWishlists_GetCurrentReservation",
+        "summary": "Manages only the authenticated owner reservation on an owned wish.",
+        "tags": [
+          "SharedWishlists"
+        ],
+        "responses": {
+          "200": {
+            "description": "200OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GiftReservationResponse"
+                }
+              }
+            },
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Quoted lowercase hexadecimal PostgreSQL xmin version."
+              }
+            }
+          },
+          "400": {
+            "description": "400BadRequest",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "401Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "404NotFound",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The request quota was exceeded. Retry-After gives the remaining wait in seconds."
+          },
+          "503": {
+            "description": "503ServiceUnavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Request failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "wishlistId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "wishId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "put": {
+        "operationId": "OwnedSharedWishlists_UpsertCurrentReservation",
+        "summary": "Manages only the authenticated owner reservation on an owned wish.",
+        "tags": [
+          "SharedWishlists"
+        ],
+        "responses": {
+          "200": {
+            "description": "200OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GiftReservationResponse"
+                }
+              }
+            },
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Quoted lowercase hexadecimal PostgreSQL xmin version."
+              }
+            }
+          },
+          "201": {
+            "description": "201Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GiftReservationResponse"
+                }
+              }
+            },
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Quoted lowercase hexadecimal PostgreSQL xmin version."
+              },
+              "Location": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "URL of the created resource."
+              }
+            }
+          },
+          "400": {
+            "description": "400BadRequest",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "401Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "404NotFound",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "409Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "412PreconditionFailed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "413PayloadTooLarge",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "415UnsupportedMediaType",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "428PreconditionRequired",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The request quota was exceeded. Retry-After gives the remaining wait in seconds."
+          },
+          "503": {
+            "description": "503ServiceUnavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Request failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "X-CSRF-TOKEN",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Signed double-submit token returned by /security/csrf-token; browser cookies must be included."
+          },
+          {
+            "name": "wishlistId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "wishId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^\"[0-9a-f]{8}\"$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpsertGiftReservationRequest"
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "OwnedSharedWishlists_CancelCurrentReservation",
+        "summary": "Manages only the authenticated owner reservation on an owned wish.",
+        "tags": [
+          "SharedWishlists"
+        ],
+        "responses": {
+          "204": {
+            "description": "204NoContent"
+          },
+          "400": {
+            "description": "400BadRequest",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "401Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "404NotFound",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "412PreconditionFailed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "428PreconditionRequired",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The request quota was exceeded. Retry-After gives the remaining wait in seconds."
+          },
+          "503": {
+            "description": "503ServiceUnavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Request failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "X-CSRF-TOKEN",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Signed double-submit token returned by /security/csrf-token; browser cookies must be included."
+          },
+          {
+            "name": "wishlistId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "wishId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^\"[0-9a-f]{8}\"$"
+            }
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/wishlists/{wishlistId}/wishes/{wishId}/copies": {
+      "post": {
+        "operationId": "Wishes_Create",
+        "summary": "Create an independent wish copy",
+        "tags": [
+          "Wishes"
+        ],
+        "responses": {
+          "201": {
+            "description": "201Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WishResponse"
+                }
+              }
+            },
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Quoted lowercase hexadecimal PostgreSQL xmin version."
+              },
+              "Location": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "URL of the created resource."
+              }
+            }
+          },
+          "400": {
+            "description": "400BadRequest",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "404NotFound",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "409Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "413PayloadTooLarge",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "415UnsupportedMediaType",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "503ServiceUnavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Request failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Request failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Request failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The request quota was exceeded. Retry-After gives the remaining wait in seconds."
+          }
+        },
+        "parameters": [
+          {
+            "name": "wishlistId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "wishId",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "in": "path"
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CopyOwnedWishRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/wishlists/{wishlistId}/wishes/copies": {
+      "post": {
+        "operationId": "Wishes_Create",
+        "summary": "Create an independent wish copy",
+        "tags": [
+          "Wishes"
+        ],
+        "responses": {
+          "201": {
+            "description": "201Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WishResponse"
+                }
+              }
+            },
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Quoted lowercase hexadecimal PostgreSQL xmin version."
+              },
+              "Location": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "URL of the created resource."
+              }
+            }
+          },
+          "400": {
+            "description": "400BadRequest",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "404NotFound",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "409Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "413PayloadTooLarge",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "415UnsupportedMediaType",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "503ServiceUnavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Request failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Request failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Request failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The request quota was exceeded. Retry-After gives the remaining wait in seconds."
+          }
+        },
+        "parameters": [
+          {
+            "name": "wishlistId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-MonKado-Share-Token",
+            "schema": {
+              "type": "string"
+            },
+            "required": true,
+            "in": "header"
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CopyWishRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/shared-wishlists/{shareLinkId}/preview": {
+      "get": {
+        "responses": {
+          "429": {
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The request quota was exceeded. Retry-After gives the remaining wait in seconds."
+          },
+          "400": {
+            "description": "Request failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Public preview",
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Request failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "required": true,
+            "in": "path",
+            "name": "shareLinkId"
+          }
+        ],
+        "summary": "Read explicitly public share preview metadata"
+      },
+      "head": {
+        "responses": {
+          "429": {
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The request quota was exceeded. Retry-After gives the remaining wait in seconds."
+          },
+          "400": {
+            "description": "Request failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Public preview",
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Request failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "required": true,
+            "in": "path",
+            "name": "shareLinkId"
+          }
+        ],
+        "summary": "Read explicitly public share preview metadata"
+      }
+    },
+    "/api/v1/shared-wishlists/{shareLinkId}/preview/image": {
+      "get": {
+        "responses": {
+          "429": {
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The request quota was exceeded. Retry-After gives the remaining wait in seconds."
+          },
+          "400": {
+            "description": "Request failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Public preview",
+            "content": {
+              "image/jpeg": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Request failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "required": true,
+            "in": "path",
+            "name": "shareLinkId"
+          }
+        ],
+        "summary": "Read explicitly public share preview metadata"
+      },
+      "head": {
+        "responses": {
+          "429": {
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The request quota was exceeded. Retry-After gives the remaining wait in seconds."
+          },
+          "400": {
+            "description": "Request failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Request failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Public preview",
+            "content": {
+              "image/jpeg": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Request failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "required": true,
+            "in": "path",
+            "name": "shareLinkId"
+          }
+        ],
+        "summary": "Read explicitly public share preview metadata"
       }
     }
   },
@@ -10406,6 +13608,9 @@
             "type": "boolean",
             "description": "Whether the current account is associated with Google, independent of the session's sign-in method."
           },
+          "isVisibleInMemberSearch": {
+            "type": "boolean"
+          },
           "roles": {
             "type": "array",
             "items": {
@@ -10419,7 +13624,8 @@
           "displayName",
           "profileImageUrl",
           "roles",
-          "isGoogleLinked"
+          "isGoogleLinked",
+          "isVisibleInMemberSearch"
         ]
       },
       "ConfirmEmailRequest": {
@@ -10703,6 +13909,39 @@
                 "type": "null"
               }
             ]
+          },
+          "ownerId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "ownerDisplayName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "shareUrl": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "imageUrl": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "ownedWishPath": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "isArchived": {
+            "type": "boolean"
           }
         },
         "required": [
@@ -10716,7 +13955,13 @@
           "status",
           "createdAt",
           "lastActivityAt",
-          "endedAt"
+          "endedAt",
+          "ownerId",
+          "ownerDisplayName",
+          "shareUrl",
+          "imageUrl",
+          "ownedWishPath",
+          "isArchived"
         ]
       },
       "GiftReservationHistoryStatus": {
@@ -10730,6 +13975,9 @@
       "MemberProfileResponse": {
         "type": "object",
         "properties": {
+          "isVisibleInMemberSearch": {
+            "type": "boolean"
+          },
           "displayName": {
             "type": "string"
           },
@@ -10746,12 +13994,23 @@
         },
         "required": [
           "displayName",
-          "profileImageUrl"
+          "profileImageUrl",
+          "isVisibleInMemberSearch"
         ]
       },
       "UpdateMemberProfileRequest": {
         "type": "object",
         "properties": {
+          "isVisibleInMemberSearch": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "displayName": {
             "anyOf": [
               {
@@ -11413,6 +14672,9 @@
                 "type": "null"
               }
             ]
+          },
+          "canSubscribe": {
+            "type": "boolean"
           }
         },
         "required": [
@@ -11462,11 +14724,17 @@
             "format": "int32"
           },
           "reservedQuantity": {
-            "type": "integer",
+            "type": [
+              "integer",
+              "null"
+            ],
             "format": "int32"
           },
           "availableQuantity": {
-            "type": "integer",
+            "type": [
+              "integer",
+              "null"
+            ],
             "format": "int32"
           },
           "currentParticipantReservedQuantity": {
@@ -11489,6 +14757,9 @@
                 "type": "null"
               }
             ]
+          },
+          "isFavorite": {
+            "type": "boolean"
           }
         },
         "required": [
@@ -11565,11 +14836,17 @@
             "format": "int32"
           },
           "reservedQuantity": {
-            "type": "integer",
+            "type": [
+              "integer",
+              "null"
+            ],
             "format": "int32"
           },
           "availableQuantity": {
-            "type": "integer",
+            "type": [
+              "integer",
+              "null"
+            ],
             "format": "int32"
           },
           "currentParticipantReservedQuantity": {
@@ -11592,6 +14869,9 @@
                 "type": "null"
               }
             ]
+          },
+          "isFavorite": {
+            "type": "boolean"
           }
         },
         "required": [
@@ -11860,6 +15140,23 @@
           },
           "entityTag": {
             "type": "string"
+          },
+          "isFavorite": {
+            "type": "boolean"
+          },
+          "reservedQuantity": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "availableQuantity": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
           }
         },
         "required": [
@@ -12008,6 +15305,23 @@
                 "type": "null"
               }
             ]
+          },
+          "isFavorite": {
+            "type": "boolean"
+          },
+          "reservedQuantity": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "availableQuantity": {
+            "format": "int32",
+            "type": [
+              "integer",
+              "null"
+            ]
           }
         },
         "required": [
@@ -12078,6 +15392,12 @@
                 "type": "null"
               }
             ]
+          },
+          "isFavorite": {
+            "type": [
+              "boolean",
+              "null"
+            ]
           }
         }
       },
@@ -12134,6 +15454,12 @@
               {
                 "type": "null"
               }
+            ]
+          },
+          "isFavorite": {
+            "type": [
+              "boolean",
+              "null"
             ]
           }
         }
@@ -12584,6 +15910,12 @@
                 "type": "null"
               }
             ]
+          },
+          "surpriseMode": {
+            "type": "boolean"
+          },
+          "isArchived": {
+            "type": "boolean"
           }
         },
         "required": [
@@ -12642,6 +15974,12 @@
                 "type": "null"
               }
             ]
+          },
+          "surpriseMode": {
+            "type": [
+              "boolean",
+              "null"
+            ]
           }
         }
       },
@@ -12688,6 +16026,12 @@
                 "type": "null"
               }
             ]
+          },
+          "surpriseMode": {
+            "type": [
+              "boolean",
+              "null"
+            ]
           }
         }
       },
@@ -12733,6 +16077,145 @@
         },
         "required": [
           "token"
+        ]
+      },
+      "SetWishlistArchivedRequest": {
+        "required": [
+          "isArchived"
+        ],
+        "properties": {
+          "isArchived": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "SetWishFavoriteRequest": {
+        "required": [
+          "isFavorite"
+        ],
+        "properties": {
+          "isFavorite": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "PublicMemberWishlistResponse": {
+        "type": "object",
+        "properties": {
+          "eventDate": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date"
+          },
+          "occasion": {
+            "$ref": "#/components/schemas/WishlistOccasion"
+          },
+          "shareUrl": {
+            "type": "string",
+            "format": "uri"
+          },
+          "name": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "PublicMemberProfileResponse": {
+        "type": "object",
+        "properties": {
+          "displayName": {
+            "type": "string"
+          },
+          "wishlists": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PublicMemberWishlistResponse"
+            }
+          },
+          "profileImageUrl": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uri"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "WishlistSubscriptionResponse": {
+        "properties": {
+          "shareUrl": {
+            "format": "uri",
+            "type": "string"
+          },
+          "eventDate": {
+            "format": "date",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "ownerDisplayName": {
+            "type": "string"
+          },
+          "occasion": {
+            "$ref": "#/components/schemas/WishlistOccasion"
+          },
+          "wishlistId": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "CopyOwnedWishRequest": {
+        "properties": {
+          "destinationWishlistId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "type": "object",
+        "required": [
+          "destinationWishlistId"
+        ]
+      },
+      "CopyWishRequest": {
+        "properties": {
+          "sourceShareLinkId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "sourceWishId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "type": "object",
+        "required": [
+          "sourceShareLinkId",
+          "sourceWishId"
         ]
       }
     }

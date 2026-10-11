@@ -58,6 +58,8 @@ func ValidateAt(input any, now time.Time) error {
 		"RegisterAccountRequest": {"Email", "Password", "DisplayName"}, "LoginRequest": {"Email", "Password"},
 		"CreateWishlistRequest": {"Name", "Occasion"}, "UpdateWishlistRequest": {"Name", "Occasion"},
 		"CreateWishRequest": {"Name"}, "UpdateWishRequest": {"Name"},
+		"CopyOwnedWishRequest": {"DestinationWishlistId"}, "CopyWishRequest": {"SourceShareLinkId", "SourceWishId"},
+		"SetWishlistArchivedRequest": {"IsArchived"}, "SetWishFavoriteRequest": {"IsFavorite"},
 		"UpsertGiftReservationRequest": {"Quantity"}, "UpdateMemberProfileRequest": {"DisplayName"},
 		"UpdateMemberPasswordRequest": {"CurrentPassword", "NewPassword"}, "UpdateMemberEmailRequest": {"Email", "CurrentPassword"},
 		"ConfirmEmailRequest": {"UserId", "Token"}, "ConfirmMemberEmailChangeRequest": {"RequestId", "Token"},
@@ -75,6 +77,9 @@ func ValidateAt(input any, now time.Time) error {
 	errors := []domain.ValidationError{}
 	add := func(path, message string) {
 		errors = append(errors, domain.ValidationError{PropertyName: path, ErrorMessage: message})
+	}
+	if profile, ok := v.Interface().(domain.UpdateMemberProfileRequest); ok && profile.HasVisibilityPreference && profile.IsVisibleInMemberSearch == nil {
+		add("isVisibleInMemberSearch", fmt.Sprintf(mandatory, "isVisibleInMemberSearch"))
 	}
 	for i := 0; i < v.NumField(); i++ {
 		field := v.Type().Field(i)
@@ -177,7 +182,7 @@ func ValidateAt(input any, now time.Time) error {
 				if (field.Name == "NewPassword" || name == "RegisterAccountRequest") && n < 12 {
 					add(path, "The password must contain at least 12 characters.")
 				}
-			case "UserId", "RequestId", "ConfirmedMemberId":
+			case "UserId", "RequestId", "ConfirmedMemberId", "DestinationWishlistId", "SourceShareLinkId", "SourceWishId":
 				if id, err := uuid.Parse(s); err != nil || id == uuid.Nil || len(s) != 36 {
 					add(path, "The identifier is invalid.")
 				}

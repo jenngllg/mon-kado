@@ -7,11 +7,15 @@ import (
 
 	"github.com/JennGllg/mon-kado/internal/application"
 	"github.com/JennGllg/mon-kado/internal/domain"
+	"github.com/JennGllg/mon-kado/internal/validation"
 )
 
 func (a *API) routes() {
 	a.registerCSRF()
 	a.accountRoutes()
+	a.subscriptionRoutes()
+	a.copyRoutes()
+	a.previewRoutes()
 	a.sharingRoutes()
 	a.imageRoutes()
 	a.twoFactorRoutes()
@@ -19,7 +23,7 @@ func (a *API) routes() {
 	a.exportRoutes()
 	a.administrationRoutes()
 	a.googleRoutes()
-	a.route("POST /api/v1/wishlists/{wishlistId}/wish-import-previews", options{Auth: true, Rate: a.Service.Config.Imports().PermitLimit, RateByMember: true}, a.importPreview)
+	a.route("POST /api/v1/wishlists/{wishlistId}/wish-import-previews", options{Auth: true, Rate: a.Service.Config.Imports().PermitLimit, RateByMember: true, ImageAdmission: true}, a.importPreview)
 	a.route("GET /liveness", options{}, func(r *request) (response, error) {
 		return response{Binary: []byte("Healthy"), MediaType: "text/plain"}, nil
 	})
@@ -39,13 +43,13 @@ func (a *API) routes() {
 	for _, method := range []string{"GET", "POST"} {
 		a.route(method+" /api/v1/wishlists", options{Auth: true}, a.wishlists)
 	}
-	for _, method := range []string{"GET", "PUT", "DELETE"} {
+	for _, method := range []string{"GET", "PUT", "PATCH", "DELETE"} {
 		a.route(method+" /api/v1/wishlists/{wishlistId}", options{Auth: true}, a.wishlist)
 	}
 	for _, method := range []string{"GET", "POST", "PATCH"} {
 		a.route(method+" /api/v1/wishlists/{wishlistId}/wishes", options{Auth: true}, a.wishes)
 	}
-	for _, method := range []string{"GET", "PUT", "DELETE"} {
+	for _, method := range []string{"GET", "PUT", "PATCH", "DELETE"} {
 		a.route(method+" /api/v1/wishlists/{wishlistId}/wishes/{wishId}", options{Auth: true}, a.wish)
 	}
 }
@@ -85,7 +89,11 @@ func (a *API) current(r *request) (response, error) {
 }
 func (a *API) wishlists(r *request) (response, error) {
 	if r.Method == http.MethodGet {
-		result, err := a.Service.Wishlists(r.Context(), r.Principal.MemberID)
+		archived, err := validation.QueryBoolean(r.URL.Query(), "isArchived")
+		if err != nil {
+			return response{}, err
+		}
+		result, err := a.Service.Wishlists(r.Context(), r.Principal.MemberID, archived)
 		return response{Body: result}, err
 	}
 	input, err := body[domain.CreateWishlistRequest](r)
@@ -107,6 +115,14 @@ func (a *API) wishlist(r *request) (response, error) {
 	}
 	if r.Method == http.MethodDelete {
 		return response{Status: 204}, a.Service.DeleteWishlist(r.Context(), owner, id, *v)
+	}
+	if r.Method == http.MethodPatch {
+		input, err := body[domain.SetWishlistArchivedRequest](r)
+		if err != nil {
+			return response{}, err
+		}
+		result, version, err := a.Service.SetWishlistArchived(r.Context(), owner, id, *input.IsArchived, *v)
+		return response{Body: result, Version: &version}, err
 	}
 	input, err := body[domain.UpdateWishlistRequest](r)
 	if err != nil {
@@ -152,6 +168,14 @@ func (a *API) wish(r *request) (response, error) {
 	}
 	if r.Method == http.MethodDelete {
 		return response{Status: 204}, a.Service.DeleteWish(r.Context(), owner, list, id, *v)
+	}
+	if r.Method == http.MethodPatch {
+		input, err := body[domain.SetWishFavoriteRequest](r)
+		if err != nil {
+			return response{}, err
+		}
+		result, version, err := a.Service.SetWishFavorite(r.Context(), owner, list, id, *input.IsFavorite, *v)
+		return response{Body: result, Version: &version}, err
 	}
 	input, err := body[domain.UpdateWishRequest](r)
 	if err != nil {

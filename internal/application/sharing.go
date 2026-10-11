@@ -71,23 +71,24 @@ func (s *Service) ShareLink(ctx context.Context, owner, wishlist, method string,
 }
 
 type verifiedShare struct {
-	Wishlist string
-	Owner    string
-	Name     string
+	Wishlist     string
+	Owner        string
+	Name         string
+	SurpriseMode bool
 }
 
 func (s *Service) verifyShare(ctx context.Context, tx pgx.Tx, id, secret string) (verifiedShare, error) {
 	var share verifiedShare
 	var hash []byte
-	var suspended bool
-	err := tx.QueryRow(ctx, `SELECT l.wishlist_id::text,l.secret_hash,w.owner_id::text,w.name,w.is_suspended FROM wishlist_share_links l JOIN wishlists w ON w.id=l.wishlist_id WHERE l.id=$1 FOR UPDATE OF w,l`, id).Scan(&share.Wishlist, &hash, &share.Owner, &share.Name, &suspended)
+	var suspended, archived bool
+	err := tx.QueryRow(ctx, `SELECT l.wishlist_id::text,l.secret_hash,w.owner_id::text,w.name,w.is_suspended,w.is_archived,w.surprise_mode FROM wishlist_share_links l JOIN wishlists w ON w.id=l.wishlist_id WHERE l.id=$1 FOR UPDATE OF w,l`, id).Scan(&share.Wishlist, &hash, &share.Owner, &share.Name, &suspended, &archived, &share.SurpriseMode)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return share, missing(domain.SharedWishlistNotFound)
 	}
 	if err != nil {
 		return share, err
 	}
-	if suspended || !security.VerifyToken(secret, hash) {
+	if suspended || archived || !security.VerifyToken(secret, hash) {
 		return share, missing(domain.SharedWishlistNotFound)
 	}
 	return share, nil
@@ -236,11 +237,14 @@ func (s *Service) sharedWish(ctx context.Context, tx pgx.Tx, share verifiedShare
 	if participant != nil {
 		participantID = &participant.Id
 	}
-	err := tx.QueryRow(ctx, `SELECT w.id::text,w.name,w.note,w.url,w.price::text,w.quantity,COALESCE((SELECT sum(r.quantity) FROM gift_reservations r WHERE r.wish_id=w.id),0),CASE WHEN $3::uuid IS NULL THEN NULL ELSE COALESCE((SELECT r.quantity FROM gift_reservations r WHERE r.wish_id=w.id AND r.wishlist_participant_id=$3),0) END,w.image_id::text FROM wishes w WHERE w.wishlist_id=$1 AND w.id=$2`, share.Wishlist, id, participantID).Scan(&r.Id, &r.Name, &r.Note, &r.Url, &r.Price, &r.Quantity, &r.ReservedQuantity, &r.CurrentParticipantReservedQuantity, &image)
+	err := tx.QueryRow(ctx, `SELECT w.id::text,w.name,w.note,w.url,w.price::text,w.quantity,COALESCE((SELECT sum(r.quantity) FROM gift_reservations r WHERE r.wish_id=w.id),0),CASE WHEN $3::uuid IS NULL THEN NULL ELSE COALESCE((SELECT r.quantity FROM gift_reservations r WHERE r.wish_id=w.id AND r.wishlist_participant_id=$3),0) END,w.image_id::text,w.is_favorite FROM wishes w WHERE w.wishlist_id=$1 AND w.id=$2`, share.Wishlist, id, participantID).Scan(&r.Id, &r.Name, &r.Note, &r.Url, &r.Price, &r.Quantity, &r.ReservedQuantity, &r.CurrentParticipantReservedQuantity, &image, &r.IsFavorite)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return r, missing(domain.SharedWishNotFound)
 	}
-	r.AvailableQuantity = r.Quantity - r.ReservedQuantity
+	if r.ReservedQuantity != nil {
+		available := max(0, r.Quantity-*r.ReservedQuantity)
+		r.AvailableQuantity = &available
+	}
 	if image != nil {
 		imageURL, urlErr := s.imageURL("", link, share.Wishlist, id, *image)
 		if urlErr != nil {
@@ -264,6 +268,9 @@ func (s *Service) SharedWish(ctx context.Context, link, secret, id, member, gues
 			return err
 		}
 		r, err = s.sharedWish(ctx, tx, share, link, id, participant)
+		if share.Owner == member && share.SurpriseMode {
+			r.ReservedQuantity, r.AvailableQuantity, r.CurrentParticipantReservedQuantity = nil, nil, nil
+		}
 		return err
 	})
 	return r, err
@@ -281,6 +288,7 @@ func (s *Service) SharedWishlist(ctx context.Context, link, secret, member, gues
 			return err
 		}
 		r.Occasion = lowerFirst(r.Occasion)
+		r.CanSubscribe = share.Owner != member
 		r.CurrentParticipant, err = s.participant(ctx, tx, share, member, guest)
 		if err != nil {
 			return err
@@ -298,10 +306,13 @@ func (s *Service) SharedWishlist(ctx context.Context, link, secret, member, gues
 			if err != nil {
 				return err
 			}
-			if availableOnly && wish.AvailableQuantity == 0 {
+			if share.Owner == member && share.SurpriseMode {
+				wish.ReservedQuantity, wish.AvailableQuantity, wish.CurrentParticipantReservedQuantity = nil, nil, nil
+			}
+			if availableOnly && wish.AvailableQuantity != nil && *wish.AvailableQuantity == 0 && (wish.CurrentParticipantReservedQuantity == nil || *wish.CurrentParticipantReservedQuantity == 0) {
 				continue
 			}
-			r.Wishes = append(r.Wishes, domain.SharedWishResponse{Id: wish.Id, Name: wish.Name, Url: wish.Url, Price: wish.Price, Quantity: wish.Quantity, ReservedQuantity: wish.ReservedQuantity, AvailableQuantity: wish.AvailableQuantity, CurrentParticipantReservedQuantity: wish.CurrentParticipantReservedQuantity, ImageUrl: wish.ImageUrl})
+			r.Wishes = append(r.Wishes, domain.SharedWishResponse{Id: wish.Id, Name: wish.Name, Url: wish.Url, Price: wish.Price, Quantity: wish.Quantity, IsFavorite: wish.IsFavorite, ReservedQuantity: wish.ReservedQuantity, AvailableQuantity: wish.AvailableQuantity, CurrentParticipantReservedQuantity: wish.CurrentParticipantReservedQuantity, ImageUrl: wish.ImageUrl})
 		}
 		return nil
 	})

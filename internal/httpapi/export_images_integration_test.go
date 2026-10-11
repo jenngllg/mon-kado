@@ -23,6 +23,9 @@ func TestExports_WhenImagesAndPrivateReservationsExist_IncludesOwnedImagesWithou
 	current := f.send(t, "GET", "/api/v1/auth/sessions/current", "", nil)
 	etag := current.Header.Get("ETag")
 	requireStatus(t, current, 200, nil)
+	updated := f.send(t, "PUT", "/api/v1/members/current/profile", `{"displayName":"Export member","isVisibleInMemberSearch":false}`, map[string]string{"If-Match": etag})
+	etag = updated.Header.Get("ETag")
+	requireStatus(t, updated, 200, nil)
 	requireStatus(t, f.upload(t, "/api/v1/members/current/profile/image", etag, 42), 200, nil)
 	var list domain.WishlistResponse
 	requireStatus(t, f.send(t, "POST", "/api/v1/wishlists", `{"name":"Illustrated list","occasion":"other"}`, nil), 201, &list)
@@ -86,6 +89,14 @@ func TestExports_WhenImagesAndPrivateReservationsExist_IncludesOwnedImagesWithou
 	var document map[string]any
 	if err := json.Unmarshal(entries["data.json"], &document); err != nil {
 		t.Fatal(err)
+	}
+	account, ok := document["account"].(map[string]any)
+	if !ok {
+		t.Fatal("account export missing")
+	}
+	profile, ok := account["profile"].(map[string]any)
+	if !ok || profile["isVisibleInMemberSearch"] != false {
+		t.Fatal("export omitted the saved member search preference")
 	}
 	for _, key := range []string{"participations", "reservations", "reservationHistory"} {
 		items, valid := document[key].([]any)
