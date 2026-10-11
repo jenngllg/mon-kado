@@ -66,9 +66,11 @@ jobs:
           go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
           cd src/Tools.GmailOAuthBootstrap
           go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
+      - name: Verify native API and worker browser journeys and graceful shutdown
+        run: sudo env "PATH=$PATH" bash tests/Native.ProcessTests/run.sh coverage.native.out
       - name: Merge coverage paths for SonarQube Cloud
         shell: pwsh
-        run: ./scripts/Merge-GoCoverage.ps1
+        run: ./scripts/Merge-GoCoverage.ps1 -Paths @('coverage.out', 'src/Tools.GmailOAuthBootstrap/coverage.out', 'coverage.native.out')
       - name: Analyze Go with SonarQube Cloud
         if: >-
           (github.event_name == 'push' && github.ref == 'refs/heads/develop') ||
@@ -117,6 +119,7 @@ jobs:
             artifacts/
             coverage.out
             coverage.sonar.out
+            coverage.native.out
             src/Tools.GmailOAuthBootstrap/coverage.out
           if-no-files-found: error
           retention-days: 7

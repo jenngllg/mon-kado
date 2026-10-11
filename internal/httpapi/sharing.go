@@ -18,9 +18,11 @@ func (a *API) sharingRoutes() {
 	a.route("POST /api/v1/shared-wishlists/{shareLinkId}/participants", options{CSRF: true, Rate: 10, RateByShare: true, RatePolicy: "sharedJoin"}, a.joinWishlist)
 	a.route("GET /api/v1/shared-wishlists/{shareLinkId}/participants/current", options{Rate: 120}, a.currentParticipant)
 	a.route("POST /api/v1/shared-wishlists/{shareLinkId}/reports", options{CSRF: true, Rate: 5, RateWindow: time.Hour, RateByShare: true, RatePolicy: "sharedReport"}, a.reportWishlist)
-	for _, method := range []string{"GET", "PUT", "DELETE"} {
-		a.route(method+" /api/v1/shared-wishlists/{shareLinkId}/wishes/{wishId}/reservations/current", options{CSRF: method != "GET", Rate: 20, RateByShare: true, RatePolicy: "sharedReservation"}, a.reservation)
-		a.route(method+" /api/v1/wishlists/{wishlistId}/wishes/{wishId}/reservations/current", options{Auth: true, CSRF: method != "GET", Rate: 20, RatePolicy: "ownedReservation"}, a.reservation)
+	a.route("GET /api/v1/shared-wishlists/{shareLinkId}/wishes/{wishId}/reservations/current", options{Rate: 120}, a.reservation)
+	a.route("GET /api/v1/wishlists/{wishlistId}/wishes/{wishId}/reservations/current", options{Auth: true}, a.reservation)
+	for _, method := range []string{"PUT", "DELETE"} {
+		a.route(method+" /api/v1/shared-wishlists/{shareLinkId}/wishes/{wishId}/reservations/current", options{CSRF: true, Rate: 20, RateByShare: true, RatePolicy: "sharedReservation"}, a.reservation)
+		a.route(method+" /api/v1/wishlists/{wishlistId}/wishes/{wishId}/reservations/current", options{Auth: true, CSRF: true, Rate: 20, RatePolicy: "ownedReservation"}, a.reservation)
 	}
 	a.route("GET /api/v1/members/current/reservations", options{Auth: true}, a.reservationHistory)
 }

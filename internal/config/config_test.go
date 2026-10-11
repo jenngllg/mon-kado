@@ -51,6 +51,22 @@ func TestLoad_WhenNativeLocalConfigurationValid_UsesBoundedDefaults(t *testing.T
 	}
 }
 
+func TestLoad_WhenEnvironmentMisspelled_RejectsInsteadOfDisablingProductionProtection(t *testing.T) {
+	for _, environment := range []string{"Production", "prod", "development", "production ", "unknown"} {
+		t.Run(environment, func(t *testing.T) {
+			// Arrange
+			validEnvironment(t)
+			t.Setenv("APP_ENV", environment)
+			// Act
+			_, err := Load()
+			// Assert
+			if err == nil || err.Error() != "APP_ENV must be local or production" {
+				t.Fatal("unknown environment silently disabled production protection")
+			}
+		})
+	}
+}
+
 func TestLoad_WhenGmailSenderIsNotAnExactAddress_RejectsStartup(t *testing.T) {
 	for _, address := range []string{"invalid", "Sender <sender@example.test>", "sender@example.test,other@example.test", "sender@example.test\r\nBcc:other@example.test"} {
 		t.Run(address, func(t *testing.T) {

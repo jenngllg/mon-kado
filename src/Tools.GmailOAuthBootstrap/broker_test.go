@@ -36,7 +36,7 @@ func (w *consentWriter) Write(data []byte) (int, error) {
 	w.Challenge = query.Get("code_challenge")
 	w.Callback = query.Get("redirect_uri")
 	callback, err := url.Parse(w.Callback)
-	if err != nil || callback.Hostname() != "127.0.0.1" {
+	if err != nil || callback.Scheme != "http" || callback.Hostname() != "127.0.0.1" || callback.Port() == "" || callback.Port() == "0" || callback.Path != "/oauth2/callback" {
 		w.T.Fatal("callback is not IPv4 loopback")
 	}
 	values := url.Values{"state": {"wrong-state"}, "code": {"authorization-code"}}
@@ -144,7 +144,7 @@ func TestAuthorize_WhenLoopbackConsentCompletes_ExchangesPKCEOnceWithoutPersisti
 			t.Fatal(err)
 		}
 		proof := sha256.Sum256([]byte(r.Form.Get("code_verifier")))
-		if r.Method != "POST" || base64.RawURLEncoding.EncodeToString(proof[:]) != writer.Challenge || r.Form.Get("redirect_uri") != writer.Callback || r.Form.Get("code") != "authorization-code" {
+		if r.Method != "POST" || r.URL.String() != "https://oauth2.googleapis.com/token" || base64.RawURLEncoding.EncodeToString(proof[:]) != writer.Challenge || r.Form.Get("redirect_uri") != writer.Callback || r.Form.Get("code") != "authorization-code" {
 			t.Fatal("token exchange is not bound to loopback consent")
 		}
 		return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(`{"refresh_token":"test-refresh","scope":"https://www.googleapis.com/auth/gmail.send"}`)), Header: http.Header{}}, nil

@@ -58,9 +58,13 @@ func value(key, fallback string) string {
 
 // Load rejects incomplete configuration before opening listeners or running jobs.
 func Load() (Config, error) {
+	environment := value("APP_ENV", "local")
+	if environment != "local" && environment != "production" {
+		return Config{}, errors.New("APP_ENV must be local or production")
+	}
 	c := Config{
 		DatabaseURL: os.Getenv("DATABASE_URL"), Address: value("HTTP_ADDRESS", ":7000"),
-		Production: value("APP_ENV", "local") == "production",
+		Production: environment == "production",
 		Issuer:     value("JWT_ISSUER", "MonKado.Api"), Audience: value("JWT_AUDIENCE", "MonKado.Frontend"),
 		FrontendOrigin: value("FRONTEND_ORIGIN", "http://localhost:5173"),
 		AllowedOrigins: strings.Split(value("ALLOWED_ORIGINS", "http://localhost:5173"), ","),
