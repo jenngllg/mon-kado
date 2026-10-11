@@ -1,247 +1,100 @@
 name: CI
-
 on:
   pull_request:
-    branches:
-      - develop
-      - main
+    branches: [develop, main]
   push:
-    branches:
-      - develop
-      - main
+    branches: [develop, main]
   workflow_dispatch:
-
 permissions:
   contents: read
-
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
-
-env:
-  DOTNET_CLI_TELEMETRY_OPTOUT: "1"
-  DOTNET_NOLOGO: "1"
-  ConnectionStrings__PostgreSql: >-
-    Host=127.0.0.1;Port=1;Database=mon_kado;Username=mon_kado;Timeout=1;Command Timeout=1;Pooling=false;SSL Mode=Disable
-
 jobs:
-  windows_export_coverage:
-    name: Windows export storage coverage
-    runs-on: windows-latest
-    timeout-minutes: 10
-
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - name: Set up .NET
-        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
-        with:
-          global-json-file: global.json
-
-      - name: Test Windows export storage with coverage
-        shell: pwsh
-        run: |
-          dotnet test tests/Infrastructure.PersonalDataExports.UnitTests/Infrastructure.PersonalDataExports.UnitTests.csproj --configuration Release --settings coverlet.runsettings --collect:"XPlat Code Coverage" --results-directory TestResults
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          $env:GITHUB_WORKSPACE | Set-Content -LiteralPath TestResults/windows-workspace.txt
-
-      - name: Upload Windows coverage
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: windows-export-coverage
-          path: |
-            TestResults/**/coverage.opencover.xml
-            TestResults/windows-workspace.txt
-          if-no-files-found: error
-          retention-days: 3
-
   quality:
     name: quality
-    needs: windows_export_coverage
     runs-on: ubuntu-latest
     timeout-minutes: 20
-
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
-
-      - name: Scan Git history for secrets
-        uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Set up .NET
-        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          global-json-file: global.json
-
-      - name: Restore local tools
-        run: dotnet tool restore
-
-      - name: Restore dependencies
-        run: dotnet restore JennGllg.Fr.MonKado.Back.slnx
-
-      - name: Verify formatting
-        run: >-
-          dotnet format JennGllg.Fr.MonKado.Back.slnx
-          --verify-no-changes
-          --no-restore
-
-      - name: Start SonarQube Cloud analysis
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+      - name: Install native PostgreSQL 18
+        run: bash scripts/Initialize-CIPostgres.sh
+      - name: Scan Git history for secrets with native Gitleaks
+        run: go run github.com/zricethezav/gitleaks/v8@v8.30.1 git --redact --config .gitleaks.toml
+      - name: Verify formatting and modules
+        run: |
+          test -z "$(gofmt -l cmd internal src/Tools.GmailOAuthBootstrap)"
+          go mod tidy
+          git diff --exit-code -- go.mod go.sum
+          go mod verify
+          go -C src/Tools.GmailOAuthBootstrap mod tidy
+          git diff --exit-code -- src/Tools.GmailOAuthBootstrap/go.mod src/Tools.GmailOAuthBootstrap/go.sum
+      - name: Analyze code
+        run: |
+          go vet ./...
+          go -C src/Tools.GmailOAuthBootstrap vet ./...
+      - name: Test native PostgreSQL and concurrency
+        run: |
+          go test -race -tags=integration -covermode=atomic -coverpkg=github.com/JennGllg/mon-kado/... -coverprofile=coverage.out ./...
+          go -C src/Tools.GmailOAuthBootstrap test -race -coverprofile=coverage.out ./...
+      - name: Check known reachable vulnerabilities
+        run: |
+          go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
+          cd src/Tools.GmailOAuthBootstrap
+          go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
+      - name: Merge coverage paths for SonarQube Cloud
+        shell: pwsh
+        run: ./scripts/Merge-GoCoverage.ps1
+      - name: Analyze Go with SonarQube Cloud
         if: >-
           (github.event_name == 'push' && github.ref == 'refs/heads/develop') ||
           (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository &&
           github.actor != 'dependabot[bot]')
-        shell: bash
+        uses: SonarSource/sonarqube-scan-action@a31c9398be7ace6bbfaf30c0bd5d415f843d45e9 # v7.0.0, native action
         env:
-          SONAR_ORGANIZATION: ${{ vars.SONAR_ORGANIZATION }}
-          SONAR_PROJECT_KEY: ${{ vars.SONAR_PROJECT_KEY }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        run: >-
-          dotnet sonarscanner begin
-          /k:"$SONAR_PROJECT_KEY"
-          /o:"$SONAR_ORGANIZATION"
-          /d:sonar.token="$SONAR_TOKEN"
-          /d:sonar.host.url="https://sonarcloud.io"
-          /d:sonar.cs.opencover.reportsPaths="**/coverage.opencover.xml"
-          /d:sonar.exclusions="src/**/Migrations/**"
-          /d:sonar.qualitygate.wait=true
-          /d:sonar.qualitygate.timeout=300
-
-      - name: Build
-        run: >-
-          dotnet build JennGllg.Fr.MonKado.Back.slnx
-          --configuration Release
-          --no-restore
-
-      - name: Test with coverage
-        run: >-
-          dotnet test JennGllg.Fr.MonKado.Back.slnx
-          --configuration Release
-          --no-build
-          --no-restore
-          --settings coverlet.runsettings
-          --collect:"XPlat Code Coverage"
-          --results-directory TestResults
-
-      - name: Download Windows export coverage
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: windows-export-coverage
-          path: TestResults/windows
-
-      - name: Normalize Windows coverage source paths
+          args: >-
+            -Dsonar.projectKey="${{ vars.SONAR_PROJECT_KEY }}"
+            -Dsonar.organization="${{ vars.SONAR_ORGANIZATION }}"
+            -Dsonar.host.url=https://sonarcloud.io
+            -Dsonar.sources=cmd,internal,src/Tools.GmailOAuthBootstrap
+            -Dsonar.tests=cmd,internal,src/Tools.GmailOAuthBootstrap
+            -Dsonar.test.inclusions=**/*_test.go
+            -Dsonar.exclusions=**/*_test.go,internal/persistence/migrations/**
+            -Dsonar.go.coverage.reportPaths=coverage.sonar.out
+            -Dsonar.qualitygate.wait=true
+            -Dsonar.qualitygate.timeout=300
+      - name: Build native binaries without CGO
+        env:
+          CGO_ENABLED: '0'
+        run: |
+          mkdir -p artifacts
+          for app in api worker migrate; do go build -trimpath -ldflags='-s -w' -o artifacts/$app ./cmd/$app; done
+          go -C src/Tools.GmailOAuthBootstrap build -trimpath -ldflags='-s -w' -o ../../artifacts/gmail-oauth-bootstrap .
+      - name: Enforce coverage target
         shell: pwsh
         run: |
-          $sourceRoot = (Get-Content -LiteralPath TestResults/windows/windows-workspace.txt -Raw).Trim()
-          ./scripts/Normalize-CoveragePaths.ps1 -ResultsDirectory TestResults/windows -SourceRoot $sourceRoot -TargetRoot $env:GITHUB_WORKSPACE
-
-      - name: Verify coverage reports
-        shell: pwsh
-        run: >-
-          ./scripts/Verify-Coverage.ps1
-          -ResultsDirectory TestResults
-
-      - name: Upload coverage diagnostics
-        if: failure()
+          ./scripts/Test-GoCoverage.ps1 -Path coverage.out
+          ./scripts/Test-GoCoverage.ps1 -Path src/Tools.GmailOAuthBootstrap/coverage.out
+      - name: Upload native binaries and coverage
+        if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: quality-coverage
-          path: TestResults/**/coverage.opencover.xml
-          if-no-files-found: ignore
-          retention-days: 3
-
-      - name: Audit vulnerable packages
-        shell: bash
-        run: |
-          report="$(dotnet package list --project JennGllg.Fr.MonKado.Back.slnx --vulnerable --include-transitive --format json --output-version 1 --no-restore)"
-          echo "$report"
-          count="$(jq '[.projects[].frameworks[]? | ((.topLevelPackages // []) + (.transitivePackages // []))] | flatten | length' <<< "$report")"
-          test "$count" -eq 0
-
-      - name: Audit deprecated packages
-        shell: bash
-        run: |
-          report="$(dotnet package list --project JennGllg.Fr.MonKado.Back.slnx --deprecated --include-transitive --format json --output-version 1 --no-restore)"
-          echo "$report"
-          count="$(jq '[.projects[].frameworks[]? | ((.topLevelPackages // []) + (.transitivePackages // []))] | flatten | length' <<< "$report")"
-          test "$count" -eq 0
-
-      - name: Report outdated packages
-        run: >-
-          dotnet package list
-          --project JennGllg.Fr.MonKado.Back.slnx
-          --outdated
-          --no-restore
-
-      - name: List EF Core migrations
-        run: >-
-          dotnet ef migrations list
-          --no-connect
-          --project src/Infrastructure.Persistence.PostgreSql/Infrastructure.Persistence.PostgreSql.csproj
-          --startup-project src/API/Api.csproj
-          --context MonKadoDbContext
-          --configuration Release
-          --no-build
-
-      - name: Verify EF Core model
-        run: >-
-          dotnet ef migrations has-pending-model-changes
-          --project src/Infrastructure.Persistence.PostgreSql/Infrastructure.Persistence.PostgreSql.csproj
-          --startup-project src/API/Api.csproj
-          --context MonKadoDbContext
-          --configuration Release
-          --no-build
-
-      - name: Generate Compose validation credentials
-        shell: bash
-        run: |
-          echo "CI_POSTGRES_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
-          echo "CI_JWT_SIGNING_KEY=$(openssl rand -base64 32)" >> "$GITHUB_ENV"
-
-      - name: Validate production Compose configuration
-        shell: bash
-        run: >-
-          API_HOST=api.example.test
-          HTTP_PORT=80
-          HTTPS_PORT=443
-          FRONTEND_ORIGIN=https://example.test
-          GOOGLE_AUTHENTICATION_ENABLED=false
-          API_ALLOWED_HOST=api.example.test
-          POSTGRES_DB=mon_kado
-          POSTGRES_USER=mon_kado
-          POSTGRES_PASSWORD="$CI_POSTGRES_SECRET"
-          JWT_SIGNING_KEY="$CI_JWT_SIGNING_KEY"
-          IMAGE_TAG=ci
-          docker compose -f compose.yaml config --quiet
-
-      - name: Validate local Compose configuration
-        shell: bash
-        run: >-
-          API_HOST=http://localhost
-          HTTP_PORT=18080
-          HTTPS_PORT=18443
-          FRONTEND_ORIGIN=http://localhost:5173
-          GOOGLE_AUTHENTICATION_ENABLED=false
-          API_ALLOWED_HOST=localhost
-          POSTGRES_DB=mon_kado
-          POSTGRES_USER=mon_kado
-          POSTGRES_PASSWORD="$CI_POSTGRES_SECRET"
-          JWT_SIGNING_KEY="$CI_JWT_SIGNING_KEY"
-          IMAGE_TAG=ci
-          docker compose -f compose.yaml -f compose.local.yaml config --quiet
-
-      - name: Complete SonarQube Cloud analysis
-        if: >-
-          (github.event_name == 'push' && github.ref == 'refs/heads/develop') ||
-          (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository &&
-          github.actor != 'dependabot[bot]')
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        run: dotnet sonarscanner end /d:sonar.token="$SONAR_TOKEN"
+          name: native-go-build
+          path: |
+            artifacts/
+            coverage.out
+            coverage.sonar.out
+            src/Tools.GmailOAuthBootstrap/coverage.out
+          if-no-files-found: error
+          retention-days: 7

@@ -15,6 +15,6 @@ id = "generic-api-key"
 [[rules.allowlists]]
 description = "RFC 6238 Appendix B public SHA-1 test vector, Base32 encoded"
 condition = "AND"
-paths = ['''^tests/Infrastructure\.Persistence\.PostgreSql\.UnitTests/Services/TwoFactorCryptographyTests\.cs$''']
+paths = ['''^internal/security/totp_test\.go$''', '''^tests/Infrastructure\.Persistence\.PostgreSql\.UnitTests/Services/TwoFactorCryptographyTests\.cs$''']
 regexTarget = "secret"
 regexes = ['''^GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ$''']
