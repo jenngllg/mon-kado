@@ -251,7 +251,7 @@ class NativeProcessTests(unittest.TestCase):
             self.assertEqual("linux", metadata["os"])
             self.assertEqual("amd64", metadata["architecture"])
         metadata = json.loads(self.run_command([*self.identity, str(self.root / "migrate"), "--catalog"], environment=self.binary_environment("migrate")))
-        self.assertEqual(10, len(metadata["migrations"]))
+        self.assertEqual(12, len(metadata["migrations"]))
 
 
 if __name__ == "__main__":

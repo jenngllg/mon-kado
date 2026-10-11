@@ -17,7 +17,7 @@ func (s *Service) PublicMemberProfile(ctx context.Context, member string) (domai
 	}
 	defer tx.Rollback(ctx)
 	var image *string
-	err = tx.QueryRow(ctx, `SELECT id::text,display_name,profile_image_id::text FROM users WHERE id=$1 AND email_confirmed`, member).Scan(&result.Id, &result.DisplayName, &image)
+	err = tx.QueryRow(ctx, `SELECT id::text,display_name,display_name_tag,profile_image_id::text FROM users WHERE id=$1 AND email_confirmed`, member).Scan(&result.Id, &result.DisplayName, &result.DisplayNameTag, &image)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return result, missing(domain.PublicMemberProfileNotFound)
 	}

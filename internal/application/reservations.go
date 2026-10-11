@@ -149,7 +149,7 @@ func (s *Service) ReservationHistory(ctx context.Context, member, status string,
 	if total == 0 || int64(page) > (int64(total)+int64(size)-1)/int64(size) {
 		return domain.Page(items, page, size, total), nil
 	}
-	rows, err := s.Store.Pool.Query(ctx, `SELECT h.id::text,h.wishlist_id::text,COALESCE(w.name,h.wishlist_name),h.wish_id::text,COALESCE(g.name,h.wish_name),l.id::text,h.quantity,h.status,h.created_at,h.last_activity_at,h.ended_at,u.id::text,u.display_name,COALESCE(w.is_archived,false),CASE WHEN NOT w.is_archived AND NOT w.is_suspended AND g.id IS NOT NULL THEN w.owner_id=$1 ELSE false END,CASE WHEN NOT w.is_archived AND NOT w.is_suspended AND g.id IS NOT NULL THEN l.protected_secret END,g.image_id::text FROM gift_reservation_histories h LEFT JOIN wishlists w ON w.id=h.wishlist_id LEFT JOIN users u ON u.id=w.owner_id LEFT JOIN wishes g ON g.id=h.wish_id AND g.wishlist_id=h.wishlist_id LEFT JOIN wishlist_share_links l ON l.wishlist_id=h.wishlist_id WHERE h.member_id=$1 AND ($2='' OR h.status=$2) ORDER BY h.last_activity_at DESC,h.id DESC LIMIT $3 OFFSET $4`, member, upperFirst(status), size, (int64(page)-1)*int64(size))
+	rows, err := s.Store.Pool.Query(ctx, `SELECT h.id::text,h.wishlist_id::text,CASE WHEN w.owner_id=$1 OR (l.id IS NOT NULL AND NOT w.is_archived AND NOT w.is_suspended) THEN COALESCE(w.name,h.wishlist_name) ELSE h.wishlist_name END,h.wish_id::text,CASE WHEN w.owner_id=$1 OR (l.id IS NOT NULL AND NOT w.is_archived AND NOT w.is_suspended) THEN COALESCE(g.name,h.wish_name) ELSE h.wish_name END,l.id::text,h.quantity,h.status,h.created_at,h.last_activity_at,h.ended_at,u.id::text,u.display_name,COALESCE(w.is_archived,false),CASE WHEN NOT w.is_archived AND NOT w.is_suspended AND g.id IS NOT NULL THEN w.owner_id=$1 ELSE false END,CASE WHEN NOT w.is_archived AND NOT w.is_suspended AND g.id IS NOT NULL THEN l.protected_secret END,g.image_id::text,CASE WHEN u.id IS NULL THEN 'wishlistDeleted' WHEN w.owner_id<>$1 AND l.id IS NULL THEN 'notShared' WHEN w.is_suspended THEN 'suspended' WHEN w.is_archived THEN 'archived' WHEN g.id IS NULL THEN 'wishDeleted' END FROM gift_reservation_histories h LEFT JOIN wishlists w ON w.id=h.wishlist_id LEFT JOIN users u ON u.id=w.owner_id LEFT JOIN wishes g ON g.id=h.wish_id AND g.wishlist_id=h.wishlist_id LEFT JOIN wishlist_share_links l ON l.wishlist_id=h.wishlist_id WHERE h.member_id=$1 AND ($2='' OR h.status=$2) ORDER BY h.last_activity_at DESC,h.id DESC LIMIT $3 OFFSET $4`, member, upperFirst(status), size, (int64(page)-1)*int64(size))
 	if err != nil {
 		return domain.Page(items, page, size, total), err
 	}
@@ -158,8 +158,14 @@ func (s *Service) ReservationHistory(ctx context.Context, member, status string,
 		var r domain.GiftReservationHistoryResponse
 		var owned bool
 		var protected, image *string
-		if err = rows.Scan(&r.Id, &r.WishlistId, &r.WishlistName, &r.WishId, &r.WishName, &r.ShareLinkId, &r.Quantity, &r.Status, &r.CreatedAt, &r.LastActivityAt, &r.EndedAt, &r.OwnerId, &r.OwnerDisplayName, &r.IsArchived, &owned, &protected, &image); err != nil {
+		if err = rows.Scan(&r.Id, &r.WishlistId, &r.WishlistName, &r.WishId, &r.WishName, &r.ShareLinkId, &r.Quantity, &r.Status, &r.CreatedAt, &r.LastActivityAt, &r.EndedAt, &r.OwnerId, &r.OwnerDisplayName, &r.IsArchived, &owned, &protected, &image, &r.InaccessibilityReason); err != nil {
 			return domain.Page(items, page, size, total), err
+		}
+		if r.InaccessibilityReason != nil && *r.InaccessibilityReason != "archived" {
+			// History survives revocation; it never restores grants or current private identity.
+			r.OwnerId, r.OwnerDisplayName, r.ShareLinkId = nil, nil, nil
+		} else if owned {
+			r.ShareLinkId = nil
 		}
 		if owned {
 			r.OwnedWishPath = ptrString("/lists/" + r.WishlistId + "/wishes/" + r.WishId)

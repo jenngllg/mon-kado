@@ -239,7 +239,7 @@ func (s *Service) UpdateProfile(ctx context.Context, user string, request domain
 	var current uint32
 	var image *string
 	err := s.Store.Transaction(ctx, func(tx pgx.Tx) error {
-		err := tx.QueryRow(ctx, `SELECT display_name,profile_image_id::text,xmin::text::bigint,is_visible_in_member_search FROM users WHERE id=$1 FOR UPDATE`, user).Scan(&result.DisplayName, &image, &current, &result.IsVisibleInMemberSearch)
+		err := tx.QueryRow(ctx, `SELECT display_name,display_name_tag,profile_image_id::text,xmin::text::bigint,is_visible_in_member_search FROM users WHERE id=$1 FOR UPDATE`, user).Scan(&result.DisplayName, &result.DisplayNameTag, &image, &current, &result.IsVisibleInMemberSearch)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return unauthorized()
 		}
@@ -253,12 +253,12 @@ func (s *Service) UpdateProfile(ctx context.Context, user string, request domain
 		if result.DisplayName == name && (request.IsVisibleInMemberSearch == nil || result.IsVisibleInMemberSearch == *request.IsVisibleInMemberSearch) {
 			return nil
 		}
-		return tx.QueryRow(ctx, `UPDATE users SET display_name=$2,updated_at=$3,is_visible_in_member_search=COALESCE($4,is_visible_in_member_search) WHERE id=$1 RETURNING display_name,profile_image_id::text,xmin::text::bigint,is_visible_in_member_search`, user, name, s.Now().UTC(), request.IsVisibleInMemberSearch).Scan(&result.DisplayName, &image, &current, &result.IsVisibleInMemberSearch)
+		return tx.QueryRow(ctx, `UPDATE users SET display_name=$2,updated_at=$3,is_visible_in_member_search=COALESCE($4,is_visible_in_member_search) WHERE id=$1 RETURNING display_name,display_name_tag,profile_image_id::text,xmin::text::bigint,is_visible_in_member_search`, user, name, s.Now().UTC(), request.IsVisibleInMemberSearch).Scan(&result.DisplayName, &result.DisplayNameTag, &image, &current, &result.IsVisibleInMemberSearch)
 	})
 	if image != nil {
 		result.ProfileImageUrl = ptrString("/api/v1/members/" + user + "/profile/image?imageId=" + *image)
 	}
-	return result, current, err
+	return result, current, memberTagError(err)
 }
 
 func ptrString(value string) *string { return &value }

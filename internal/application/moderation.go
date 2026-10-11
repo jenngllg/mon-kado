@@ -81,7 +81,7 @@ func (s *Service) ReportedWishlist(ctx context.Context, list string) (domain.Rep
 		if wish.ImageUrl != nil {
 			*wish.ImageUrl = strings.Replace(*wish.ImageUrl, "/api/v1/wishlists/", "/api/v1/admin/reported-wishlists/", 1)
 		}
-		result.Wishes = append(result.Wishes, domain.ReportedWishResponse{Id: wish.Id, Name: wish.Name, Note: wish.Note, Url: wish.Url, Price: wish.Price, Quantity: wish.Quantity, Position: wish.Position, CreatedAt: wish.CreatedAt, UpdatedAt: wish.UpdatedAt, ImageUrl: wish.ImageUrl})
+		result.Wishes = append(result.Wishes, domain.ReportedWishResponse{Id: wish.Id, Name: wish.Name, Note: wish.Note, Color: wish.Color, Size: wish.Size, Url: wish.Url, Price: wish.Price, Quantity: wish.Quantity, Position: wish.Position, CreatedAt: wish.CreatedAt, UpdatedAt: wish.UpdatedAt, ImageUrl: wish.ImageUrl})
 	}
 	return result, rows.Err()
 }

@@ -16,12 +16,13 @@ import (
 func (s *Service) SearchMembers(ctx context.Context, displayName string, page, size int) (domain.PaginatedResponse[domain.UserSearchResponse], error) {
 	items := []domain.UserSearchResponse{}
 	var total int
-	filter := `email_confirmed AND is_visible_in_member_search AND length(public.unaccent($1)) > 0 AND strpos(lower(public.unaccent(normalize(display_name,NFC))),lower(public.unaccent($1))) > 0`
-	err := s.Store.Pool.QueryRow(ctx, `SELECT count(*) FROM users WHERE `+filter, strings.TrimSpace(displayName)).Scan(&total)
+	name, tag := domain.SplitMemberHandle(displayName)
+	filter := `email_confirmed AND is_visible_in_member_search AND length(public.unaccent($1)) > 0 AND (($2 = '' AND strpos(lower(public.unaccent(normalize(display_name,NFC))),lower(public.unaccent($1))) > 0) OR ($2 <> '' AND normalized_display_name = lower(normalize($1,NFC) COLLATE "pg_unicode_fast") AND display_name_tag = $2))`
+	err := s.Store.Pool.QueryRow(ctx, `SELECT count(*) FROM users WHERE `+filter, name, tag).Scan(&total)
 	if err != nil || total == 0 || int64(page) > (int64(total)+int64(size)-1)/int64(size) {
 		return domain.Page(items, page, size, total), err
 	}
-	rows, err := s.Store.Pool.Query(ctx, `SELECT id::text,display_name,profile_image_id::text FROM users WHERE `+filter+` ORDER BY lower(public.unaccent(normalize(display_name,NFC))),id LIMIT $2 OFFSET $3`, strings.TrimSpace(displayName), size, (int64(page)-1)*int64(size))
+	rows, err := s.Store.Pool.Query(ctx, `SELECT id::text,display_name,display_name_tag,profile_image_id::text FROM users WHERE `+filter+` ORDER BY lower(public.unaccent(normalize(display_name,NFC))),display_name_tag,id LIMIT $3 OFFSET $4`, name, tag, size, (int64(page)-1)*int64(size))
 	if err != nil {
 		return domain.Page(items, page, size, total), err
 	}
@@ -29,7 +30,7 @@ func (s *Service) SearchMembers(ctx context.Context, displayName string, page, s
 	for rows.Next() {
 		var r domain.UserSearchResponse
 		var image *string
-		if err = rows.Scan(&r.Id, &r.DisplayName, &image); err != nil {
+		if err = rows.Scan(&r.Id, &r.DisplayName, &r.DisplayNameTag, &image); err != nil {
 			return domain.Page(items, page, size, total), err
 		}
 		if image != nil {

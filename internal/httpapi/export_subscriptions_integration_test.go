@@ -62,12 +62,14 @@ func TestExports_WhenFlagsAndSubscriptionsExist_ExportsOwnStateAndMinimalSubscri
 	// Arrange
 	f := newFixture(t)
 	f.member(t, "export-followed-owner@example.test")
+	var identity domain.CurrentSessionResponse
+	requireStatus(t, f.send(t, "GET", "/api/v1/auth/sessions/current", "", nil), 200, &identity)
 	var list domain.WishlistResponse
 	created := f.send(t, "POST", "/api/v1/wishlists", `{"name":"Confidential followed list","occasion":"other","surpriseMode":true}`, nil)
 	version := created.Header.Get("ETag")
 	requireStatus(t, created, 201, &list)
 	var wish domain.WishResponse
-	requireStatus(t, f.send(t, "POST", "/api/v1/wishlists/"+list.Id+"/wishes", `{"name":"Confidential favorite gift","note":"Confidential owner note","isFavorite":true}`, nil), 201, &wish)
+	requireStatus(t, f.send(t, "POST", "/api/v1/wishlists/"+list.Id+"/wishes", `{"name":"Confidential favorite gift","note":"Confidential owner note","color":"Coral","size":"Medium","isFavorite":true}`, nil), 201, &wish)
 	var link domain.WishlistShareLinkResponse
 	requireStatus(t, f.send(t, "POST", "/api/v1/wishlists/"+list.Id+"/share-link", "", nil), 201, &link)
 	u, err := url.Parse(link.ShareUrl)
@@ -88,6 +90,10 @@ func TestExports_WhenFlagsAndSubscriptionsExist_ExportsOwnStateAndMinimalSubscri
 	if len(ownedLists) != 1 || ownedLists[0].(map[string]any)["isArchived"] != true || ownedLists[0].(map[string]any)["surpriseMode"] != true ||
 		len(ownedWishes) != 1 || ownedWishes[0].(map[string]any)["isFavorite"] != true {
 		t.Fatal("export omitted archive, surprise or favorite state")
+	}
+	profile := ownerDocument["account"].(map[string]any)["profile"].(map[string]any)
+	if profile["displayNameTag"] != identity.DisplayNameTag || ownedWishes[0].(map[string]any)["color"] != "Coral" || ownedWishes[0].(map[string]any)["size"] != "Medium" {
+		t.Fatal("export omitted the immutable member tag or wish variants")
 	}
 	if len(ownerDocument["wishlistSubscriptions"].([]any)) != 0 || strings.Contains(ownerJSON, subscription.Id) {
 		t.Fatal("owner export disclosed another member's subscription")

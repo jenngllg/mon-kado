@@ -12,13 +12,13 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
-const wishColumns = `id::text,wishlist_id::text,name,note,url,price::text,quantity,position,created_at,updated_at,image_id::text,is_favorite,CASE WHEN (SELECT surprise_mode FROM wishlists WHERE id=wishes.wishlist_id) THEN NULL ELSE COALESCE((SELECT sum(quantity)::int FROM gift_reservations WHERE wish_id=wishes.id),0) END,xmin::text::bigint`
+const wishColumns = `color,size,id::text,wishlist_id::text,name,note,url,price::text,quantity,position,created_at,updated_at,image_id::text,is_favorite,CASE WHEN (SELECT surprise_mode FROM wishlists WHERE id=wishes.wishlist_id) THEN NULL ELSE COALESCE((SELECT sum(quantity)::int FROM gift_reservations WHERE wish_id=wishes.id),0) END,xmin::text::bigint`
 
 func (s *Service) scanWish(owner string, row pgx.Row) (domain.WishResponse, uint32, error) {
 	var r domain.WishResponse
 	var v uint32
 	var image *string
-	err := row.Scan(&r.Id, &r.WishlistId, &r.Name, &r.Note, &r.Url, &r.Price, &r.Quantity, &r.Position, &r.CreatedAt, &r.UpdatedAt, &image, &r.IsFavorite, &r.ReservedQuantity, &v)
+	err := row.Scan(&r.Color, &r.Size, &r.Id, &r.WishlistId, &r.Name, &r.Note, &r.Url, &r.Price, &r.Quantity, &r.Position, &r.CreatedAt, &r.UpdatedAt, &image, &r.IsFavorite, &r.ReservedQuantity, &v)
 	if r.ReservedQuantity != nil {
 		available := max(0, r.Quantity-*r.ReservedQuantity)
 		r.AvailableQuantity = &available
@@ -54,7 +54,7 @@ func (s *Service) Wishes(ctx context.Context, owner, wishlist string) (domain.Wi
 			if err != nil {
 				return err
 			}
-			r.Wishes = append(r.Wishes, domain.WishCollectionItemResponse{Id: wish.Id, WishlistId: wish.WishlistId, Name: wish.Name, Note: wish.Note, Url: wish.Url, Price: wish.Price, Quantity: wish.Quantity, IsFavorite: wish.IsFavorite, ReservedQuantity: wish.ReservedQuantity, AvailableQuantity: wish.AvailableQuantity, ImageUrl: wish.ImageUrl, Position: wish.Position, CreatedAt: wish.CreatedAt, UpdatedAt: wish.UpdatedAt, EntityTag: EntityTag(v)})
+			r.Wishes = append(r.Wishes, domain.WishCollectionItemResponse{Id: wish.Id, WishlistId: wish.WishlistId, Name: wish.Name, Note: wish.Note, Color: wish.Color, Size: wish.Size, Url: wish.Url, Price: wish.Price, Quantity: wish.Quantity, IsFavorite: wish.IsFavorite, ReservedQuantity: wish.ReservedQuantity, AvailableQuantity: wish.AvailableQuantity, ImageUrl: wish.ImageUrl, Position: wish.Position, CreatedAt: wish.CreatedAt, UpdatedAt: wish.UpdatedAt, EntityTag: EntityTag(v)})
 		}
 		return rows.Err()
 	})
@@ -93,7 +93,7 @@ func (s *Service) CreateWish(ctx context.Context, owner, wishlist string, reques
 			return err
 		}
 		var err error
-		r, v, err = s.scanWish(owner, tx.QueryRow(ctx, `INSERT INTO wishes(id,wishlist_id,name,note,url,price,quantity,position,created_at,is_favorite) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,COALESCE($10,false)) RETURNING `+wishColumns, security.NewID(), wishlist, strings.TrimSpace(text(request.Name)), optional(request.Note), optional(request.Url), request.Price, quantity(request.Quantity), position+1, s.Now().UTC(), request.IsFavorite))
+		r, v, err = s.scanWish(owner, tx.QueryRow(ctx, `INSERT INTO wishes(id,wishlist_id,name,note,url,price,quantity,position,created_at,is_favorite,color,size) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,COALESCE($10,false),$11,$12) RETURNING `+wishColumns, security.NewID(), wishlist, strings.TrimSpace(text(request.Name)), optional(request.Note), optional(request.Url), request.Price, quantity(request.Quantity), position+1, s.Now().UTC(), request.IsFavorite, optional(request.Color), optional(request.Size)))
 		return err
 	})
 	return r, v, err
@@ -118,7 +118,7 @@ func (s *Service) UpdateWish(ctx context.Context, owner, wishlist, id string, re
 		if v != version {
 			return stale(domain.WishVersionConflict)
 		}
-		updated, next, err := s.scanWish(owner, tx.QueryRow(ctx, `UPDATE wishes SET name=$3,note=$4,url=$5,price=$6,quantity=$7,updated_at=$8,is_favorite=COALESCE($9,is_favorite) WHERE id=$1 AND wishlist_id=$2 AND ROW(name,note,url,price,quantity,is_favorite) IS DISTINCT FROM ROW($3,$4,$5,$6::numeric,$7,COALESCE($9,is_favorite)) RETURNING `+wishColumns, id, wishlist, strings.TrimSpace(text(request.Name)), optional(request.Note), optional(request.Url), request.Price, quantity(request.Quantity), s.Now().UTC(), request.IsFavorite))
+		updated, next, err := s.scanWish(owner, tx.QueryRow(ctx, `UPDATE wishes SET name=$3,note=$4,url=$5,price=$6,quantity=$7,updated_at=$8,is_favorite=COALESCE($9,is_favorite),color=$10,size=$11 WHERE id=$1 AND wishlist_id=$2 AND ROW(name,note,url,price,quantity,is_favorite,color,size) IS DISTINCT FROM ROW($3,$4,$5,$6::numeric,$7,COALESCE($9,is_favorite),$10::varchar,$11::varchar) RETURNING `+wishColumns, id, wishlist, strings.TrimSpace(text(request.Name)), optional(request.Note), optional(request.Url), request.Price, quantity(request.Quantity), s.Now().UTC(), request.IsFavorite, optional(request.Color), optional(request.Size)))
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil
 		}

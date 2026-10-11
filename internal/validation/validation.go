@@ -19,6 +19,8 @@ import (
 )
 
 const mandatory = "The property %s is mandatory."
+const wishVariantMaximumLength = 100
+const wishVariantInvalid = "The value must contain valid single-line text of at most 100 characters."
 
 var money = regexp.MustCompile(`^(?:[0-9]{1,8})(?:\.[0-9]{1,2})?$`)
 
@@ -107,6 +109,10 @@ func ValidateAt(input any, now time.Time) error {
 		if value.Kind() == reflect.String {
 			s := value.String()
 			switch field.Name {
+			case "Color", "Size":
+				if !Text(s, wishVariantMaximumLength, false) {
+					add(path, wishVariantInvalid)
+				}
 			case "Email":
 				address, err := mail.ParseAddress(s)
 				if err != nil || address.Address != s || len(s) > 254 || !strings.Contains(s, "@") {

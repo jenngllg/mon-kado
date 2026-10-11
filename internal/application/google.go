@@ -270,7 +270,7 @@ func (s *Service) CompleteGoogle(ctx context.Context, proof, binding string, pas
 	if duplicate(err, "pk_user_logins") || duplicate(err, "ux_user_logins_user_id_login_provider") {
 		err = domain.Failure(409, domain.GoogleAccountLinkConflict, "The Google account association conflicts with an existing identity.")
 	}
-	return result, err
+	return result, memberTagError(err)
 }
 
 func (s *Service) finalizeGoogle(ctx context.Context, tx pgx.Tx, user string, flow googleContext, preserved string) error {

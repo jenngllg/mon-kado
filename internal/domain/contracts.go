@@ -43,6 +43,8 @@ type CreateWishlistRequest struct {
 
 // CreateWishRequest preserves the versioned JSON contract.
 type CreateWishRequest struct {
+	Color      *string      `json:"color"`
+	Size       *string      `json:"size"`
 	Name       *string      `json:"name"`
 	Note       *string      `json:"note"`
 	Url        *string      `json:"url"`
@@ -188,6 +190,8 @@ type UpdateWishlistRequest struct {
 
 // UpdateWishRequest preserves the versioned JSON contract.
 type UpdateWishRequest struct {
+	Color      *string      `json:"color"`
+	Size       *string      `json:"size"`
 	Name       *string      `json:"name"`
 	Note       *string      `json:"note"`
 	Url        *string      `json:"url"`
@@ -239,6 +243,7 @@ type CsrfTokenResponse struct {
 
 // CurrentSessionResponse preserves the versioned JSON contract.
 type CurrentSessionResponse struct {
+	DisplayNameTag          string   `json:"displayNameTag"`
 	Id                      string   `json:"id"`
 	Email                   string   `json:"email"`
 	DisplayName             string   `json:"displayName"`
@@ -250,23 +255,24 @@ type CurrentSessionResponse struct {
 
 // GiftReservationHistoryResponse preserves the versioned JSON contract.
 type GiftReservationHistoryResponse struct {
-	OwnerId          *string    `json:"ownerId"`
-	OwnerDisplayName *string    `json:"ownerDisplayName"`
-	ShareUrl         *string    `json:"shareUrl"`
-	ImageUrl         *string    `json:"imageUrl"`
-	OwnedWishPath    *string    `json:"ownedWishPath"`
-	IsArchived       bool       `json:"isArchived"`
-	Id               string     `json:"id"`
-	WishlistId       string     `json:"wishlistId"`
-	WishlistName     string     `json:"wishlistName"`
-	WishId           string     `json:"wishId"`
-	WishName         string     `json:"wishName"`
-	ShareLinkId      *string    `json:"shareLinkId"`
-	Quantity         int        `json:"quantity"`
-	Status           string     `json:"status"`
-	CreatedAt        time.Time  `json:"createdAt"`
-	LastActivityAt   time.Time  `json:"lastActivityAt"`
-	EndedAt          *time.Time `json:"endedAt"`
+	InaccessibilityReason *string    `json:"inaccessibilityReason"`
+	OwnerId               *string    `json:"ownerId"`
+	OwnerDisplayName      *string    `json:"ownerDisplayName"`
+	ShareUrl              *string    `json:"shareUrl"`
+	ImageUrl              *string    `json:"imageUrl"`
+	OwnedWishPath         *string    `json:"ownedWishPath"`
+	IsArchived            bool       `json:"isArchived"`
+	Id                    string     `json:"id"`
+	WishlistId            string     `json:"wishlistId"`
+	WishlistName          string     `json:"wishlistName"`
+	WishId                string     `json:"wishId"`
+	WishName              string     `json:"wishName"`
+	ShareLinkId           *string    `json:"shareLinkId"`
+	Quantity              int        `json:"quantity"`
+	Status                string     `json:"status"`
+	CreatedAt             time.Time  `json:"createdAt"`
+	LastActivityAt        time.Time  `json:"lastActivityAt"`
+	EndedAt               *time.Time `json:"endedAt"`
 }
 
 // GiftReservationResponse preserves the versioned JSON contract.
@@ -280,6 +286,7 @@ type GiftReservationResponse struct {
 
 // MemberProfileResponse preserves the versioned JSON contract.
 type MemberProfileResponse struct {
+	DisplayNameTag          string  `json:"displayNameTag"`
 	DisplayName             string  `json:"displayName"`
 	ProfileImageUrl         *string `json:"profileImageUrl"`
 	IsVisibleInMemberSearch bool    `json:"isVisibleInMemberSearch"`
@@ -316,6 +323,8 @@ type ReportedWishlistResponse struct {
 
 // ReportedWishResponse preserves the versioned JSON contract.
 type ReportedWishResponse struct {
+	Color     *string      `json:"color"`
+	Size      *string      `json:"size"`
 	Id        string       `json:"id"`
 	Name      string       `json:"name"`
 	Note      *string      `json:"note"`
@@ -330,6 +339,8 @@ type ReportedWishResponse struct {
 
 // SharedWishDetailResponse preserves the versioned JSON contract.
 type SharedWishDetailResponse struct {
+	Color                              *string      `json:"color"`
+	Size                               *string      `json:"size"`
 	Id                                 string       `json:"id"`
 	Name                               string       `json:"name"`
 	Note                               *string      `json:"note"`
@@ -358,6 +369,8 @@ type SharedWishlistResponse struct {
 
 // SharedWishResponse preserves the versioned JSON contract.
 type SharedWishResponse struct {
+	Color                              *string      `json:"color"`
+	Size                               *string      `json:"size"`
 	Id                                 string       `json:"id"`
 	Name                               string       `json:"name"`
 	Url                                *string      `json:"url"`
@@ -372,6 +385,7 @@ type SharedWishResponse struct {
 
 // UserSearchResponse preserves the versioned JSON contract.
 type UserSearchResponse struct {
+	DisplayNameTag  string  `json:"displayNameTag"`
 	Id              string  `json:"id"`
 	DisplayName     string  `json:"displayName"`
 	ProfileImageUrl *string `json:"profileImageUrl"`
@@ -379,6 +393,7 @@ type UserSearchResponse struct {
 
 // PublicMemberProfileResponse exposes a confirmed identity and its discoverable shared lists.
 type PublicMemberProfileResponse struct {
+	DisplayNameTag  string                         `json:"displayNameTag"`
 	Id              string                         `json:"id"`
 	DisplayName     string                         `json:"displayName"`
 	ProfileImageUrl *string                        `json:"profileImageUrl"`
@@ -408,6 +423,8 @@ type WishlistSubscriptionResponse struct {
 
 // WishCollectionItemResponse preserves the versioned JSON contract.
 type WishCollectionItemResponse struct {
+	Color             *string      `json:"color"`
+	Size              *string      `json:"size"`
 	Id                string       `json:"id"`
 	WishlistId        string       `json:"wishlistId"`
 	Name              string       `json:"name"`
@@ -491,6 +508,8 @@ type WishOrderResponse struct {
 
 // WishResponse preserves the versioned JSON contract.
 type WishResponse struct {
+	Color             *string      `json:"color"`
+	Size              *string      `json:"size"`
 	Id                string       `json:"id"`
 	WishlistId        string       `json:"wishlistId"`
 	Name              string       `json:"name"`

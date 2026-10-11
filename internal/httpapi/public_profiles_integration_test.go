@@ -54,7 +54,7 @@ func TestPublicMemberProfile_WhenListsAreShared_ExposesOnlyActivePublicMetadata(
 	var result map[string]json.RawMessage
 	requireStatus(t, visitor.send(t, "GET", "/api/v1/members/"+owner+"/profile", "", nil), 200, &result)
 	// Assert
-	if len(result) != 4 || result["id"] == nil || result["displayName"] == nil || result["profileImageUrl"] == nil || result["wishlists"] == nil {
+	if len(result) != 5 || result["id"] == nil || result["displayName"] == nil || result["displayNameTag"] == nil || result["profileImageUrl"] == nil || result["wishlists"] == nil {
 		t.Fatal("public profile disclosed an unexpected property")
 	}
 	var lists []map[string]json.RawMessage

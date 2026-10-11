@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -29,6 +30,14 @@ func Open(ctx context.Context, connection string) (*Store, error) {
 	c.MinConns = 0
 	c.MaxConnIdleTime = 5 * time.Minute
 	c.ConnConfig.RuntimeParams["timezone"] = "UTC"
+	// Server timezone does not control pgx's decoding location on the host.
+	c.AfterConnect = func(_ context.Context, connection *pgx.Conn) error {
+		connection.TypeMap().RegisterType(&pgtype.Type{
+			Name: "timestamptz", OID: pgtype.TimestamptzOID,
+			Codec: &pgtype.TimestamptzCodec{ScanLocation: time.UTC},
+		})
+		return nil
+	}
 	p, err := pgxpool.NewWithConfig(ctx, c)
 	if err != nil {
 		return nil, err

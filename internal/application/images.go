@@ -177,7 +177,7 @@ func (s *Service) ProfileImage(ctx context.Context, user string, source []byte, 
 				return err
 			}
 		}
-		return tx.QueryRow(ctx, `UPDATE users SET profile_image_id=$2,profile_image_hash=$3,updated_at=$4 WHERE id=$1 RETURNING display_name,xmin::text::bigint,is_visible_in_member_search`, user, id, normalized.Hash, s.Now().UTC()).Scan(&result.DisplayName, &version, &result.IsVisibleInMemberSearch)
+		return tx.QueryRow(ctx, `UPDATE users SET profile_image_id=$2,profile_image_hash=$3,updated_at=$4 WHERE id=$1 RETURNING display_name,display_name_tag,xmin::text::bigint,is_visible_in_member_search`, user, id, normalized.Hash, s.Now().UTC()).Scan(&result.DisplayName, &result.DisplayNameTag, &version, &result.IsVisibleInMemberSearch)
 	})
 	if id != nil {
 		if err != nil {

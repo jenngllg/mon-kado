@@ -237,7 +237,7 @@ func (s *Service) sharedWish(ctx context.Context, tx pgx.Tx, share verifiedShare
 	if participant != nil {
 		participantID = &participant.Id
 	}
-	err := tx.QueryRow(ctx, `SELECT w.id::text,w.name,w.note,w.url,w.price::text,w.quantity,COALESCE((SELECT sum(r.quantity) FROM gift_reservations r WHERE r.wish_id=w.id),0),CASE WHEN $3::uuid IS NULL THEN NULL ELSE COALESCE((SELECT r.quantity FROM gift_reservations r WHERE r.wish_id=w.id AND r.wishlist_participant_id=$3),0) END,w.image_id::text,w.is_favorite FROM wishes w WHERE w.wishlist_id=$1 AND w.id=$2`, share.Wishlist, id, participantID).Scan(&r.Id, &r.Name, &r.Note, &r.Url, &r.Price, &r.Quantity, &r.ReservedQuantity, &r.CurrentParticipantReservedQuantity, &image, &r.IsFavorite)
+	err := tx.QueryRow(ctx, `SELECT w.id::text,w.name,w.note,w.url,w.price::text,w.quantity,COALESCE((SELECT sum(r.quantity) FROM gift_reservations r WHERE r.wish_id=w.id),0),CASE WHEN $3::uuid IS NULL THEN NULL ELSE COALESCE((SELECT r.quantity FROM gift_reservations r WHERE r.wish_id=w.id AND r.wishlist_participant_id=$3),0) END,w.image_id::text,w.is_favorite,w.color,w.size FROM wishes w WHERE w.wishlist_id=$1 AND w.id=$2`, share.Wishlist, id, participantID).Scan(&r.Id, &r.Name, &r.Note, &r.Url, &r.Price, &r.Quantity, &r.ReservedQuantity, &r.CurrentParticipantReservedQuantity, &image, &r.IsFavorite, &r.Color, &r.Size)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return r, missing(domain.SharedWishNotFound)
 	}
@@ -312,7 +312,7 @@ func (s *Service) SharedWishlist(ctx context.Context, link, secret, member, gues
 			if availableOnly && wish.AvailableQuantity != nil && *wish.AvailableQuantity == 0 && (wish.CurrentParticipantReservedQuantity == nil || *wish.CurrentParticipantReservedQuantity == 0) {
 				continue
 			}
-			r.Wishes = append(r.Wishes, domain.SharedWishResponse{Id: wish.Id, Name: wish.Name, Url: wish.Url, Price: wish.Price, Quantity: wish.Quantity, IsFavorite: wish.IsFavorite, ReservedQuantity: wish.ReservedQuantity, AvailableQuantity: wish.AvailableQuantity, CurrentParticipantReservedQuantity: wish.CurrentParticipantReservedQuantity, ImageUrl: wish.ImageUrl})
+			r.Wishes = append(r.Wishes, domain.SharedWishResponse{Id: wish.Id, Name: wish.Name, Color: wish.Color, Size: wish.Size, Url: wish.Url, Price: wish.Price, Quantity: wish.Quantity, IsFavorite: wish.IsFavorite, ReservedQuantity: wish.ReservedQuantity, AvailableQuantity: wish.AvailableQuantity, CurrentParticipantReservedQuantity: wish.CurrentParticipantReservedQuantity, ImageUrl: wish.ImageUrl})
 		}
 		return nil
 	})

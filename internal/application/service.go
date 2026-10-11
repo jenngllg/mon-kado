@@ -36,6 +36,18 @@ func text(value *string) string {
 	}
 	return *value
 }
+func memberTagError(err error) error {
+	var databaseError *pgconn.PgError
+	if errors.As(err, &databaseError) {
+		if databaseError.Code == "P0001" && databaseError.ConstraintName == "member_display_name_tags_exhausted" {
+			return domain.Failure(409, domain.MemberDisplayNameTagUnavailable, "No tag is available for this display name.")
+		}
+		if databaseError.Code == "23505" && databaseError.ConstraintName == "ux_users_display_name_tag" {
+			return domain.Failure(409, domain.MemberHandleAlreadyUsed, "This display name is already used with your tag. Choose another display name.")
+		}
+	}
+	return err
+}
 func optional(value *string) *string {
 	if value == nil {
 		return nil

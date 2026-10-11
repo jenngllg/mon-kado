@@ -13616,6 +13616,11 @@
             "items": {
               "type": "string"
             }
+          },
+          "displayNameTag": {
+            "type": "string",
+            "pattern": "^[0-9]{4}$",
+            "description": "Server-assigned immutable account tag; never supplied when updating the display name."
           }
         },
         "required": [
@@ -13625,7 +13630,8 @@
           "profileImageUrl",
           "roles",
           "isGoogleLinked",
-          "isVisibleInMemberSearch"
+          "isVisibleInMemberSearch",
+          "displayNameTag"
         ]
       },
       "ConfirmEmailRequest": {
@@ -13791,12 +13797,18 @@
                 "type": "null"
               }
             ]
+          },
+          "displayNameTag": {
+            "type": "string",
+            "pattern": "^[0-9]{4}$",
+            "description": "Server-assigned immutable account tag; never supplied when updating the display name."
           }
         },
         "required": [
           "id",
           "displayName",
-          "profileImageUrl"
+          "profileImageUrl",
+          "displayNameTag"
         ]
       },
       "ConfirmMemberAccountDeletionRequest": {
@@ -13942,6 +13954,21 @@
           },
           "isArchived": {
             "type": "boolean"
+          },
+          "inaccessibilityReason": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "wishlistDeleted",
+              "notShared",
+              "suspended",
+              "archived",
+              "wishDeleted",
+              null
+            ],
+            "description": "Known current access restriction. Lifecycle status remains independent; unavailable sources grant no media or navigation."
           }
         },
         "required": [
@@ -13990,12 +14017,18 @@
                 "type": "null"
               }
             ]
+          },
+          "displayNameTag": {
+            "type": "string",
+            "pattern": "^[0-9]{4}$",
+            "description": "Server-assigned immutable account tag; never supplied when updating the display name."
           }
         },
         "required": [
           "displayName",
           "profileImageUrl",
-          "isVisibleInMemberSearch"
+          "isVisibleInMemberSearch",
+          "displayNameTag"
         ]
       },
       "UpdateMemberProfileRequest": {
@@ -14463,6 +14496,22 @@
                 "type": "null"
               }
             ]
+          },
+          "color": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 100,
+            "description": "Optional single-line variant; blank values are normalized to null."
+          },
+          "size": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 100,
+            "description": "Optional single-line variant; blank values are normalized to null."
           }
         },
         "required": [
@@ -14760,6 +14809,22 @@
           },
           "isFavorite": {
             "type": "boolean"
+          },
+          "color": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 100,
+            "description": "Optional single-line variant; blank values are normalized to null."
+          },
+          "size": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 100,
+            "description": "Optional single-line variant; blank values are normalized to null."
           }
         },
         "required": [
@@ -14872,6 +14937,22 @@
           },
           "isFavorite": {
             "type": "boolean"
+          },
+          "color": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 100,
+            "description": "Optional single-line variant; blank values are normalized to null."
+          },
+          "size": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 100,
+            "description": "Optional single-line variant; blank values are normalized to null."
           }
         },
         "required": [
@@ -15157,6 +15238,22 @@
               "integer",
               "null"
             ]
+          },
+          "color": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 100,
+            "description": "Optional single-line variant; blank values are normalized to null."
+          },
+          "size": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 100,
+            "description": "Optional single-line variant; blank values are normalized to null."
           }
         },
         "required": [
@@ -15322,6 +15419,22 @@
               "integer",
               "null"
             ]
+          },
+          "color": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 100,
+            "description": "Optional single-line variant; blank values are normalized to null."
+          },
+          "size": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 100,
+            "description": "Optional single-line variant; blank values are normalized to null."
           }
         },
         "required": [
@@ -15398,6 +15511,22 @@
               "boolean",
               "null"
             ]
+          },
+          "color": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 100,
+            "description": "Optional single-line variant; blank values are normalized to null."
+          },
+          "size": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 100,
+            "description": "Optional single-line variant; blank values are normalized to null."
           }
         }
       },
@@ -15461,6 +15590,22 @@
               "boolean",
               "null"
             ]
+          },
+          "color": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 100,
+            "description": "Optional single-line variant; blank values are normalized to null."
+          },
+          "size": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 100,
+            "description": "Optional single-line variant; blank values are normalized to null."
           }
         }
       },
@@ -16149,6 +16294,11 @@
           "id": {
             "type": "string",
             "format": "uuid"
+          },
+          "displayNameTag": {
+            "type": "string",
+            "pattern": "^[0-9]{4}$",
+            "description": "Server-assigned immutable account tag; never supplied when updating the display name."
           }
         }
       },
