@@ -52,6 +52,11 @@ jobs:
             sudo env PYTHONPATH="$GITHUB_WORKSPACE/src/Operations.Native:$GITHUB_WORKSPACE/src/Operations.Deployment:$GITHUB_WORKSPACE/src/Operations.Monitoring:$GITHUB_WORKSPACE/src/Operations.Frontend:$GITHUB_WORKSPACE/src/Operations.Backups:$GITHUB_WORKSPACE/deployments/production:$GITHUB_WORKSPACE/tests/$suite" \
               python3 -m unittest discover -s "tests/$suite"
           done
+      - name: Test backup installer in a private native mount namespace
+        run: |
+          sudo env MONKADO_NATIVE_BACKUP_INSTALL_TESTS=1 \
+            PYTHONPATH="$GITHUB_WORKSPACE/src/Operations.Backups:$GITHUB_WORKSPACE/src/Operations.Native:$GITHUB_WORKSPACE/src/Operations.Deployment:$GITHUB_WORKSPACE/deployments/production" \
+            python3 -m unittest discover -s tests/Operations.Backups.Tests -p test_install_sandbox.py
       - name: Test native PostgreSQL and concurrency
         run: |
           go test -race -tags=integration -covermode=atomic -coverpkg=github.com/JennGllg/mon-kado/... -coverprofile=coverage.out ./...

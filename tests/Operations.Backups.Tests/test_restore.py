@@ -1,6 +1,6 @@
 """Native restore contracts use private fresh resources and no production configuration."""
 
-import shutil
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -46,6 +46,33 @@ class RestoreTests(unittest.TestCase):
         with self.assertRaisesRegex(BackupError, "RESTORE_RESOURCES_EXIST"):
             self.restore.volumes(self.capture, target.name)
         self.operations.run.assert_not_called()
+
+    def test_long_socket_path_is_rejected_before_database_effects(self):
+        # Arrange
+        capture(self.capture)
+        self.restore.root = self.root / ("x" * 80)
+        # Act / Assert
+        with self.assertRaisesRegex(BackupError, "RESTORE_SOCKET_PATH_TOO_LONG"):
+            self.restore.volumes(self.capture, "monkado-restore-12345678")
+        self.operations.run.assert_not_called()
+        self.assertFalse((self.restore.root / "monkado-restore-12345678").exists())
+
+    def test_private_cli_umask_preserves_postgres_traversal_without_exposing_files(self):
+        # Arrange
+        capture(self.capture)
+        self.operations.run.side_effect = self.runner
+        previous = os.umask(0o077)
+        try:
+            # Act
+            result = self.restore.volumes(self.capture, "monkado-restore-12345678")
+            # Assert
+            target = self.restore.root / result["project"]
+            self.assertEqual(0o711, self.restore.root.stat().st_mode & 0o777)
+            self.assertEqual(0o711, target.stat().st_mode & 0o777)
+            self.assertEqual(0o700, (target / "configuration").stat().st_mode & 0o777)
+            self.assertEqual(0o600, (target / "configuration/production.env").stat().st_mode & 0o777)
+        finally:
+            os.umask(previous)
 
     def runner(self, args, **kwargs):
         if args[:2] == ["install", "-d"]:

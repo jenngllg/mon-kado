@@ -52,10 +52,16 @@ class Restore:
             raise BackupError("UNSAFE_RESTORE_ROOT")
         if re.fullmatch(r"/[A-Za-z0-9/_-]+", str(self.root)) is None:
             raise BackupError("UNSAFE_RESTORE_ROOT")
+        # CLI umask 077 must not prevent PostgreSQL traversing otherwise private parents.
+        self.root.chmod(0o711)
         target = self.root / name
+        # Linux sockaddr_un leaves at most 107 bytes for the complete socket filename.
+        if len(os.fsencode(target / "socket" / (".s.PGSQL." + SOCKET_PORT))) > 107:
+            raise BackupError("RESTORE_SOCKET_PATH_TOO_LONG")
         if target.exists() or target.is_symlink():
             raise BackupError("RESTORE_RESOURCES_EXIST")
         target.mkdir(mode=0o711)
+        target.chmod(0o711)
         cluster = target / "postgres"
         socket = target / "socket"
         self.run(["install", "-d", "-m", "0700", "-o", "postgres", "-g", "postgres", str(cluster), str(socket)])

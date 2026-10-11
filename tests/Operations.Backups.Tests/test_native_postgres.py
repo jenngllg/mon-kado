@@ -9,6 +9,9 @@ import shutil
 import subprocess
 import tempfile
 import unittest
+from unittest.mock import patch
+
+import exercise_drive
 
 from fixtures import native_capture
 from monkado_backup.capture import create_native_manifest, digest
@@ -18,6 +21,43 @@ from monkado_backup.restore import Restore, PG_BIN, SOCKET_PORT
 
 @unittest.skipUnless(os.environ.get("MONKADO_NATIVE_BACKUP_TESTS") == "1", "Explicit native database restoration exercise only")
 class NativePostgresTests(unittest.TestCase):
+    def test_native_qualification_preserves_protected_bytes_with_a_local_encrypted_provider(self):
+        # Arrange: replace only the external provider repository; all native effects remain real.
+        self.assertEqual(0, os.geteuid())
+        migrator = Path(os.environ["MONKADO_NATIVE_MIGRATOR"]).resolve()
+        with tempfile.TemporaryDirectory(prefix="mk-qual-") as temporary:
+            root = Path(temporary)
+            root.chmod(0o711)
+            work = root / "exercise"
+            work.mkdir(mode=0o711)
+            password = root / "password"
+            password.write_text("synthetic-local-qualification-password")
+            password.chmod(0o600)
+            repository = root / "encrypted-repository"
+
+            def local_provider(arguments, **options):
+                if arguments[0] == "restic":
+                    arguments = list(arguments)
+                    self.assertRegex(arguments[arguments.index("--repo") + 1],
+                                     r"^rclone:monkado:MonKado-backups/exercise-native-[a-f0-9]{16}$")
+                    arguments[arguments.index("--repo") + 1] = str(repository)
+                    arguments[arguments.index("--password-file") + 1] = str(password)
+                return command(arguments, **options)
+
+            # Act
+            with patch.dict(os.environ, {"MONKADO_DRIVE_EXERCISE": "1", "MONKADO_NATIVE_MIGRATOR": str(migrator)}), \
+                    patch.object(exercise_drive, "private_file"), \
+                    patch.object(exercise_drive.tempfile, "mkdtemp", return_value=str(work)), \
+                    patch.object(exercise_drive, "command", side_effect=local_provider):
+                exercise_drive.main()
+            # Assert
+            result = json.loads((work / "result.json").read_bytes())
+            self.assertTrue(result["deduplicationVerified"])
+            self.assertTrue(result["hashesVerified"])
+            self.assertTrue(result["databaseStopped"])
+            self.assertFalse(result["applicationStarted"])
+            self.assertEqual(64, len(result["snapshotId"]))
+
     def test_complete_go_schema_and_private_files_restore_into_a_new_stopped_native_cluster(self):
         self.assertEqual(0, os.geteuid())
         migrator = Path(os.environ["MONKADO_NATIVE_MIGRATOR"]).resolve()

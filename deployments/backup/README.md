@@ -3,8 +3,10 @@
 The capture and restoration commands use native PostgreSQL 18, systemd, Restic
 and rclone. They do not require Docker. Local tests cover a real Go-migrated schema,
 dump/restore, byte integrity, encrypted Restic roundtrip, deduplication, wrong
-passwords and corruption. The historical Drive qualification exercise and installer
-sandbox still need native reconciliation before the final migration merge.
+passwords and corruption. The synthetic qualification uses the real Go migrator,
+native PostgreSQL and Restic; its local test substitutes only the external repository.
+Installer tests use a private Linux mount namespace and preserve credentials,
+status, timer activation and coordination locks without changing host paths.
 No real Drive exercise or production restoration has been performed.
 
 ## Coherent capture
@@ -73,3 +75,24 @@ substitute restoration for deployment rollback.
 Local verification is not proof of offsite recoverability. Complete the native
 synthetic offsite qualification and retained credential handoff before accepting
 data to preserve or enabling automatic captures.
+
+## Manual offsite qualification
+
+From the reviewed repository on a native Linux test host with PostgreSQL 18,
+Restic, rclone and the dedicated private credentials installed, explicitly run:
+
+```sh
+sudo env MONKADO_DRIVE_EXERCISE=1 MONKADO_NATIVE_MIGRATOR=/absolute/reviewed/migrate \
+  PYTHONPATH=src/Operations.Backups:src/Operations.Native:src/Operations.Deployment:deployments/production \
+  python3 src/Operations.Backups/exercise_drive.py
+```
+
+Use a reviewed migrator carrying a full revision, not a `local` development binary.
+The exercise creates a fresh synthetic Go database, opaque protected bytes and an
+image, then a uniquely named `exercise-native-*` encrypted Drive repository. It
+checks deduplication, repository integrity, restored row bytes and every private
+file hash. Both source and restored databases finish stopped; no application or
+provider is started. It retains private stopped resources and `result.json` under
+its newly created `/tmp/mk-drive-*` directory for inspection. The production
+repository is never opened. Remove only that explicitly reported exercise after
+review; no production restore or offsite qualification is implicit in local tests.
