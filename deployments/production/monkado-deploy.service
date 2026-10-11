@@ -1,8 +1,8 @@
 [Unit]
 Description=Pull the approved MonKado backend release
 Wants=network-online.target
-After=network-online.target docker.service monkado.slice
-Requires=docker.service monkado.slice
+After=network-online.target postgresql@18-main.service caddy.service monkado.slice
+Requires=postgresql@18-main.service monkado.slice
 
 [Service]
 Type=oneshot

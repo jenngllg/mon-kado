@@ -1,15 +1,19 @@
 [Unit]
 Description=MonKado native Go worker
-After=network-online.target postgresql.service
+After=network-online.target postgresql@18-main.service monkado.slice
 Wants=network-online.target
+Requires=postgresql@18-main.service monkado.slice
 
 [Service]
 Type=simple
 User=monkado
 Group=monkado
-WorkingDirectory=/opt/mon-kado
-EnvironmentFile=/etc/mon-kado/environment
-ExecStart=/opt/mon-kado/bin/worker
+WorkingDirectory=/opt/monkado
+EnvironmentFile=/etc/monkado/production.env
+EnvironmentFile=/var/lib/monkado-deployment/active.env
+ExecStart=/opt/monkado/current/worker
+Slice=monkado.slice
+Environment=GOMEMLIMIT=192MiB
 Restart=on-failure
 RestartSec=5
 TimeoutStopSec=30
@@ -18,8 +22,8 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=/var/lib/mon-kado /var/lib/monkado-observability/worker
-StateDirectory=monkado-observability/worker
+ReadWritePaths=/var/lib/monkado /var/lib/monkado-observability/worker
+StateDirectory=monkado monkado-observability/worker
 StateDirectoryMode=0700
 
 [Install]

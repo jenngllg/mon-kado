@@ -24,13 +24,14 @@ def ensure(condition, code):
 
 def decision(current, candidate, history):
     """Require exact current history and append-only migrations before maintenance."""
-    require(candidate["schemaVersion"] == 2, "ADOPTION_REQUIRED")
+    require(candidate["schemaVersion"] in (2, 3), "ADOPTION_REQUIRED")
     catalog = validate_catalog(candidate["migrationCatalog"])
     require(fingerprint(catalog) == candidate["migrationHash"])
     if current is None:
         ensure(not history, "ADOPTION_REQUIRED")
         return {"migrate": True, "rollback": False}
     previous = current["migrationCatalog"]
+    ensure(current["schemaVersion"] == candidate["schemaVersion"], "ADOPTION_REQUIRED")
     ensure(history == identifiers(previous), "DATABASE_HISTORY_DIVERGED")
     old_entries = previous["migrations"]
     ensure(catalog["migrations"][:len(old_entries)] == old_entries, "MIGRATION_HISTORY_REWRITTEN")
@@ -64,6 +65,11 @@ def validate_state(value):
 
 
 def dotenv(release):
-    """Keep the three-line compatibility contract consumed by backup tooling."""
+    """Publish non-secret immutable references for backups and native service identity."""
+    if release["schemaVersion"] == 3:
+        return (f'API_SHA256={release["binaries"]["api"]["sha256"]}\n'
+                f'WORKER_SHA256={release["binaries"]["worker"]["sha256"]}\n'
+                f'MIGRATE_SHA256={release["binaries"]["migrate"]["sha256"]}\n'
+                f'RELEASE_REVISION={release["revision"]}\nAPP_VERSION={release["revision"]}\n')
     return (f'API_IMAGE={release["apiImage"]}\nWORKER_IMAGE={release["workerImage"]}\n'
             f'RELEASE_REVISION={release["revision"]}\n')

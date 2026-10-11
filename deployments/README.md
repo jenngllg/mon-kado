@@ -1,11 +1,11 @@
 # Native deployment
 
-Build with Go 1.27 and CGO_ENABLED=0. Run PostgreSQL 18, Caddy, API and worker as native services. No Docker is required. The checked-in systemd units are templates; installing or enabling services is a separate deployment operation.
+Build with Go 1.27.2 and CGO_ENABLED=0. Run PostgreSQL 18, Caddy, API and worker as native services. No Docker is required. Follow the [native production runbook](production/README.md) for protected publication, installation, adoption and recovery. Installing or enabling services is a separate deployment operation.
 
 1. Create a dedicated non-login `monkado` user and a PostgreSQL application role/database. Enable SCRAM and use TLS if PostgreSQL is remote.
-2. Copy binaries to `/opt/mon-kado/bin` and create private `/var/lib/mon-kado/gift-images` and `/var/lib/mon-kado/personal-data-exports` directories owned by the application user.
-3. Put runtime variables in `/etc/mon-kado/environment` with restricted permissions. Use `.env.example` as a list of names, replacing placeholders privately. Keep the encryption/signing keys stable and back them up securely.
-4. Execute `/opt/mon-kado/bin/migrate` with the same environment. Do this before starting/upgrading API and worker; neither migrates on startup.
+2. Install reviewed configuration under `/opt/monkado`; approved immutable releases live under `/opt/monkado/releases` with an atomic `/opt/monkado/current` pointer. Create private `/var/lib/monkado/gift-images` and `/var/lib/monkado/personal-data-exports` directories owned by the application user.
+3. Put runtime variables in `/etc/monkado/production.env` with root:root 0600 permissions. Use the production environment example, replacing placeholders privately. Keep the encryption/signing keys stable and back them up securely. Only Caddy host/static-path settings belong in its separate private `caddy.env`.
+4. The explicit approved migrator runs with the same private environment before starting/upgrading API and worker; neither migrates on startup. Initialization refuses a non-empty native database, and interrupted intent requires explicit recovery.
 5. Adapt and install the API/worker systemd units. Bind `HTTP_ADDRESS=127.0.0.1:7000`, set production origins/hosts, and trust only the loopback Caddy address (`TRUSTED_PROXIES=127.0.0.1/32,::1/128`).
 6. Configure Caddy's `API_HOST` with the public API hostname. Caddy terminates HTTPS and forwards to the native loopback listener. Register the exact Google callback `PUBLIC_API_ORIGIN/api/v1/auth/google/callback` if enabled.
 7. Verify `/liveness`, `/readiness`, a protected API flow and the worker before routing normal traffic.

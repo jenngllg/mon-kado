@@ -13,13 +13,14 @@ HISTORY_BYTES = 32 * 1024 * 1024
 JSON_SUFFIX = ".json"
 
 
-def read_json(path, private=False):
+def read_json(path, private=False, owner=None):
     """Read only a bounded regular file; credential files must be root-only."""
-    metadata = path.lstat()
-    require(stat.S_ISREG(metadata.st_mode) and metadata.st_size <= MAX_JSON_BYTES)
-    if private:
-        require(metadata.st_uid == 0 and stat.S_IMODE(metadata.st_mode) == 0o600)
-    with path.open("rb") as source:
+    descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    with os.fdopen(descriptor, "rb") as source:
+        metadata = os.fstat(source.fileno())
+        require(stat.S_ISREG(metadata.st_mode) and metadata.st_size <= MAX_JSON_BYTES)
+        if private or owner is not None:
+            require(metadata.st_uid == (0 if private else owner) and stat.S_IMODE(metadata.st_mode) == 0o600)
         data = source.read(MAX_JSON_BYTES + 1)
     require(len(data) <= MAX_JSON_BYTES)
     return json.loads(data)

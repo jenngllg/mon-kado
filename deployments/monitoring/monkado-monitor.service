@@ -1,6 +1,6 @@
 [Unit]
 Description=Observe MonKado health and send bounded operational alerts
-After=network-online.target docker.service
+After=network-online.target
 Wants=network-online.target
 
 [Service]

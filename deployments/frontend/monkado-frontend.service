@@ -1,8 +1,8 @@
 [Unit]
 Description=Install an explicitly approved static MonKado frontend
 Wants=network-online.target
-After=network-online.target docker.service
-Requires=docker.service
+After=network-online.target caddy.service
+Requires=caddy.service
 
 [Service]
 Type=oneshot

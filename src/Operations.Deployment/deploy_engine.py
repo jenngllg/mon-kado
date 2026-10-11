@@ -41,8 +41,9 @@ class Engine:
         self.store.begin(state)
         try:
             self.rollout(state, policy)
-        except (DeploymentError, InterruptedError) as error:
-            self.handle_failure(state, policy, error)
+        except (DeploymentError, InterruptedError, OSError, ValueError, KeyError, TypeError, AttributeError) as error:
+            failure = error if isinstance(error, (DeploymentError, InterruptedError)) else DeploymentError("DEPLOYMENT_EFFECT_FAILED")
+            self.handle_failure(state, policy, failure)
         return state
 
     def rollout(self, state, policy):
@@ -71,14 +72,14 @@ class Engine:
             raise DeploymentError("RECOVERY_REQUIRED") from None
         try:
             self.rollback(state)
-        except (DeploymentError, InterruptedError):
+        except (DeploymentError, InterruptedError, OSError, ValueError, KeyError, TypeError, AttributeError):
             state.update(phase="recoveryRequired", error="ROLLBACK_FAILED", finishedAt=self.clock())
             self.store.save(state)
             raise DeploymentError("ROLLBACK_FAILED") from None
         raise DeploymentError("PUBLICATION_ROLLED_BACK") from None
 
     def rollback(self, state):
-        """Restore application images only, verifying history before any replacement."""
+        """Restore application executables, verifying history before any replacement."""
         ensure(self.runtime.history() == identifiers(state["previous"]["migrationCatalog"]), "DATABASE_HISTORY_DIVERGED")
         self.transition(state, "rollingBack")
         self.runtime.stop()

@@ -42,6 +42,16 @@ jobs:
         run: |
           go vet ./...
           go -C src/Tools.GmailOAuthBootstrap vet ./...
+      - name: Test native release and service observation contracts
+        run: |
+          sudo env PYTHONPATH="$GITHUB_WORKSPACE/src/Operations.Native:$GITHUB_WORKSPACE/src/Operations.Deployment:$GITHUB_WORKSPACE/deployments/production:$GITHUB_WORKSPACE/tests/Operations.NativeTests" \
+            python3 -m unittest discover -s tests/Operations.NativeTests
+      - name: Test native deployment, supervision and frontend recovery
+        run: |
+          for suite in Operations.DeploymentTests Operations.MonitoringTests Deployment.FrontendTests; do
+            sudo env PYTHONPATH="$GITHUB_WORKSPACE/src/Operations.Native:$GITHUB_WORKSPACE/src/Operations.Deployment:$GITHUB_WORKSPACE/src/Operations.Monitoring:$GITHUB_WORKSPACE/src/Operations.Frontend:$GITHUB_WORKSPACE/deployments/production:$GITHUB_WORKSPACE/tests/$suite" \
+              python3 -m unittest discover -s "tests/$suite"
+          done
       - name: Test native PostgreSQL and concurrency
         run: |
           go test -race -tags=integration -covermode=atomic -coverpkg=github.com/JennGllg/mon-kado/... -coverprofile=coverage.out ./...
@@ -64,8 +74,8 @@ jobs:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         with:
           args: >-
-            -Dsonar.projectKey="${{ vars.SONAR_PROJECT_KEY }}"
-            -Dsonar.organization="${{ vars.SONAR_ORGANIZATION }}"
+            -Dsonar.projectKey=${{ vars.SONAR_PROJECT_KEY }}
+            -Dsonar.organization=${{ vars.SONAR_ORGANIZATION }}
             -Dsonar.host.url=https://sonarcloud.io
             -Dsonar.sources=cmd,internal,src/Tools.GmailOAuthBootstrap
             -Dsonar.tests=cmd,internal,src/Tools.GmailOAuthBootstrap

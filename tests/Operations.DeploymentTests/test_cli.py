@@ -37,7 +37,6 @@ class CliTests(unittest.TestCase):
         self.store = Store(self.root)
         self.state = initial_state() | {"phase": "succeeded", "current": self.release, "candidate": self.release}
         self.runtime = Mock()
-        self.runtime.inspect.return_value = self.release["revision"]
         self.runtime.history.return_value = identifiers(self.release["migrationCatalog"])
         self.runtime.smoke.return_value = {"technical": True, "functional": True}
         self.runtime.observe_baseline.return_value = {"infrastructure": {}, "frontend": None}
@@ -48,7 +47,7 @@ class CliTests(unittest.TestCase):
         value = cli.summary(self.state)
         self.assertEqual(self.release["revision"], value["revision"])
         self.assertEqual(self.release["publicationId"], value["publicationId"])
-        self.assertNotIn("apiImage", value)
+        self.assertNotIn("binaries", value)
 
     def test_locks_exclude_other_descriptors_and_reuse_verified_outer_lock(self):
         target = self.root / "lock"
@@ -81,26 +80,32 @@ class CliTests(unittest.TestCase):
         cli.validate_saved(initial_state(), "c" * 64)
         cli.validate_saved(self.state, "c" * 64)
         legacy = {key: value for key, value in self.release.items() if key in
-                  {"schemaVersion", "revision", "configurationHash", "apiImage", "workerImage"}} | {"schemaVersion": 1}
+                  {"revision", "configurationHash"}} | {"schemaVersion": 1,
+                  "apiImage": "ghcr.io/jenngllg/mon-kado-api@sha256:" + "a" * 64,
+                  "workerImage": "ghcr.io/jenngllg/mon-kado-worker@sha256:" + "a" * 64}
         runner.return_value = json.dumps({"tag_name": "backend-production", "draft": False,
                                           "prerelease": False, "body": json.dumps(legacy)}).encode()
-        with self.assertRaisesRegex(DeploymentError, "PUBLICATION_V2_REQUIRED"):
+        with self.assertRaisesRegex(DeploymentError, "NATIVE_PUBLICATION_REQUIRED"):
             cli.approved_release("c" * 64, runner)
         with self.assertRaisesRegex(DeploymentError, "ADOPTION_REQUIRED"):
             cli.validate_saved(initial_state() | {"current": legacy}, "c" * 64)
 
-    def test_adoption_verifies_exact_images_history_and_smoke_before_committing(self):
-        atomic_write(self.root / "current.env", dotenv(self.release).encode())
-        catalog = self.root / "catalog.json"
-        atomic_write(catalog, json.dumps(self.release["migrationCatalog"]).encode())
-        state = cli.adopt(catalog, self.store, self.runtime, "c" * 64)
-        self.assertEqual("1-1", state["current"]["publicationId"])
+    def test_adoption_verifies_approved_binaries_history_and_smoke_before_committing(self):
+        manifest = self.root / "manifest.json"
+        atomic_write(manifest, json.dumps(self.release).encode())
+        with patch.object(cli, "approved_release", return_value=release("b")):
+            with self.assertRaisesRegex(DeploymentError, "PUBLICATION_NOT_APPROVED"):
+                cli.adopt(manifest, self.store, self.runtime, "c" * 64)
+        self.runtime.verify_active.assert_not_called()
+        with patch.object(cli, "approved_release", return_value=self.release):
+            state = cli.adopt(manifest, self.store, self.runtime, "c" * 64)
+        self.assertEqual("123-1", state["current"]["publicationId"])
         self.assertEqual("succeeded", state["phase"])
         self.runtime.verify_active.assert_called_once()
         self.runtime.smoke.assert_called_once()
         self.assertEqual(state, self.store.load())
         with self.assertRaisesRegex(DeploymentError, "ALREADY_ADOPTED"):
-            cli.adopt(catalog, self.store, self.runtime, "c" * 64)
+            cli.adopt(manifest, self.store, self.runtime, "c" * 64)
 
     def test_recovery_actions_require_exact_publication_and_verified_outcome(self):
         self.state.update(phase="recoveryRequired", previous=self.release, candidate=release("b"))
@@ -119,6 +124,50 @@ class CliTests(unittest.TestCase):
         self.assertEqual("acknowledged", value["phase"])
         self.assertEqual("456-1", value["rejectedPublication"])
 
+    def test_first_native_install_retains_intent_until_full_member_adoption(self):
+        atomic_write(self.root / "production.env", b"DATABASE_URL=postgres://mon_kado:synthetic@127.0.0.1:5432/mon_kado?sslmode=disable\n")
+        atomic_write(self.root / "caddy.env", b"API_HOST=api.monkado.fr\n")
+        self.runtime.history.side_effect = [[], identifiers(self.release["migrationCatalog"])]
+        self.runtime.empty_database.return_value = True
+        self.runtime.container.return_value = {"running": False}
+        with patch.object(cli, "approved_release", return_value=self.release):
+            state = cli.initialize(self.store, self.runtime, "c" * 64)
+        self.assertEqual("verifying", state["phase"])
+        self.assertIsNone(state["current"])
+        self.assertTrue((self.root / "in-progress.env").exists())
+        self.runtime.wait_technical.assert_called_once_with(self.release)
+        self.runtime.smoke.assert_not_called()
+        manifest = self.root / "initial-manifest.json"
+        atomic_write(manifest, json.dumps(self.release).encode())
+        self.runtime.history.side_effect = None
+        with patch.object(cli, "approved_release", return_value=self.release):
+            state = cli.adopt(manifest, self.store, self.runtime, "c" * 64)
+        self.assertEqual("succeeded", state["phase"])
+        self.assertEqual(self.release, state["current"])
+        self.assertFalse((self.root / "in-progress.env").exists())
+        self.runtime.smoke.assert_called_once_with(self.release)
+
+    def test_first_install_refuses_existing_data_and_never_retries_an_interrupted_migration(self):
+        atomic_write(self.root / "production.env", b"DATABASE_URL=postgres://mon_kado:synthetic@127.0.0.1:5432/mon_kado?sslmode=disable\n")
+        atomic_write(self.root / "caddy.env", b"API_HOST=api.monkado.fr\n")
+        self.runtime.history.return_value = []
+        self.runtime.empty_database.return_value = False
+        with self.assertRaisesRegex(DeploymentError, "DATABASE_NOT_EMPTY"):
+            cli.initialize(self.store, self.runtime, "c" * 64)
+        self.runtime.migrate.assert_not_called()
+        self.runtime.empty_database.return_value = True
+        self.runtime.container.return_value = {"running": False}
+        self.runtime.migrate.side_effect = InterruptedError()
+        with patch.object(cli, "approved_release", return_value=self.release):
+            with self.assertRaisesRegex(DeploymentError, "INITIALIZATION_FAILED"):
+                cli.initialize(self.store, self.runtime, "c" * 64)
+        self.assertEqual("recoveryRequired", self.store.load()["phase"])
+        self.assertTrue((self.root / "in-progress.env").exists())
+        self.runtime.start.assert_not_called()
+        with self.assertRaisesRegex(DeploymentError, "RECOVERY_REQUIRED"):
+            cli.initialize(self.store, self.runtime, "c" * 64)
+        self.runtime.migrate.assert_called_once()
+
     def test_recovery_without_candidate_refuses_before_external_effects(self):
         self.store.save(initial_state())
         with self.assertRaisesRegex(DeploymentError, "RECOVERY_ID_MISMATCH"):
@@ -128,7 +177,7 @@ class CliTests(unittest.TestCase):
     def test_cli_status_check_config_and_validation(self):
         self.store.save(self.state)
         self.assertEqual("succeeded", cli.execute(["status"])["phase"])
-        atomic_write(self.root / "production.env", b"private")
+        atomic_write(self.root / "production.env", b"DATABASE_URL=postgres://mon_kado:synthetic@127.0.0.1:5432/mon_kado?sslmode=disable\n")
         atomic_write(self.root / "deployment-smoke.json", json.dumps(ACCOUNT).encode())
         self.assertEqual({"configurationValid": True}, cli.execute(["check-config"]))
         with self.assertRaisesRegex(DeploymentError, "INVALID_ARGUMENTS"):

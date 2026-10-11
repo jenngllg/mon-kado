@@ -3,12 +3,17 @@
 from datetime import datetime, timedelta, timezone
 import http.client
 import json
+import os
 from pathlib import Path
 import re
 import ssl
 import subprocess
+import sys
 import monitor_deployment
 from zoneinfo import ZoneInfo
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "Operations.Native"))
+import native_services
 
 from monitor_policy import SERVICES, age, require, timestamp, validate_snapshot
 from monitor_storage import read_json
@@ -53,11 +58,28 @@ def https(service, path):
 class Collector:
     """Observe known installation paths with substitutable network and process dependencies."""
 
-    def __init__(self, root=Path("/var/lib"), cgroup=Path("/sys/fs/cgroup/monkado.slice/memory.events"), runner=command, probe=https):
+    def __init__(self, root=Path("/var/lib"), cgroup=Path("/sys/fs/cgroup/monkado.slice/memory.events"), runner=command, probe=https,
+                 observer=native_services.observe, service_uid=None):
         self.root = root
         self.cgroup = cgroup
         self.runner = runner
         self.probe = probe
+        self.observer = observer
+        self.service_uid = service_uid
+
+    def native_command(self, arguments):
+        """Adapt bounded native observations while rejecting unsuccessful process results."""
+        code, output = self.runner(arguments)
+        require(code == 0)
+        return output
+
+    def snapshot(self, service):
+        """Accept private application-owned telemetry, never an untrusted replacement file."""
+        if self.service_uid is None:
+            import pwd
+            self.service_uid = pwd.getpwnam("monkado").pw_uid
+        path = self.root / ("monkado-observability/" + service + "/snapshot.json")
+        return validate_snapshot(read_json(path, owner=self.service_uid), service)
 
     def backup(self, now):
         """Adapt MK-813's retained status without loading its unmerged code or accessing Drive."""
@@ -78,26 +100,22 @@ class Collector:
         return selected
 
     def containers(self, now, previous, window_seconds):
-        """Inspect only running state, OOM evidence and restart counters for fixed containers."""
+        """Retain the history schema while observing fixed native units across process restarts."""
         samples = []
         observations = {}
         for service in SERVICES:
             try:
-                code, output = self.runner(["docker", "inspect", "--format",
-                                             '{"id":{{json .Id}},"running":{{json .State.Running}},"oom":{{json .State.OOMKilled}},"restarts":{{json .RestartCount}}}',
-                                             "mon-kado-" + service + "-1"])
-                require(code == 0)
-                current = json.loads(output)
-                require(isinstance(current, dict) and re.fullmatch(r"[0-9a-f]{64}", current.get("id", "")) is not None)
+                current = self.observer(service, self.native_command)
+                require(isinstance(current, dict) and re.fullmatch(r"[0-9a-f]{64}", current.get("monitorId", "")) is not None)
                 require(type(current.get("running")) is bool and type(current.get("oom")) is bool)
                 require(type(current.get("restarts")) is int and current["restarts"] >= 0)
-                earlier = [item for item in previous if item["service"] == service and item["id"] == current["id"]
+                earlier = [item for item in previous if item["service"] == service and item["id"] == current["monitorId"]
                            and age(item["createdAt"], now) <= window_seconds]
                 baseline = min(earlier, key=lambda item: timestamp(item["createdAt"]), default=current)
                 latest = max(earlier, key=lambda item: timestamp(item["createdAt"]), default={"oom": False})
                 observations[service] = {"running": current["running"], "newOom": current["oom"] and not latest["oom"],
                                          "recentRestarts": max(0, current["restarts"] - baseline["restarts"])}
-                samples.append({"service": service, "createdAt": now.isoformat(), "id": current["id"],
+                samples.append({"service": service, "createdAt": now.isoformat(), "id": current["monitorId"],
                                 "oom": current["oom"], "restarts": current["restarts"]})
             except (OSError, ValueError, TypeError, KeyError, subprocess.SubprocessError):
                 observations[service] = None
@@ -119,7 +137,7 @@ class Collector:
                 result["certificates"].setdefault(service, None)
         for service in ("api", "worker"):
             try:
-                result["snapshots"][service] = validate_snapshot(read_json(self.root / ("monkado-observability/" + service + "/snapshot.json")), service)
+                result["snapshots"][service] = self.snapshot(service)
                 age(result["snapshots"][service]["createdAt"], now)
             except (OSError, ValueError, TypeError, KeyError):
                 result["snapshots"][service] = None

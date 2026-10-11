@@ -12,13 +12,14 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "deployments/production"))
 from release_manifest import configuration_hash, from_release, validate
 from deploy_engine import Engine
-from deploy_policy import DeploymentError, TERMINAL, decision, ensure, initial_state
+from deploy_policy import DeploymentError, TERMINAL, decision, dotenv, ensure, initial_state
 from deploy_process import command
 from deploy_provision import provision
 from deploy_runtime import ROOT, SETTINGS, STATE, Runtime
 from deploy_storage import Store, private_read
-from release_catalog import fingerprint, identifiers, validate_catalog
+from release_catalog import identifiers
 from smoke_functional import credentials
+from native_configuration import validate_database_environment
 
 
 def now():
@@ -65,11 +66,11 @@ def summary(state):
 
 
 def validate_saved(state, expected_hash):
-    """Revalidate every retained release before any manifest field reaches Docker."""
+    """Revalidate every retained release before selecting a native executable."""
     for name in ("current", "previous", "candidate"):
         if state[name] is not None:
             validate(state[name], expected_hash)
-            ensure(state[name]["schemaVersion"] == 2, "ADOPTION_REQUIRED")
+            ensure(state[name]["schemaVersion"] == 3, "ADOPTION_REQUIRED")
 
 
 def approved_release(expected_hash, runner=command):
@@ -78,30 +79,64 @@ def approved_release(expected_hash, runner=command):
                   "--connect-timeout", "10", "--max-time", "30", "--max-filesize", "65536",
                   "https://api.github.com/repos/jenngllg/mon-kado/releases/tags/backend-production"], maximum=65536)
     release = from_release(json.loads(raw), expected_hash)
-    ensure(release["schemaVersion"] == 2, "PUBLICATION_V2_REQUIRED")
+    ensure(release["schemaVersion"] == 3, "NATIVE_PUBLICATION_REQUIRED")
     return release
 
 
-def adopt(catalog_path, store, runtime, expected_hash):
-    """Establish a reviewed v1 baseline using exact installed images and matching EF history."""
-    ensure(not (STATE / "in-progress.env").exists(), "RECOVERY_REQUIRED")
-    ensure(not (STATE / "status.json").exists(), "ALREADY_ADOPTED")
-    values = {key: value for key, value in (line.split("=", 1) for line in private_read(STATE / "current.env").decode().splitlines())}
-    ensure(set(values) == {"API_IMAGE", "WORKER_IMAGE", "RELEASE_REVISION"}, "INVALID_LEGACY_POINTER")
-    catalog = validate_catalog(json.loads(private_read(catalog_path, 32768)))
-    value = validate({"schemaVersion": 2, "publicationId": "1-1", "configurationHash": expected_hash,
-                      "revision": values["RELEASE_REVISION"], "apiImage": values["API_IMAGE"],
-                      "workerImage": values["WORKER_IMAGE"], "migrationCatalog": catalog,
-                      "migrationHash": fingerprint(catalog), "rollbackAllowed": False}, expected_hash)
+def adopt(manifest_path, store, runtime, expected_hash):
+    """Adopt the approved native publication only after executable, SQL and functional checks."""
+    state = store.load()
+    ensure(state["current"] is None, "ALREADY_ADOPTED")
+    pending = state["candidate"]
+    ensure(pending is None or state["phase"] in ("verifying", "recoveryRequired"), "RECOVERY_REQUIRED")
+    marker = STATE / "in-progress.env"
+    if marker.exists():
+        ensure(pending is not None and private_read(marker) == dotenv(pending).encode(), "RECOVERY_REQUIRED")
+    value = validate(json.loads(private_read(manifest_path, 65536)), expected_hash)
+    ensure(value["schemaVersion"] == 3, "NATIVE_PUBLICATION_REQUIRED")
+    ensure(value == approved_release(expected_hash), "PUBLICATION_NOT_APPROVED")
+    ensure(pending is None or value == pending, "RECOVERY_ID_MISMATCH")
+    runtime.catalog(value)
     runtime.verify_active(value)
-    for service in ("api", "worker"):
-        ensure(runtime.inspect(value[service + "Image"], '{{index .Config.Labels "org.opencontainers.image.revision"}}') == value["revision"],
-               "IMAGE_REVISION_MISMATCH")
-    ensure(runtime.history() == identifiers(catalog), "DATABASE_HISTORY_DIVERGED")
+    ensure(runtime.history() == identifiers(value["migrationCatalog"]), "DATABASE_HISTORY_DIVERGED")
     baseline = runtime.observe_baseline()
     checks = runtime.smoke(value)
     state = initial_state() | {"phase": "succeeded", "current": value, "checks": checks, "finishedAt": now(), "baseline": baseline}
     store.finish(state)
+    return state
+
+
+def initialize(store, runtime, expected_hash):
+    """Install one approved publication into an empty native database, retaining interrupted intent."""
+    state = store.load()
+    ensure(state == initial_state() and not (STATE / "in-progress.env").exists(), "RECOVERY_REQUIRED")
+    validate_database_environment(private_read(SETTINGS / "production.env"))
+    private_read(SETTINGS / "caddy.env")
+    ensure(runtime.history() == [] and runtime.empty_database(), "DATABASE_NOT_EMPTY")
+    for service in ("api", "worker"):
+        ensure(runtime.container(service)["running"] is False, "EXISTING_APPLICATION")
+    candidate = approved_release(expected_hash)
+    runtime.prepare(candidate)
+    state.update(candidate=candidate, phase="prepared", startedAt=now())
+    store.begin(state)
+    engine = Engine(store, runtime, now)
+    try:
+        engine.transition(state, "stopping")
+        runtime.stop()
+        engine.transition(state, "migrating")
+        runtime.migrate(candidate)
+        engine.transition(state, "starting")
+        runtime.start(candidate)
+        state["baseline"] = runtime.observe_baseline()
+        engine.transition(state, "verifying")
+        runtime.wait_technical(candidate)
+        ensure(runtime.history() == identifiers(candidate["migrationCatalog"]), "DATABASE_HISTORY_DIVERGED")
+        state.update(checks={"technical": True}, finishedAt=now())
+        store.save(state)
+    except (DeploymentError, OSError, ValueError, KeyError, TypeError, AttributeError, InterruptedError):
+        state.update(phase="recoveryRequired", error="INITIALIZATION_FAILED", finishedAt=now())
+        store.save(state)
+        raise DeploymentError("INITIALIZATION_FAILED") from None
     return state
 
 
@@ -143,7 +178,7 @@ def rebaseline(store, runtime, expected_hash):
     ensure(state["phase"] in ("succeeded", "acknowledged") and state["current"] is not None, "RECOVERY_REQUIRED")
     current = state["current"]
     validate(current, current["configurationHash"])
-    ensure(current["schemaVersion"] == 2, "ADOPTION_REQUIRED")
+    ensure(current["schemaVersion"] == 3, "ADOPTION_REQUIRED")
     runtime.verify_active(current)
     ensure(runtime.history() == identifiers(current["migrationCatalog"]), "DATABASE_HISTORY_DIVERGED")
     baseline = runtime.observe_baseline()
@@ -163,14 +198,18 @@ def execute(arguments):
         return summary(store.load())
     expected_hash = configuration_hash(ROOT)
     if arguments == ["check-config"]:
-        private_read(SETTINGS / "production.env")
+        validate_database_environment(private_read(SETTINGS / "production.env"))
         credentials(SETTINGS / "deployment-smoke.json")
         return {"configurationValid": True}
-    ensure(arguments == ["deploy"] or arguments in (["smoke-readonly"], ["smoke-write"], ["provision-smoke"], ["rebaseline"]) or
+    ensure(arguments in (["deploy"], ["initialize"], ["smoke-readonly"], ["smoke-write"], ["provision-smoke"], ["rebaseline"]) or
            len(arguments) == 2 and arguments[0] == "adopt" or len(arguments) == 3 and arguments[0] == "recover", "INVALID_ARGUMENTS")
     with lock(STATE / "backup-coordination.lock", inherited=8), lock(STATE / "deploy.lock"):
         ensure(not Path("/var/lib/monkado-backup/maintenance.json").exists(), "BACKUP_RECOVERY_REQUIRED")
         runtime = Runtime()
+        if arguments == ["initialize"]:
+            signal.signal(signal.SIGTERM, interrupt)
+            signal.signal(signal.SIGINT, interrupt)
+            return summary(initialize(store, runtime, expected_hash))
         if arguments == ["provision-smoke"]:
             return provision(SETTINGS, STATE, runtime.clients)
         if arguments == ["rebaseline"]:

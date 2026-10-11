@@ -1,5 +1,5 @@
 [Unit]
-Description=Shared memory budget for MonKado containers
+Description=Shared memory budget for native MonKado services
 
 [Slice]
 MemoryAccounting=true

@@ -25,13 +25,11 @@ jobs:
     permissions:
       actions: read
       contents: write
-      packages: write
     steps:
       - name: Check out approved revision
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-
       - name: Require production protection and green checks for this exact revision
         env:
           GH_TOKEN: ${{ github.token }}
@@ -41,76 +39,83 @@ jobs:
           test "$GITHUB_REPOSITORY" = 'jenngllg/mon-kado'
           gh api "repos/$GITHUB_REPOSITORY/environments/production" \
             --jq '.protection_rules | any(.type == "required_reviewers" and (.reviewers | length > 0))' | grep -x true
-          for workflow in ci.yml containers.yml; do
+          for workflow in ci.yml codeql.yml; do
             gh api "repos/$GITHUB_REPOSITORY/actions/workflows/$workflow/runs?head_sha=$GITHUB_SHA&branch=develop&per_page=100" \
               --jq '[.workflow_runs[] | select(.event == "push" or .event == "workflow_dispatch")] | sort_by(.run_number) | last | .conclusion' \
               | grep -x success
           done
-
-      - name: Build release images on GitHub, never on the VPS
+          gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/check-runs?per_page=100" \
+            --jq '[.check_runs[] | select(.name == "CodeQL")] | sort_by(.started_at) | last | .conclusion' | grep -x success
+      - name: Set up native Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+      - name: Scan reachable native dependencies
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
+      - name: Build immutable native Linux binaries
+        env:
+          CGO_ENABLED: '0'
+          GOOS: linux
+          GOARCH: amd64
         shell: bash
         run: |
           set -euo pipefail
-          for component in api worker; do
-            docker build --pull --target "$component" \
-              --label "org.opencontainers.image.source=https://github.com/$GITHUB_REPOSITORY" \
-              --label "org.opencontainers.image.revision=$GITHUB_SHA" \
-              -t "ghcr.io/jenngllg/mon-kado-$component:$GITHUB_SHA" .
+          mkdir -p "$RUNNER_TEMP/native-release"
+          for component in api worker migrate; do
+            go build -trimpath -ldflags="-s -w -X github.com/JennGllg/mon-kado/internal/buildinfo.Revision=$GITHUB_SHA" \
+              -o "$RUNNER_TEMP/native-release/monkado-$component-linux-amd64" "./cmd/$component"
+            "$RUNNER_TEMP/native-release/monkado-$component-linux-amd64" --version \
+              | jq -e --arg revision "$GITHUB_SHA" '.schemaVersion == 1 and .revision == $revision and .os == "linux" and .architecture == "amd64"'
           done
-
-      - name: Scan API release image
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
-        with:
-          image-ref: ghcr.io/jenngllg/mon-kado-api:${{ github.sha }}
-          format: table
-          scanners: vuln
-          severity: HIGH,CRITICAL
-          ignore-unfixed: true
-          exit-code: "1"
-
-      - name: Scan Worker release image
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
-        with:
-          image-ref: ghcr.io/jenngllg/mon-kado-worker:${{ github.sha }}
-          format: table
-          scanners: vuln
-          severity: HIGH,CRITICAL
-          ignore-unfixed: true
-          exit-code: "1"
-
-      - name: Publish immutable image references
+          "$RUNNER_TEMP/native-release/monkado-migrate-linux-amd64" --catalog > "$RUNNER_TEMP/native-release/migration-catalog.json"
+          python3 src/Operations.Deployment/release_catalog.py internal/persistence/migrations > "$RUNNER_TEMP/source-catalog.json"
+          jq -S . "$RUNNER_TEMP/source-catalog.json" > "$RUNNER_TEMP/source-catalog.sorted.json"
+          jq -S . "$RUNNER_TEMP/native-release/migration-catalog.json" > "$RUNNER_TEMP/binary-catalog.sorted.json"
+          cmp "$RUNNER_TEMP/source-catalog.sorted.json" "$RUNNER_TEMP/binary-catalog.sorted.json"
+          (cd "$RUNNER_TEMP/native-release" && sha256sum monkado-*-linux-amd64 migration-catalog.json > SHA256SUMS)
+      - name: Publish approved immutable artifacts and promotion pointer
         env:
           GH_TOKEN: ${{ github.token }}
           ROLLBACK_ALLOWED: ${{ inputs.rollback_allowed }}
         shell: bash
         run: |
           set -euo pipefail
-          printf '%s' "$GH_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
-          trap 'docker logout ghcr.io' EXIT
-          for component in api worker; do
-            image="ghcr.io/jenngllg/mon-kado-$component:$GITHUB_SHA"
-            docker push "$image"
-            docker inspect "$image" --format '{{index .RepoDigests 0}}' > "$RUNNER_TEMP/$component.digest"
-          done
           configuration_hash=$(python3 deployments/production/release_manifest.py hash)
-          python3 src/Operations.Deployment/release_catalog.py src/Infrastructure.Persistence.PostgreSql/Migrations \
-            > "$RUNNER_TEMP/migration-catalog.json"
-          migration_hash=$(PYTHONPATH=src/Operations.Deployment python3 -c 'import json,sys; from release_catalog import fingerprint; print(fingerprint(json.load(sys.stdin)))' < "$RUNNER_TEMP/migration-catalog.json")
-          jq -n --arg revision "$GITHUB_SHA" --arg configurationHash "$configuration_hash" \
-            --arg apiImage "$(cat "$RUNNER_TEMP/api.digest")" \
-            --arg workerImage "$(cat "$RUNNER_TEMP/worker.digest")" \
-            --arg publicationId "$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" \
-            --slurpfile migrationCatalog "$RUNNER_TEMP/migration-catalog.json" \
-            --arg migrationHash "$migration_hash" --argjson rollbackAllowed "$ROLLBACK_ALLOWED" \
-            '{schemaVersion: 2, revision: $revision, configurationHash: $configurationHash, apiImage: $apiImage, workerImage: $workerImage,
-              publicationId: $publicationId, migrationCatalog: $migrationCatalog[0], migrationHash: $migrationHash, rollbackAllowed: $rollbackAllowed}' \
-            > "$RUNNER_TEMP/backend-manifest.json"
-          # The release body is the sole promotion pointer; update it only after both pushes succeed.
+          export CONFIGURATION_HASH="$configuration_hash"
+          export PUBLICATION_ID="$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          export RELEASE_TAG="backend-$GITHUB_SHA-$PUBLICATION_ID"
+          python3 - <<'PY'
+          import hashlib, json, os, pathlib, sys
+          sys.path[:0] = ['src/Operations.Deployment', 'deployments/production']
+          from release_catalog import fingerprint
+          from release_manifest import validate
+          root = pathlib.Path(os.environ['RUNNER_TEMP']) / 'native-release'
+          catalog = json.loads((root / 'migration-catalog.json').read_bytes())
+          binaries = {}
+          for component in ('api', 'worker', 'migrate'):
+              name = f'monkado-{component}-linux-amd64'
+              body = (root / name).read_bytes()
+              binaries[component] = {
+                  'url': f'https://github.com/jenngllg/mon-kado/releases/download/{os.environ["RELEASE_TAG"]}/{name}',
+                  'sha256': hashlib.sha256(body).hexdigest(), 'size': len(body)}
+          manifest = {'schemaVersion': 3, 'revision': os.environ['GITHUB_SHA'],
+              'configurationHash': os.environ['CONFIGURATION_HASH'], 'publicationId': os.environ['PUBLICATION_ID'],
+              'migrationCatalog': catalog, 'migrationHash': fingerprint(catalog),
+              'rollbackAllowed': os.environ['ROLLBACK_ALLOWED'] == 'true', 'binaries': binaries}
+          validate(manifest, os.environ['CONFIGURATION_HASH'])
+          (root / 'backend-manifest.json').write_text(json.dumps(manifest, sort_keys=True), encoding='utf-8')
+          PY
+          # Never overwrite assets on an immutable publication tag.
+          gh release create "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --title "Native backend $PUBLICATION_ID" --notes-file "$RUNNER_TEMP/native-release/backend-manifest.json" \
+            --latest=false "$RUNNER_TEMP/native-release/"*
+          # Move the approved channel only after all immutable artifacts were published.
           if gh release view backend-production --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release edit backend-production --repo "$GITHUB_REPOSITORY" \
-              --notes-file "$RUNNER_TEMP/backend-manifest.json" --latest=false
+              --notes-file "$RUNNER_TEMP/native-release/backend-manifest.json" --latest=false
           else
             gh release create backend-production --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
-              --title 'Approved backend production images' --notes-file "$RUNNER_TEMP/backend-manifest.json" --latest=false
+              --title 'Approved native backend production release' --notes-file "$RUNNER_TEMP/native-release/backend-manifest.json" --latest=false
           fi
-          echo 'Images published. This job does not confirm a successful VPS rollout.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Native binaries published. This job does not confirm a successful VPS rollout.' >> "$GITHUB_STEP_SUMMARY"

@@ -1,109 +1,106 @@
-# Production backend deployment (MK-812 / MK-820)
+# Native production backend deployment
 
-## Contract and prerequisites
+The backend consists of three Go executables (API, worker, explicit SQL migrations),
+PostgreSQL 18 and Caddy on Ubuntu 24.04. No Docker daemon, image registry, .NET runtime,
+container volume or migration bundle is required. Only Caddy exposes TCP 80/443;
+PostgreSQL and the API listen locally. Restrict SSH to the operator's current IP.
 
-The existing DigitalOcean Basic VPS runs Ubuntu 24.04, Docker Engine and Compose.
-The public API hostname is `api.monkado.fr`; the frontend origin is
-`https://www.monkado.fr`. Only Caddy publishes TCP 80/443. SSH is restricted to the
-operator's current IP by the free DigitalOcean firewall. Never publish PostgreSQL
-or the API container port, and never open SSH globally for GitHub-hosted runners.
+## Migration status
 
-GitHub Actions builds and scans API/Worker images on a standard hosted runner for
-this public repository. It publishes to GHCR, then updates the JSON body of the
-`backend-production` release. The VPS makes outbound HTTPS requests only. It
-downloads pinned image digests, not code, Compose files or shell commands from a
-release. No self-hosted runner, PAT or SSH private key is installed for deployment.
-No paid cloud products are required; do not enable billing overages or paid runners.
+Native publication, deployment transitions, adoption, smoke tests and supervision
+have local automated tests, including an isolated real systemd restart/OOM exercise.
+Backup/restore, security probes and performance campaigns still require their native
+reconciliation before the final migration merge. Subsequent deployment deliberately
+checks the installed backup configuration inventory and refuses an older bundle.
+No production deployment or production qualification has been performed.
 
-Before publication, configure a GitHub environment named `production` with Jenn
-as required reviewer and a branch restriction to `develop`. The workflow refuses
-publication without a required reviewer and successful **CI and Containers runs
-for the exact commit**. If Containers was skipped by path filters, dispatch it on
-develop first. Publication itself is manual (`Publish approved backend`). A green
-publication does not prove the VPS rollout succeeded.
+## Protected publication
 
-GHCR packages are initially private. After their first publication, explicitly
-review and make `mon-kado-api` and `mon-kado-worker` public (the source repository
-is already public). Do not publish images containing credentials. Anonymous pulls
-must succeed before rollout; otherwise deployment fails before stopping services.
-Do not add a broad GitHub token to the VPS as a workaround.
+The manual `Publish approved backend` workflow runs only on `develop`, behind the
+existing `production` environment's required reviewers. CI and CodeQL must succeed
+for the exact revision. The workflow builds static Linux amd64 executables, verifies
+embedded source metadata and the complete SQL catalog, and publishes a new immutable
+`backend-<revision>-<runId>-<attempt>` GitHub release. Manifest schema 3 binds all three
+asset URLs, SHA-256 hashes, sizes, source revision, publication ID, SQL catalog,
+configuration fingerprint and the explicit rollback declaration.
 
-## Install reviewed configuration
+The fixed `backend-production` release body is updated only after the immutable
+assets are published. The server downloads only approved executable bytes; it never
+runs operational scripts from a release. Installed root-owned operational code checks
+HTTPS redirects, byte limits and every hash before executing metadata commands.
+Cached and retained executables are reverified before reuse. No deployment PAT,
+self-hosted runner or inbound GitHub SSH access is needed.
 
-Copy the complete reviewed source bundle to an operator-owned staging folder,
-preserving its relative paths. Follow [the MK-820 upgrade runbook](rollback-smoke.md)
-before the first MK-820 publication. Run
-`sudo bash deployments/production/install.sh` from that bundle. It installs code
-under `/opt/monkado` owned by root and stops (does not enable) the deployment timer.
-Changing any file covered by `release_manifest.py` requires a reviewed reinstall:
-the release's configuration hash must match the installed files before rollout.
-The `backend-production` tag identifies the channel, not the currently deployed
-commit; the validated `revision` and digests in its body identify that commit.
+## Native host preparation
 
-Create `/etc/monkado/production.env`, owner root, permissions 0600, using
-`production.env.example`. Generate a unique PostgreSQL password and 32-byte
-Base64 JWT key. Fill Gmail credentials through a private local/SSH path; never
-paste them into a ticket, commit, workflow, log or chat. Google login remains
-disabled until its production client and real HTTPS smoke test are approved.
-Production deliberately refuses a disabled email provider. Do not switch to
-the Local environment to bypass this validation.
+Install native PostgreSQL 18 and Caddy using their reviewed official packages. Create
+the non-login `monkado` system account. Configure PostgreSQL to listen on loopback,
+with database/role `mon_kado`, a privately generated password, 64 MB shared buffers,
+40 connections and 2 MB work memory. The application pool is bounded. Preserve local
+peer access for the `postgres` Unix user; operations use it without password arguments.
+Do not grant the application superuser, role creation or database creation rights.
 
-The service reads dotenv values through Compose, never through shell `source`.
-Do not run `docker compose config` without `--quiet` or publish `docker inspect`
-output: both may reveal container credentials. Protect Docker access like root
-access; this installation does not grant the `docker` group or passwordless sudo.
+Review the complete source bundle and run `sudo bash deployments/production/install.sh`.
+The installer leaves deployment, frontend and monitor timers stopped. It installs
+root-owned code and native units; it does not start the application, replace secrets,
+install a database or restart existing PostgreSQL/Caddy processes. Do not invoke it
+while an operational job is active. A configuration hash mismatch requires a reviewed
+reinstall, never a downloaded configuration override.
 
-## Subsequent approved publications
+Privately create `/etc/monkado/production.env` and `/etc/monkado/caddy.env`, root:root
+0600, from the examples. These are systemd EnvironmentFiles, never shell scripts.
+The database URL must have this exact target (substitute only the password privately):
+`postgres://mon_kado:PASSWORD@127.0.0.1:5432/mon_kado?sslmode=disable`.
+Generate independent 32-byte Base64 JWT and data-encryption keys and retain them
+across releases. Configure Gmail privately; Google login stays disabled until its
+separate provider setup is approved. Caddy receives only host/static-path settings.
+Its unit deliberately omits `--environ`, which would disclose environment values.
 
-1. Complete the one-time MK-820 smoke-account handoff, backup upgrade and explicit
-   adoption described in the runbook, then get green checks on develop.
-2. Dispatch publication and approve it. Declare rollback compatibility only after
-   reviewing data/file compatibility with the preceding application. Anonymous
-   GHCR pulls must be available.
-3. Run `sudo systemctl start monkado-deploy.service` on the VPS.
-4. Inspect `sudo systemctl status monkado-deploy.service` and HTTPS `/readiness`.
-   Verify the Worker remains running and perform real email checks before accepting
-   users. Do not call the site production-ready while the frontend is unavailable.
-5. After explicit approval of unattended pulls, enable the free local timer with
-   `sudo systemctl enable --now monkado-deploy.timer`. It checks every five minutes
-   and applies only explicitly published releases, not every develop commit.
+For the frontend, configure its host and paths, then install the reviewed
+`deployments/frontend/frontend.caddy` as
+`/opt/monkado/deployments/caddy/frontend/site.caddy`. The frontend pointer is
+`/var/lib/monkado-frontend/releases/current`. Complete the frontend runbook before
+setting `frontendEnabled` in monitoring; publication timers remain opt-in.
 
-Rollout pulls candidate application images first, stops Caddy/API/Worker for a
-short maintenance window, runs the migration bundle once only when new migrations
-are present, and recreates API/Worker. PostgreSQL and the existing Caddy container
-are retained; Caddy is restarted, not recreated.
-The `mon-kado` Compose project name is stable so named volumes survive upgrades.
-Never use `down --volumes`, delete volumes, or prune volumes during deployment.
-Coordination locks prevent overlap with backups and other deployments. Successful
-technical and authenticated persistence smoke tests save
-the applied references to `/var/lib/monkado-deployment/current.env` atomically.
+## First native installation
 
-The durable `status.json` is authoritative. A failed compatible, schema-unchanged
-publication gets one verified automatic application rollback. An interrupted
-migration or failed rollback preserves `in-progress.env` and requires explicit
-operator recovery. Never delete a marker to retry or roll a database backwards.
-Failed publication IDs are not retried: publish again with a new approval.
-Retain the previous image references; there is no automatic image/volume pruning.
-Monitor disk
-usage and remove only reviewed unused images before the 25 GB disk fills up.
+1. Approve and publish the native release. Transfer its exact `backend-manifest.json`
+   privately to `/etc/monkado/initial-manifest.json`, root:root 0600.
+2. Run `sudo monkado-deploy initialize` only against an empty native database.
+   It refuses existing application tables/processes, verifies the publication, persists
+   maintenance intent, runs SQL once and starts verified executables. Readiness alone
+   leaves the installation awaiting adoption; interrupted intent is never replayed.
+3. Register and confirm a dedicated ordinary smoke-test member through the normal
+   application. Retain its password and immutable member ID privately, separately
+   from backup storage. Run `sudo monkado-deploy provision-smoke`; inputs are masked.
+4. Run `sudo monkado-deploy adopt /etc/monkado/initial-manifest.json`.
+   Adoption requires the exact approved publication, binary digests/metadata,
+   complete SQL history, fresh telemetry and both technical and member CRUD smokes.
+   It commits the baseline and removes maintenance intent only after all checks pass.
+5. Complete native backup/restore qualification before enabling subsequent deployment
+   or accepting data to preserve. Then run `sudo monkado-deploy check-config` and
+   inspect `sudo monkado-deploy status`.
 
-## Small VPS limits and remaining work
+If initialization fails, investigate the retained state locally. Do not delete its
+marker, rerun initialization over existing data or perform a down migration. After
+manually repairing the exact approved installation, adoption can verify it without
+replaying SQL. A different publication cannot silently replace interrupted intent.
 
-All five services share `monkado.slice`, with a total 768 MiB memory limit and no
-swap. This avoids the fixed API limit that failed image uploads in local tests.
-The API/migration managed heap is capped at 256 MiB, the Worker at 192 MiB; native
-image memory is additional. PostgreSQL uses 64 MiB shared buffers, 40 connections,
-and application pools of 12. These are initial settings to verify on the real VPS,
-not a throughput guarantee. Do not compile on this machine. Previous local image
-stress tests reached the shared limit: uploads/exports still need load validation.
+## Subsequent releases and resource limits
 
-The persistent volumes include PostgreSQL, images/profile photos, Data Protection
-keys, exports and Caddy certificate state. Persistent volumes are NOT backups.
-Off-server backup/restore (including images/keys) is maintained by MK-813; security
-verification is MK-814, monitoring/alerts MK-815 and performance testing MK-816.
-Do not import real personal data before backups and restore are verified. OS
-security updates and any required reboot must be scheduled before opening service.
+Run `sudo systemctl start monkado-deploy.service` after protected publication.
+Preflight downloads and verifies the candidate before maintenance, checks backups,
+free disk, dedicated member credentials, retained binaries, infrastructure and frontend.
+Caddy/API/worker stop briefly; PostgreSQL remains running. SQL executes only for an
+append-only catalog. The executable pointer changes atomically; private `active.env`
+sets the approved log revision. No build occurs on the VPS.
 
-References: [Docker installation](https://docs.docker.com/engine/install/ubuntu/),
-[Docker/UFW limitations](https://docs.docker.com/engine/network/packet-filtering-firewalls/),
-[GHCR visibility and digests](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry).
+All four native services share `monkado.slice`: 768 MiB, no swap. Go's soft memory
+limits are 256 MiB for API and 192 MiB for worker. These are initial settings requiring
+native load qualification, not a throughput guarantee. The operational job's cap is
+20 minutes. Only explicitly approved releases are pulled if the timer is later enabled.
+
+`status.json` is authoritative; `current.env` and `in-progress.env` contain only
+non-secret digests/revision. Retained immutable executables permit a verified
+application rollback only when the SQL catalog is unchanged and compatibility was
+explicitly declared. Database rollback is never automatic. See [recovery](rollback-smoke.md).
