@@ -1,0 +1,24 @@
+[Unit]
+Description=MonKado native Go API
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=monkado
+Group=monkado
+WorkingDirectory=/opt/mon-kado
+EnvironmentFile=/etc/mon-kado/environment
+ExecStart=/opt/mon-kado/bin/api
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=15
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/mon-kado
+
+[Install]
+WantedBy=multi-user.target
