@@ -6,12 +6,25 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
 
-from .capture import FILES, IMAGE_NAME, KEY_NAME, atomic_json, copy_files, copy_deployment_private, create_manifest, verify_manifest
+from .capture import FILES, NATIVE_IMAGE_NAME, atomic_json, copy_files, copy_deployment_private, create_native_manifest, verify_manifest
 from .policy import BackupError, TAG, expired_snapshots, release_metadata, snapshot_id, status_health, timestamp, missed_capture
+
+source = Path(__file__).resolve().parents[2]
+if not (source / "Operations.Native").is_dir():
+    source = Path("/opt/monkado/src")
+sys.path[:0] = [str(source / "Operations.Native"), str(source / "Operations.Deployment"),
+               str(source.parent / "deployments/production")]
+import native_artifacts
+import native_services
+from native_configuration import validate_database_environment
+from release_manifest import configuration_hash, validate
+from release_catalog import identifiers
+from deploy_policy import dotenv, validate_state
 
 ROOT = Path("/opt/monkado")
 STATE = Path("/var/lib/monkado-backup")
@@ -33,7 +46,7 @@ def utcnow():
 
 def command(arguments, *, output=None, input_file=None, timeout=600, cwd=None, extra_env=None):
     """Never relay subprocess stderr, which can contain credentials or data."""
-    environment = {"PATH": "/usr/local/bin:/usr/bin:/bin", "HOME": "/root", "LANG": "C.UTF-8", "TZ": "UTC"}
+    environment = {"PATH": "/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin", "HOME": "/root", "LANG": "C.UTF-8", "TZ": "UTC"}
     environment.update(extra_env or {})
     try:
         result = subprocess.run(arguments, stdout=output or subprocess.PIPE, stdin=input_file or subprocess.DEVNULL,
@@ -41,6 +54,8 @@ def command(arguments, *, output=None, input_file=None, timeout=600, cwd=None, e
                                 check=False, env=environment, cwd=cwd)
     except subprocess.TimeoutExpired:
         raise BackupError("COMMAND_TIMEOUT") from None
+    except OSError:
+        raise BackupError("COMMAND_FAILED") from None
     if result.returncode:
         raise BackupError("COMMAND_FAILED")
     return result.stdout.decode("utf-8") if output is None else ""
@@ -67,10 +82,13 @@ def private_file(path):
 class Operations:
     """Coordinate immutable capture, offsite transfer and safe crash recovery."""
 
-    def __init__(self, run=command, now=utcnow, wait=time.sleep):
+    def __init__(self, run=command, now=utcnow, wait=time.sleep, observer=native_services.observe,
+                 storage=Path("/var/lib/monkado")):
         self.run = run
         self.now = now
         self.wait = wait
+        self.observer = observer
+        self.storage = storage
 
     def state(self):
         """Read bounded operational metadata, never secret-bearing captures."""
@@ -83,32 +101,57 @@ class Operations:
         value.update(changes)
         atomic_json(STATE / "status.json", value)
 
-    def compose(self, *arguments):
-        """Pin Compose to the installed root-owned configuration and current images."""
-        return self.run([
-            "docker", "compose", "--project-name", "mon-kado", "--project-directory", str(ROOT),
-            "--env-file", str(PRODUCTION_ENV), "--env-file", str(DEPLOYMENT / CURRENT_ENV_NAME),
-            "-f", str(ROOT / "compose.yaml"), "-f", str(ROOT / "deployments/production/compose.production.yaml"),
-            *arguments,
-        ])
+    def service(self, service):
+        """Observe one fixed native unit without accessing its environment or raw logs."""
+        try:
+            return self.observer(service, self.run)
+        except (OSError, ValueError, KeyError, TypeError):
+            raise BackupError("SERVICE_OBSERVATION_FAILED") from None
 
-    def container(self, service):
-        """Resolve exactly one running container in the production project."""
-        ids = self.compose("ps", "-q", service).split()
-        if len(ids) != 1:
+    def running(self, service):
+        """Require a live native service before entering a capture maintenance window."""
+        current = self.service(service)
+        if not current["running"] or current["oom"]:
             raise BackupError("SERVICE_NOT_RUNNING")
-        return ids[0]
-
-    def inspect(self, identifier, template):
-        """Inspect only explicit non-secret fields, never a complete container."""
-        return self.run(["docker", "inspect", "--format", template, identifier]).strip()
+        return current
 
     def volume(self, name):
-        """Use fixed project volume names; never accept user-provided host paths."""
-        path = Path(self.run(["docker", "volume", "inspect", "--format", "{{.Mountpoint}}", "mon-kado_" + name]).strip())
+        """Use only the configured native durable image root, never caller-provided paths."""
+        if name != "gift_images":
+            raise BackupError("INVALID_STORAGE_PATH")
+        path = self.storage / "gift-images"
         if not path.is_absolute() or not path.is_dir() or path.is_symlink():
             raise BackupError("INVALID_VOLUME_PATH")
         return path
+
+    def database(self, sql):
+        """Run reviewed fixed queries through PostgreSQL's local peer socket without password argv."""
+        return self.run(["runuser", "-u", "postgres", "--", "psql", "-X", "--no-password", "-d", "mon_kado",
+                         "-At", "-v", "ON_ERROR_STOP=1", "-c", sql], timeout=15).strip()
+
+    def approved(self):
+        """Verify retained approval, executable bytes and private pointers before stopping writers."""
+        for path in (DEPLOYMENT / "status.json", DEPLOYMENT / CURRENT_ENV_NAME, DEPLOYMENT / "active.env"):
+            private_file(path)
+            if path.stat().st_size > 131072:
+                raise BackupError("INVALID_RELEASE_POINTER")
+        state = validate_state(json.loads((DEPLOYMENT / "status.json").read_bytes()))
+        if state["phase"] not in ("succeeded", "acknowledged", "rolledBack", "rejected") or state["current"] is None:
+            raise BackupError("DEPLOYMENT_INCOMPLETE")
+        approved = validate(state["current"], configuration_hash(ROOT))
+        if approved["schemaVersion"] != 3:
+            raise BackupError("NATIVE_PUBLICATION_REQUIRED")
+        pointer = dotenv(approved).encode()
+        if any((DEPLOYMENT / name).read_bytes() != pointer for name in (CURRENT_ENV_NAME, "active.env")):
+            raise BackupError("RELEASE_MISMATCH")
+        directory = ROOT / "releases" / native_artifacts.identity(approved)
+        native_artifacts.verify_directory(directory, approved)
+        for service in ("api", "worker"):
+            if self.running(service)["image"] != approved["binaries"][service]["sha256"]:
+                raise BackupError("ACTIVE_RELEASE_MISMATCH")
+        if self.database("SELECT name FROM public.mon_kado_migrations ORDER BY name;").splitlines() != identifiers(approved["migrationCatalog"]):
+            raise BackupError("DATABASE_HISTORY_DIVERGED")
+        return approved, directory
 
     def restic(self, *arguments, cwd=None):
         """Use a dedicated repository and credential files, without secret arguments."""
@@ -130,22 +173,14 @@ class Operations:
             return
         if json.loads(marker.read_text()) != {"services": list(SERVICES)}:
             raise BackupError("INVALID_MAINTENANCE_MARKER")
-        # Compose start traverses dependencies, including the removed one-shot migration.
-        # Resolve the stopped application containers, then start exactly those instances.
-        identifiers = []
         for service in SERVICES:
-            matches = self.compose("ps", "--all", "-q", service).split()
-            if len(matches) != 1:
-                raise BackupError("RECOVERY_CONTAINER_MISSING_OR_AMBIGUOUS")
-            identifiers.append(matches[0])
-        self.run(["docker", "start", *identifiers])
+            self.service(service)
+        self.run(["systemctl", "start", *[native_services.unit(service) for service in SERVICES]], timeout=120)
         for _ in range(30):
             try:
                 self.run(["curl", "--fail", "--silent", "--show-error", "--max-time", "5",
                           "--resolve", "api.monkado.fr:443:127.0.0.1", "https://api.monkado.fr/readiness"])
-                worker = self.container("worker")
-                if self.inspect(worker, "{{.State.Running}}") != "true":
-                    raise BackupError("WORKER_NOT_RUNNING")
+                self.running("worker")
                 marker.unlink()
                 return
             except BackupError:
@@ -165,17 +200,18 @@ class Operations:
             if (candidate / "manifest.json").exists():
                 raise BackupError("INTERRUPTED_CAPTURE_REQUIRES_TRANSFER")
             private_file(PRODUCTION_ENV)
-            release_metadata((DEPLOYMENT / CURRENT_ENV_NAME).read_text())
+            validate_database_environment(PRODUCTION_ENV.read_bytes())
+            caddy_environment = PRODUCTION_ENV.parent / "caddy.env"
+            private_file(caddy_environment)
+            approved, directory = self.approved()
             for service in SERVICES:
-                self.container(service)
-            postgres = self.container("postgres")
-            caddy_id = self.inspect(self.container("caddy"), "{{.Image}}")
-            caddy_digest = self.inspect(caddy_id, "{{index .RepoDigests 0}}")
+                self.running(service)
+            postgres = self.running("postgres")
+            caddy_digest = self.running("caddy")["image"]
             images = self.volume("gift_images")
-            keys = self.volume("data_protection_keys")
-            size = int(self.run(["docker", "exec", postgres, "sh", "-c",
-                                 'exec psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc "SELECT pg_database_size(current_database())"']))
-            size += sum(p.stat().st_size for source in (images, keys) for p in source.rglob("*") if p.is_file())
+            size = int(self.database("SELECT pg_database_size(current_database());"))
+            size += sum(p.stat().st_size for p in images.rglob("*") if p.is_file())
+            size += sum(artifact["size"] for artifact in approved["binaries"].values())
             if shutil.disk_usage(STATE).free < size * 2 + 512 * 1024 * 1024:
                 raise BackupError("INSUFFICIENT_LOCAL_SPACE")
             if candidate.exists():
@@ -183,28 +219,30 @@ class Operations:
             candidate.mkdir(mode=0o700)
             atomic_json(STATE / MAINTENANCE_NAME, {"services": list(SERVICES)})
             try:
-                self.compose("stop", "--timeout", "60", "caddy", "api", "worker")
+                self.run(["systemctl", "stop", *[native_services.unit(service) for service in ("caddy", "api", "worker")]], timeout=120)
                 for service in SERVICES:
-                    if self.compose("ps", "--status", "running", "-q", service).strip():
+                    if self.service(service)["running"]:
                         raise BackupError("WRITERS_STILL_RUNNING")
                 created = self.now().isoformat()
                 with (candidate / "postgres.dump").open("xb") as output:
-                    self.run(["docker", "exec", postgres, "sh", "-c",
-                              'exec pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" --format=custom --compress=0 --no-owner --no-acl'], output=output)
-                copy_files(images, candidate / "images", IMAGE_NAME)
-                copy_files(keys, candidate / "keys", KEY_NAME)
+                    self.run(["runuser", "-u", "postgres", "--", "pg_dump", "--no-password", "--dbname=mon_kado",
+                              "--format=custom", "--compress=0", "--no-owner", "--no-acl"], output=output)
+                copy_files(images, candidate / "images", NATIVE_IMAGE_NAME)
                 for name in FILES:
                     destination = candidate / "configuration" / name
                     destination.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
                     shutil.copyfile(ROOT / name, destination)
                 shutil.copyfile(PRODUCTION_ENV, candidate / "configuration/production.env")
+                shutil.copyfile(caddy_environment, candidate / "configuration/caddy.env")
                 shutil.copyfile(DEPLOYMENT / CURRENT_ENV_NAME, candidate / "configuration/current.env")
+                shutil.copyfile(DEPLOYMENT / "active.env", candidate / "configuration/active.env")
                 copy_deployment_private(PRODUCTION_ENV.parent, DEPLOYMENT, candidate / "configuration")
-                pg_image_id = self.inspect(postgres, "{{.Image}}")
-                pg_digest = self.inspect(pg_image_id, "{{index .RepoDigests 0}}")
-                version = self.run(["docker", "exec", postgres, "sh", "-c",
-                                    'exec psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc "SHOW server_version"']).strip().split()[0]
-                create_manifest(candidate, created, pg_digest, version, caddy_digest)
+                binary_target = candidate / "binaries"
+                binary_target.mkdir(mode=0o700)
+                for component in ("api", "worker", "migrate"):
+                    shutil.copyfile(directory / component, binary_target / component)
+                version = self.database("SHOW server_version;").split()[0]
+                create_native_manifest(candidate, created, postgres["image"], version, caddy_digest)
                 verify_manifest(candidate)
             finally:
                 self.recover()
@@ -216,7 +254,7 @@ class Operations:
             self.update(lastCapture=created, captureBytes=sum(x.stat().st_size for x in pending.rglob("*") if x.is_file()))
 
     def remove_capture(self, path):
-        """Delete only explicitly owned staging directories; never Docker volumes."""
+        """Delete only explicitly owned staging directories, never live native storage."""
         if path not in (STATE / "pending", STATE / CANDIDATE_NAME, STATE / PREVIOUS_NAME) or path.is_symlink():
             raise BackupError("UNSAFE_CLEANUP_TARGET")
         shutil.rmtree(path)

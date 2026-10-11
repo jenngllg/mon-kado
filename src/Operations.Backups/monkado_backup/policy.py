@@ -50,9 +50,19 @@ DEPLOYMENT_FILES = PREVIOUS_FILES + (
     "deployments/production/monkado-deploy.service",
     "deployments/production/monkado-deploy.timer",
 )
-FILES = DEPLOYMENT_FILES + (
+LEGACY_CURRENT_FILES = DEPLOYMENT_FILES + (
     "src/Operations.Frontend/frontend_state.py",
     "src/Operations.Frontend/frontend_probe.py",
+)
+FILES = tuple(name for name in LEGACY_CURRENT_FILES if name not in
+              ("compose.yaml", "deployments/production/compose.production.yaml")) + (
+    "deployments/systemd/mon-kado-api.service",
+    "deployments/systemd/mon-kado-worker.service",
+    "deployments/systemd/caddy-native.conf",
+    "deployments/systemd/postgresql-native.conf",
+    "src/Operations.Native/native_services.py",
+    "src/Operations.Native/native_artifacts.py",
+    "src/Operations.Native/native_configuration.py",
 )
 
 
@@ -89,15 +99,23 @@ def image_reference(value, component):
 def release_metadata(text):
     """Parse the deployed pointer as data, never as shell instructions."""
     try:
-        values = {key: value for key, value in (line.split("=", 1) for line in text.splitlines())}
-        if set(values) != {"API_IMAGE", "WORKER_IMAGE", "RELEASE_REVISION"}:
+        lines = text.splitlines()
+        values = {key: value for key, value in (line.split("=", 1) for line in lines)}
+        if len(values) != len(lines):
             raise ValueError()
         if not re.fullmatch(r"[0-9a-f]{40}", values["RELEASE_REVISION"]):
             raise ValueError()
-        image_reference(values["API_IMAGE"], "api")
-        image_reference(values["WORKER_IMAGE"], "worker")
+        if set(values) == {"API_SHA256", "WORKER_SHA256", "MIGRATE_SHA256", "RELEASE_REVISION", "APP_VERSION"}:
+            if values["APP_VERSION"] != values["RELEASE_REVISION"] or any(not re.fullmatch(HASH, values[key])
+                    for key in ("API_SHA256", "WORKER_SHA256", "MIGRATE_SHA256")):
+                raise ValueError()
+        elif set(values) == {"API_IMAGE", "WORKER_IMAGE", "RELEASE_REVISION"}:
+            image_reference(values["API_IMAGE"], "api")
+            image_reference(values["WORKER_IMAGE"], "worker")
+        else:
+            raise ValueError()
         return values
-    except (AttributeError, TypeError, ValueError):
+    except (AttributeError, TypeError, ValueError, KeyError):
         raise BackupError("INVALID_RELEASE_POINTER") from None
 
 

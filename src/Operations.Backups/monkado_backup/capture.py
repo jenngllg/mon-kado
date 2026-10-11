@@ -9,9 +9,10 @@ import stat
 import tempfile
 from pathlib import Path
 
-from .policy import BackupError, FILES, LEGACY_FILES, PREVIOUS_FILES, DEPLOYMENT_FILES, HASH, release_metadata, timestamp
+from .policy import BackupError, FILES, LEGACY_FILES, PREVIOUS_FILES, DEPLOYMENT_FILES, LEGACY_CURRENT_FILES, HASH, release_metadata, timestamp
 
 IMAGE_NAME = re.compile(r"(?P<a>[0-9a-f]{2})/(?P<b>[0-9a-f]{2})/(?P=a)(?P=b)[0-9a-f]{28}\.(webp|pending)")
+NATIVE_IMAGE_NAME = re.compile(r"[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\.(webp|pending)")
 # The repository also contains revocation records, not only key-{guid}.xml.
 KEY_NAME = re.compile(r"[A-Za-z0-9_-]+\.xml")
 MANIFEST_NAME = "manifest.json"
@@ -82,8 +83,11 @@ def entries(root):
 def validate_shape(paths, schema_version=4):
     """Prevent a restored archive from injecting extra configuration or secrets."""
     required = {"postgres.dump", "configuration/production.env", RELEASE_PATH}
-    configuration = {1: LEGACY_FILES, 2: PREVIOUS_FILES, 3: DEPLOYMENT_FILES, 4: FILES}[schema_version]
+    configuration = {1: LEGACY_FILES, 2: PREVIOUS_FILES, 3: DEPLOYMENT_FILES, 4: LEGACY_CURRENT_FILES, 5: FILES}[schema_version]
     required.update("configuration/" + name for name in configuration)
+    if schema_version == 5:
+        required.update({"configuration/caddy.env", "configuration/active.env", "configuration/deployment-status.json",
+                         "binaries/api", "binaries/worker", "binaries/migrate"})
     if not required.issubset(paths):
         raise BackupError("INCOMPLETE_CAPTURE")
     for name in paths:
@@ -92,12 +96,13 @@ def validate_shape(paths, schema_version=4):
         if schema_version >= 3 and name in {"configuration/deployment-smoke.json", "configuration/deployment-status.json"}:
             continue
         parent, _, filename = name.rpartition("/")
-        if name.startswith("images/") and IMAGE_NAME.fullmatch(name[len("images/"):]):
+        pattern = NATIVE_IMAGE_NAME if schema_version == 5 else IMAGE_NAME
+        if name.startswith("images/") and pattern.fullmatch(name[len("images/"):]):
             continue
-        if parent == "keys" and KEY_NAME.fullmatch(filename):
+        if schema_version < 5 and parent == "keys" and KEY_NAME.fullmatch(filename):
             continue
         raise BackupError("UNEXPECTED_CAPTURE_FILE")
-    if not any(name.startswith("keys/") for name in paths):
+    if schema_version < 5 and not any(name.startswith("keys/") for name in paths):
         raise BackupError("MISSING_DATA_PROTECTION_KEYS")
 
 
@@ -129,8 +134,10 @@ def verify_manifest(root):
     """Verify every byte and reject unexpected files before a restore can run."""
     regular(root / MANIFEST_NAME)
     value = json.loads((root / MANIFEST_NAME).read_text())
-    if not isinstance(value, dict) or type(value.get("schemaVersion")) is not int or value["schemaVersion"] not in (1, 2, 3, 4):
+    if not isinstance(value, dict) or type(value.get("schemaVersion")) is not int or value["schemaVersion"] not in (1, 2, 3, 4, 5):
         raise BackupError("INVALID_MANIFEST")
+    if value["schemaVersion"] == 5:
+        return verify_native_manifest(root, value)
     fields = {"schemaVersion", "createdAt", "postgresImage", "postgresVersion", "release", "files"}
     if value["schemaVersion"] >= 2:
         fields.add("caddyImage")
@@ -150,6 +157,72 @@ def verify_manifest(root):
         raise BackupError("CAPTURE_INTEGRITY_FAILED")
     release = release_metadata((root / RELEASE_PATH).read_text())
     if value["release"] != release:
+        raise BackupError("RELEASE_MISMATCH")
+    return value
+
+
+def native_release(root, inventory):
+    """Bind captured executables and SQL metadata to the retained approved native publication."""
+    from release_manifest import configuration_hash, validate
+    from deploy_policy import dotenv, validate_state
+    from native_configuration import validate_database_environment, validate_runtime_keys
+
+    state_path = root / "configuration/deployment-status.json"
+    if state_path.stat().st_size > 131072:
+        raise BackupError("INVALID_DEPLOYMENT_STATE")
+    state = validate_state(json.loads(state_path.read_bytes()))
+    if state["phase"] not in ("succeeded", "acknowledged", "rolledBack", "rejected") or state["current"] is None:
+        raise BackupError("DEPLOYMENT_INCOMPLETE")
+    approved = validate(state["current"], configuration_hash(root / "configuration"))
+    if approved["schemaVersion"] != 3:
+        raise BackupError("NATIVE_PUBLICATION_REQUIRED")
+    pointer = dotenv(approved).encode()
+    if any((root / "configuration" / name).read_bytes() != pointer for name in ("current.env", "active.env")):
+        raise BackupError("RELEASE_MISMATCH")
+    for component in ("api", "worker", "migrate"):
+        artifact = approved["binaries"][component]
+        if inventory["binaries/" + component] != {"sha256": artifact["sha256"], "bytes": artifact["size"]}:
+            raise BackupError("BINARY_INTEGRITY_FAILED")
+    environment = root / "configuration/production.env"
+    if environment.stat().st_size > 131072:
+        raise BackupError("INVALID_PRIVATE_CONFIGURATION")
+    raw = environment.read_bytes()
+    validate_database_environment(raw)
+    validate_runtime_keys(raw)
+    return release_metadata(pointer.decode())
+
+
+def create_native_manifest(root, created_at, postgres_digest, postgres_version, caddy_digest):
+    """Record a coherent native capture including stable private keys and all executable bytes."""
+    value = {"schemaVersion": 5, "createdAt": created_at, "postgresSHA256": postgres_digest,
+             "postgresVersion": postgres_version, "caddySHA256": caddy_digest, "files": entries(root)}
+    validate_shape(value["files"], 5)
+    value["release"] = native_release(root, value["files"])
+    validate_native_metadata(value)
+    atomic_json(root / MANIFEST_NAME, value)
+    return value
+
+
+def validate_native_metadata(value):
+    """Reject unknown manifest fields, runtime hashes and unsupported native PostgreSQL versions."""
+    if set(value) != {"schemaVersion", "createdAt", "postgresSHA256", "postgresVersion", "caddySHA256", "release", "files"}:
+        raise BackupError("INVALID_MANIFEST")
+    timestamp(value["createdAt"])
+    for key in ("postgresSHA256", "caddySHA256"):
+        if not isinstance(value[key], str) or not re.fullmatch(HASH, value[key]):
+            raise BackupError("INVALID_RUNTIME_DIGEST")
+    if not isinstance(value["postgresVersion"], str) or not re.fullmatch(r"18\.[0-9]+", value["postgresVersion"]):
+        raise BackupError("UNSUPPORTED_POSTGRES_VERSION")
+
+
+def verify_native_manifest(root, value):
+    """Verify native captured bytes and approval metadata before any restoration side effect."""
+    validate_native_metadata(value)
+    inventory = entries(root)
+    validate_shape(inventory, 5)
+    if inventory != value["files"]:
+        raise BackupError("CAPTURE_INTEGRITY_FAILED")
+    if native_release(root, inventory) != value["release"]:
         raise BackupError("RELEASE_MISMATCH")
     return value
 

@@ -5,7 +5,7 @@ sudo apt-get update -qq
 sudo apt-get install -y -qq postgresql-common ca-certificates
 sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
 sudo apt-get update -qq
-sudo apt-get install -y -qq postgresql-18 postgresql-client-18
+sudo apt-get install -y -qq postgresql-18 postgresql-client-18 restic
 sudo pg_createcluster 18 monkado --port=55432 --start
 password="$(openssl rand -hex 24)"
 printf '::add-mask::%s\n' "$password"

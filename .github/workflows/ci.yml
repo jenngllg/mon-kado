@@ -48,8 +48,8 @@ jobs:
             python3 -m unittest discover -s tests/Operations.NativeTests
       - name: Test native deployment, supervision and frontend recovery
         run: |
-          for suite in Operations.DeploymentTests Operations.MonitoringTests Deployment.FrontendTests; do
-            sudo env PYTHONPATH="$GITHUB_WORKSPACE/src/Operations.Native:$GITHUB_WORKSPACE/src/Operations.Deployment:$GITHUB_WORKSPACE/src/Operations.Monitoring:$GITHUB_WORKSPACE/src/Operations.Frontend:$GITHUB_WORKSPACE/deployments/production:$GITHUB_WORKSPACE/tests/$suite" \
+          for suite in Operations.DeploymentTests Operations.MonitoringTests Deployment.FrontendTests Operations.Backups.Tests; do
+            sudo env PYTHONPATH="$GITHUB_WORKSPACE/src/Operations.Native:$GITHUB_WORKSPACE/src/Operations.Deployment:$GITHUB_WORKSPACE/src/Operations.Monitoring:$GITHUB_WORKSPACE/src/Operations.Frontend:$GITHUB_WORKSPACE/src/Operations.Backups:$GITHUB_WORKSPACE/deployments/production:$GITHUB_WORKSPACE/tests/$suite" \
               python3 -m unittest discover -s "tests/$suite"
           done
       - name: Test native PostgreSQL and concurrency
@@ -89,8 +89,15 @@ jobs:
           CGO_ENABLED: '0'
         run: |
           mkdir -p artifacts
-          for app in api worker migrate; do go build -trimpath -ldflags='-s -w' -o artifacts/$app ./cmd/$app; done
+          for app in api worker migrate; do
+            go build -trimpath -ldflags="-s -w -X github.com/JennGllg/mon-kado/internal/buildinfo.Revision=$GITHUB_SHA" -o artifacts/$app ./cmd/$app
+          done
           go -C src/Tools.GmailOAuthBootstrap build -trimpath -ldflags='-s -w' -o ../../artifacts/gmail-oauth-bootstrap .
+      - name: Restore the complete Go schema with isolated native PostgreSQL
+        run: |
+          sudo env MONKADO_NATIVE_BACKUP_TESTS=1 MONKADO_NATIVE_MIGRATOR="$GITHUB_WORKSPACE/artifacts/migrate" \
+            PYTHONPATH="$GITHUB_WORKSPACE/src/Operations.Backups:$GITHUB_WORKSPACE/src/Operations.Native:$GITHUB_WORKSPACE/src/Operations.Deployment:$GITHUB_WORKSPACE/deployments/production" \
+            python3 -m unittest discover -s tests/Operations.Backups.Tests -p test_native_postgres.py
       - name: Enforce coverage target
         shell: pwsh
         run: |

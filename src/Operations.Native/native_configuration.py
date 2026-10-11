@@ -1,5 +1,6 @@
 """Bind private process configuration to the same native database inspected by operations."""
 
+import base64
 import re
 from urllib.parse import parse_qsl, urlsplit
 
@@ -29,3 +30,22 @@ def validate_database_environment(raw):
             and parsed.port in (None, 5432) and parsed.username == "mon_kado" and bool(parsed.password)
             and parsed.path == "/mon_kado" and not parsed.fragment)
     require(parse_qsl(parsed.query, strict_parsing=True) == [("sslmode", "disable")])
+
+
+def validate_runtime_keys(raw):
+    """Require both stable cryptographic keys in a native encrypted capture without returning their values."""
+    try:
+        values = {}
+        for line in raw.decode("utf-8").splitlines():
+            name, separator, value = line.strip().partition("=")
+            if separator != "=" or name not in ("JWT_SIGNING_KEY", "DATA_ENCRYPTION_KEY"):
+                continue
+            if name in values:
+                raise ValueError()
+            if len(value) > 1 and value[0] in ("'", '"') and value[-1] == value[0]:
+                value = value[1:-1]
+            values[name] = base64.b64decode(value, validate=True)
+        if set(values) != {"JWT_SIGNING_KEY", "DATA_ENCRYPTION_KEY"} or any(len(value) != 32 for value in values.values()):
+            raise ValueError()
+    except (UnicodeError, ValueError, TypeError):
+        raise ValueError("NATIVE_RUNTIME_KEYS_INVALID") from None

@@ -1,7 +1,7 @@
 [Unit]
 Description=Capture and encrypt MonKado offsite backup
-After=docker.service network-online.target monkado-backup-recovery.service
-Requires=docker.service
+After=postgresql@18-main.service network-online.target monkado-backup-recovery.service
+Requires=postgresql@18-main.service
 Wants=network-online.target
 
 [Service]

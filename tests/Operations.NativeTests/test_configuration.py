@@ -1,13 +1,23 @@
 """Private database configuration must address the database checked by native operations."""
 
+import base64
 import unittest
 
-from native_configuration import validate_database_environment
+from native_configuration import validate_database_environment, validate_runtime_keys
 
 URL = "postgres://mon_kado:synthetic-secret@127.0.0.1:5432/mon_kado?sslmode=disable"
 
 
 class ConfigurationTests(unittest.TestCase):
+    def test_both_stable_runtime_keys_are_mandatory_and_duplicate_assignments_are_rejected(self):
+        encoded = base64.b64encode(bytes(range(32))).decode()
+        valid = ("JWT_SIGNING_KEY=" + encoded + "\nDATA_ENCRYPTION_KEY=" + encoded + "\n").encode()
+        self.assertIsNone(validate_runtime_keys(valid))
+        for invalid in (b"", b"JWT_SIGNING_KEY=private", valid + b"DATA_ENCRYPTION_KEY=private\n",
+                        valid.replace(encoded.encode(), b"AQ==")):
+            with self.subTest(invalid=invalid), self.assertRaisesRegex(ValueError, "^NATIVE_RUNTIME_KEYS_INVALID$"):
+                validate_runtime_keys(invalid)
+
     def test_canonical_and_quoted_systemd_assignments_are_accepted_without_returning_credentials(self):
         for value in (URL, '"' + URL + '"', "'" + URL + "'"):
             with self.subTest(value=value):
