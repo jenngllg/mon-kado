@@ -24,4 +24,4 @@ description = "Historical empty catalog-key placeholder followed by the public t
 condition = "AND"
 paths = ['''^deployments/production/production\.env\.example$''']
 regexTarget = "secret"
-regexes = ['''^OBSERVABILITY_ENABLED$''']
+regexes = ['''^OBSERVABILITY_ENABLED=true$''']
