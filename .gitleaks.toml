@@ -18,3 +18,10 @@ condition = "AND"
 paths = ['''^internal/security/totp_test\.go$''', '''^tests/Infrastructure\.Persistence\.PostgreSql\.UnitTests/Services/TwoFactorCryptographyTests\.cs$''']
 regexTarget = "secret"
 regexes = ['''^GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ$''']
+
+[[rules.allowlists]]
+description = "Historical empty catalog-key placeholder followed by the public telemetry setting name"
+condition = "AND"
+paths = ['''^deployments/production/production\.env\.example$''']
+regexTarget = "secret"
+regexes = ['''^OBSERVABILITY_ENABLED$''']
