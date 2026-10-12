@@ -11,11 +11,11 @@ import urllib.parse
 import urllib.request
 
 TREES = (
-    ("internal", "38bc880565a829898a4cdcbdac44b87ed428834a"),
-    ("cmd", "26e60ba2584860f2d734c03ceeac4a1230f043cf"),
-    ("src/Tools.GmailOAuthBootstrap", "514d3ca53803cdea79e68bd0f12a799d96ce9725"),
-    ("go.mod", "75f9db7b6b688516ad06f9bb555a98287165c5f3"),
-    ("go.sum", "ae5237bf78d84aeef7e6a4e6dac37226d2f1bb6f"),
+    ("38bc880565a829898a4cdcbdac44b87ed428834a", "internal"),
+    ("26e60ba2584860f2d734c03ceeac4a1230f043cf", "cmd"),
+    ("514d3ca53803cdea79e68bd0f12a799d96ce9725", "src/Tools.GmailOAuthBootstrap"),
+    ("75f9db7b6b688516ad06f9bb555a98287165c5f3", "go.mod"),
+    ("ae5237bf78d84aeef7e6a4e6dac37226d2f1bb6f", "go.sum"),
 )
 CASES = (
     ("AaEtF3mwWCv6d85MrHcS", "go:S2092", "internal/httpapi/cookies.go",
@@ -28,7 +28,7 @@ CASES = (
 
 
 def verify_source():
-    for path, expected in TREES:
+    for expected, path in TREES:
         actual = subprocess.check_output(["git", "rev-parse", "HEAD:" + path], text=True).strip()
         if actual != expected:
             raise ValueError("SOURCE_REVIEW_NO_LONGER_APPLIES")
