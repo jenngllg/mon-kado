@@ -26,6 +26,26 @@ CSRF, CORS, TLS, create/read/update/delete and exact cleanup. A confirmed synthe
 account is seeded only into the fresh fixture. No production setting or provider
 credential is accepted by the runner.
 
+The full deployment engine campaign runs separately on the same native Linux
+prerequisites as the performance harness (including k6 for its shared fixture):
+
+```sh
+sudo env "PATH=$PATH" MONKADO_NATIVE_DEPLOYMENT_CAMPAIGN=1 \
+  python3 tests/Operations.DeploymentTests/native_campaign.py
+```
+
+It creates a uniquely owned four-service fixture and uses the real deployment
+engine, artifact verification, process observations, private telemetry and HTTPS
+CRUD probes. Only the external artifact download is replaced with local reviewed
+binaries. It verifies A-to-B replacement, a real API bind failure with verified
+rollback, rejection without retry, and a deliberately failing SQL migration
+embedded solely into a private source copy. Database contents, image bytes and
+cryptographic settings must survive. Failed migration intent remains durable;
+the campaign never performs a database rollback. Cleanup checks ownership before
+stopping its exact units and namespace; its stopped private fixture and sanitized
+`/tmp/<run-id>/deployment-report.json` remain for inspection. This command neither
+adopts nor changes an existing installation.
+
 The separate native Go process suite also verifies browser journeys, worker local
 delivery, export ZIP privacy, graceful shutdown and startup rejection. See
 `tests/Native.ProcessTests/run.sh`. Performance acceptance and its longer profiles
