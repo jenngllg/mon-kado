@@ -9,12 +9,15 @@ authorization, JSON contracts and failures.
 
 ## Local evidence on 2026-10-12
 
-The complete Windows native PostgreSQL integration suite, `go vet` and race
+At `fd30129`, the complete Windows native PostgreSQL integration suite, `go vet` and race
 detector pass through `scripts/Test-Native.ps1 -Race -Coverage`. Backend statement
-coverage is **84.58% (4942/5843)**; the autonomous Gmail module is **87.50% (70/80)**.
+coverage is **84.62% (4946/5845)**; the autonomous Gmail module is **87.50% (70/80)**.
 Both enforce the documented 80% minimum without executable-code exclusions.
 These are statement measurements, not branch coverage or a guarantee of no bugs.
-Sonar's separate new-code line coverage is 80.3% at `fdcbb92`.
+Sonar's separate new-code line coverage is 80.4% at `fd30129`. That revision also
+passes the complete Linux native integration/race gate at 84.65% (4948/5845)
+backend statements and 87.50% for Gmail. Formal Sonar security review remains
+outstanding.
 
 The native Linux process suite passes all four process tests, including a full
 public HTTP journey through API, worker, local mailbox and export ZIP; invalid
@@ -44,6 +47,12 @@ Supporting deterministic suites test domain values, aggregated validation paths,
 cryptography, structured logging, telemetry, embedded SQL catalogs and PostgreSQL
 constraints. Public contracts verify business persistence; direct SQL assertions
 are limited to technical invariants that the public API cannot expose.
+
+The final parity check found and corrected blank anonymous participant names.
+`guest_join_integration_test.go` verifies missing/null/blank/invalid guest names,
+eighty Unicode scalars after trimming, persisted guest identity, and identified
+members ignoring guest-only details. The optional input and actual response
+headers are explicitly asserted in OpenAPI.
 
 ## Native operations
 

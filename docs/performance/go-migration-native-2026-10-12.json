@@ -1,0 +1,301 @@
+{
+  "schemaVersion": 1,
+  "qualificationScope": "local-performance",
+  "productionQualification": false,
+  "profiles": [
+    {
+      "profile": "nominal",
+      "runId": "mk816-ac82bdcb653f",
+      "sourceRevision": "f35ac4c95980c7fc498f259a3e37165825f6cda0",
+      "sourceDirty": true,
+      "binaries": {
+        "api": "bb158b286a2475cedebadef8ec3e12bb4c1fabb7b166822a8e2b0fdcf48e35a4",
+        "worker": "a3865023914be36e370baa357f0ca89b3fdbc83a59af21f3349b1367f0cf8dbe",
+        "migrate": "1ca93d359abf61e773d6836c27daf890916ecfc8f074729160350029a07e121a"
+      },
+      "reportSha256": "048e892a50d3e84f58daf3f6b488f413b4c5c564b3c94e00acb9e85df74b25c2",
+      "verdict": "passed",
+      "completedRequests": 9000,
+      "unexpectedErrors": 0,
+      "rateLimited": 0,
+      "droppedIterations": 0,
+      "observedRequestsPerSecond": 10.00613368623564,
+      "memoryPeakBytes": 182398976,
+      "oom": 0,
+      "restarts": 0,
+      "p95Milliseconds": {
+        "lists": 1.68920895,
+        "wishes": 13.92778365,
+        "shared": 16.155181550000002,
+        "update": 13.778111599999999,
+        "reservation": 13.455643449999998
+      },
+      "dataInvariants": {
+        "members": 100,
+        "lists": 500,
+        "wishes": 10000,
+        "images": 200,
+        "overReserved": 0
+      },
+      "supplement": null
+    },
+    {
+      "profile": "images",
+      "runId": "mk816-dbfe7f220f0d",
+      "sourceRevision": "b17b2a0afe0c9af97f53db65afe4f3cd90453e97",
+      "sourceDirty": true,
+      "binaries": {
+        "api": "175eaf8e824c8c615972a4664b9fb204153af906186e5bfe2d0a5f027dec3e5a",
+        "worker": "2b7a5eea249f93a4d2c9922f2f83b5593fc45b8e05090967282d530bf99cbd8e",
+        "migrate": "b2c4524f29f5bca19b71c066774d7a801cacc8224212a8eff4659ff1d163afb9"
+      },
+      "reportSha256": "6b6dbc155d9ed4686e63c9371f463057861787f1aa000870ae5f0b3d4131e219",
+      "verdict": "passed",
+      "completedRequests": 9000,
+      "unexpectedErrors": 0,
+      "rateLimited": 0,
+      "droppedIterations": 0,
+      "observedRequestsPerSecond": 10.004116852342829,
+      "memoryPeakBytes": 602451968,
+      "oom": 0,
+      "restarts": 0,
+      "p95Milliseconds": {
+        "lists": 1.76110825,
+        "wishes": 10.76709855,
+        "shared": 13.373903750000002
+      },
+      "dataInvariants": {
+        "members": 100,
+        "lists": 500,
+        "wishes": 10000,
+        "images": 202,
+        "overReserved": 0
+      },
+      "supplement": {
+        "profile": "images",
+        "passed": true,
+        "results": [
+          {
+            "kind": "gift",
+            "inputBytes": 8807,
+            "outputBytes": 1774,
+            "milliseconds": 912.063030002173,
+            "valid": true,
+            "case": "normal",
+            "concurrency": 1
+          },
+          {
+            "kind": "gift",
+            "inputBytes": 8807,
+            "outputBytes": 1774,
+            "milliseconds": 946.9061580020934,
+            "valid": true,
+            "case": "normal",
+            "concurrency": 2
+          },
+          {
+            "kind": "gift",
+            "inputBytes": 8807,
+            "outputBytes": 1774,
+            "milliseconds": 1846.1616720014717,
+            "valid": true,
+            "case": "normal",
+            "concurrency": 2
+          },
+          {
+            "kind": "profile",
+            "inputBytes": 8807,
+            "outputBytes": 512,
+            "milliseconds": 119.98485698131844,
+            "valid": true,
+            "case": "normal",
+            "concurrency": 1
+          },
+          {
+            "kind": "profile",
+            "inputBytes": 8807,
+            "outputBytes": 512,
+            "milliseconds": 231.59580898936838,
+            "valid": true,
+            "case": "normal",
+            "concurrency": 2
+          },
+          {
+            "kind": "profile",
+            "inputBytes": 8807,
+            "outputBytes": 512,
+            "milliseconds": 111.86385597102344,
+            "valid": true,
+            "case": "normal",
+            "concurrency": 2
+          },
+          {
+            "kind": "gift",
+            "inputBytes": 10262753,
+            "outputBytes": 2074,
+            "milliseconds": 1375.0213620078284,
+            "valid": true,
+            "case": "bytes",
+            "concurrency": 1
+          },
+          {
+            "kind": "gift",
+            "inputBytes": 10262753,
+            "outputBytes": 2074,
+            "milliseconds": 2466.724414989585,
+            "valid": true,
+            "case": "bytes",
+            "concurrency": 2
+          },
+          {
+            "kind": "gift",
+            "inputBytes": 10262753,
+            "outputBytes": 2074,
+            "milliseconds": 1231.5343539812602,
+            "valid": true,
+            "case": "bytes",
+            "concurrency": 2
+          },
+          {
+            "kind": "profile",
+            "inputBytes": 10262753,
+            "outputBytes": 544,
+            "milliseconds": 183.9700469863601,
+            "valid": true,
+            "case": "bytes",
+            "concurrency": 1
+          },
+          {
+            "kind": "profile",
+            "inputBytes": 10262753,
+            "outputBytes": 544,
+            "milliseconds": 204.95281802141108,
+            "valid": true,
+            "case": "bytes",
+            "concurrency": 2
+          },
+          {
+            "kind": "profile",
+            "inputBytes": 10262753,
+            "outputBytes": 544,
+            "milliseconds": 394.6013770182617,
+            "valid": true,
+            "case": "bytes",
+            "concurrency": 2
+          },
+          {
+            "kind": "gift",
+            "inputBytes": 126820,
+            "outputBytes": 1492,
+            "milliseconds": 1687.0083939866163,
+            "valid": true,
+            "case": "pixels",
+            "concurrency": 1
+          },
+          {
+            "kind": "gift",
+            "inputBytes": 126820,
+            "outputBytes": 1492,
+            "milliseconds": 1694.1508699965198,
+            "valid": true,
+            "case": "pixels",
+            "concurrency": 2
+          },
+          {
+            "kind": "gift",
+            "inputBytes": 126820,
+            "outputBytes": 1492,
+            "milliseconds": 3418.802917993162,
+            "valid": true,
+            "case": "pixels",
+            "concurrency": 2
+          },
+          {
+            "kind": "profile",
+            "inputBytes": 126820,
+            "outputBytes": 482,
+            "milliseconds": 943.3846809843089,
+            "valid": true,
+            "case": "pixels",
+            "concurrency": 1
+          },
+          {
+            "kind": "profile",
+            "inputBytes": 126820,
+            "outputBytes": 482,
+            "milliseconds": 1755.2233340102248,
+            "valid": true,
+            "case": "pixels",
+            "concurrency": 2
+          },
+          {
+            "kind": "profile",
+            "inputBytes": 126820,
+            "outputBytes": 482,
+            "milliseconds": 886.0450240026694,
+            "valid": true,
+            "case": "pixels",
+            "concurrency": 2
+          }
+        ]
+      }
+    },
+    {
+      "profile": "exports",
+      "runId": "mk816-bf6f8b450354",
+      "sourceRevision": "b18e3e88e1153f7e532379dc47a5b59233d88182",
+      "sourceDirty": false,
+      "binaries": {
+        "api": "f9407b8eaa792ebe52d2fab2ed79d188b91118d8a241420794eecdcef9d8563d",
+        "worker": "2795ed78fa1199bd9526fed24d905dc16ab419e91ceb750fb7ea375de96dd9e7",
+        "migrate": "cccf637b2ae3313c124ca21d4fcdd1f0db6ecf64c583f8db517275d7b097fe17"
+      },
+      "reportSha256": "1afc7c58be6ea30fe75e48c4654cc32d893193aeb836ab871dad0b2521eb3740",
+      "verdict": "passed",
+      "completedRequests": 15000,
+      "unexpectedErrors": 0,
+      "rateLimited": 0,
+      "droppedIterations": 0,
+      "observedRequestsPerSecond": 10.001606506218373,
+      "memoryPeakBytes": 185901056,
+      "oom": 0,
+      "restarts": 0,
+      "p95Milliseconds": {
+        "lists": 1.7313862,
+        "wishes": 10.710639250000002,
+        "shared": 13.330051150000001
+      },
+      "dataInvariants": {
+        "members": 100,
+        "lists": 500,
+        "wishes": 10000,
+        "images": 200,
+        "overReserved": 0
+      },
+      "supplement": {
+        "profile": "exports",
+        "passed": true,
+        "results": [
+          {
+            "milliseconds": 2015.1385360222775,
+            "bytes": 3643,
+            "valid": true,
+            "concurrency": 1
+          },
+          {
+            "milliseconds": 2018.5659790004138,
+            "bytes": 3648,
+            "valid": true,
+            "concurrency": 2
+          },
+          {
+            "milliseconds": 2015.7669490145054,
+            "bytes": 3646,
+            "valid": true,
+            "concurrency": 2
+          }
+        ]
+      }
+    }
+  ]
+}

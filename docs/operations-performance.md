@@ -2,6 +2,10 @@
 
 ## Latest release-quality evidence
 
+The [native Go migration campaign](performance/go-migration-native-2026-10-12.md)
+records the current local evidence, run provenance and qualification limits.
+The historical reports below describe the earlier .NET/Docker implementation.
+
 Read the [MK-938 campaign review](performance/mk938-2026-09-26.md) before
 interpreting older passing reports. It preserves the historical concurrent
 40 MP PNG OOM and Docker clock discrepancy. The subsequent approved admission
