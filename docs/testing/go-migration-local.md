@@ -16,8 +16,8 @@ Both enforce the documented 80% minimum without executable-code exclusions.
 These are statement measurements, not branch coverage or a guarantee of no bugs.
 Sonar's separate new-code line coverage is 80.4% at `fd30129`. That revision also
 passes the complete Linux native integration/race gate at 84.65% (4948/5845)
-backend statements and 87.50% for Gmail. Formal Sonar security review remains
-outstanding.
+backend statements and 87.50% for Gmail. The subsequent Sonar security review is
+recorded in [the local transport review](native-transport-security-review.md).
 
 The native Linux process suite passes all four process tests, including a full
 public HTTP journey through API, worker, local mailbox and export ZIP; invalid
@@ -97,9 +97,10 @@ Gmail, merchant sites or Drive credentials. The frontend prototype in the user's
 checkout is preserved; this backend qualification does not claim a full visual
 UI acceptance test of a separately developed frontend.
 
-Merge still requires protected CI and formal Sonar security review of the local
-HTTP cookie exception and OAuth loopback callback. Neither analysis rules nor
-thresholds are disabled. CodeQL alert
+Sonar's local HTTP cookie exception and OAuth loopback callback now have
+[recorded contextual reviews](native-transport-security-review.md); the complete
+quality gate passes. The temporary manual review mechanism has been removed.
+Neither analysis rules nor thresholds are disabled. CodeQL alert
 [34](https://github.com/jenngllg/mon-kado/security/code-scanning/34) was explicitly
 reviewed as **used in tests**: freshly generated synthetic fixture passwords in
 0600 files, no external route, no production credentials and sanitized reports

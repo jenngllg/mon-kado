@@ -5,12 +5,6 @@ on:
   push:
     branches: [develop, main]
   workflow_dispatch:
-    inputs:
-      review_local_transports:
-        description: Record the reviewed local transport exceptions for PR 127
-        type: boolean
-        required: false
-        default: false
 permissions:
   contents: read
 concurrency:
@@ -104,21 +98,10 @@ jobs:
         run: |
           ./scripts/Test-GoCoverage.ps1 -Path coverage.out
           ./scripts/Test-GoCoverage.ps1 -Path src/Tools.GmailOAuthBootstrap/coverage.out
-      - name: Record the pinned local transport security review
-        if: >-
-          github.event_name == 'workflow_dispatch' && inputs.review_local_transports &&
-          github.repository == 'jenngllg/mon-kado' && github.actor == 'jenngllg' &&
-          github.ref == 'refs/heads/codex/go-develop-reconciliation'
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        run: python3 .github/review_local_transports.py
       - name: Analyze Go with SonarQube Cloud
         if: >-
           (github.event_name == 'push' && github.ref == 'refs/heads/develop') ||
-          (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) ||
-          (github.event_name == 'workflow_dispatch' && inputs.review_local_transports &&
-          github.repository == 'jenngllg/mon-kado' && github.actor == 'jenngllg' &&
-          github.ref == 'refs/heads/codex/go-develop-reconciliation')
+          (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)
         uses: SonarSource/sonarqube-scan-action@a31c9398be7ace6bbfaf30c0bd5d415f843d45e9 # v7.0.0, native action
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
@@ -134,7 +117,6 @@ jobs:
             -Dsonar.go.coverage.reportPaths=coverage.sonar.out
             -Dsonar.qualitygate.wait=true
             -Dsonar.qualitygate.timeout=300
-            ${{ github.event_name == 'workflow_dispatch' && inputs.review_local_transports && '-Dsonar.pullrequest.key=127 -Dsonar.pullrequest.branch=codex/go-develop-reconciliation -Dsonar.pullrequest.base=develop' || '' }}
       - name: Upload native binaries and coverage
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
