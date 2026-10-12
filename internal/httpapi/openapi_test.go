@@ -59,4 +59,23 @@ func TestOpenAPI_WhenReadingDocument_ContainsVersionedOperationsAndExactErrorEnv
 			t.Fatalf("missing %s", endpoint.Path)
 		}
 	}
+	var join struct {
+		RequestBody struct {
+			Required bool `json:"required"`
+			Content  map[string]struct {
+				Schema struct {
+					Ref string `json:"$ref"`
+				} `json:"schema"`
+			} `json:"content"`
+		} `json:"requestBody"`
+		Responses map[string]struct {
+			Headers map[string]json.RawMessage `json:"headers"`
+		} `json:"responses"`
+	}
+	if json.Unmarshal(document.Paths["/api/v1/shared-wishlists/{shareLinkId}/participants"]["post"], &join) != nil || join.RequestBody.Required || join.RequestBody.Content["application/json"].Schema.Ref != "#/components/schemas/JoinSharedWishlistRequest" {
+		t.Fatal("optional participant details are undocumented")
+	}
+	if document.Components.Schemas["JoinSharedWishlistRequest"].Properties["displayName"] == nil || join.Responses["201"].Headers["Location"] == nil || join.Responses["200"].Headers["ETag"] != nil || join.Responses["201"].Headers["ETag"] != nil {
+		t.Fatal("participant input or response headers changed")
+	}
 }

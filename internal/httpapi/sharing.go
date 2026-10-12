@@ -63,16 +63,9 @@ func (a *API) sharedWish(r *request) (response, error) {
 }
 
 func (a *API) joinWishlist(r *request) (response, error) {
-	input := domain.JoinSharedWishlistRequest{}
-	var err error
-	if r.ContentLength != 0 {
-		input, err = body[domain.JoinSharedWishlistRequest](r)
-		if err != nil {
-			return response{}, err
-		}
-	}
-	if r.Principal.MemberID == "" && (input.DisplayName == nil || !validation.Text(*input.DisplayName, 80, false) || *input.DisplayName == "") {
-		return response{}, &domain.Error{Status: 400, Code: domain.RequestValidationError, Message: "The display name is required for guests.", Validation: []domain.ValidationError{{PropertyName: "displayName", ErrorMessage: "The display name is mandatory."}}}
+	input, err := optionalBody[domain.JoinSharedWishlistRequest](r)
+	if err != nil {
+		return response{}, err
 	}
 	link := r.PathValue("shareLinkId")
 	result, err := a.Service.JoinWishlist(r.Context(), link, r.Header.Get(shareTokenHeader), r.Principal.MemberID, a.cookie(r.Request, "Guest"), input)

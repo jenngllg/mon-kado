@@ -393,7 +393,24 @@ func body[T any](r *request) (T, error) {
 	if decoder.Decode(new(any)) != io.EOF {
 		return value, domain.Failure(400, domain.RequestBadRequest, "The request must contain exactly one JSON object.")
 	}
-	return value, validation.ValidateAt(value, r.Now)
+	return value, validateInput(r, value)
+}
+
+func optionalBody[T any](r *request) (T, error) {
+	if r.ContentLength == 0 {
+		var value T
+		return value, validateInput(r, value)
+	}
+	return body[T](r)
+}
+
+func validateInput[T any](r *request, value T) error {
+	// Identified participants use the live profile name, so anonymous details
+	// must not affect their enrollment or fail guest-only validation.
+	if _, join := any(value).(domain.JoinSharedWishlistRequest); join && r.Principal.MemberID != "" {
+		return nil
+	}
+	return validation.ValidateAt(value, r.Now)
 }
 
 func incomingTrace(value string) string {

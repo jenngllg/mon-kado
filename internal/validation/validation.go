@@ -58,7 +58,8 @@ func ValidateAt(input any, now time.Time) error {
 	name := v.Type().Name()
 	required := map[string][]string{
 		"RegisterAccountRequest": {"Email", "Password", "DisplayName"}, "LoginRequest": {"Email", "Password"},
-		"CreateWishlistRequest": {"Name", "Occasion"}, "UpdateWishlistRequest": {"Name", "Occasion"},
+		"JoinSharedWishlistRequest": {"DisplayName"},
+		"CreateWishlistRequest":     {"Name", "Occasion"}, "UpdateWishlistRequest": {"Name", "Occasion"},
 		"CreateWishRequest": {"Name"}, "UpdateWishRequest": {"Name"},
 		"CopyOwnedWishRequest": {"DestinationWishlistId"}, "CopyWishRequest": {"SourceShareLinkId", "SourceWishId"},
 		"SetWishlistArchivedRequest": {"IsArchived"}, "SetWishFavoriteRequest": {"IsFavorite"},

@@ -5441,7 +5441,7 @@
     "/api/v1/shared-wishlists/{shareLinkId}/participants": {
       "post": {
         "operationId": "SharedWishlists_Join",
-        "summary": "Join",
+        "summary": "Enrolls an authenticated member or anonymous guest through an active share proof.",
         "tags": [
           "SharedWishlists"
         ],
@@ -5453,14 +5453,6 @@
                 "schema": {
                   "$ref": "#/components/schemas/WishlistParticipantResponse"
                 }
-              }
-            },
-            "headers": {
-              "ETag": {
-                "schema": {
-                  "type": "string"
-                },
-                "description": "Quoted lowercase hexadecimal PostgreSQL xmin version."
               }
             }
           },
@@ -5474,12 +5466,6 @@
               }
             },
             "headers": {
-              "ETag": {
-                "schema": {
-                  "type": "string"
-                },
-                "description": "Quoted lowercase hexadecimal PostgreSQL xmin version."
-              },
               "Location": {
                 "schema": {
                   "type": "string"
@@ -5613,6 +5599,23 @@
             "schema": {
               "type": "string"
             }
+          }
+        ],
+        "description": "Authenticated members use their live profile display name and may omit the body. Anonymous guests must provide nonblank displayName text containing at most 80 Unicode scalar values after trimming. Existing participation returns 200; newly created participation returns 201 and Location. Guest identity is retained in the private browser cookie.",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/JoinSharedWishlistRequest"
+              }
+            }
+          }
+        },
+        "security": [
+          {},
+          {
+            "bearerAuth": []
           }
         ]
       }
@@ -16367,6 +16370,22 @@
           "sourceShareLinkId",
           "sourceWishId"
         ]
+      },
+      "JoinSharedWishlistRequest": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "description": "Guest details are required only for anonymous enrollment; authenticated members ignore these details.",
+        "properties": {
+          "displayName": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Guest display name: nonblank, no control characters, at most 80 Unicode scalar values after trimming."
+          }
+        }
       }
     }
   }
