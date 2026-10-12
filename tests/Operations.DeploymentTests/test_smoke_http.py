@@ -58,6 +58,10 @@ class HttpTests(unittest.TestCase):
         self.response.getheaders.return_value.append(("Set-Cookie", valid))
         self.client.request("GET", "/")
         self.assertEqual({"__Host-MonKado.Refresh": "value"}, self.client.cookies)
+        self.client.accept_cookies("__Host-MonKado.Csrf=proof; Secure; HttpOnly; Path=/; SameSite=Strict")
+        self.assertEqual("proof",self.client.cookies["__Host-MonKado.Csrf"])
+        with self.assertRaisesRegex(DeploymentError,"INVALID_SMOKE_COOKIE"):
+            self.client.accept_cookies("__Host-MonKado.Csrf=proof; Secure; HttpOnly; Path=/; SameSite=Lax")
         for cookie in ("not a cookie", valid.replace("Secure;", ""), valid + "; Domain=monkado.fr",
                        valid.replace("HttpOnly;", ""), valid.replace("Path=/;", "Path=/other;"), "other=x; Secure; HttpOnly; Path=/",
                        valid.replace("SameSite=Strict", "SameSite=None"), valid.replace("SameSite=Strict", "")):

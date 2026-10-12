@@ -6,7 +6,7 @@ import { Counter, Trend, Rate } from 'k6/metrics';
 
 const origin = 'https://mk816.test';
 const profile = __ENV.PROFILE;
-const fixture = JSON.parse(open('/fixture/fixtures-' + __ENV.SHARD + '.json'));
+const fixture = JSON.parse(open((__ENV.MONKADO_PERFORMANCE_FIXTURE || '/fixture') + '/fixtures-' + __ENV.SHARD + '.json'));
 const duration = new Trend('business_ms', true);
 const outcome = new Counter('business_ok');
 const failures = new Rate('business_failure');

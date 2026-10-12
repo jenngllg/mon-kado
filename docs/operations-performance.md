@@ -18,7 +18,8 @@ measured 300-second stages, avoiding a race at the final scheduled arrival.
 This tail adds no business requests or extra measured stage; all 12,000
 operations and the existing in-flight grace period remain required.
 
-This harness sends traffic only to a disposable Docker deployment. It cannot
+This harness sends traffic only to disposable native Linux processes in an
+isolated network namespace. It cannot
 qualify production hardware, Internet latency, frontend rendering, Gmail,
 Google, backup overlap or deployment overlap. It never connects to the VPS.
 Use local k6, not Grafana Cloud; no account, paid runner or paid service is needed.
@@ -38,44 +39,45 @@ Percentiles use the union of successful request samples across all ten generator
 never the average of generator percentiles. k6 thresholds and the merged evaluator
 both return a nonzero exit status on failure.
 
-There are ten actual Docker source addresses. Caddy derives the forwarded address
+There are ten actual loopback source addresses. Caddy derives the forwarded address
 from the network connection; the generators never forge forwarding headers.
 General (300/minute/IP) and business quotas stay enabled. In particular, shared
 list traffic is kept below its tighter 60/minute/IP quota in nominal traffic.
 
 ## Prerequisites and execution
 
-Use Python 3.13+, a **local Linux Docker Engine with cgroup v2**, Docker Compose,
-and enough free host memory for the generators in addition to the system under
-test. The runner refuses remote Docker endpoints and Docker environment overrides.
-Run from the exact reviewed checkout; the orchestrator builds Release images before each campaign (Docker caches unchanged layers):
+Use local Linux with systemd, cgroup v2 CPU/memory controllers, Python 3.12+,
+Go matching `go.mod`, native PostgreSQL 18 under `/usr/lib/postgresql/18/bin`,
+Caddy 2.11.4, k6 2.3.0, iproute2 and root privileges for disposable namespaces
+and systemd units. WSL Ubuntu with systemd is suitable for local functional
+qualification. Allow enough free host memory for the generators in addition to
+the system under test. Run from the exact reviewed checkout; the orchestrator
+compiles three native Go binaries with CGO disabled before each campaign.
 
-```powershell
-docker pull grafana/k6:2.3.0@sha256:9c2dee7f8ed74d317e4027c06a10f169b625638189de8d4555d0b3486a5aeb34
-python src/Operations.Performance/performance_cli.py run --profile smoke
-python src/Operations.Performance/performance_cli.py run --profile nominal
+```bash
+sudo env "PATH=$PATH" python3 src/Operations.Performance/performance_cli.py run --profile smoke
+sudo env "PATH=$PATH" python3 src/Operations.Performance/performance_cli.py run --profile nominal
 ```
 
 The application, database and Caddy share a dedicated **768 MiB**, **zero swap**,
 **one logical CPU** cgroup. Generators and the observer are outside that budget.
-The small cgroup helper temporarily needs privileged local Docker access to create
-or remove precisely this run's group; it never changes the parent controllers or
-other groups. A failure to apply or verify limits prevents VPS-profile qualification.
-Docker container-level memory displays do not necessarily show inherited parent
-limits: the report reads the parent cgroup's effective files directly.
+Each generated run owns a dedicated systemd slice and four transient services.
+The observer reads the parent cgroup's effective files, actual OOM counters and
+service restart counts. A failure to apply or verify limits prevents qualification.
+Existing application units, PostgreSQL clusters and parent controllers are untouched.
 
-The API runs in Production, with Release binaries, original pools/GC settings and
-JSON logging. The Worker uses **Local** with its existing Disabled email provider.
-This explicit difference prevents external mail and means email throughput is not
-qualified. Google is disabled. All runtime networks are internal; no host ports are
-published. HTTPS verifies the run-specific Caddy CA. No production credentials,
-real data, backup repository or production volumes are mounted.
+The API and worker run with production security settings, native Go binaries,
+JSON logging and their configured 256/192 MiB Go memory limits. The email provider
+is Disabled and Google is disabled. Email throughput is not qualified. The network
+namespace contains only loopback and no external route; it cannot reach providers
+or host services. HTTPS verifies the run-specific Caddy CA without installing it
+in the host trust store. No production credentials, real data or backup repository
+are used.
 
-Docker uses bounded local JSON logs as in deployment. Observability remains enabled;
-its rolling private snapshots live in the disposable, UID-1654-only
-`/run/monkado` tmpfs rather than the
-VPS monitoring directory. This local storage difference is not an I/O performance
-qualification of the VPS disk.
+Observability remains enabled; its rolling private snapshots live in the disposable
+application directory owned by the unprivileged service account. Service logs are
+discarded; generator diagnostics remain private. The local filesystem and WSL
+differences do not qualify VPS disk performance.
 
 Preparation creates a fresh marked database with 100 members, 500 lists and 10,000
 wishes, then uses real HTTP login, CSRF, sharing and upload contracts to initialize
@@ -84,13 +86,11 @@ JWT signing material and share proofs are disposable and stay in private local
 files/memory. Login and refresh behavior is not bypassed. Long scenarios renew
 tokens with the original application lifetime.
 
-On POSIX the run directory is 0700 and credential files are 0600. On Windows the
-runner removes inherited permissions on the new run directory and grants access
-only to the current owner and SYSTEM. CodeQL alerts 19 and 20 (the same moved finding) were reviewed and classified
-as "used in tests" with the repository owner's approval: these disposable fixture
-credentials are intentionally not production secrets. No scanning rule is disabled.
-The non-secret Caddy configuration is copied into its stopped container as a
-root-owned private file. It never mounts the fixture credential files.
+The root-owned `/tmp/<run-id>` directory is 0711 to permit traversal by isolated
+service accounts; credential files are root-only 0600 and service data directories
+are 0700. The frozen harness and non-secret Caddy configuration are readable by
+the services. Existing historical CodeQL reviews remain historical evidence;
+no scanning rule is disabled.
 
 ## Additional profiles
 
@@ -120,27 +120,30 @@ which the disabled email provider does not send.
 
 ## Evidence and cleanup
 
-Results are under ignored `TestResults/performance/<run-id>/`.
+Results are under private `/tmp/<run-id>/`. Copy only sanitized reports to the
+ignored `TestResults/performance/` directory when retaining local evidence.
 `report.json` has schemaVersion 1, merged percentiles, counts, resource samples,
 limits, dataset invariants and passed/failed/incomplete verdict.
 `report.md` is the human summary. Image IDs, revision, local host facts and harness
-SHA-256 fingerprints distinguish runs. Harness files are frozen for each new run.
+SHA-256 fingerprints distinguish runs. Native binary hashes and Caddy/k6 versions
+replace image identifiers. Harness files are frozen for each new run.
 
 Only sanitized metrics and reports may be attached to a MR. **Never upload the
-entire result directory**: Compose configuration and fixture credentials are private.
+entire result directory**: environment files and fixture credentials are private.
 Do not enable k6 HTTP debug logs. Public metric tags are fixed family/phase labels;
 no headers, cookies, body content or token-bearing URLs are retained in reports.
 
-After reviewing the evidence, remove this run's disposable containers, networks
-and volumes by its printed identifier:
+After reviewing the evidence, stop this run's disposable services and remove its
+network namespace and runtime slice configuration by its printed identifier:
 
-```powershell
-python src/Operations.Performance/performance_cli.py cleanup --run-id mk816-012345abcdef
+```bash
+sudo env "PATH=$PATH" python3 src/Operations.Performance/performance_cli.py cleanup --run-id mk816-012345abcdef
 ```
 
-Cleanup checks ownership labels and does not use Docker prune or target other
-projects. It deletes only test data in this run's Docker resources; reports remain
-locally. A failed or interrupted run must not be reported as successful.
+Cleanup checks the exact generated identifier and its root-owned ownership marker.
+It targets only that run's services, slice and namespace. Stopped fixture data and
+reports remain locally for diagnosis. A failed or interrupted run must not be
+reported as successful.
 
 If a target fails, retain the evidence and describe the bottleneck. Architecture,
 business migrations, production quota changes or VPS upgrades require a separate

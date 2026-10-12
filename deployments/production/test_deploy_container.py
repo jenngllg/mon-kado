@@ -1,4 +1,4 @@
-"""Test the installed root entrypoint only in an explicitly disposable container."""
+"""Test the installed root entrypoint only in a private native mount namespace."""
 
 import json
 import os
@@ -6,25 +6,27 @@ from pathlib import Path
 import shutil
 import subprocess
 import unittest
+from native_fixture import MountSandbox
 
 
-@unittest.skipUnless(Path("/.dockerenv").exists() and os.environ.get("MONKADO_DEPLOYMENT_SANDBOX") == "1",
-                     "Requires an explicitly disposable deployment-test container")
+@unittest.skipUnless(os.environ.get("MONKADO_DEPLOYMENT_SANDBOX") == "1",
+                     "Explicit isolated native installer opt-in required")
 class EntryPointTests(unittest.TestCase):
     def setUp(self):
         self.source = Path(__file__).resolve().parents[2]
-        self.root = Path("/opt/monkado")
+        self.sandbox = MountSandbox()
+        self.addCleanup(self.sandbox.close)
+        self.root = self.sandbox.root / "opt/monkado"
         self.root.mkdir(parents=True, exist_ok=True)
         shutil.copytree(self.source / "src/Operations.Deployment", self.root / "src/Operations.Deployment", dirs_exist_ok=True)
         shutil.copytree(self.source / "deployments/production", self.root / "deployments/production", dirs_exist_ok=True)
-        self.state = Path("/var/lib/monkado-deployment")
+        shutil.copytree(self.source / "src/Operations.Native", self.root / "src/Operations.Native", dirs_exist_ok=True)
+        self.state = self.sandbox.root / "varlib/monkado-deployment"
         self.state.mkdir(mode=0o700, parents=True, exist_ok=True)
-        if not Path("/usr/bin/python3").exists():
-            Path("/usr/bin/python3").symlink_to("/usr/local/bin/python3")
 
     def test_status_is_bounded_and_has_no_external_effects(self):
-        result = subprocess.run(["bash", str(self.root / "deployments/production/monkado-deploy"), "status"],
-                                capture_output=True, timeout=10, env=os.environ | {"PYTHONPATH": "/untrusted", "DOCKER_HOST": "tcp://untrusted"})
+        result = self.sandbox.execute(["bash", "/opt/monkado/deployments/production/monkado-deploy", "status"],
+                                      os.environ | {"PYTHONPATH": "/untrusted"})
         self.assertEqual(0, result.returncode)
         value = json.loads(result.stdout)
         self.assertEqual("idle", value["phase"])
@@ -32,7 +34,7 @@ class EntryPointTests(unittest.TestCase):
         self.assertEqual([], list(self.state.iterdir()))
 
     def test_incomplete_installation_refuses_rollout_without_raw_errors(self):
-        result = subprocess.run(["bash", str(self.root / "deployments/production/deploy.sh")], capture_output=True, timeout=10)
+        result = self.sandbox.execute(["bash", "/opt/monkado/deployments/production/deploy.sh"])
         self.assertEqual(1, result.returncode)
         self.assertEqual("DEPLOYMENT_OPERATION_FAILED", json.loads(result.stdout)["code"])
         self.assertEqual(b"", result.stderr)

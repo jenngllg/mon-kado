@@ -2,6 +2,8 @@
 import concurrent.futures
 import hashlib
 import http.cookiejar
+import http.client
+import os
 import io
 import json
 import ssl
@@ -17,6 +19,8 @@ from policy import PerformanceError, require
 from seed import png
 
 ORIGIN = "https://mk816.test"
+FIXTURE = Path(os.environ.get("MONKADO_PERFORMANCE_FIXTURE", "/fixture"))
+SOURCE_IP = os.environ.get("MONKADO_PERFORMANCE_SOURCE_IP", "127.0.0.1")
 SHARE = "X-MonKado-Share-Token"
 CSRF_PATH = "/security/csrf-token"
 JSON_CONTENT = "application/json"
@@ -34,18 +38,28 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
         raise PerformanceError("REDIRECT_REFUSED")
 
 
+class BoundHTTPSConnection(http.client.HTTPSConnection):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, source_address=(SOURCE_IP, 0), **kwargs)
+
+
+class BoundHTTPSHandler(urllib.request.HTTPSHandler):
+    def https_open(self, request):
+        return self.do_open(BoundHTTPSConnection, request, context=self._context)
+
+
 class Client:
     def __init__(self, account, password):
         self.account = account
         self.token = None
         self.csrf = None
         self.expires = 0
-        context = ssl.create_default_context(cafile="/fixture/ca.crt")
+        context = ssl.create_default_context(cafile=str(FIXTURE / "ca.crt"))
         context.minimum_version = ssl.TLSVersion.TLSv1_2
         context.verify_mode = ssl.CERT_REQUIRED
         context.check_hostname = True
         self.opener = urllib.request.build_opener(
-            urllib.request.HTTPSHandler(context=context),
+            BoundHTTPSHandler(context=context), urllib.request.ProxyHandler({}),
             urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()), NoRedirect())
         self.csrf = self.json_request("GET", CSRF_PATH)[0]["token"]
         auth, _ = self.json_request("POST", "/api/v1/auth/sessions",
@@ -205,7 +219,7 @@ def concurrency(clients):
 def prepare_images(shard):
     """Initialize one shard sequentially through real HTTP, never retry rejections."""
     require(0 <= shard < 10, "INVALID_PREPARATION_SHARD")
-    fixture = json.loads(Path(f"/fixture/fixtures-{shard}.json").read_text())
+    fixture = json.loads((FIXTURE / f"fixtures-{shard}.json").read_text())
     require(len(fixture["accounts"]) == 10, "INVALID_PREPARATION_ACCOUNTS")
     image = png(128, 128)
     for account in fixture["accounts"]:
@@ -216,7 +230,7 @@ def prepare_images(shard):
 
 
 def main():
-    fixture = json.loads(Path("/fixture/fixtures-0.json").read_text())
+    fixture = json.loads((FIXTURE / "fixtures-0.json").read_text())
     profile = sys.argv[1]
     try:
         clients = [] if profile == "prepare" else [Client(account, fixture["password"]) for account in fixture["accounts"][7:10]]

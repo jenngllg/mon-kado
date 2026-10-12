@@ -25,15 +25,16 @@ un doublon lors d’une nouvelle tentative explicite ; elle n’est jamais trait
   Le nom d’événement est issu du catalogue compilé, pas d’un texte fourni par l’appelant.
 - Les exceptions conservent leur type et les frames techniques, sans message, données
   arbitraires ni chemins de fichiers sources.
-- Docker conserve les logs avec son pilote `local`, au plus trois fichiers de 10 Mo par
-  conteneur. Ce plafond en taille ne garantit aucune durée de conservation en jours.
+- Les services natifs transmettent leurs logs à journald. Configurer et vérifier ses
+  plafonds de stockage sur l'hôte avant activation ; ils ne garantissent pas une durée
+  de conservation en jours.
 - Les mesures locales sont privées, sans identifiant de membre : sept jours au maximum,
   avec un plafond global de 32 Mio. La saturation raccourcit cette durée.
 - Le moniteur conserve aussi l’état technique courant des incidents, dédoublonnage et
   tentatives. Ne pas supprimer cet état pour « remettre au vert » : cela perdrait la preuve
   des tentatives et pourrait provoquer des notifications en double.
 
-Les métriques .NET utilisent `Meter` et des compteurs cumulatifs par processus. Un identifiant
+Les métriques Go utilisent des compteurs cumulatifs par processus. Un identifiant
 de démarrage empêche de comparer les compteurs de deux processus différents. Les requêtes
 HTTP sont comptées avec statut, durée, rejets 429 et abandons. Les cycles Worker enregistrent
 leur vrai début, résultat et prochaine exécution attendue ; un heartbeat ne vaut pas réussite
@@ -47,8 +48,8 @@ Toutes les 30 secondes, chaque processus publie atomiquement son propre fichier 
 | UID/GID 1654, Worker | `/var/lib/monkado-observability/worker/snapshot.json` | répertoire 0700, fichier 0600 |
 | root, moniteur | `/var/lib/monkado-monitoring/` | répertoire 0700, fichiers 0600 |
 
-Les conteneurs disposent chacun d’un montage distinct, sans accès au fichier de l’autre
-service. Le reste de leur système de fichiers reste en lecture seule. Un fichier absent,
+Les unités API et Worker disposent chacune d'un chemin d'écriture de télémétrie distinct.
+Le reste de leur système de fichiers est protégé par systemd. Un fichier absent,
 invalide ou périmé n’est pas remplacé par des mesures fictives égales à zéro.
 
 ## Règles par défaut
@@ -60,9 +61,9 @@ observations et les tests d’e-mail simultanés.
 | Signal | Déclenchement |
 |---|---|
 | API, readiness PostgreSQL, frontend activé | trois contrôles consécutifs en échec |
-| Conteneur arrêté | trois observations consécutives |
+| Service natif arrêté | trois observations consécutives |
 | Nouvelle preuve OOM | immédiat |
-| Redémarrages d’un même conteneur | au moins trois en dix minutes |
+| Redémarrages d'une même unité | au moins trois en dix minutes |
 | Fichier de métriques | absent/invalide ou âgé de plus de trois minutes |
 | Cycle Worker | trois échecs, attente dépassée de deux minutes, ou exécution de plus de quinze minutes |
 | Échec définitif d’élément | nouvelle augmentation du compteur |
@@ -166,7 +167,7 @@ sudo journalctl -u monkado-monitor.service -n 20 --no-pager
 `status` est en lecture seule. Un statut âgé de plus de trois minutes ou une invocation
 échouée donne un état dégradé. Le moniteur arrêté ne peut pas envoyer sa propre alerte : le
 contrôle du timer reste une tâche d’exploitation. Ne pas afficher `production.env`, le JSON
-Gmail, un `docker inspect` complet ou les arguments OAuth dans un diagnostic partagé.
+Gmail, les variables d'environnement des processus ou les arguments OAuth dans un diagnostic partagé.
 
 ## Complément DigitalOcean Monitoring gratuit
 
@@ -181,7 +182,8 @@ d’une sauvegarde. Il ne supprime pas la limite d’absence d’une sonde exter
 
 ## Validation avant activation
 
-- Exécuter la quality gate .NET et Python, les vérifications du bundle et les exercices Docker.
+- Exécuter la quality gate Go et Python, les vérifications du bundle et les exercices natifs
+  dans leurs espaces de noms privés.
 - Vérifier les permissions et l’isolation des montages, les plafonds CPU/mémoire et les pannes
   simulées, sans saturation ni changement de secret en production.
 - Garder les providers simulés dans la CI ; aucun test ne doit envoyer de vrais e-mails.

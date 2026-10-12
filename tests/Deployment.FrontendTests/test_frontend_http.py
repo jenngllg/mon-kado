@@ -1,4 +1,4 @@
-"""Real TLS and static hosting checks in explicitly opted-in disposable Docker resources."""
+"""Real native TLS/static hosting checks inside a private Linux network namespace."""
 
 import http.client
 import json
@@ -14,17 +14,14 @@ import unittest
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "Deployment.SecurityTests"))
-from test_caddy import docker, ready
+from native_fixture import NativeCaddy, stop
 
 
-@unittest.skipUnless(os.environ.get("MONKADO_FRONTEND_DOCKER_TESTS") == "1", "Explicit isolated Docker opt-in required")
+@unittest.skipUnless(os.environ.get("MONKADO_FRONTEND_NATIVE_TESTS") == "1", "Explicit isolated native opt-in required")
 class FrontendHttpTests(unittest.TestCase):
     def test_static_site_and_api_share_caddy_without_exposing_internal_ports(self):
         # Arrange
-        name = "monkado-frontend-http-" + secrets.token_hex(8)
-        api, edge = name + "-api", name + "-edge"
         root = Path(__file__).resolve().parents[2]
-        docker("network", "create", name)
         with tempfile.TemporaryDirectory(prefix="monkado-frontend-http-") as directory:
             fixture = Path(directory)
             current = fixture / "current"
@@ -53,30 +50,19 @@ class Handler(http.server.BaseHTTPRequestHandler):
   self.end_headers()
   self.wfile.write(b'api-fixture')
  def log_message(self,*args): pass
-server=http.server.HTTPServer(('0.0.0.0',8080),Handler)
+server=http.server.HTTPServer(('127.0.0.1',7000),Handler)
 print('fixture-ready',flush=True)
 server.serve_forever()
 """
-            try:
-                docker("run", "-d", "--name", api, "--network", name, "--network-alias", "api",
-                       "python:3.13-slim@sha256:8d9d0b8bcf6506481eae4907c18f5e3e7902e629f5f6d684f9e7c32e85e3ddf0",
-                       "python", "-u", "-c", server)
-                ready(api, "fixture-ready")
-                docker("run", "-d", "--name", edge, "--network", name,
-                       "-e", "API_HOST=api.localhost", "-e", "FRONTEND_HOST=www.localhost",
-                       "-e", "FRONTEND_APEX_HOST=localhost", "-e", "FRONTEND_API_ORIGIN=http://api:8080",
-                       "-e", "FRONTEND_ROOT=/srv/frontend/current", "-p", "127.0.0.1::443", "-p", "127.0.0.1::80",
-                       "--mount", "type=bind,src=" + str(root / "deployments/caddy/Caddyfile") + ",dst=/etc/caddy/Caddyfile,readonly",
-                       "--mount", "type=bind,src=" + str(root / "deployments/frontend/frontend.caddy") + ",dst=/etc/caddy/frontend/site.caddy,readonly",
-                       "--mount", "type=bind,src=" + str(fixture) + ",dst=/srv/frontend,readonly",
-                       "caddy:2.11.4-alpine")
-                ready(edge, "certificate obtained successfully")
-                ports = json.loads(docker("inspect", "--format", "{{json .NetworkSettings.Ports}}", edge))
-                tls_port = int(ports["443/tcp"][0]["HostPort"])
-                http_port = int(ports["80/tcp"][0]["HostPort"])
-                certificate = fixture / "root.crt"
-                docker("cp", edge + ":/data/caddy/pki/authorities/local/root.crt", str(certificate))
-                context = ssl.create_default_context(cafile=str(certificate))
+            configuration = (root / 'deployments/caddy/Caddyfile').read_text().replace(
+                'import /opt/monkado/deployments/caddy/frontend/*.caddy',
+                'import ' + str(root / 'deployments/frontend/frontend.caddy'))
+            environment = {'API_HOST':'api.localhost','FRONTEND_HOST':'www.localhost',
+                           'FRONTEND_APEX_HOST':'localhost','FRONTEND_API_ORIGIN':'http://127.0.0.1:7000',
+                           'FRONTEND_ROOT':str(current)}
+            with NativeCaddy(root, configuration, environment, server) as native:
+                tls_port, http_port = 443, 80
+                context = ssl.create_default_context(cafile=str(native.certificate))
                 original_resolver = socket.getaddrinfo
 
                 def local_resolver(host, *args, **kwargs):
@@ -132,17 +118,12 @@ server.serve_forever()
                     self.assertEqual(308, status)
                     self.assertEqual("https://www.localhost/login", headers["Location"])
                     self.assertEqual(b"api-fixture", request("api.localhost", "/readiness")[2])
-                    docker("stop", api)
+                    stop(native.upstream)
                     for page in ("legal-notice", "privacy-policy", "terms-of-use"):
                         status, headers, body = request("www.localhost", "/" + page)
                         self.assertEqual(200, status)
                         self.assertEqual(("<h1>" + page + "</h1>").encode(), body)
                         self.assertEqual("no-store", headers["Cache-Control"])
-                self.assertEqual({}, json.loads(docker("inspect", "--format", "{{json .HostConfig.PortBindings}}", api)))
-            finally:
-                for container in (edge, api):
-                    subprocess.run(["docker", "rm", "-f", "-v", container], capture_output=True, timeout=30)
-                docker("network", "rm", name)
 
 
 if __name__ == "__main__":

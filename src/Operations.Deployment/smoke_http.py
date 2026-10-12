@@ -14,7 +14,7 @@ API_HOST = "api.monkado.fr"
 FRONTEND_HOST = "www.monkado.fr"
 ORIGIN = "https://www.monkado.fr"
 MAXIMUM_BODY = 2 * 1024 * 1024
-COOKIE_POLICIES = {"__Host-MonKado.Refresh": "strict", "__Host-MonKado.Antiforgery": "lax"}
+COOKIE_POLICIES = {"__Host-MonKado.Refresh": "strict", "__Host-MonKado.Csrf": "strict"}
 
 
 class LocalHttps(http.client.HTTPSConnection):

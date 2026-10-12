@@ -1,51 +1,17 @@
 import json
-import io
-import tarfile
 import subprocess
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch
 
-from policy import LABEL, PerformanceError
-from runtime import Bench, command, private_write, protect_directory, generator_user, keep_awake, copy_caddy_configuration
+from policy import PerformanceError
+from runtime import Bench, command, private_write, protect_directory, keep_awake
 
 
 class RuntimeTests(unittest.TestCase):
-    def test_image_preparation_is_serial_local_bounded_and_stops_on_first_failure(self):
-        bench = Bench(".", "mk816-012345abcdef")
-        with patch("runtime.command") as execute, patch("runtime.generator_user", return_value="1000"):
-            bench.prepare_images("10.240.0.0/24")
-        calls = [call.args[0] for call in execute.call_args_list]
-        self.assertEqual(10, len(calls))
-        self.assertEqual([f"10.240.0.{100 + shard}" for shard in range(10)],
-                         [args[args.index("--ip") + 1] for args in calls])
-        for shard, args in enumerate(calls):
-            self.assertEqual(["prepare", str(shard)], args[-2:])
-            self.assertEqual("mk816-012345abcdef_edge", args[args.index("--network") + 1])
-            self.assertEqual("128m", args[args.index("--memory-swap") + 1])
-            self.assertEqual("ALL", args[args.index("--cap-drop") + 1])
-            self.assertNotIn("--publish", args)
-            self.assertIn(f"{LABEL}=mk816-012345abcdef", args)
-        with patch("runtime.command", side_effect=PerformanceError("COMMAND_FAILED")) as execute:
-            with self.assertRaisesRegex(PerformanceError, "COMMAND_FAILED"):
-                bench.prepare_images("10.240.0.0/24")
-            execute.assert_called_once()
-
-    def test_caddy_copy_fixes_container_ownership_and_mode_without_host_permissions(self):
-        with tempfile.TemporaryDirectory() as root:
-            path = Path(root) / "Caddyfile"
-            path.write_text("mk816.test { tls internal }")
-            with patch("runtime.command") as execute:
-                copy_caddy_configuration(path, "owned-caddy")
-            self.assertEqual(["docker", "cp", "--archive", "-", "owned-caddy:/etc/caddy"], execute.call_args.args[0])
-            with tarfile.open(fileobj=io.BytesIO(execute.call_args.kwargs["data"])) as bundle:
-                entry = bundle.getmember("Caddyfile")
-                self.assertEqual((0, 0, 0o600), (entry.uid, entry.gid, entry.mode))
-                self.assertEqual(path.read_bytes(), bundle.extractfile(entry).read())
-
     def test_windows_wake_lock_is_temporary_and_released_on_failure(self):
-        with patch("runtime.sys.platform", "win32"), patch("runtime.ctypes.windll", create=True) as native:
+        with patch("native_runtime.sys.platform", "win32"), patch("native_runtime.ctypes.windll", create=True) as native:
             native.kernel32.SetThreadExecutionState.return_value = 1
             with self.assertRaisesRegex(ValueError, "interrupted"):
                 with keep_awake():
@@ -57,85 +23,6 @@ class RuntimeTests(unittest.TestCase):
                 with keep_awake():
                     self.fail("The campaign must not start without a wake lock")
 
-    def fixture_source(self, root):
-        bench = Bench(root, "mk816-012345abcdef")
-        bench.source_code.mkdir(parents=True)
-        (bench.source_code / "fixture.py").write_text("# fixed")
-        (bench.source_code / "scenario.js").write_text("// fixed")
-        (bench.source_code / "ignored.txt").write_text("not executable")
-        caddy = Path(root) / "deployments" / "caddy" / "Caddyfile"
-        caddy.parent.mkdir(parents=True)
-        caddy.write_text("{$API_HOST} {\n reverse_proxy api:8080\n}\n")
-        return bench
-
-    @staticmethod
-    def docker_output(arguments, **kwargs):
-        if arguments == ["docker", "network", "ls", "-q"]:
-            return "network1\nnetwork2"
-        if arguments[:3] == ["docker", "network", "inspect"]:
-            return '[{"Subnet":"10.241.0.0/16"},{}]' if arguments[-1] == "network1" else "null"
-        if arguments[:3] == ["docker", "image", "inspect"]:
-            return "sha256:test"
-        if "rev-parse" in arguments:
-            return "a" * 40
-        return ""
-
-    def test_create_freezes_harness_and_initializes_only_new_owned_resources(self):
-        with tempfile.TemporaryDirectory() as root:
-            bench = self.fixture_source(root)
-            calls = []
-            def compose(*args, **kwargs):
-                calls.append(args)
-                if args[0] == "exec" and sum(item[0] == "exec" for item in calls) == 1:
-                    raise PerformanceError("COMMAND_FAILED")
-                return "caddy-id"
-            with patch.object(bench, "local_only"), patch.object(bench, "group", return_value={"qualified": True}):
-                with patch.object(bench, "compose", side_effect=compose), patch.object(bench, "sql") as sql:
-                    with patch("runtime.command", side_effect=self.docker_output), patch("runtime.time.sleep"):
-                        self.assertTrue(bench.create()["qualified"])
-            self.assertIn("current_database()", sql.call_args.args[0])
-            self.assertEqual(2, len(list(bench.code.iterdir())))
-            self.assertEqual(10, len(list(bench.directory.glob("fixtures-*.json"))))
-            metadata = json.loads((bench.directory / "metadata.json").read_text())
-            self.assertFalse(metadata["externalProviders"])
-            with patch.object(bench, "local_only"), self.assertRaisesRegex(PerformanceError, "RUN_ALREADY_EXISTS"):
-                bench.create()
-
-    def test_systemd_creation_configures_only_the_owned_slice(self):
-        with tempfile.TemporaryDirectory() as root:
-            bench = self.fixture_source(root)
-            bench.driver = "systemd"
-            with patch.object(bench, "local_only"), patch.object(bench, "group", return_value={}) as group:
-                with patch.object(bench, "compose"), patch.object(bench, "sql"), patch.object(bench, "owned_containers") as owned:
-                    with patch("runtime.command", side_effect=self.docker_output):
-                        bench.create()
-            owned.assert_called_once()
-            self.assertEqual("mk816012345abcdef.slice", bench.parent)
-            self.assertEqual([("configure",), ("status",)], [call.args for call in group.call_args_list])
-
-    def test_create_refuses_subnet_exhaustion_and_readiness_timeout(self):
-        for fault in ("subnet", "readiness"):
-            with self.subTest(fault=fault), tempfile.TemporaryDirectory() as root:
-                bench = self.fixture_source(root)
-                def docker(arguments, **kwargs):
-                    if fault == "subnet" and arguments[:3] == ["docker", "network", "inspect"]:
-                        return '[{"Subnet":"0.0.0.0/0"}]'
-                    return self.docker_output(arguments, **kwargs)
-                def compose(*args, **kwargs):
-                    if args[0] == "exec":
-                        raise PerformanceError("COMMAND_FAILED")
-                    return ""
-                with patch.object(bench, "local_only"), patch.object(bench, "group"), patch.object(bench, "sql"):
-                    with patch.object(bench, "compose", side_effect=compose), patch("runtime.command", side_effect=docker):
-                        with patch("runtime.time.monotonic", side_effect=[0, 121]):
-                            expected = "NO_PRIVATE_SUBNET" if fault == "subnet" else "READINESS_TIMEOUT"
-                            with self.assertRaisesRegex(PerformanceError, expected):
-                                bench.create()
-        with tempfile.TemporaryDirectory() as root:
-            bench = self.fixture_source(root)
-            with patch.object(bench, "local_only"), patch("runtime.command", return_value="collision"):
-                with self.assertRaisesRegex(PerformanceError, "DOCKER_RESOURCES_ALREADY_EXIST"):
-                    bench.create()
 
     def test_final_invariants_include_dataset_and_reservation_capacity(self):
         bench = Bench(".", "mk816-012345abcdef")
@@ -148,22 +35,24 @@ class RuntimeTests(unittest.TestCase):
                 with self.assertRaisesRegex(PerformanceError, "DATA_INVARIANT_FAILED"):
                     bench.verify_data()
 
+
     def test_command_captures_output_and_never_echoes_credentials(self):
         binary = subprocess.CompletedProcess([], 0, b"ok", b"")
-        with patch("runtime.subprocess.run", return_value=binary) as execute:
-            self.assertEqual("ok", command(["docker", "cp"], data=b"archive"))
+        with patch("native_runtime.subprocess.run", return_value=binary) as execute:
+            self.assertEqual("ok", command(["psql"], data=b"archive"))
             self.assertFalse(execute.call_args.kwargs["text"])
         result = subprocess.CompletedProcess([], 0, " ok \n", "secret")
-        with patch("runtime.subprocess.run", return_value=result) as execute:
-            self.assertEqual("ok", command(["docker", "version"], data="private"))
-            self.assertEqual("ok \nsecret", command(["docker", "logs"], include_stderr=True))
+        with patch("native_runtime.subprocess.run", return_value=result) as execute:
+            self.assertEqual("ok", command(["caddy", "version"], data="private"))
+            self.assertEqual("ok \nsecret", command(["systemctl", "show"], include_stderr=True))
             self.assertTrue(execute.call_args.kwargs["capture_output"])
         for error in (OSError("secret"), subprocess.TimeoutExpired("secret", 1)):
-            with patch("runtime.subprocess.run", side_effect=error), self.assertRaisesRegex(PerformanceError, "^COMMAND_UNAVAILABLE$"):
-                command(["docker"])
-        with patch("runtime.subprocess.run", return_value=subprocess.CompletedProcess([], 1, "secret", "secret")):
+            with patch("native_runtime.subprocess.run", side_effect=error), self.assertRaisesRegex(PerformanceError, "^COMMAND_UNAVAILABLE$"):
+                command(["psql"])
+        with patch("native_runtime.subprocess.run", return_value=subprocess.CompletedProcess([], 1, "secret", "secret")):
             with self.assertRaisesRegex(PerformanceError, "^COMMAND_FAILED$"):
-                command(["docker"])
+                command(["psql"])
+
 
     def test_private_files_cannot_overwrite_existing_material(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -173,115 +62,123 @@ class RuntimeTests(unittest.TestCase):
             with self.assertRaises(FileExistsError):
                 private_write(path, "replace")
 
+
     def test_windows_acl_grants_only_current_owner_and_system(self):
-        with patch("runtime.sys.platform", "win32"):
-            self.assertEqual("0", generator_user())
-            with patch("runtime.command", side_effect=['"fixture-user","S-1-5-21-123"', ""]) as execute:
+        with patch("native_runtime.sys.platform", "win32"):
+            with patch("native_runtime.command", side_effect=['"fixture-user","S-1-5-21-123"', ""]) as execute:
                 protect_directory(Path("private-run"))
                 self.assertIn("*S-1-5-21-123:(OI)(CI)F", execute.call_args.args[0])
                 self.assertIn("/inheritance:r", execute.call_args.args[0])
-            with patch("runtime.command", return_value='"fixture-user","unknown"'):
+            with patch("native_runtime.command", return_value='"fixture-user","unknown"'):
                 with self.assertRaisesRegex(PerformanceError, "OWNER_ID_UNAVAILABLE"):
                     protect_directory(Path("private-run"))
 
-    def test_remote_docker_and_unsupported_cgroup_are_refused(self):
-        bench = Bench(".", "mk816-012345abcdef")
-        for endpoint in ("ssh://server", "tcp://server:2375", "npipe:////remote-server/pipe/docker_engine", "unix://remote/path"):
-            with patch("runtime.command", return_value=endpoint), self.assertRaisesRegex(PerformanceError, "REMOTE_DOCKER"):
-                bench.local_only()
-        with patch("runtime.command", side_effect=["unix:///var/run/docker.sock", "linux/1"]):
-            with self.assertRaisesRegex(PerformanceError, "LINUX_CGROUP"):
-                bench.local_only()
-        with patch.dict("os.environ", {"DOCKER_HOST": "ssh://remote"}):
-            with patch("runtime.command", side_effect=["unix:///var/run/docker.sock", "linux/2"]):
-                with self.assertRaisesRegex(PerformanceError, "DOCKER_OVERRIDE"):
+
+    def test_preflight_refuses_unprivileged_or_non_linux_hosts_before_any_effect(self):
+        bench = Bench('.', 'mk816-012345abcdef')
+        for platform, uid in [('win32',0), ('linux',1000)]:
+            with self.subTest(platform=platform,uid=uid), patch('native_runtime.sys.platform',platform), patch('native_runtime.os.geteuid',return_value=uid):
+                with patch('native_runtime.command') as execute, self.assertRaisesRegex(PerformanceError,'NATIVE_LINUX_ROOT_REQUIRED'):
                     bench.local_only()
-        with patch.dict("os.environ", {"DOCKER_HOST": "", "DOCKER_CONTEXT": ""}):
-            with patch("runtime.command", side_effect=["npipe:////./pipe/docker_engine", "linux/2", "cgroupfs"]):
-                bench.local_only()
+                execute.assert_not_called()
 
-    def test_owned_containers_reject_any_other_label(self):
-        bench = Bench(".", "mk816-012345abcdef")
-        with patch.object(bench, "compose", return_value="id1\nid2"), patch("runtime.command", return_value=bench.identifier):
-            self.assertEqual(["id1", "id2"], bench.owned_containers())
-        with patch.object(bench, "compose", return_value="foreign"), patch("runtime.command", return_value="mon-kado"):
-            with self.assertRaisesRegex(PerformanceError, "OWNERSHIP"):
-                bench.owned_containers()
-        with patch.object(bench, "owned_containers"), patch.object(bench, "compose", return_value="42") as compose:
-            self.assertEqual("42", bench.sql("SELECT 42;"))
-            self.assertEqual("SELECT 42;", compose.call_args.kwargs["data"])
+    def test_service_start_uses_owned_namespace_private_environment_and_shared_slice(self):
+        bench = Bench('.', 'mk816-012345abcdef')
+        bench.directory = Path('/tmp') / bench.identifier
+        with patch('native_runtime.command') as execute:
+            bench.start('api',['/tmp/owned/api'],environment=bench.directory/'api.env')
+        args = execute.call_args.args[0]
+        self.assertEqual('systemd-run',args[0])
+        for value in ['--slice=mk816012345abcdef.slice','--unit=mk816-012345abcdef-api.service',
+                      '--property=NetworkNamespacePath=/run/netns/mk816-012345abcdef',
+                      '--property=User=nobody','--property=Restart=no','--property=NoNewPrivileges=yes',
+                      '--property=ProtectSystem=strict','--property=UMask=0077',
+                      '--property=EnvironmentFile=/tmp/mk816-012345abcdef/api.env']:
+            self.assertIn(value,args)
+        self.assertNotIn('sh',args)
+        with self.assertRaisesRegex(PerformanceError,'INVALID_SERVICE'):
+            bench.start('production',['anything'])
 
-    def test_compose_never_sources_environment_as_shell(self):
-        bench = Bench(".", "mk816-012345abcdef")
-        with patch("runtime.command", return_value="done") as run:
-            self.assertEqual("done", bench.compose("ps", data="secret"))
-            self.assertEqual("secret", run.call_args.kwargs["data"])
-            self.assertEqual(["docker", "compose", "-p", bench.identifier], run.call_args.args[0][:4])
+    def test_preparation_uses_ten_distinct_loopback_addresses_serially_without_retry(self):
+        bench = Bench('.', 'mk816-012345abcdef')
+        with patch.object(bench,'namespace') as execute:
+            bench.prepare_images()
+        self.assertEqual(10,execute.call_count)
+        for index, call in enumerate(execute.call_args_list):
+            self.assertIn('MONKADO_PERFORMANCE_SOURCE_IP=127.0.0.'+str(200+index),call.args)
+            self.assertEqual(('prepare',str(index)),call.args[-2:])
+        with patch.object(bench,'namespace',side_effect=PerformanceError('COMMAND_FAILED')) as execute:
+            with self.assertRaisesRegex(PerformanceError,'COMMAND_FAILED'):
+                bench.prepare_images()
+            execute.assert_called_once()
 
-    def test_cgroup_status_is_read_only_and_changes_are_explicit(self):
-        bench = Bench(".", "mk816-012345abcdef")
-        for action in ("status", "create", "remove"):
-            with patch("runtime.command", return_value='{"qualified":true}') as run:
-                self.assertTrue(bench.group(action)["qualified"])
-                self.assertEqual(action != "status", "--privileged" in run.call_args.args[0])
+    def test_sql_checks_ownership_before_local_namespace_access(self):
+        bench = Bench('.', 'mk816-012345abcdef')
+        with patch.object(bench,'owned') as owned, patch.object(bench,'namespace',return_value='42') as execute:
+            self.assertEqual('42',bench.sql('SELECT 42;'))
+        owned.assert_called_once_with()
+        self.assertIn('127.0.0.1',execute.call_args.args)
+        self.assertEqual('SELECT 42;',execute.call_args.kwargs['data'])
+        with patch.object(bench,'owned',side_effect=PerformanceError('OWNERSHIP_MISMATCH')):
+            with patch.object(bench,'namespace') as execute, self.assertRaisesRegex(PerformanceError,'OWNERSHIP_MISMATCH'):
+                bench.sql('SELECT 42;')
+            execute.assert_not_called()
 
-    def test_health_verifies_parent_and_published_ports(self):
-        bench = Bench(".", "mk816-012345abcdef")
-        state = {"image": "sha256:test", "state": "running", "oom": False, "restarts": 0, "parent": bench.identifier, "ports": {}}
-        with patch.object(bench, "group", return_value={"qualified": True, "oom": 0}), patch.object(bench, "compose", return_value="owned"):
-            with patch("runtime.command", return_value=json.dumps(state)):
-                self.assertTrue(bench.inspect_health()["alive"])
-                with patch.object(bench, "compose", side_effect=["id", "id", "id", "id", PerformanceError("DOWN")]):
-                    self.assertFalse(bench.inspect_health()["alive"])
-            for changes in ({"parent": "other"}, {"ports": {"80": []}}):
-                with patch("runtime.command", return_value=json.dumps({**state, **changes})):
-                    with self.assertRaisesRegex(PerformanceError, "ISOLATION"):
-                        bench.inspect_health()
-        with patch.object(bench, "group", return_value={}), patch.object(bench, "compose", return_value=""):
-            with self.assertRaisesRegex(PerformanceError, "CONTAINER_MISSING"):
-                bench.inspect_health()
+    def test_observer_keeps_actual_oom_and_restart_and_refuses_foreign_groups(self):
+        bench = Bench('.', 'mk816-012345abcdef')
+        state = 'ActiveState=active\nNRestarts=0\nResult=success\nControlGroup=/'+bench.parent+'/owned.service'
+        with patch.object(bench,'owned'), patch.object(bench,'group',return_value={'qualified':True,'oom':0}):
+            with patch('native_runtime.command',return_value=state):
+                self.assertTrue(bench.inspect_health()['alive'])
+            with patch('native_runtime.command',return_value=state.replace('NRestarts=0','NRestarts=2').replace('Result=success','Result=oom-kill').replace('ActiveState=active','ActiveState=failed')):
+                health = bench.inspect_health()
+                self.assertFalse(health['alive'])
+                self.assertEqual(1,health['oom'])
+                self.assertEqual(8,health['restarts'])
+            with patch('native_runtime.command',return_value=state.replace(bench.parent,'foreign.slice')):
+                with self.assertRaisesRegex(PerformanceError,'ISOLATION_MISMATCH'):
+                    bench.inspect_health()
 
-    def test_generators_have_no_host_network_or_capabilities(self):
-        with tempfile.TemporaryDirectory() as root:
-            bench = self.fixture_source(root)
-            bench.directory.mkdir(parents=True)
-            with patch("runtime.subprocess.Popen") as process:
-                self.assertEqual(10, len(bench.generators("smoke")))
-            for call in process.call_args_list:
-                args = call.args[0]
-                self.assertIn(bench.identifier + "_edge", args)
-                self.assertNotIn("--privileged", args)
-                self.assertNotIn("host", args)
-                self.assertIn("--no-usage-report", args)
-
-    def test_cleanup_targets_only_labelled_resources_and_refuses_mismatch(self):
-        bench = Bench(".", "mk816-012345abcdef")
-        def execute(arguments, **kwargs):
-            if "ls" in arguments:
-                return "owned"
-            if "inspect" in arguments:
-                return json.dumps({LABEL: bench.identifier})
-            return ""
-        with patch.object(bench, "local_only"), patch.object(bench, "owned_containers"), patch.object(bench, "group") as group:
-            with patch("runtime.command", side_effect=execute) as run:
+    def test_cleanup_refuses_unowned_resources_before_stopping_any_service(self):
+        bench = Bench('.', 'mk816-012345abcdef')
+        with patch.object(bench,'local_only'), patch.object(bench,'owned',side_effect=PerformanceError('OWNERSHIP_MISMATCH')):
+            with patch('native_runtime.command') as execute, self.assertRaisesRegex(PerformanceError,'OWNERSHIP_MISMATCH'):
                 bench.cleanup()
-                removes = [call.args[0] for call in run.call_args_list if "rm" in call.args[0]]
-                self.assertEqual(3, len(removes))
-                self.assertTrue(all(arguments[-1] == "owned" for arguments in removes))
-                self.assertFalse(any("prune" in arguments for arguments in removes))
-            group.assert_called_once_with("remove")
-            with patch("runtime.command", side_effect=["foreign", json.dumps({LABEL: "other"})]):
-                with self.assertRaisesRegex(PerformanceError, "OWNERSHIP_MISMATCH"):
-                    bench.cleanup()
+            execute.assert_not_called()
 
-    def test_failure_diagnostics_strip_all_log_content_except_known_categories(self):
-        bench = Bench(".", "mk816-012345abcdef")
-        self.assertEqual({}, bench.failure_diagnostics())
-        bench.cg_created = True
-        with patch.object(bench, "compose", return_value="owned"):
-            with patch("runtime.command", side_effect=['{"running":false,"oom":true,"exitCode":137}', "private-value OutOfMemoryException"] * 4):
-                report = bench.failure_diagnostics()
-                self.assertNotIn("private-value", json.dumps(report))
-                self.assertEqual(["OutOfMemoryException"], report["api"]["categories"])
-            with patch("runtime.command", side_effect=PerformanceError("COMMAND_FAILED")):
-                self.assertTrue(bench.failure_diagnostics()["api"]["diagnosticsUnavailable"])
+    def test_process_stop_is_bounded_and_kills_only_pending_generators(self):
+        bench = Bench('.', 'mk816-012345abcdef')
+        exited, running = Mock(),Mock()
+        exited.poll.return_value=0
+        running.poll.return_value=None
+        running.wait.side_effect=[subprocess.TimeoutExpired('fixture',20),0]
+        bench.stop_processes([exited,running],None)
+        exited.terminate.assert_not_called()
+        running.terminate.assert_called_once()
+        running.kill.assert_called_once()
+        self.assertEqual([20,5],[call.kwargs['timeout'] for call in running.wait.call_args_list])
+
+    def test_partial_cleanup_skips_missing_units_and_refuses_foreign_units_before_any_stop(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            bench = Bench('.', 'mk816-012345abcdef')
+
+            def mapped(value, *parts):
+                return root / str(value).lstrip('/') / Path(*parts)
+
+            for foreign in (False, True):
+                with self.subTest(foreign=foreign):
+                    def result(arguments, **_):
+                        if arguments[:2] == ['systemctl','show']:
+                            return ('LoadState=loaded\nControlGroup=/foreign.slice/service\nFragmentPath=/etc/systemd/system/service' if foreign
+                                    else 'LoadState=not-found\nControlGroup=\nFragmentPath=')
+                        return ''
+
+                    with patch.object(bench,'local_only'), patch.object(bench,'owned'), patch('native_runtime.Path',side_effect=mapped):
+                        with patch('native_runtime.command',side_effect=result) as execute:
+                            if foreign:
+                                with self.assertRaisesRegex(PerformanceError,'OWNERSHIP_MISMATCH'):
+                                    bench.cleanup()
+                            else:
+                                bench.cleanup()
+                            self.assertFalse(any(call.args[0][:2] == ['systemctl','stop'] for call in execute.call_args_list))

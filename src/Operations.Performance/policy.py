@@ -3,13 +3,10 @@ import math
 import re
 from datetime import datetime
 
-K6_IMAGE = "grafana/k6:2.3.0@sha256:9c2dee7f8ed74d317e4027c06a10f169b625638189de8d4555d0b3486a5aeb34"
-PYTHON_IMAGE = "python:3.13-slim@sha256:8d9d0b8bcf6506481eae4907c18f5e3e7902e629f5f6d684f9e7c32e85e3ddf0"
 MEMORY = 768 * 1024 * 1024
 FAMILIES = ("lists", "wishes", "shared", "update", "reservation")
 WEIGHTS = (3, 2, 3, 1, 1)
 PROFILES = ("smoke", "nominal", "images", "exports", "quotas", "concurrency", "stress")
-LABEL = "fr.monkado.performance.run"
 
 
 class PerformanceError(Exception):

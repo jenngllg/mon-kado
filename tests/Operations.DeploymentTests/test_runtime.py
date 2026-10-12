@@ -181,6 +181,18 @@ class RuntimeTests(unittest.TestCase):
             with self.assertRaisesRegex(DeploymentError, "TECHNICAL_SMOKE_TIMEOUT"):
                 self.runtime.smoke(self.release)
 
+    def test_dead_api_is_terminal_before_executable_identity_or_readiness_probes(self):
+        for outcome in ({"running": False, "oom": False}, {"running": False, "oom": True}):
+            with self.subTest(outcome=outcome), patch.object(self.runtime, "container", return_value=outcome) as observe, \
+                 patch.object(self.runtime, "verify_active") as verify, patch.object(self.runtime, "pause") as pause, \
+                 patch("deploy_runtime.smoke_technical.check") as check:
+                with self.assertRaisesRegex(DeploymentError, "^SERVICE_UNSTABLE$"):
+                    self.runtime.wait_technical(self.release)
+                observe.assert_called_once_with("api")
+                verify.assert_not_called()
+                pause.assert_not_called()
+                check.assert_not_called()
+
     def test_malformed_functional_identity_becomes_sanitized_smoke_failure(self):
         client = Api()
         client.identity = []

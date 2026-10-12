@@ -1,4 +1,4 @@
-"""Opt-in disposable resource exercise: no network, host state, Docker socket or provider secrets."""
+"""Opt-in native systemd resource exercise with private files and no external network."""
 
 from datetime import timedelta
 from concurrent.futures import ThreadPoolExecutor
@@ -8,12 +8,12 @@ from pathlib import Path
 import subprocess
 import sys
 import unittest
-
-IMAGE = "python:3.13-slim@sha256:8d9d0b8bcf6506481eae4907c18f5e3e7902e629f5f6d684f9e7c32e85e3ddf0"
-
+import tempfile
+import uuid
+from unittest.mock import patch
 
 def exercise():
-    """Run real state/history/CLI code with synthetic observations inside the limited container."""
+    """Run real state/history/CLI code with synthetic observations inside the limited native service."""
     import resource
     import time
     import monitor_cli
@@ -31,7 +31,7 @@ def exercise():
 
     began = time.monotonic()
     sent = []
-    root = Path("/tmp/monitoring")
+    root = Path(os.environ["MONKADO_NATIVE_FIXTURE"]) / "monitoring"
     monitor = monitor_runtime.Monitor(root, Collector(), lambda incidents, keys, now: sent.append(keys))
     configuration = {"schemaVersion": 1, "frontendEnabled": False, "notificationsEnabled": True, "thresholds": {}}
     # Virtual clock: no sleep, external request, database or actual e-mail.
@@ -47,82 +47,62 @@ def exercise():
     print(json.dumps(output, sort_keys=True))
 
 
-@unittest.skipUnless(os.environ.get("MONKADO_MONITOR_DOCKER_TESTS") == "1", "Explicit isolated Docker exercise only")
-class MonitorContainerTests(unittest.TestCase):
-    def test_real_container_oom_is_reported_as_a_new_incident(self):
+@unittest.skipUnless(os.environ.get("MONKADO_MONITOR_NATIVE_TESTS") == "1", "Explicit native systemd exercise only")
+class MonitorNativeTests(unittest.TestCase):
+    def test_real_native_oom_is_reported_once_as_a_new_incident(self):
         # Arrange
-        root = Path(__file__).resolve().parents[2]
-        sys.path.insert(0, str(root / "src/Operations.Monitoring"))
+        import native_services
         import monitor_collect
         from test_monitor_policy import NOW
-        created = subprocess.run(["docker", "create", "--network", "none", "--memory", "32m", "--memory-swap", "32m",
-                                  "--pids-limit", "32", "--cap-drop", "ALL", "--security-opt", "no-new-privileges",
-                                  "--read-only", IMAGE, "python", "-c",
-                                  "import signal, subprocess, sys\n"
-                                  "signal.signal(signal.SIGTERM, lambda *_: sys.exit(137))\n"
-                                  "child = subprocess.run([sys.executable, '-c', 'payload = bytearray(128 * 1024 * 1024)'])\n"
-                                  "if child.returncode != -signal.SIGKILL: sys.exit(1)\n"
-                                  "print('child-killed', flush=True)\n"
-                                  "signal.pause()"],
-                                 capture_output=True, check=True, timeout=15)
-        container = created.stdout.decode().strip()
-        self.assertRegex(container, r"^[0-9a-f]{64}$")
+        self.assertEqual(0, os.geteuid())
+        name = "monkado-monitor-probe-" + uuid.uuid4().hex + ".service"
         try:
-            # Act
-            created_at = subprocess.run(["docker", "inspect", "--format", "{{.Created}}", container],
-                                        capture_output=True, text=True, check=True, timeout=5).stdout.strip()
-            # Keep PID 1 alive until Docker acknowledges the child's real OOM. Otherwise the
-            # cgroup can disappear before the daemon consumes its independent OOM notification.
-            # Replay this container's events so subscription startup cannot miss the signal.
-            with ThreadPoolExecutor(max_workers=2) as listener:
-                events = subprocess.Popen(["docker", "events", "--since", created_at, "--filter", "container=" + container,
-                                           "--filter", "event=oom", "--format", "{{.Action}}"],
-                                          stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
-                attached = subprocess.Popen(["docker", "start", "--attach", container],
-                                            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
-                try:
-                    event = listener.submit(events.stdout.readline)
-                    killed = listener.submit(attached.stdout.readline)
-                    self.assertEqual("child-killed", killed.result(timeout=30).strip(),
-                                     "The child must really be killed by the memory limit")
-                    self.assertEqual("oom", event.result(timeout=10).strip(), "Docker must acknowledge the OOM before exit")
-                    subprocess.run(["docker", "stop", "--time", "5", container], capture_output=True, check=True, timeout=15)
-                    exited = subprocess.run(["docker", "wait", container], capture_output=True, text=True, check=True, timeout=30)
-                    self.assertEqual("137", exited.stdout.strip(), "The supervisor must retain the OOM exit status")
-                finally:
-                    events.terminate()
-                    events.wait(timeout=5)
-                    events.stdout.close()
-                    attached.terminate()
-                    attached.wait(timeout=5)
-                    attached.stdout.close()
+            # Act: a real kernel memory limit kills this disposable process.
+            result = subprocess.run(['systemd-run','--quiet','--wait','--unit='+name,
+                                     '--property=MemoryMax=32M','--property=MemorySwapMax=0',
+                                     '--property=PrivateNetwork=yes','--property=NoNewPrivileges=yes',
+                                     sys.executable,'-c','payload = bytearray(128 * 1024 * 1024)'],
+                                    capture_output=True, timeout=20, check=False)
+            self.assertNotEqual(0,result.returncode)
             def runner(arguments):
-                # Only substitute the owned disposable container; inspect's fixed field allowlist is unchanged.
-                inspected = subprocess.run(arguments[:-1] + [container], capture_output=True, check=True, timeout=5)
-                return inspected.returncode, inspected.stdout.decode()
-            collector = monitor_collect.Collector(runner=runner)
-            observed, samples = collector.containers(NOW, [], 600)
-            # Assert
-            self.assertEqual(4, len(samples))
-            self.assertTrue(all(value["newOom"] for value in observed.values()))
-            self.assertTrue(all(not value["running"] for value in observed.values()))
-            repeated, _ = collector.containers(NOW, samples, 600)
-            self.assertTrue(all(not value["newOom"] for value in repeated.values()))
+                result = subprocess.run(arguments,capture_output=True,timeout=5,check=False)
+                return result.returncode,result.stdout.decode()
+            with patch.dict(native_services.UNITS,{key:name for key in native_services.UNITS}):
+                collector = monitor_collect.Collector(runner=runner)
+                observed,samples = collector.containers(NOW,[],600)
+                repeated,_ = collector.containers(NOW,samples,600)
+            # Assert: actual native evidence enters the retained history contract.
+            self.assertEqual(4,len(samples))
+            self.assertTrue(all(value['newOom'] and not value['running'] for value in observed.values()))
+            self.assertTrue(all(not value['newOom'] for value in repeated.values()))
         finally:
-            subprocess.run(["docker", "rm", "--force", container], capture_output=True, check=True, timeout=15)
+            for action in ('stop','reset-failed'):
+                subprocess.run(['systemctl',action,name],capture_output=True,timeout=15,check=False)
 
     def test_monitor_under_production_budget_uses_private_bounded_state_without_network(self):
         # Arrange
         root = Path(__file__).resolve().parents[2]
-        command = ["docker", "run", "--rm", "--network", "none", "--cpus", "0.1", "--memory", "128m",
-                   "--memory-swap", "128m", "--pids-limit", "64", "--cap-drop", "ALL",
-                   "--security-opt", "no-new-privileges", "--read-only", "--tmpfs", "/tmp:rw,nosuid,nodev,size=40m",
-                   "--mount", "type=bind,source=" + str(root) + ",target=/source,readonly",
-                   "-e", "PYTHONDONTWRITEBYTECODE=1",
-                   "-e", "PYTHONPATH=/source/src/Operations.Monitoring:/source/tests/Operations.MonitoringTests",
-                   IMAGE, "python", "/source/tests/Operations.MonitoringTests/test_monitor_container.py", "--inside"]
-        # Act
-        result = subprocess.run(command, capture_output=True, check=True, timeout=45)
+        self.assertEqual(0,os.geteuid())
+        name = "monkado-monitor-budget-" + uuid.uuid4().hex + ".service"
+        with tempfile.TemporaryDirectory(prefix='monkado-native-monitor-') as temporary:
+            fixture = Path(temporary)
+            fixture.chmod(0o700)
+            os.chown(fixture,65534,65534)
+            command = ['systemd-run','--quiet','--wait','--pipe','--unit='+name,
+                       '--property=User=nobody','--property=Group=nogroup','--property=MemoryMax=128M',
+                       '--property=MemorySwapMax=0','--property=CPUQuota=10%','--property=TasksMax=64',
+                       '--property=PrivateNetwork=yes','--property=NoNewPrivileges=yes',
+                       '--property=ProtectSystem=strict','--property=ReadWritePaths='+str(fixture),'--property=UMask=0077',
+                       '--setenv=PYTHONDONTWRITEBYTECODE=1','--setenv=MONKADO_NATIVE_FIXTURE='+str(fixture),
+                       '--setenv=PYTHONPATH='+str(root/'src/Operations.Monitoring')+':'+str(root/'tests/Operations.MonitoringTests'),
+                       sys.executable,str(Path(__file__).resolve()),'--inside']
+            # Act
+            try:
+                result = subprocess.run(command,capture_output=True,timeout=45,check=False)
+                self.assertEqual(0,result.returncode,'NATIVE_MONITOR_BUDGET_EXERCISE_FAILED')
+            finally:
+                for action in ('stop','reset-failed'):
+                    subprocess.run(['systemctl',action,name],capture_output=True,timeout=15,check=False)
         report = json.loads(result.stdout)
         # Assert
         self.assertEqual(16, report["cycles"])

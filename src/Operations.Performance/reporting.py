@@ -27,7 +27,7 @@ def markdown(report):
              "The functional smoke is not a performance qualification; shared-runner throughput and latency remain diagnostic.", "",
              "This is an isolated local result, not a DigitalOcean throughput guarantee.", "",
              f"Revision: `{metadata.get('revision', 'unknown')}`. Run: `{metadata.get('runId', 'unknown')}`.",
-             f"Host: {metadata.get('host', 'unknown')}. Worker: Local; external providers disabled.",
+             f"Host: {metadata.get('host', 'unknown')}. Worker: native local; external providers disabled.",
              f"Memory limit: {infrastructure.get('memoryMax')} bytes; swap: {infrastructure.get('swapMax')}; CPU quota: {infrastructure.get('cpuMax')}.",
              f"Requests: {report['completedRequests']}/{report['expectedRequests']}; auxiliary requests: {report['auxiliaryRequests']}.",
              f"Observed completion rate: {report.get('observedRequestsPerSecond')} requests/second over {report.get('observedCompletionSpanSeconds')} seconds.",
@@ -40,6 +40,6 @@ def markdown(report):
                  for name, item in report["families"].items())
     lines.extend(["", f"Resource summary: `{report['resourceSummary']}`.",
                   f"Data invariants: `{report['dataInvariants']}`.",
-                  "Exact container image identifiers, stage counts and observed rates, supplemental results and resource samples are in report.json.",
+                  "Exact native binary hashes and tool versions, stage counts and observed rates, supplemental results and resource samples are in report.json.",
                   "Completion timestamps gate throughput conservatively: clock discontinuities require investigation, not a passing qualification."])
     return "\n".join(lines) + "\n"

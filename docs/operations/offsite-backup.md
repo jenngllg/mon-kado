@@ -2,8 +2,9 @@
 
 ## Activation status
 
-MK-936 capture schema **4** adds the two frontend release-safety modules to the
-reviewed configuration inventory. Restore accepts schemas 1, 2 and 3 with their
+The native Go migration uses capture schema **5**, recording the approved native
+release, verified executable hashes, explicit SQL migration catalog and reviewed
+native configuration inventory. Verification retains schemas 1 through 4 with their
 original inventories; historical archives are not rewritten. During an approved
 deployment-code upgrade, reinstall the reviewed backup tooling before the next
 capture so its inventory matches the configuration fingerprint. This does not
@@ -17,19 +18,19 @@ weekly integrity result before closing MK-813.
 ## Scope and limits
 
 The root-only tool captures a PostgreSQL 18 logical dump, current gift/profile
-images, pending image markers, the complete XML Data Protection key ring, deployed
-configuration (including `production.env`), and immutable application references.
+images, pending image markers, deployed configuration (including both stable Go
+cryptographic keys in `production.env`), and immutable application references.
 It excludes the raw PostgreSQL volume, temporary personal-data export archives,
 logs, caches, image write temporaries, and the Restic password.
 
-New captures use manifest version 2. Their configuration inventory matches the
+New captures use manifest schema 5. Their configuration inventory matches the
 current release hash contract, including frontend routing and monitoring code;
 a regression test rejects drift between these inventories. The manifest also
-records the running Caddy image digest alongside PostgreSQL and application
-references. Schema 1 snapshots remain verifiable/restorable as historical data
-captures, but lack the newer ancillary configuration and Caddy digest. For those
-snapshots, obtain the missing reviewed files from their recorded Git revision
-before rebuilding a host; never infer an immutable image from a mutable tag.
+records the native PostgreSQL and Caddy executable hashes alongside verified API,
+worker and migrator references. Historical snapshots lack some newer ancillary
+configuration. Recover their matching reviewed tooling from the recorded Git
+revision before using the historical restore workflow; the current native restore
+does not execute a legacy application or translate old cryptographic keys.
 Existing remote snapshots are not rewritten or deleted by this format change.
 
 Caddy, API and Worker are stopped during the capture. PostgreSQL remains running.
@@ -66,7 +67,7 @@ point objective, not a guarantee. Restore duration must be measured in an exerci
 
 ## Credentials and prerequisites
 
-Use Ubuntu 24.04 with Python 3.12+, Docker/Compose, curl, Restic and rclone. Validate
+Use Ubuntu 24.04 with Python 3.12+, native PostgreSQL 18, Caddy, curl, Restic and rclone. Validate
 the selected package versions and memory consumption on the 1 GiB VPS before
 activation. Local tests use Restic 0.18.0; they do not qualify every other release.
 
@@ -132,7 +133,7 @@ is independent and does not stop application services.
 
 ## Restore without the original VPS
 
-Use an isolated Linux environment on the PC with Docker access, restored backup
+Use an isolated Linux environment on the PC with native PostgreSQL 18, restored backup
 tooling and a fresh authorized Drive configuration. Retrieve the secret from
 Bitwarden using hidden input, not from the VPS. Never enable the production
 backup timer on the recovery machine.
@@ -144,18 +145,18 @@ sudo monkado-backup download EXACT_SNAPSHOT_ID /private/new-recovery-directory
 sudo monkado-backup restore /private/new-recovery-directory monkado-restore-0123456789abcdef
 ```
 
-The destination must not exist. The tool accepts both supported manifest versions,
-verifies every manifest hash and creates
-fresh named volumes plus an internal network; it refuses existing resources.
-It imports the dump atomically, restores image/key ownership to UID 1654, and
-leaves the database stopped. It publishes no ports, starts no API/Worker and
+The destination must not exist. The native restore accepts schema 5,
+verifies every manifest hash and creates a fresh private PostgreSQL cluster and
+Unix socket; it refuses existing resources. It imports the dump atomically,
+checks the exact SQL migration history and restores private image/configuration
+files. The database is stopped before return. It listens on no TCP port, starts no API/Worker and
 loads no production environment into a running application. The downloaded
 capture DOES contain production secrets: preserve private permissions and remove
 it securely according to the workstation storage policy after validation.
 
 Before declaring recovery successful, verify representative database data,
 images, and decryption of a test administrator authenticator using the saved
-Data Protection application name and original purpose identifiers. A hash check
+stable Go encryption key and the matching recorded revision. A hash check
 alone does not establish that application-level cryptography works. Use a local
 API only with no outbound connectivity, synthetic credentials, loopback-only
 ports and the recorded application revision. Never start the production Worker

@@ -217,7 +217,6 @@ class Runtime:
 
     def technical_sample(self, release, deadline=None):
         """Fail immediately for OOM or process restarts; return readiness only with fresh evidence."""
-        self.verify_active(release)
         for service in ("api", "worker", "caddy", "postgres"):
             current = self.container(service)
             ensure(current["running"] is True and current["oom"] is False, "SERVICE_UNSTABLE")
@@ -227,6 +226,9 @@ class Runtime:
             elif service in self.infrastructure:
                 ensure(self.infrastructure_identity(service, current) == self.infrastructure[service],
                        "INFRASTRUCTURE_CHANGED")
+        # A dead process has no executable digest. Detect its terminal failure before
+        # identity checking, so OOM/exit failures cannot become a readiness timeout.
+        self.verify_active(release)
         smoke_technical.redirect()
         client = self.clients()
         if deadline is not None:
