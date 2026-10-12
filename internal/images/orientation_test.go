@@ -12,6 +12,7 @@ import (
 	"image/png"
 	"testing"
 
+	"github.com/HugoSmits86/nativewebp"
 	"github.com/JennGllg/mon-kado/internal/domain"
 	"github.com/JennGllg/mon-kado/internal/images"
 )
@@ -35,6 +36,93 @@ func pngWithChunk(t *testing.T, kind string, payload []byte) []byte {
 	binary.Write(&chunk, binary.BigEndian, crc32.ChecksumIEEE(append([]byte(kind), payload...)))
 	data := encoded.Bytes()
 	return append(append(append([]byte{}, data[:33]...), chunk.Bytes()...), data[33:]...)
+}
+
+func webpFixture(t *testing.T) []byte {
+	t.Helper()
+	source := image.NewNRGBA(image.Rect(0, 0, 2, 3))
+	source.Set(0, 0, color.NRGBA{R: 255, A: 255})
+	var encoded bytes.Buffer
+	if err := nativewebp.Encode(&encoded, source, nil); err != nil {
+		t.Fatal(err)
+	}
+	return encoded.Bytes()
+}
+
+func webpChunk(data []byte, kind string, payload []byte) []byte {
+	result := append([]byte{}, data...)
+	result = append(result, []byte(kind)...)
+	var length [4]byte
+	binary.LittleEndian.PutUint32(length[:], uint32(len(payload)))
+	result = append(result, length[:]...)
+	result = append(result, payload...)
+	if len(payload)%2 != 0 {
+		result = append(result, 0)
+	}
+	binary.LittleEndian.PutUint32(result[4:8], uint32(len(result)-8))
+	return result
+}
+
+func TestProcess_WhenWebPHasExifAndOddChunks_RotatesPixelsAndStripsAllMetadata(t *testing.T) {
+	for _, metadata := range [][]byte{orientationTIFF(6, binary.LittleEndian), append([]byte("Exif\x00\x00"), orientationTIFF(6, binary.BigEndian)...)} {
+		// Arrange
+		source := webpChunk(webpFixture(t), "TEST", []byte{1, 2, 3})
+		source = webpChunk(source, "EXIF", metadata)
+		// Act
+		result, err := images.Process(t.Context(), source, 512, true)
+		// Assert
+		if err != nil {
+			t.Fatal(err)
+		}
+		decoded, _, err := image.Decode(bytes.NewReader(result.Content))
+		if err != nil || decoded.Bounds().Dx() != 3 || decoded.Bounds().Dy() != 2 {
+			t.Fatal("WebP orientation dimensions differ")
+		}
+		red, _, _, _ := decoded.At(2, 0).RGBA()
+		if red != 65535 || bytes.Contains(result.Content, []byte("EXIF")) || bytes.Contains(result.Content, []byte("TEST")) {
+			t.Fatal("WebP pixel rotation or metadata stripping differs")
+		}
+	}
+}
+
+func TestProcess_WhenWebPIsAnimatedOrChunkLengthIsCorrupt_RejectsUntrustedContent(t *testing.T) {
+	for _, kind := range []string{"ANIM", "ANMF", "corruptLength"} {
+		t.Run(kind, func(t *testing.T) {
+			// Arrange
+			source := webpChunk(webpFixture(t), kind[:4], []byte{0})
+			if kind == "corruptLength" {
+				binary.LittleEndian.PutUint32(source[len(source)-6:len(source)-2], 0xffffffff)
+			}
+			// Act
+			_, err := images.Process(t.Context(), source, 512, false)
+			// Assert
+			var failure *domain.Error
+			if !errors.As(err, &failure) || failure.Code != domain.WishImageUnsupportedFormat {
+				t.Fatalf("untrusted WebP error = %v", err)
+			}
+		})
+	}
+}
+
+func TestProcess_WhenPNGHasMissingPixelsOrExcessiveDimensions_RejectsBeforeNormalization(t *testing.T) {
+	for _, oversized := range []bool{false, true} {
+		// Arrange
+		source := pngWithChunk(t, "eXIf", nil)
+		if oversized {
+			binary.BigEndian.PutUint32(source[16:20], 8001)
+			binary.BigEndian.PutUint32(source[20:24], 5000)
+			binary.BigEndian.PutUint32(source[29:33], crc32.ChecksumIEEE(source[12:29]))
+		} else {
+			source = source[:33]
+		}
+		// Act
+		_, err := images.Process(t.Context(), source, 512, false)
+		// Assert
+		var failure *domain.Error
+		if !errors.As(err, &failure) || failure.Code != domain.WishImageInvalid {
+			t.Fatalf("invalid PNG error = %v", err)
+		}
+	}
 }
 
 func orientationTIFF(value uint16, order binary.ByteOrder) []byte {

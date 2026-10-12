@@ -253,6 +253,38 @@ class NativeProcessTests(unittest.TestCase):
         metadata = json.loads(self.run_command([*self.identity, str(self.root / "migrate"), "--catalog"], environment=self.binary_environment("migrate")))
         self.assertEqual(12, len(metadata["migrations"]))
 
+    def test_native_commands_when_database_is_unavailable_fail_without_disclosing_connection_details(self):
+        # Arrange: a Unix socket beneath this fresh private fixture cannot reach a host database.
+        private = 'native-connection-secret-canary'
+        for component in ('api','worker','migrate'):
+            with self.subTest(component=component):
+                environment = self.binary_environment(component) | {
+                    'DATABASE_URL':'postgres://postgres:'+private+'@/absent?host='+str(self.root/'absent-socket')+'&sslmode=disable'}
+                # Act
+                result = subprocess.run([*self.identity,str(self.root/component)],env=environment,
+                                        capture_output=True,timeout=15,check=False)
+                # Assert
+                self.assertEqual(1,result.returncode)
+                self.assertNotIn(private.encode(),result.stdout+result.stderr)
+                self.assertNotIn(b'postgres://',result.stdout+result.stderr)
+                self.assertNotIn(str(self.root/'absent-socket').encode(),result.stdout+result.stderr)
+
+    def test_native_api_when_listener_is_occupied_refuses_startup_and_does_not_replace_other_listener(self):
+        # Arrange
+        self.start_database()
+        with socket.socket() as existing:
+            existing.bind(('127.0.0.1',0))
+            existing.listen(1)
+            endpoint = existing.getsockname()
+            environment = self.binary_environment('api') | {'HTTP_ADDRESS':'127.0.0.1:'+str(endpoint[1])}
+            # Act
+            result = subprocess.run([*self.identity,str(self.root/'api')],env=environment,
+                                    capture_output=True,timeout=15,check=False)
+            # Assert
+            self.assertEqual(1,result.returncode)
+            self.assertEqual(endpoint,existing.getsockname())
+            self.assertNotIn(b'postgres://',result.stdout+result.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()
