@@ -1,631 +1,132 @@
 name: CI
-
 on:
   pull_request:
-    branches:
-      - develop
-      - main
+    branches: [develop, main]
   push:
-    branches:
-      - develop
-      - main
+    branches: [develop, main]
   workflow_dispatch:
-
 permissions:
   contents: read
-
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
-
-env:
-  DOTNET_CLI_TELEMETRY_OPTOUT: "1"
-  DOTNET_NOLOGO: "1"
-  ConnectionStrings__PostgreSql: >-
-    Host=127.0.0.1;Port=1;Database=mon_kado;Username=mon_kado;Timeout=1;Command Timeout=1;Pooling=false;SSL Mode=Disable
-
 jobs:
-  local_disk_tools:
-    name: Local disk tools (${{ matrix.os }})
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest]
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
-        with:
-          global-json-file: global.json
-      - name: Verify disk guard, safe cleanup and local build integration
-        shell: pwsh
-        run: |
-          Install-Module Pester -RequiredVersion 5.7.1 -Scope CurrentUser -Repository PSGallery -Force
-          ./tests/Operations.LocalDiskTests/Invoke-Coverage.ps1 -ReportPath TestResults/local-disk-${{ matrix.os }}.xml
-      - name: Upload local disk coverage
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: local-disk-coverage-${{ matrix.os }}
-          path: TestResults/local-disk-${{ matrix.os }}.xml
-          if-no-files-found: error
-          retention-days: 3
-  performance:
-    name: Isolated k6 smoke and harness coverage
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version: '3.13'
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: '24.19.0'
-      - name: Test deterministic orchestration without external services
-        env:
-          PYTHONPATH: src/Operations.Performance
-          COVERAGE_RCFILE: src/Operations.Performance/.coveragerc
-        run: |
-          python -m pip install --only-binary :all: coverage==7.10.7
-          python -m coverage run -m unittest discover -s tests/Operations.PerformanceTests
-          python -m coverage report
-          python -m coverage xml -o TestResults/performance-coverage.xml
-      - name: Cover the real k6 script through simulated HTTP contracts
-        run: >-
-          node --experimental-vm-modules --test --experimental-test-coverage
-          --test-coverage-lines=100 --test-coverage-branches=100 --test-coverage-functions=100
-          --test-coverage-include='**/src/Operations.Performance/scenarios.js'
-          --test-reporter=lcov --test-reporter-destination=TestResults/performance.lcov
-          tests/Operations.PerformanceTests/test_scenarios.mjs
-      - name: Upload deterministic performance coverage
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: performance-coverage
-          path: |
-            TestResults/performance-coverage.xml
-            TestResults/performance.lcov
-          if-no-files-found: error
-          retention-days: 3
-      - name: Allocate a disposable run identifier
-        run: |
-          docker pull grafana/k6:2.3.0@sha256:9c2dee7f8ed74d317e4027c06a10f169b625638189de8d4555d0b3486a5aeb34
-          echo "PERFORMANCE_RUN_ID=mk816-$(openssl rand -hex 6)" >> "$GITHUB_ENV"
-      - name: Exercise real TLS and database without external connectivity
-        run: python src/Operations.Performance/performance_cli.py run --profile smoke --run-id "$PERFORMANCE_RUN_ID"
-      - name: Upload only sanitized performance evidence
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: performance-smoke-evidence
-          path: TestResults/performance/*/report.*
-          if-no-files-found: ignore
-          retention-days: 3
-      - name: Remove only this run's disposable resources
-        if: always() && env.PERFORMANCE_RUN_ID != ''
-        run: python src/Operations.Performance/performance_cli.py cleanup --run-id "$PERFORMANCE_RUN_ID"
-  local_monitoring:
-    name: Local monitoring without provider access
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: Test private Linux storage and simulated alerts in a disposable root container
-        run: |
-          docker run --rm -v "$PWD:/workspace" -w /workspace \
-            -e PYTHONPATH=/workspace/src/Operations.Monitoring \
-            -e COVERAGE_RCFILE=/workspace/src/Operations.Monitoring/.coveragerc \
-            python:3.13-slim@sha256:8d9d0b8bcf6506481eae4907c18f5e3e7902e629f5f6d684f9e7c32e85e3ddf0 \
-            sh -c 'python -m pip install --only-binary :all: coverage==7.10.7 && python -m coverage run --branch --source=src/Operations.Monitoring -m unittest discover -s tests/Operations.MonitoringTests && python -m coverage report --fail-under=100 && python -m coverage xml -o TestResults/monitoring-coverage.xml'
-      - name: Upload monitoring coverage
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: monitoring-coverage
-          path: TestResults/monitoring-coverage.xml
-          if-no-files-found: error
-          retention-days: 3
-      - name: Exercise the monitor under the VPS resource budget without a network
-        env:
-          MONKADO_MONITOR_DOCKER_TESTS: "1"
-        run: |
-          docker pull python:3.13-slim@sha256:8d9d0b8bcf6506481eae4907c18f5e3e7902e629f5f6d684f9e7c32e85e3ddf0
-          python3 tests/Operations.MonitoringTests/test_monitor_container.py
-      - name: Verify installation preserves monitoring credentials and backup state
-        run: >-
-          docker run --rm -e MONKADO_MONITOR_INSTALL_TESTS=1 -v "$PWD:/source:ro" -w /source
-          python:3.13-slim@sha256:8d9d0b8bcf6506481eae4907c18f5e3e7902e629f5f6d684f9e7c32e85e3ddf0
-          python tests/Deployment.MonitoringTests/test_install.py
-  frontend_publication:
-    name: Static frontend publication
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: Test publication trust boundary and recovery without production access
-        env:
-          PYTHONPATH: src/Operations.Frontend
-          COVERAGE_RCFILE: src/Operations.Frontend/.coveragerc
-        run: |
-          python3 -m pip install --only-binary :all: 'coverage==7.10.7'
-          python3 -m coverage run --branch --source=src/Operations.Frontend -m unittest discover -s tests/Deployment.FrontendTests
-          python3 -m coverage report --fail-under=100
-          python3 -m coverage xml -o TestResults/frontend-publication-coverage.xml
-      - name: Verify frontend routing through real Caddy TLS
-        env:
-          MONKADO_FRONTEND_DOCKER_TESTS: "1"
-        run: python3 tests/Deployment.FrontendTests/test_frontend_http.py
-      - name: Verify release rollback and process interruption over isolated HTTPS
-        env:
-          MK936_DOCKER_CAMPAIGN: "1"
-        run: |
-          docker build -f tests/Deployment.FrontendTests/Dockerfile -t monkado-frontend-tests tests/Deployment.FrontendTests
-          python3 tests/Deployment.FrontendTests/test_frontend_campaign.py
-      - name: Upload frontend publication coverage
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: frontend-publication-coverage
-          path: |
-            TestResults/frontend-publication-coverage.xml
-            TestResults/mk936-frontend-campaign.json
-          if-no-files-found: error
-          retention-days: 3
-  security_proxy:
-    name: HTTPS and proxy security
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: Test real TLS and proxy boundaries without production credentials
-        env:
-          MONKADO_CADDY_TESTS: "1"
-        run: |
-          python3 tests/Deployment.SecurityTests/test_caddy.py
-          python3 tests/Deployment.SecurityTests/test_build_context.py
-          python3 tests/Deployment.SecurityTests/test_secret_replacement.py
-      - name: Cover the read-only production probe without external calls
-        env:
-          PYTHONPATH: src/Operations.Security
-          COVERAGE_RCFILE: src/Operations.Security/.coveragerc
-        run: |
-          python3 -m pip install --only-binary :all: 'coverage==7.10.7'
-          python3 -m coverage run --branch --source=security_probe -m unittest discover -s tests/Deployment.SecurityTests -p test_security_probe.py
-          python3 -m coverage report --fail-under=100
-          python3 -m coverage xml -o TestResults/security-coverage.xml
-      - name: Upload security probe coverage
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: security-coverage
-          path: TestResults/security-coverage.xml
-          if-no-files-found: error
-          retention-days: 3
-
-  backup_configuration:
-    name: Backup and restoration tooling
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: Validate shell entrypoints
-        run: |
-          bash -n deployments/backup/install.sh deployments/backup/monkado-backup deployments/backup/monkado-guarded-deploy
-          shellcheck deployments/backup/install.sh deployments/backup/monkado-backup deployments/backup/monkado-guarded-deploy
-      - name: Build isolated backup test tools
-        run: docker build -t monkado-backup-tests -f tests/Operations.Backups.Tests/Dockerfile .
-      - name: Test orchestration and real encrypted local repository
-        run: >-
-          docker run --rm --network none -v "$PWD:/workspace" -w /workspace
-          monkado-backup-tests sh -c
-          'python -m coverage run --branch --source=src/Operations.Backups -m unittest discover -s tests/Operations.Backups.Tests
-          && python -m coverage report --fail-under=100
-          && python -m coverage xml -o TestResults/backup-coverage.xml'
-      - name: Upload backup coverage
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: backup-coverage
-          path: TestResults/backup-coverage.xml
-          if-no-files-found: error
-          retention-days: 3
-      - name: Verify private installer and lock preservation
-        run: >-
-          docker run --rm --network none -v "$PWD:/workspace:ro"
-          -e MONKADO_BACKUP_INSTALL_TESTS=1 monkado-backup-tests
-          python -m unittest discover -s tests/Operations.Backups.Tests -p test_install_sandbox.py
-      - name: Exercise PostgreSQL restoration in fresh local Docker volumes
-        run: >-
-          docker run --rm -v "$PWD:/workspace" -v /var/run/docker.sock:/var/run/docker.sock
-          -e MONKADO_BACKUP_DOCKER_TESTS=1 monkado-backup-tests
-          python -m unittest discover -s tests/Operations.Backups.Tests -p test_postgres_integration.py
-
-  deployment_configuration:
-    name: Deployment configuration
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: Verify production scripts and release validation
-        shell: bash
-        run: |
-          set -euo pipefail
-          bash -n deployments/production/deploy.sh deployments/production/install.sh
-          shellcheck deployments/production/deploy.sh deployments/production/install.sh
-          python3 -m pip install --only-binary :all: 'coverage==7.10.7'
-          PYTHONPATH=deployments/production python3 -m coverage run --branch --source=release_manifest -m unittest discover -s deployments/production -p 'test_*.py'
-          python3 -m coverage report --fail-under=100
-          python3 -m coverage xml -o TestResults/deployment-coverage.xml
-      - name: Verify deployment orchestration and private storage with full branch coverage
-        run: |
-          docker run --rm -v "$PWD:/workspace" -w /workspace \
-            -e PYTHONPATH=src/Operations.Deployment -e COVERAGE_RCFILE=src/Operations.Deployment/.coveragerc \
-            python:3.13-slim@sha256:8d9d0b8bcf6506481eae4907c18f5e3e7902e629f5f6d684f9e7c32e85e3ddf0 \
-            sh -c 'python -m pip install --only-binary :all: coverage==7.10.7 && python -m coverage run -m unittest discover -s tests/Operations.DeploymentTests && python -m coverage report && python -m coverage xml -o TestResults/deployment-orchestration-coverage.xml'
-      - name: Upload deployment coverage
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: deployment-coverage
-          path: TestResults/deployment*-coverage.xml
-          if-no-files-found: error
-          retention-days: 3
-      - name: Test deployment failure handling in a disposable container
-        run: >-
-          docker run --rm -e MONKADO_DEPLOYMENT_SANDBOX=1
-          -v "$PWD:/source:ro" -w /source
-          python:3.13-slim@sha256:8d9d0b8bcf6506481eae4907c18f5e3e7902e629f5f6d684f9e7c32e85e3ddf0
-          python deployments/production/test_deploy_container.py
-      - name: Validate production Compose contract
-        shell: bash
-        run: |
-          set -euo pipefail
-          export API_HOST=api.monkado.fr API_ALLOWED_HOST=api.monkado.fr FRONTEND_ORIGIN=https://www.monkado.fr
-          export POSTGRES_DB=mon_kado POSTGRES_USER=mon_kado
-          compose_database_secret="$(openssl rand -hex 32)"
-          export POSTGRES_PASSWORD="$compose_database_secret"
-          JWT_SIGNING_KEY="$(openssl rand -base64 32)"
-          API_IMAGE="ghcr.io/jenngllg/mon-kado-api@sha256:$(printf 'a%.0s' {1..64})"
-          WORKER_IMAGE="ghcr.io/jenngllg/mon-kado-worker@sha256:$(printf 'b%.0s' {1..64})"
-          RELEASE_REVISION="$(printf 'a%.0s' {1..40})"
-          export JWT_SIGNING_KEY API_IMAGE WORKER_IMAGE RELEASE_REVISION
-          docker compose -f compose.yaml -f deployments/production/compose.production.yaml config --format json \
-            | python3 deployments/production/verify_compose.py
-
-  deployment_campaign:
-    name: Isolated deployment and rollback
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: Build the reviewed application and disposable test toolbox
-        run: |
-          docker build --target api --label "org.opencontainers.image.revision=$GITHUB_SHA" -t mon-kado-api:mk820 .
-          docker build --target worker --label "org.opencontainers.image.revision=$GITHUB_SHA" -t mon-kado-worker:mk820 .
-          docker build -f tests/Operations.DeploymentTests/Dockerfile -t monkado-deployment-tests tests/Operations.DeploymentTests
-          docker pull postgres:18.6-alpine
-          docker pull caddy:2.11.4-alpine
-      - name: Verify actual HTTPS rollout, rollback, persistence and migration refusal
-        env:
-          MK820_DOCKER_CAMPAIGN: "1"
-        run: python3 tests/Operations.DeploymentTests/run_docker_campaign.py
-      - name: Upload allowlisted deployment evidence only
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: deployment-campaign
-          path: TestResults/mk820-docker-campaign.jsonl
-          retention-days: 3
-
-  windows_export_coverage:
-    name: Windows export storage coverage
-    runs-on: windows-latest
-    timeout-minutes: 10
-
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - name: Set up .NET
-        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
-        with:
-          global-json-file: global.json
-
-      - name: Test Windows export storage with coverage
-        shell: pwsh
-        run: |
-          dotnet test tests/Infrastructure.PersonalDataExports.UnitTests/Infrastructure.PersonalDataExports.UnitTests.csproj --configuration Release --settings coverlet.runsettings --collect:"XPlat Code Coverage" --results-directory TestResults
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          dotnet test tests/Infrastructure.Observability.UnitTests/Infrastructure.Observability.UnitTests.csproj --configuration Release --settings coverlet.runsettings --collect:"XPlat Code Coverage" --results-directory TestResults
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          $env:GITHUB_WORKSPACE | Set-Content -LiteralPath TestResults/windows-workspace.txt
-
-      - name: Upload Windows coverage
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: windows-export-coverage
-          path: |
-            TestResults/**/coverage.opencover.xml
-            TestResults/windows-workspace.txt
-          if-no-files-found: error
-          retention-days: 3
-
   quality:
     name: quality
-    needs: [windows_export_coverage, deployment_configuration, deployment_campaign, security_proxy, frontend_publication, local_monitoring, backup_configuration, performance, local_disk_tools]
     runs-on: ubuntu-latest
     timeout-minutes: 20
-
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
-
-      - name: Scan Git history for secrets
-        uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Set up .NET
-        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          global-json-file: global.json
-
-      - name: Restore local tools
-        run: dotnet tool restore
-
-      - name: Restore dependencies
-        run: dotnet restore JennGllg.Fr.MonKado.Back.slnx
-
-      - name: Verify formatting
-        run: >-
-          dotnet format JennGllg.Fr.MonKado.Back.slnx
-          --verify-no-changes
-          --no-restore
-
-      - name: Start SonarQube Cloud analysis
-        if: >-
-          (github.event_name == 'push' && github.ref == 'refs/heads/develop') ||
-          (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository &&
-          github.actor != 'dependabot[bot]')
-        shell: bash
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+      - name: Install native PostgreSQL 18
+        run: bash scripts/Initialize-CIPostgres.sh
+      - name: Install verified Caddy for isolated native HTTP tests
+        run: bash scripts/Initialize-CICaddy.sh
+      - name: Scan Git history for secrets with native Gitleaks
+        run: go run github.com/zricethezav/gitleaks/v8@v8.30.1 git --redact --config .gitleaks.toml
+      - name: Verify formatting and modules
+        run: |
+          test -z "$(gofmt -l cmd internal src/Tools.GmailOAuthBootstrap)"
+          go mod tidy
+          git diff --exit-code -- go.mod go.sum
+          go mod verify
+          go -C src/Tools.GmailOAuthBootstrap mod tidy
+          git diff --exit-code -- src/Tools.GmailOAuthBootstrap/go.mod src/Tools.GmailOAuthBootstrap/go.sum
+      - name: Analyze code
+        run: |
+          go vet ./...
+          go -C src/Tools.GmailOAuthBootstrap vet ./...
+      - name: Test native release and service observation contracts
+        run: |
+          sudo env PYTHONPATH="$GITHUB_WORKSPACE/src/Operations.Native:$GITHUB_WORKSPACE/src/Operations.Deployment:$GITHUB_WORKSPACE/deployments/production:$GITHUB_WORKSPACE/tests/Operations.NativeTests" \
+            python3 -m unittest discover -s tests/Operations.NativeTests
+      - name: Test native deployment, supervision and frontend recovery
+        run: |
+          for suite in Operations.DeploymentTests Operations.MonitoringTests Deployment.FrontendTests Operations.Backups.Tests; do
+            sudo env PYTHONPATH="$GITHUB_WORKSPACE/src/Operations.Native:$GITHUB_WORKSPACE/src/Operations.Deployment:$GITHUB_WORKSPACE/src/Operations.Monitoring:$GITHUB_WORKSPACE/src/Operations.Frontend:$GITHUB_WORKSPACE/src/Operations.Backups:$GITHUB_WORKSPACE/deployments/production:$GITHUB_WORKSPACE/tests/Native.OperationsTests:$GITHUB_WORKSPACE/tests/$suite" \
+              python3 -m unittest discover -s "tests/$suite"
+          done
+      - name: Test native performance orchestration and request accounting
+        run: |
+          PYTHONPATH="$GITHUB_WORKSPACE/src/Operations.Performance" python3 -m unittest discover -s tests/Operations.PerformanceTests
+          node --experimental-vm-modules --test tests/Operations.PerformanceTests/test_scenarios.mjs
+      - name: Test backup installer in a private native mount namespace
+        run: |
+          sudo env MONKADO_NATIVE_BACKUP_INSTALL_TESTS=1 \
+            PYTHONPATH="$GITHUB_WORKSPACE/src/Operations.Backups:$GITHUB_WORKSPACE/src/Operations.Native:$GITHUB_WORKSPACE/src/Operations.Deployment:$GITHUB_WORKSPACE/deployments/production" \
+            python3 -m unittest discover -s tests/Operations.Backups.Tests -p test_install_sandbox.py
+      - name: Test native PostgreSQL and concurrency
+        run: |
+          go test -race -tags=integration -covermode=atomic -coverpkg=github.com/JennGllg/mon-kado/... -coverprofile=coverage.out ./...
+          go -C src/Tools.GmailOAuthBootstrap test -race -coverprofile=coverage.out ./...
+      - name: Check known reachable vulnerabilities
+        run: |
+          go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
+          cd src/Tools.GmailOAuthBootstrap
+          go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
+      - name: Verify native API and worker browser journeys and graceful shutdown
+        run: sudo env "PATH=$PATH" bash tests/Native.ProcessTests/run.sh coverage.native.out
+      - name: Merge coverage paths for SonarQube Cloud
+        shell: pwsh
+        run: ./scripts/Merge-GoCoverage.ps1 -Paths @('coverage.out', 'src/Tools.GmailOAuthBootstrap/coverage.out', 'coverage.native.out')
+      - name: Build native binaries without CGO
         env:
-          SONAR_ORGANIZATION: ${{ vars.SONAR_ORGANIZATION }}
-          SONAR_PROJECT_KEY: ${{ vars.SONAR_PROJECT_KEY }}
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        run: >-
-          dotnet sonarscanner begin
-          /k:"$SONAR_PROJECT_KEY"
-          /o:"$SONAR_ORGANIZATION"
-          /d:sonar.token="$SONAR_TOKEN"
-          /d:sonar.host.url="https://sonarcloud.io"
-          /d:sonar.cs.opencover.reportsPaths="**/coverage.opencover.xml"
-          /d:sonar.python.coverage.reportPaths="TestResults/deployment-coverage.xml,TestResults/deployment-orchestration-coverage.xml,TestResults/security-coverage.xml,TestResults/frontend-publication-coverage.xml,TestResults/monitoring-coverage.xml,TestResults/backup-coverage.xml,TestResults/performance-coverage.xml"
-          /d:sonar.python.version="3.13"
-          /d:sonar.javascript.lcov.reportPaths="TestResults/performance.lcov"
-          /d:sonar.coverageReportPaths="TestResults/local-disk-coverage.xml"
-          /d:sonar.test.inclusions="tests/**,scripts/Test-LocalDiskTools.ps1,deployments/production/test_*.py,deployments/production/verify_compose.py"
-          /d:sonar.exclusions="src/**/Migrations/**"
-          /d:sonar.qualitygate.wait=true
-          /d:sonar.qualitygate.timeout=300
-
-      - name: Build
-        run: >-
-          dotnet build JennGllg.Fr.MonKado.Back.slnx
-          --configuration Release
-          --no-restore
-
-      - name: Test with coverage
-        run: >-
-          dotnet test JennGllg.Fr.MonKado.Back.slnx
-          --configuration Release
-          --no-build
-          --no-restore
-          --settings coverlet.runsettings
-          --collect:"XPlat Code Coverage"
-          --results-directory TestResults
-
-      - name: Download Windows export coverage
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: windows-export-coverage
-          path: TestResults/windows
-
-      - name: Normalize Windows coverage source paths
+          CGO_ENABLED: '0'
+        run: |
+          mkdir -p artifacts
+          for app in api worker migrate; do
+            go build -trimpath -ldflags="-s -w -X github.com/JennGllg/mon-kado/internal/buildinfo.Revision=$GITHUB_SHA" -o artifacts/$app ./cmd/$app
+          done
+          go -C src/Tools.GmailOAuthBootstrap build -trimpath -ldflags='-s -w' -o ../../artifacts/gmail-oauth-bootstrap .
+      - name: Verify real native HTTPS, frontend activation, installers and bounded monitoring
+        run: sudo env "PATH=$PATH" MONKADO_NATIVE_BINARIES="$GITHUB_WORKSPACE/artifacts" bash scripts/Test-NativeOperations.sh
+      - name: Restore the complete Go schema with isolated native PostgreSQL
+        run: |
+          sudo env MONKADO_NATIVE_BACKUP_TESTS=1 MONKADO_NATIVE_MIGRATOR="$GITHUB_WORKSPACE/artifacts/migrate" \
+            PYTHONPATH="$GITHUB_WORKSPACE/src/Operations.Backups:$GITHUB_WORKSPACE/src/Operations.Native:$GITHUB_WORKSPACE/src/Operations.Deployment:$GITHUB_WORKSPACE/deployments/production" \
+            python3 -m unittest discover -s tests/Operations.Backups.Tests -p test_native_postgres.py
+      - name: Enforce coverage target
         shell: pwsh
         run: |
-          $sourceRoot = (Get-Content -LiteralPath TestResults/windows/windows-workspace.txt -Raw).Trim()
-          ./scripts/Normalize-CoveragePaths.ps1 -ResultsDirectory TestResults/windows -SourceRoot $sourceRoot -TargetRoot $env:GITHUB_WORKSPACE
-
-      - name: Download deployment coverage for Sonar
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+          ./scripts/Test-GoCoverage.ps1 -Path coverage.out
+          ./scripts/Test-GoCoverage.ps1 -Path src/Tools.GmailOAuthBootstrap/coverage.out
+      - name: Analyze Go with SonarQube Cloud
+        if: >-
+          (github.event_name == 'push' && github.ref == 'refs/heads/develop') ||
+          (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)
+        uses: SonarSource/sonarqube-scan-action@a31c9398be7ace6bbfaf30c0bd5d415f843d45e9 # v7.0.0, native action
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         with:
-          name: deployment-coverage
-          path: TestResults
-
-      - name: Download security probe coverage for Sonar
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: security-coverage
-          path: TestResults
-
-      - name: Download frontend publication coverage for Sonar
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: frontend-publication-coverage
-          path: TestResults
-
-      - name: Download local monitoring coverage for Sonar
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: monitoring-coverage
-          path: TestResults
-
-      - name: Download backup coverage for Sonar
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: backup-coverage
-          path: TestResults
-
-      - name: Verify coverage reports
-        shell: pwsh
-        run: ./scripts/Verify-Coverage.ps1 -ResultsDirectory TestResults
-
-      - name: Download performance harness coverage for Sonar
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: performance-coverage
-          path: TestResults
-
-      - name: Upload coverage diagnostics
-        if: failure()
+          args: >-
+            -Dsonar.projectKey=${{ vars.SONAR_PROJECT_KEY }}
+            -Dsonar.organization=${{ vars.SONAR_ORGANIZATION }}
+            -Dsonar.host.url=https://sonarcloud.io
+            -Dsonar.sources=cmd,internal,src/Tools.GmailOAuthBootstrap
+            -Dsonar.tests=cmd,internal,src/Tools.GmailOAuthBootstrap
+            -Dsonar.test.inclusions=**/*_test.go
+            -Dsonar.exclusions=**/*_test.go,internal/persistence/migrations/**
+            -Dsonar.go.coverage.reportPaths=coverage.sonar.out
+            -Dsonar.qualitygate.wait=true
+            -Dsonar.qualitygate.timeout=300
+      - name: Upload native binaries and coverage
+        if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: quality-coverage
-          path: TestResults/**/coverage.opencover.xml
-          if-no-files-found: ignore
-          retention-days: 3
-
-      - name: Audit vulnerable packages
-        shell: bash
-        run: |
-          report="$(dotnet package list --project JennGllg.Fr.MonKado.Back.slnx --vulnerable --include-transitive --format json --output-version 1 --no-restore)"
-          echo "$report"
-          count="$(jq '[.projects[].frameworks[]? | ((.topLevelPackages // []) + (.transitivePackages // []))] | flatten | length' <<< "$report")"
-          test "$count" -eq 0
-
-      - name: Audit deprecated packages
-        shell: bash
-        run: |
-          report="$(dotnet package list --project JennGllg.Fr.MonKado.Back.slnx --deprecated --include-transitive --format json --output-version 1 --no-restore)"
-          echo "$report"
-          count="$(jq '[.projects[].frameworks[]? | ((.topLevelPackages // []) + (.transitivePackages // []))] | flatten | length' <<< "$report")"
-          test "$count" -eq 0
-
-      - name: Report outdated packages
-        run: >-
-          dotnet package list
-          --project JennGllg.Fr.MonKado.Back.slnx
-          --outdated
-          --no-restore
-
-      - name: List EF Core migrations
-        run: >-
-          dotnet ef migrations list
-          --no-connect
-          --project src/Infrastructure.Persistence.PostgreSql/Infrastructure.Persistence.PostgreSql.csproj
-          --startup-project src/API/Api.csproj
-          --context MonKadoDbContext
-          --configuration Release
-          --no-build
-
-      - name: Verify EF Core model
-        run: >-
-          dotnet ef migrations has-pending-model-changes
-          --project src/Infrastructure.Persistence.PostgreSql/Infrastructure.Persistence.PostgreSql.csproj
-          --startup-project src/API/Api.csproj
-          --context MonKadoDbContext
-          --configuration Release
-          --no-build
-
-      - name: Generate Compose validation credentials
-        shell: bash
-        run: |
-          echo "CI_POSTGRES_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
-          echo "CI_JWT_SIGNING_KEY=$(openssl rand -base64 32)" >> "$GITHUB_ENV"
-
-      - name: Validate production Compose configuration
-        shell: bash
-        run: >-
-          API_HOST=api.example.test
-          HTTP_PORT=80
-          HTTPS_PORT=443
-          FRONTEND_ORIGIN=https://example.test
-          GOOGLE_AUTHENTICATION_ENABLED=false
-          API_ALLOWED_HOST=api.example.test
-          POSTGRES_DB=mon_kado
-          POSTGRES_USER=mon_kado
-          POSTGRES_PASSWORD="$CI_POSTGRES_SECRET"
-          JWT_SIGNING_KEY="$CI_JWT_SIGNING_KEY"
-          IMAGE_TAG=ci
-          docker compose -f compose.yaml config --quiet
-
-      - name: Validate local Compose configuration
-        shell: bash
-        run: >-
-          API_HOST=http://localhost
-          HTTP_PORT=18080
-          HTTPS_PORT=18443
-          FRONTEND_ORIGIN=http://localhost:5173
-          GOOGLE_AUTHENTICATION_ENABLED=false
-          API_ALLOWED_HOST=localhost
-          POSTGRES_DB=mon_kado
-          POSTGRES_USER=mon_kado
-          POSTGRES_PASSWORD="$CI_POSTGRES_SECRET"
-          JWT_SIGNING_KEY="$CI_JWT_SIGNING_KEY"
-          IMAGE_TAG=ci
-          docker compose -f compose.yaml -f compose.local.yaml config --quiet
-
-      - name: Download local disk coverage
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          pattern: local-disk-coverage-*
-          merge-multiple: true
-          path: TestResults
-
-      - name: Merge platform coverage and require all disk-tool lines
-        shell: pwsh
-        run: |
-          $reports = @(Get-ChildItem -LiteralPath TestResults -Filter 'local-disk-*.xml')
-          if ($reports.Count -ne 2) { throw 'Both platform coverage reports are required.' }
-          $files = @{}
-          foreach ($report in $reports) {
-            [xml] $coverage = Get-Content -LiteralPath $report.FullName -Raw
-            foreach ($file in $coverage.coverage.file) {
-              if (-not $files.ContainsKey($file.path)) { $files[$file.path] = @{} }
-              foreach ($line in $file.lineToCover) {
-                $files[$file.path][$line.lineNumber] = $files[$file.path][$line.lineNumber] -or ($line.covered -eq 'true')
-              }
-            }
-          }
-          if ($files.Count -ne 3) { throw 'Coverage must contain all three disk-tool scripts.' }
-          $merged = [xml]'<coverage version="1" />'
-          foreach ($path in $files.Keys) {
-            $file = $merged.CreateElement('file')
-            $file.SetAttribute('path', $path)
-            foreach ($number in $files[$path].Keys) {
-              if (-not $files[$path][$number]) { throw "Uncovered disk-tool line: ${path}:$number" }
-              $line = $merged.CreateElement('lineToCover')
-              $line.SetAttribute('lineNumber', $number)
-              $line.SetAttribute('covered', 'true')
-              $file.AppendChild($line) | Out-Null
-            }
-            $merged.DocumentElement.AppendChild($file) | Out-Null
-          }
-          $merged.Save((Join-Path $PWD 'TestResults/local-disk-coverage.xml'))
-
-      - name: Complete SonarQube Cloud analysis
-        if: >-
-          (github.event_name == 'push' && github.ref == 'refs/heads/develop') ||
-          (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository &&
-          github.actor != 'dependabot[bot]')
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        run: dotnet sonarscanner end /d:sonar.token="$SONAR_TOKEN"
+          name: native-go-build
+          path: |
+            artifacts/
+            coverage.out
+            coverage.sonar.out
+            coverage.native.out
+            src/Tools.GmailOAuthBootstrap/coverage.out
+          if-no-files-found: error
+          retention-days: 7

@@ -10,9 +10,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src/Operations.Dep
 from release_catalog import fingerprint, validate_catalog
 
 FILES = (
-    "compose.yaml",
     "deployments/caddy/Caddyfile",
-    "deployments/production/compose.production.yaml",
+    "deployments/systemd/mon-kado-api.service",
+    "deployments/systemd/mon-kado-worker.service",
+    "deployments/systemd/caddy-native.conf",
+    "deployments/systemd/postgresql-native.conf",
     "deployments/production/monkado.slice",
     "deployments/production/deploy.sh",
     "deployments/production/release_manifest.py",
@@ -46,6 +48,9 @@ FILES = (
     "src/Operations.Deployment/smoke_functional.py",
     "src/Operations.Deployment/smoke_http.py",
     "src/Operations.Deployment/smoke_technical.py",
+    "src/Operations.Native/native_services.py",
+    "src/Operations.Native/native_artifacts.py",
+    "src/Operations.Native/native_configuration.py",
     "deployments/production/monkado-deploy",
     "deployments/production/monkado-deploy.service",
     "deployments/production/monkado-deploy.timer",
@@ -64,18 +69,25 @@ def configuration_hash(root):
 
 
 def validate(value, expected_hash):
-    """Reject unknown fields, mutable tags, other repositories and unsafe values."""
+    """Validate native binary publications and retain historical image contract inspection."""
     fields = {"schemaVersion", "revision", "configurationHash", "apiImage", "workerImage"}
-    if isinstance(value, dict) and value.get("schemaVersion") == 2:
+    if isinstance(value, dict) and value.get("schemaVersion") in (2, 3):
         fields.update({"publicationId", "migrationCatalog", "migrationHash", "rollbackAllowed"})
+        if value["schemaVersion"] == 3:
+            fields.difference_update({"apiImage", "workerImage"})
+            fields.add("binaries")
     if not isinstance(value, dict) or set(value) != fields:
         raise ValueError("Unexpected manifest fields")
-    if type(value["schemaVersion"]) is not int or value["schemaVersion"] not in (1, 2):
+    if type(value["schemaVersion"]) is not int or value["schemaVersion"] not in (1, 2, 3):
         raise ValueError("Unsupported manifest version")
     if not isinstance(value["revision"], str) or not re.fullmatch(r"[0-9a-f]{40}", value["revision"]):
         raise ValueError("Invalid revision")
     if value["configurationHash"] != expected_hash:
         raise ValueError("Deployment configuration changed: install reviewed files before deploying")
+    if value["schemaVersion"] == 3:
+        validate_v2(value)
+        validate_binaries(value)
+        return value
     for key, component in (("apiImage", "api"), ("workerImage", "worker")):
         pattern = rf"ghcr\.io/jenngllg/mon-kado-{component}@sha256:[0-9a-f]{{64}}"
         if not isinstance(value[key], str) or not re.fullmatch(pattern, value[key]):
@@ -94,6 +106,24 @@ def validate_v2(value):
     catalog = validate_catalog(value["migrationCatalog"])
     if value["migrationHash"] != fingerprint(catalog):
         raise ValueError("Migration catalog does not match its fingerprint")
+
+
+def validate_binaries(value):
+    """Pin every executable to approved source, publication, component, size and digest."""
+    if value["migrationCatalog"]["schemaVersion"] != 2:
+        raise ValueError("Native SQL catalog required")
+    binaries = value["binaries"]
+    if not isinstance(binaries, dict) or set(binaries) != {"api", "worker", "migrate"}:
+        raise ValueError("Incomplete native publication")
+    tag = f'backend-{value["revision"]}-{value["publicationId"]}'
+    for component, binary in binaries.items():
+        expected = f'https://github.com/{REPOSITORY}/releases/download/{tag}/monkado-{component}-linux-amd64'
+        if not isinstance(binary, dict) or set(binary) != {"url", "sha256", "size"} or binary["url"] != expected:
+            raise ValueError("Invalid native artifact reference")
+        if not isinstance(binary["sha256"], str) or not re.fullmatch(r"[0-9a-f]{64}", binary["sha256"]):
+            raise ValueError("Invalid binary digest")
+        if type(binary["size"]) is not int or not 1 <= binary["size"] <= 64 * 1024 ** 2:
+            raise ValueError("Invalid binary size")
 
 
 def from_release(release, expected_hash):
@@ -119,9 +149,8 @@ def main(arguments):
         if len(data) > 65536:
             raise ValueError("Release response too large")
         value = from_release(json.loads(data), expected_hash)
-        print(f'API_IMAGE={value["apiImage"]}')
-        print(f'WORKER_IMAGE={value["workerImage"]}')
-        print(f'RELEASE_REVISION={value["revision"]}')
+        from deploy_policy import dotenv
+        print(dotenv(value), end="")
     else:
         raise ValueError("Usage: release_manifest.py hash | release response.json")
 

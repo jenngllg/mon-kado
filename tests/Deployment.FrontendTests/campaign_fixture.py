@@ -8,11 +8,11 @@ import subprocess
 import sys
 import tempfile
 
-sys.path.insert(0, "/source/src/Operations.Frontend")
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src/Operations.Frontend"))
 import frontend_contract as contract
 import frontend_runtime as runtime
 
-ROOT = Path("/fixture")
+ROOT = Path(os.environ["MONKADO_NATIVE_FIXTURE"])
 STATE = ROOT / "state"
 BACKEND = ROOT / "backend"
 CONFIGURATION = "c" * 64

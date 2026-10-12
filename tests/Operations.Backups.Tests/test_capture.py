@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 from fixtures import capture
 from monkado_backup.capture import IMAGE_NAME, KEY_NAME, atomic_json, copy_files, copy_deployment_private, create_manifest, entries, regular, validate_shape, verify_manifest
-from monkado_backup.policy import BackupError, FILES, LEGACY_FILES, PREVIOUS_FILES, DEPLOYMENT_FILES
+from monkado_backup.policy import BackupError, FILES, LEGACY_CURRENT_FILES, LEGACY_FILES, PREVIOUS_FILES, DEPLOYMENT_FILES
 
 
 class CaptureTests(unittest.TestCase):
@@ -83,7 +83,7 @@ class CaptureTests(unittest.TestCase):
 
     def test_legacy_snapshot_remains_verifiable_without_new_configuration(self):
         # Arrange
-        for name in set(FILES) - set(LEGACY_FILES):
+        for name in set(LEGACY_CURRENT_FILES) - set(LEGACY_FILES):
             (self.root / "configuration" / name).unlink()
         value = self.value | {"schemaVersion": 1, "files": entries(self.root)}
         del value["caddyImage"]
@@ -99,7 +99,7 @@ class CaptureTests(unittest.TestCase):
             verify_manifest(self.root)
 
     def test_v2_capture_remains_readable_without_deployment_modules(self):
-        for name in set(FILES) - set(PREVIOUS_FILES):
+        for name in set(LEGACY_CURRENT_FILES) - set(PREVIOUS_FILES):
             (self.root / "configuration" / name).unlink()
         value = self.value | {"schemaVersion": 2, "files": entries(self.root)}
         atomic_json(self.root / "manifest.json", value)
@@ -107,7 +107,7 @@ class CaptureTests(unittest.TestCase):
 
     def test_v3_capture_remains_readable_without_frontend_safety_modules(self):
         # Arrange
-        for name in set(FILES) - set(DEPLOYMENT_FILES):
+        for name in set(LEGACY_CURRENT_FILES) - set(DEPLOYMENT_FILES):
             (self.root / "configuration" / name).unlink()
         value = self.value | {"schemaVersion": 3, "files": entries(self.root)}
         atomic_json(self.root / "manifest.json", value)

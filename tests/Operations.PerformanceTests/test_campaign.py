@@ -63,7 +63,8 @@ class CampaignTests(unittest.TestCase):
                         result = bench.run("images")
                 if pending:
                     self.assertIsNone(result["supplement"])
-                    command.assert_called_once_with(["docker", "stop", "--time", "5", bench.identifier + "-supplement"])
+                    supplement.terminate.assert_called_once()
+                    supplement.wait.assert_called_once_with(timeout=20)
                 else:
                     self.assertTrue(result["supplement"]["passed"])
 
@@ -120,8 +121,8 @@ class CampaignTests(unittest.TestCase):
                     result = bench.run("smoke")
             self.assertEqual("RESOURCE_FAILURE", result["stopReason"])
             self.assertEqual("failed", result["verdict"])
-            execute.assert_called_once_with(["docker", "stop", "--time", "5", bench.identifier + "-k6-0"])
-            process.wait.assert_called_once_with(timeout=30)
+            process.terminate.assert_called_once()
+            process.wait.assert_called_once_with(timeout=20)
 
     def test_partial_final_json_is_not_read_until_complete(self):
         with tempfile.TemporaryDirectory() as root:

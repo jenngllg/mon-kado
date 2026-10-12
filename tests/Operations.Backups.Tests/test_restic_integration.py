@@ -7,7 +7,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from fixtures import capture
+from fixtures import native_capture as capture
 from monkado_backup.capture import verify_manifest
 from monkado_backup.operations import command
 from monkado_backup.policy import BackupError, snapshot_id

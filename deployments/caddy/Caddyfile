@@ -4,16 +4,13 @@
 	}
 }
 
-# The production overlay mounts the reviewed static frontend site here.
-# Local API-only environments intentionally have no matching files.
-import frontend/*.caddy
+# The installer leaves this directory empty until the frontend is configured.
+import /opt/monkado/deployments/caddy/frontend/*.caddy
 
-# Override the automatic catch-all redirect: unknown HTTP hosts must not
-# control a Location header. Caddy retains its hostname-matched HTTPS redirect.
 :80 {
-    header -Server
-    header Cache-Control "no-store"
-    respond "Unknown host." 404
+	header -Server
+	header Cache-Control "no-store"
+	respond "Unknown host." 404
 }
 
 (api-security-headers) {
@@ -31,8 +28,7 @@ import frontend/*.caddy
 
 {$API_HOST} {
 	import api-security-headers
-	header -Server
-	reverse_proxy api:8080
+	reverse_proxy 127.0.0.1:7000
 	handle_errors {
 		import api-security-headers
 		header Cache-Control "no-store"

@@ -7,7 +7,9 @@ source_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)
 python3 -c 'import sys; assert sys.version_info >= (3, 12)'
 command -v restic >/dev/null
 command -v rclone >/dev/null
-systemctl is-active --quiet docker
+systemctl is-active --quiet postgresql@18-main.service
+test -r /opt/monkado/src/Operations.Native/native_services.py
+test -r /opt/monkado/deployments/production/release_manifest.py
 install -d -m 0700 /etc/monkado-backup /var/lib/monkado-backup
 exec 9>/var/lib/monkado-backup/backup.lock
 flock -n 9 || { echo 'A backup operation is active.' >&2; exit 1; }

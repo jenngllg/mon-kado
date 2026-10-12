@@ -1,7 +1,7 @@
 [Unit]
 Description=Recover an interrupted MonKado backup maintenance window
-Requires=docker.service
-After=docker.service
+Requires=postgresql@18-main.service
+After=postgresql@18-main.service
 Before=monkado-deploy.service
 
 [Service]

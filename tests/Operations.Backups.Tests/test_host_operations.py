@@ -3,6 +3,7 @@
 import json
 import os
 import subprocess
+import shutil
 import sys
 import tempfile
 import unittest
@@ -10,7 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import Mock, patch
 
-from fixtures import capture
+from fixtures import native_capture as capture
 from monkado_backup import operations as host
 from monkado_backup.capture import verify_manifest
 from monkado_backup.policy import BackupError
@@ -29,6 +30,17 @@ class HostOperationsTests(unittest.TestCase):
         self.deployment = self.root / "deployment"
         self.deployment.mkdir()
         (self.deployment / "current.env").write_text((self.source / "configuration/current.env").read_text())
+        for name, source_name in (("active.env", "active.env"), ("status.json", "deployment-status.json")):
+            shutil.copyfile(self.source / "configuration" / source_name, self.deployment / name)
+        for path in self.deployment.iterdir():
+            path.chmod(0o600)
+        release = json.loads((self.deployment / "status.json").read_bytes())["current"]
+        self.approved = release
+        directory = self.source / "configuration/releases" / ("backend-" + release["revision"] + "-" + release["publicationId"])
+        directory.mkdir(parents=True)
+        for component in ("api", "worker", "migrate"):
+            shutil.copyfile(self.source / "binaries" / component, directory / component)
+        shutil.copytree(self.source / "images", self.source / "gift-images")
         self.settings = self.root / "settings"
         self.settings.mkdir()
         for name, value in (("password", "x" * 64), ("rclone.conf", "fixture"),
@@ -38,6 +50,7 @@ class HostOperationsTests(unittest.TestCase):
             path.chmod(0o600)
         self.environment = self.source / "configuration/production.env"
         self.environment.chmod(0o600)
+        (self.source / "configuration/caddy.env").chmod(0o600)
         for name, value in (("STATE", self.state), ("ROOT", self.source / "configuration"),
                             ("SETTINGS", self.settings), ("DEPLOYMENT", self.deployment),
                             ("PRODUCTION_ENV", self.environment)):
@@ -49,37 +62,31 @@ class HostOperationsTests(unittest.TestCase):
         self.stopped = False
         self.run = Mock(side_effect=self.process)
         self.wait = Mock()
-        self.operations = host.Operations(self.run, lambda: self.now, self.wait)
+        self.observer = Mock(side_effect=self.observe)
+        self.operations = host.Operations(self.run, lambda: self.now, self.wait, observer=self.observer, storage=self.source)
+
+    def observe(self, service, runner):
+        image = self.approved["binaries"][service]["sha256"] if service in ("api", "worker") else ("d" if service == "postgres" else "e") * 64
+        return {"running": service == "postgres" or not self.stopped, "oom": False, "image": image}
 
     def process(self, args, **kwargs):
         """Explicitly enumerate permitted fake external operations."""
         self.commands.append(args)
-        if args[:2] == ["docker", "compose"]:
-            tail = args[args.index("-f") + 4:]
-            if "stop" in tail:
-                self.stopped = True
-                return ""
-            if "ps" in tail:
-                return "" if self.stopped and "--status" in tail else tail[-1]
-        if args[:2] == ["docker", "start"]:
+        if args[:2] == ["systemctl", "stop"]:
+            self.stopped = True
+            return ""
+        if args[:2] == ["systemctl", "start"]:
             self.stopped = False
             return ""
-        if args[:3] == ["docker", "volume", "inspect"]:
-            return str(self.source / ("images" if args[-1].endswith("gift_images") else "keys"))
-        if args[:2] == ["docker", "inspect"]:
-            if args[-1] == "caddy":
-                return "caddy-image-id"
-            if args[-1] == "caddy-image-id":
-                return "caddy@sha256:" + "e" * 64
-            return {"{{.Image}}": "image-id", "{{index .RepoDigests 0}}": "postgres@sha256:" + "d" * 64,
-                    "{{.State.Running}}": "true"}[args[3]]
-        if args[:2] == ["docker", "exec"]:
+        if args[:4] == ["runuser", "-u", "postgres", "--"]:
             script = args[-1]
             if "pg_database_size" in script:
                 return "100"
             if "SHOW server_version" in script:
                 return "18.6"
-            if "pg_dump" in script:
+            if "mon_kado_migrations" in script:
+                return "001_baseline.sql\n"
+            if "pg_dump" in args:
                 kwargs["output"].write(b"PGDMP fixture")
                 return ""
         if args[0] == "curl":
@@ -159,27 +166,26 @@ class HostOperationsTests(unittest.TestCase):
         self.operations.transfer.assert_not_called()
         self.run.assert_not_called()
 
-    def test_recover_starts_only_existing_application_containers_without_migrations(self):
+    def test_recover_starts_only_existing_native_application_units_without_migrations(self):
         # Arrange
         (self.state / "maintenance.json").write_text(json.dumps({"services": list(host.SERVICES)}))
         self.stopped = True
         # Act
         self.operations.recover()
         # Assert
-        self.assertIn(["docker", "start", "api", "worker", "caddy"], self.commands)
+        self.assertIn(["systemctl", "start", "mon-kado-api.service", "mon-kado-worker.service", "caddy.service"], self.commands)
         self.assertFalse(any("migrations" in arguments for arguments in self.commands))
-        self.assertFalse(any(arguments[:2] == ["docker", "compose"] and "start" in arguments for arguments in self.commands))
+        self.assertFalse(any("postgresql@18-main.service" in arguments for arguments in self.commands))
         self.assertFalse((self.state / "maintenance.json").exists())
 
-    def test_recover_refuses_missing_or_ambiguous_container_without_clearing_marker(self):
+    def test_recover_refuses_unknown_native_units_without_clearing_marker(self):
         # Arrange
         marker = self.state / "maintenance.json"
         marker.write_text(json.dumps({"services": list(host.SERVICES)}))
-        for identifiers in ("", "one two"):
-            self.run.side_effect = None
-            self.run.return_value = identifiers
+        for error in (OSError("unknown unit"), ValueError("malformed observation")):
+            self.observer.side_effect = error
             # Act / Assert
-            with self.subTest(identifiers=identifiers), self.assertRaisesRegex(BackupError, "RECOVERY_CONTAINER"):
+            with self.subTest(error=type(error)), self.assertRaisesRegex(BackupError, "SERVICE_OBSERVATION_FAILED"):
                 self.operations.recover()
             self.assertTrue(marker.exists())
 
@@ -204,7 +210,7 @@ class HostOperationsTests(unittest.TestCase):
         pending.mkdir()
         (pending / "old").touch()
         def failing(args, **kwargs):
-            if "pg_dump" in args[-1]:
+            if "pg_dump" in args:
                 raise BackupError("DUMP_FAILED")
             return self.process(args, **kwargs)
         self.run.side_effect = failing
@@ -217,25 +223,21 @@ class HostOperationsTests(unittest.TestCase):
 
     def test_live_writers_abort_capture_and_recover(self):
         # Arrange
-        def running(args, **kwargs):
-            if "--status" in args:
-                return "still-running"
-            return self.process(args, **kwargs)
-        self.run.side_effect = running
+        self.observer.side_effect = lambda service, runner: self.observe(service, runner) | {"running": True}
         # Act / Assert
         with self.assertRaisesRegex(BackupError, "WRITERS_STILL_RUNNING"):
             self.operations.capture()
         self.assertFalse(self.stopped)
 
-    def test_container_and_volume_resolution_fail_closed(self):
+    def test_native_service_and_storage_resolution_fail_closed(self):
         # Arrange / Act / Assert
-        for value in ("", "one two"):
-            self.run.side_effect = None
-            self.run.return_value = value
+        for value in ({"running": False, "oom": False}, {"running": True, "oom": True}):
+            self.observer.side_effect = None
+            self.observer.return_value = value
             with self.assertRaisesRegex(BackupError, "SERVICE_NOT_RUNNING"):
-                self.operations.container("api")
-        for value in ("relative", str(self.root / "missing")):
-            self.run.return_value = value
+                self.operations.running("api")
+        for value in (Path("relative"), self.root / "missing"):
+            self.operations.storage = value
             with self.assertRaisesRegex(BackupError, "INVALID_VOLUME"):
                 self.operations.volume("gift_images")
 
@@ -243,11 +245,7 @@ class HostOperationsTests(unittest.TestCase):
         # Arrange
         marker = self.state / "maintenance.json"
         marker.write_text(json.dumps({"services": list(host.SERVICES)}))
-        def not_running(args, **kwargs):
-            if args[:2] == ["docker", "inspect"]:
-                return "false"
-            return self.process(args, **kwargs)
-        self.run.side_effect = not_running
+        self.observer.side_effect = lambda service, runner: self.observe(service, runner) | {"running": False}
         # Act / Assert
         with self.assertRaisesRegex(BackupError, "SERVICE_RECOVERY_FAILED"):
             self.operations.recover()

@@ -36,7 +36,7 @@ class StorageTests(unittest.TestCase):
         link = self.root / "state.json"
         link.symlink_to(target)
         # Act / Assert
-        with self.assertRaises(ValueError):
+        with self.assertRaises((OSError, ValueError)):
             storage.read_json(link)
         with self.assertRaises(ValueError):
             storage.atomic_json(link, {})

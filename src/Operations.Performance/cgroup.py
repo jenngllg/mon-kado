@@ -6,7 +6,7 @@ from pathlib import Path
 from policy import MEMORY, require, run_id
 
 
-def operate(action, identifier, root=Path("/host-cgroup"), driver="cgroupfs"):
+def operate(action, identifier, root=Path("/sys/fs/cgroup"), driver="cgroupfs"):
     run_id(identifier)
     require(driver in ("cgroupfs", "systemd"), "INVALID_CGROUP_DRIVER")
     group = root / (identifier if driver == "cgroupfs" else identifier.replace("-", "") + ".slice")

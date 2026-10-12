@@ -1,0 +1,30 @@
+[Unit]
+Description=MonKado native Go API
+After=network-online.target postgresql@18-main.service monkado.slice
+Wants=network-online.target
+Requires=postgresql@18-main.service monkado.slice
+
+[Service]
+Type=simple
+User=monkado
+Group=monkado
+WorkingDirectory=/opt/monkado
+EnvironmentFile=/etc/monkado/production.env
+EnvironmentFile=/var/lib/monkado-deployment/active.env
+ExecStart=/opt/monkado/current/api
+Slice=monkado.slice
+Environment=GOMEMLIMIT=256MiB
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=15
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/monkado /var/lib/monkado-observability/api
+StateDirectory=monkado monkado-observability/api
+StateDirectoryMode=0700
+
+[Install]
+WantedBy=multi-user.target

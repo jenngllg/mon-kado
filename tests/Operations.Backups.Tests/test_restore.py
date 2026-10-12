@@ -1,11 +1,12 @@
-"""Safe restore contracts with no real Docker or Google requests."""
+"""Native restore contracts use private fresh resources and no production configuration."""
 
+import os
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import Mock
 
-from fixtures import capture
+from fixtures import native_capture as capture
 from monkado_backup.policy import BackupError
 from monkado_backup.restore import Restore
 
@@ -15,75 +16,112 @@ class RestoreTests(unittest.TestCase):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name)
-        self.operations = Mock(spec=["run", "restic", "inspect", "wait"])
+        self.capture = self.root / "capture"
+        self.capture.mkdir(mode=0o700)
+        self.operations = Mock(spec=["run", "restic"])
         self.operations.run.side_effect = AssertionError("unexpected command")
-        self.restore = Restore(self.operations)
+        self.restore = Restore(self.operations, root=self.root / "restores")
 
     def test_download_verifies_and_refuses_existing_directory(self):
-        # Arrange
         target = self.root / "download"
         self.operations.restic.side_effect = lambda *args: capture(target)
-        # Act
         result = self.restore.download("a" * 64, target)
-        # Assert
-        self.assertEqual(4, result["schemaVersion"])
+        self.assertEqual(5, result["schemaVersion"])
         self.operations.restic.assert_called_once_with("restore", "a" * 64, "--target", str(target))
         with self.assertRaisesRegex(BackupError, "RESTORE_TARGET_NOT_EMPTY"):
             self.restore.download("a" * 64, target)
         self.operations.run.assert_not_called()
 
     def test_invalid_project_cannot_touch_production(self):
-        # Arrange / Act / Assert
         for name in ("mon-kado", "monkado-restore-x", "../production"):
             with self.subTest(name=name), self.assertRaises(BackupError):
-                self.restore.volumes(self.root, name)
+                self.restore.volumes(self.capture, name)
         self.operations.run.assert_not_called()
 
     def test_existing_resources_are_never_overwritten(self):
-        # Arrange
-        capture(self.root)
-        for index in range(3):
-            self.operations.run.side_effect = ["monkado-restore-12345678-postgres" if index == 0 else "",
-                                               "monkado-restore-12345678" if index == 1 else "",
-                                               "monkado-restore-12345678-postgres" if index == 2 else ""]
-            # Act / Assert
-            with self.subTest(index=index), self.assertRaisesRegex(BackupError, "RESTORE_RESOURCES_EXIST"):
-                self.restore.volumes(self.root, "monkado-restore-12345678")
+        capture(self.capture)
+        self.restore.root.mkdir()
+        target = self.restore.root / "monkado-restore-12345678"
+        target.mkdir()
+        with self.assertRaisesRegex(BackupError, "RESTORE_RESOURCES_EXIST"):
+            self.restore.volumes(self.capture, target.name)
+        self.operations.run.assert_not_called()
 
-    def test_success_uses_fresh_network_no_ports_no_worker_and_stops_database(self):
+    def test_long_socket_path_is_rejected_before_database_effects(self):
         # Arrange
-        capture(self.root)
-        commands = []
-        def run(args, **kwargs):
-            commands.append(args)
-            if args[1] == "create":
-                return "temporary-helper"
-            if args[1:3] == ["exec", "-i"]:
-                self.assertEqual(b"PGDMP fixture", kwargs["input_file"].read())
-            return ""
-        self.operations.run.side_effect = run
-        self.operations.inspect.side_effect = ["starting", "healthy"]
-        # Act
-        result = self.restore.volumes(self.root, "monkado-restore-12345678")
-        # Assert
+        capture(self.capture)
+        self.restore.root = self.root / ("x" * 80)
+        # Act / Assert
+        with self.assertRaisesRegex(BackupError, "RESTORE_SOCKET_PATH_TOO_LONG"):
+            self.restore.volumes(self.capture, "monkado-restore-12345678")
+        self.operations.run.assert_not_called()
+        self.assertFalse((self.restore.root / "monkado-restore-12345678").exists())
+
+    def test_private_cli_umask_preserves_postgres_traversal_without_exposing_files(self):
+        # Arrange
+        capture(self.capture)
+        self.operations.run.side_effect = self.runner
+        previous = os.umask(0o077)
+        try:
+            # Act
+            result = self.restore.volumes(self.capture, "monkado-restore-12345678")
+            # Assert
+            target = self.restore.root / result["project"]
+            self.assertEqual(0o711, self.restore.root.stat().st_mode & 0o777)
+            self.assertEqual(0o711, target.stat().st_mode & 0o777)
+            self.assertEqual(0o700, (target / "configuration").stat().st_mode & 0o777)
+            self.assertEqual(0o600, (target / "configuration/production.env").stat().st_mode & 0o777)
+        finally:
+            os.umask(previous)
+
+    def runner(self, args, **kwargs):
+        if args[:2] == ["install", "-d"]:
+            for directory in args[-2:]:
+                Path(directory).mkdir(mode=0o700)
+        if "--exit-on-error" in args:
+            self.assertEqual(b"PGDMP fixture", kwargs["input_file"].read())
+        if any(argument.endswith("/psql") for argument in args):
+            return "001_baseline.sql\n"
+        return ""
+
+    def test_success_uses_new_private_socket_no_tcp_no_worker_and_stops_database(self):
+        capture(self.capture)
+        self.operations.run.side_effect = self.runner
+        result = self.restore.volumes(self.capture, "monkado-restore-12345678")
         self.assertTrue(result["databaseStopped"])
         self.assertFalse(result["applicationStarted"])
-        self.assertTrue(any("--internal" in args for args in commands))
-        self.assertFalse(any("-p" in args or "--publish" in args for args in commands))
-        self.assertEqual(["docker", "stop", "monkado-restore-12345678-postgres"], commands[-1])
-        self.operations.wait.assert_called_once_with(1)
+        calls = [call.args[0] for call in self.operations.run.call_args_list]
+        self.assertTrue(any("--options=-c listen_addresses=''" in str(args) for args in calls))
+        self.assertTrue(any("--auth-host=reject" in args for args in calls))
+        self.assertFalse(any("mon_kado" in args for args in calls))
+        self.assertIn("stop", calls[-1])
+        self.assertIn("--mode=fast", calls[-1])
+        self.assertFalse(any("JWT_SIGNING_KEY" in str(args) or "DATABASE_URL" in str(args) for args in calls))
         self.operations.restic.assert_not_called()
+        restored = self.restore.root / result["project"]
+        self.assertTrue((restored / "images").is_dir())
+        self.assertEqual(0o600, (restored / "configuration/production.env").stat().st_mode & 0o777)
 
-    def test_database_timeout_never_imports_dump(self):
-        # Arrange
-        capture(self.root)
-        self.operations.run.side_effect = None
-        self.operations.run.return_value = ""
-        self.operations.inspect.return_value = "starting"
-        # Act / Assert
+    def test_database_start_failure_never_imports_dump_and_still_attempts_stop(self):
+        capture(self.capture)
+        def failure(args, **kwargs):
+            if "start" in args:
+                raise BackupError("RESTORE_DATABASE_NOT_READY")
+            return self.runner(args, **kwargs)
+        self.operations.run.side_effect = failure
         with self.assertRaisesRegex(BackupError, "RESTORE_DATABASE_NOT_READY"):
-            self.restore.volumes(self.root, "monkado-restore-12345678")
-        self.assertFalse(any(call.args[0][1] == "exec" for call in self.operations.run.call_args_list))
-        self.assertEqual(60, self.operations.wait.call_count)
-        self.assertEqual(["docker", "stop", "monkado-restore-12345678-postgres"],
-                         self.operations.run.call_args.args[0])
+            self.restore.volumes(self.capture, "monkado-restore-12345678")
+        calls = [call.args[0] for call in self.operations.run.call_args_list]
+        self.assertFalse(any("--exit-on-error" in args for args in calls))
+        self.assertIn("stop", calls[-1])
+
+    def test_restored_history_mismatch_is_not_accepted_and_keeps_database_stopped(self):
+        capture(self.capture)
+        def failure(args, **kwargs):
+            value = self.runner(args, **kwargs)
+            return "wrong_history\n" if any(argument.endswith("/psql") for argument in args) else value
+        self.operations.run.side_effect = failure
+        with self.assertRaisesRegex(BackupError, "RESTORED_HISTORY_DIVERGED"):
+            self.restore.volumes(self.capture, "monkado-restore-12345678")
+        self.assertIn("stop", self.operations.run.call_args.args[0])
+        self.assertFalse((self.restore.root / "monkado-restore-12345678/configuration").exists())

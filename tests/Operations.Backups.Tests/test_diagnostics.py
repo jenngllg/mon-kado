@@ -37,21 +37,15 @@ class DiagnosticTests(unittest.TestCase):
             runpy.run_path(str(script), run_name="__main__")
         runpy.run_path(str(script), run_name="not_main")
 
-    def test_recovery_diagnostic_redacts_output_and_only_uses_dry_run(self):
+    def test_recovery_diagnostic_only_observes_native_outcomes_without_exposing_other_fields(self):
         # Arrange
-        def factory(run=None):
-            value = Mock()
-            value.compose.side_effect = (lambda *args: run(list(args))) if run else lambda *args: "container-id"
-            return value
+        observer = Mock(spec=["service"])
+        observer.service.return_value = {"running": True, "oom": False, "restarts": 2, "extra": "secret-canary"}
         output = io.StringIO()
-        with patch.object(diagnose_recovery, "Operations", side_effect=factory), contextlib.redirect_stdout(output):
-            for diagnostic in (b"secret-canary migration depend no container memory", b"not found oom", b"unknown"):
-                with patch.object(diagnose_recovery.subprocess, "run", return_value=SimpleNamespace(
-                    returncode=1, stdout=diagnostic, stderr=b"")) as process:
-                    # Act
-                    diagnose_recovery.main()
-                    # Assert
-                    self.assertIn("--dry-run", process.call_args.args[0])
+        with patch.object(diagnose_recovery, "Operations", return_value=observer), contextlib.redirect_stdout(output):
+            diagnose_recovery.main()
+        self.assertEqual([((name,), {}) for name in ("api", "worker", "caddy", "postgres")], observer.service.call_args_list)
+        self.assertTrue(all(set(json.loads(line)) == {"service", "running", "oom", "restarts"} for line in output.getvalue().splitlines()))
         self.assertNotIn("secret-canary", output.getvalue())
 
     def test_non_root_and_command_errors_do_not_escape(self):

@@ -7,7 +7,9 @@ umask 077
 source /etc/os-release
 [[ $ID == ubuntu && $VERSION_ID == 24.04 ]] || exit 1
 source_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)
-systemctl is-active --quiet docker
+systemctl is-active --quiet postgresql@18-main.service
+command -v caddy >/dev/null
+id monkado >/dev/null
 command -v python3 >/dev/null
 command -v curl >/dev/null
 command -v flock >/dev/null
@@ -30,7 +32,11 @@ exec 8>/var/lib/monkado-deployment/backup-coordination.lock
 flock -n 8 || { echo 'A backup operation holds the coordination lock.' >&2; exit 1; }
 exec 9>/var/lib/monkado-deployment/deploy.lock
 flock -n 9 || { echo 'A deployment holds the configuration lock.' >&2; exit 1; }
-install -d -m 0755 /opt/monkado/deployments/caddy /opt/monkado/deployments/production
+install -d -m 0755 /opt/monkado/deployments/caddy/frontend /opt/monkado/deployments/production /opt/monkado/releases
+install -d -m 0755 /opt/monkado/deployments/systemd /opt/monkado/src/Operations.Native
+for module in native_services native_artifacts native_configuration; do
+    install -m 0644 "$source_root/src/Operations.Native/$module.py" "/opt/monkado/src/Operations.Native/$module.py"
+done
 install -d -m 0755 /opt/monkado/src/Operations.Deployment
 for module in release_catalog deploy_policy deploy_storage deploy_engine deploy_cli deploy_process deploy_provision deploy_runtime smoke_functional smoke_http smoke_technical; do
     install -m 0644 "$source_root/src/Operations.Deployment/$module.py" "/opt/monkado/src/Operations.Deployment/$module.py"
@@ -45,11 +51,22 @@ exec 7>/var/lib/monkado-monitoring/monitor.lock
 flock -n 7 || { echo 'A monitor operation holds its state lock.' >&2; exit 1; }
 install -d -m 0755 /opt/monkado/deployments/monitoring /opt/monkado/src/Operations.Monitoring
 install -d -m 0755 /var/lib/monkado-observability
-install -d -m 0700 -o 1654 -g 1654 /var/lib/monkado-observability/api /var/lib/monkado-observability/worker
-install -m 0644 "$source_root/compose.yaml" /opt/monkado/compose.yaml
+install -d -m 0700 -o monkado -g monkado /var/lib/monkado-observability/api /var/lib/monkado-observability/worker
+install -d -m 0700 -o monkado -g monkado /var/lib/monkado /var/lib/monkado/gift-images /var/lib/monkado/personal-data-exports
 install -m 0644 "$source_root/deployments/caddy/Caddyfile" /opt/monkado/deployments/caddy/Caddyfile
-for file in compose.production.yaml release_manifest.py deploy.sh monkado.slice; do
+for file in release_manifest.py deploy.sh monkado.slice; do
     install -m 0644 "$source_root/deployments/production/$file" "/opt/monkado/deployments/production/$file"
+done
+for unit in mon-kado-api.service mon-kado-worker.service; do
+    install -m 0644 "$source_root/deployments/systemd/$unit" "/opt/monkado/deployments/systemd/$unit"
+    install -m 0644 "$source_root/deployments/systemd/$unit" "/etc/systemd/system/$unit"
+done
+for entry in 'caddy:caddy-native.conf' 'postgresql@18-main:postgresql-native.conf'; do
+    service=${entry%%:*}
+    file=${entry#*:}
+    install -d -m 0755 "/etc/systemd/system/$service.service.d"
+    install -m 0644 "$source_root/deployments/systemd/$file" "/opt/monkado/deployments/systemd/$file"
+    install -m 0644 "$source_root/deployments/systemd/$file" "/etc/systemd/system/$service.service.d/monkado.conf"
 done
 install -m 0644 "$source_root/deployments/frontend/frontend.caddy" /opt/monkado/deployments/frontend/frontend.caddy
 for file in frontend_contract.py frontend_runtime.py frontend_cli.py frontend_state.py frontend_probe.py; do
@@ -77,10 +94,10 @@ fi
 systemctl daemon-reload
 systemctl enable --now monkado.slice
 echo 'Deployment code installed. Timer remains stopped; no application has been started.'
-echo 'Configure /etc/monkado/production.env (root:root, 0600), approve a publication,'
-echo 'then run: sudo systemctl start monkado-deploy.service'
+echo 'Configure /etc/monkado/production.env and /etc/monkado/caddy.env (root:root, 0600).'
+echo 'Follow the native first-install runbook before invoking the deployment service.'
 echo 'Enable the timer only after a successful first rollout and review.'
-echo 'MK-820: provision the dedicated smoke account and explicitly adopt the verified current release before enabling deployment.'
+echo 'Provision the dedicated smoke account and explicitly adopt the approved native manifest before enabling deployment.'
 echo 'Frontend publication remains stopped. Review DNS, HTTPS and the approved frontend release before enabling its timer.'
 echo 'Monitoring remains stopped. Existing monitoring settings, credentials and backup units have not been replaced.'
 echo 'Review the monitoring runbook, complete the explicitly approved email test, then enable the monitor timer manually.'

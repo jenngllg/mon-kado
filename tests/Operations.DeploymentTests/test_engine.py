@@ -10,14 +10,17 @@ from release_catalog import fingerprint, identifiers
 
 
 def release(revision="a", extra=False):
-    catalog = {"schemaVersion": 1, "modelHash": "d" * 64,
-               "migrations": [{"id": "20260101000000_Initial", "sha256": "b" * 64}]}
+    catalog = {"schemaVersion": 2, "modelHash": "d" * 64,
+               "migrations": [{"id": "001_initial.sql", "sha256": "b" * 64}]}
     if extra:
-        catalog["migrations"].append({"id": "20260201000000_Next", "sha256": "c" * 64})
-    return {"schemaVersion": 2, "publicationId": "123-1" if revision == "a" else "456-1",
+        catalog["migrations"].append({"id": "002_next.sql", "sha256": "c" * 64})
+        catalog["modelHash"] = "e" * 64
+    publication = "123-1" if revision == "a" else "456-1"
+    return {"schemaVersion": 3, "publicationId": publication,
             "revision": revision * 40, "configurationHash": "c" * 64,
-            "apiImage": "ghcr.io/jenngllg/mon-kado-api@sha256:" + revision * 64,
-            "workerImage": "ghcr.io/jenngllg/mon-kado-worker@sha256:" + revision * 64,
+            "binaries": {name: {"sha256": revision * 64, "size": 1024,
+                "url": f"https://github.com/jenngllg/mon-kado/releases/download/backend-{revision * 40}-{publication}/monkado-{name}-linux-amd64"}
+                for name in ("api", "worker", "migrate")},
             "migrationCatalog": catalog, "migrationHash": fingerprint(catalog), "rollbackAllowed": True}
 
 
@@ -52,8 +55,9 @@ class PolicyTests(unittest.TestCase):
 
     def test_private_compatibility_contract(self):
         value = release()
-        self.assertEqual("API_IMAGE=" + value["apiImage"] + "\nWORKER_IMAGE=" + value["workerImage"] +
-                         "\nRELEASE_REVISION=" + value["revision"] + "\n", dotenv(value))
+        self.assertEqual("API_SHA256=" + "a" * 64 + "\nWORKER_SHA256=" + "a" * 64 +
+                         "\nMIGRATE_SHA256=" + "a" * 64 + "\nRELEASE_REVISION=" + value["revision"] +
+                         "\nAPP_VERSION=" + value["revision"] + "\n", dotenv(value))
         self.assertEqual(initial_state(), validate_state(initial_state()))
         for invalid in (None, {}, {**initial_state(), "schemaVersion": True},
                         {**initial_state(), "phase": []}, {**initial_state(), "phase": "invalid"},
@@ -143,6 +147,16 @@ class EngineTests(unittest.TestCase):
             self.engine.deploy(self.candidate)
         self.assertEqual("INTERRUPTED", self.state["error"])
         self.assertEqual("rolledBack", self.state["phase"])
+
+    def test_filesystem_and_digest_failures_allow_one_safe_application_rollback_without_raw_diagnostics(self):
+        for failure in (OSError("private filesystem diagnostic"), ValueError("private digest diagnostic")):
+            self.setUp()
+            self.runtime.start.side_effect = [failure, None]
+            with self.subTest(failure=type(failure)), self.assertRaisesRegex(DeploymentError, "PUBLICATION_ROLLED_BACK"):
+                self.engine.deploy(self.candidate)
+            self.assertEqual("DEPLOYMENT_EFFECT_FAILED", self.state["error"])
+            self.assertEqual("rolledBack", self.state["phase"])
+            self.runtime.migrate.assert_not_called()
 
     def test_rollback_failure_preserves_recovery_marker(self):
         self.runtime.smoke.side_effect = DeploymentError("SMOKE_FAILED")

@@ -22,9 +22,10 @@ class CollectorTests(unittest.TestCase):
         self.cgroup = self.root / "memory.events"
         self.cgroup.write_text("oom 0\noom_kill 2\n")
         self.active = 3
-        self.container = {"id": "a" * 64, "running": True, "oom": False, "restarts": 0}
+        self.container = {"monitorId": "a" * 64, "running": True, "oom": False, "restarts": 0}
         self.calls = []
-        self.collector = collect.Collector(self.root, self.cgroup, self.run_command, self.probe)
+        self.collector = collect.Collector(self.root, self.cgroup, self.run_command, self.probe,
+                                          observer=self.observe, service_uid=os.getuid())
         backup = self.root / "monkado-backup"
         backup.mkdir()
         deployment = self.root / "monkado-deployment"
@@ -44,6 +45,10 @@ class CollectorTests(unittest.TestCase):
                 return 0, "ActiveState=inactive\nResult=success\n"
             return self.active, ""
         return 0, json.dumps(self.container)
+
+    def observe(self, service, runner):
+        runner(["systemctl", "show", service])
+        return self.container
 
     def probe(self, service, path):
         return False, (NOW + timedelta(days=90)).isoformat()
@@ -122,7 +127,7 @@ class CollectorTests(unittest.TestCase):
         self.assertNotIn("frontend", observed["checks"])
         self.assertNotIn("secret", json.dumps(observed))
 
-    def test_restarts_and_oom_compare_same_container_within_window(self):
+    def test_restarts_and_oom_compare_same_native_unit_within_boot_window(self):
         # Arrange
         old = {"service": "api", "id": "a" * 64, "restarts": 1, "oom": False,
                "createdAt": (NOW - timedelta(minutes=5)).isoformat()}
@@ -135,6 +140,26 @@ class CollectorTests(unittest.TestCase):
         observed, _ = self.collector.containers(NOW, samples, 600)
         self.assertFalse(observed["api"]["newOom"])
         self.assertEqual(0, observed["api"]["recentRestarts"])
+
+    def test_new_process_keeps_restart_history_but_a_new_host_boot_resets_the_baseline(self):
+        old = {"service": "api", "id": "a" * 64, "restarts": 1, "oom": False,
+               "createdAt": (NOW - timedelta(minutes=5)).isoformat()}
+        self.container.update(id="new-process", restarts=4)
+        observed, _ = self.collector.containers(NOW, [old], 600)
+        self.assertEqual(3, observed["api"]["recentRestarts"])
+        self.container["monitorId"] = "b" * 64
+        observed, _ = self.collector.containers(NOW, [old], 600)
+        self.assertEqual(0, observed["api"]["recentRestarts"])
+
+    def test_public_or_foreign_owned_application_snapshots_remain_unknown(self):
+        path = self.root / "monkado-observability/api/snapshot.json"
+        path.chmod(0o644)
+        observed, _, _ = self.collector.collect(NOW, {}, policy.DEFAULTS, False)
+        self.assertIsNone(observed["snapshots"]["api"])
+        path.chmod(0o600)
+        self.collector.service_uid = os.getuid() + 1
+        observed, _, _ = self.collector.collect(NOW, {}, policy.DEFAULTS, False)
+        self.assertIsNone(observed["snapshots"]["api"])
 
     def test_backup_failure_waits_for_explicit_transfer_attempts_to_finish(self):
         # Arrange
