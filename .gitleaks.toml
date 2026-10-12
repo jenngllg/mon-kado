@@ -25,3 +25,14 @@ condition = "AND"
 paths = ['''^deployments/production/production\.env\.example$''']
 regexTarget = "secret"
 regexes = ['''^OBSERVABILITY_ENABLED=true$''']
+
+[[rules.allowlists]]
+description = "Public API executable SHA-256 digests in the original native performance evidence"
+condition = "AND"
+paths = ['''^docs/performance/go-migration-native-2026-10-12\.json$''']
+regexTarget = "secret"
+regexes = [
+  '''^bb158b286a2475cedebadef8ec3e12bb4c1fabb7b166822a8e2b0fdcf48e35a4$''',
+  '''^175eaf8e824c8c615972a4664b9fb204153af906186e5bfe2d0a5f027dec3e5a$''',
+  '''^f9407b8eaa792ebe52d2fab2ed79d188b91118d8a241420794eecdcef9d8563d$'''
+]

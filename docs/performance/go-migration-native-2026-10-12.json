@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "qualificationScope": "local-performance",
   "productionQualification": false,
   "profiles": [
@@ -8,11 +8,20 @@
       "runId": "mk816-ac82bdcb653f",
       "sourceRevision": "f35ac4c95980c7fc498f259a3e37165825f6cda0",
       "sourceDirty": true,
-      "binaries": {
-        "api": "bb158b286a2475cedebadef8ec3e12bb4c1fabb7b166822a8e2b0fdcf48e35a4",
-        "worker": "a3865023914be36e370baa357f0ca89b3fdbc83a59af21f3349b1367f0cf8dbe",
-        "migrate": "1ca93d359abf61e773d6836c27daf890916ecfc8f074729160350029a07e121a"
-      },
+      "binaries": [
+        {
+          "service": "api",
+          "sha256": "bb158b286a2475cedebadef8ec3e12bb4c1fabb7b166822a8e2b0fdcf48e35a4"
+        },
+        {
+          "service": "worker",
+          "sha256": "a3865023914be36e370baa357f0ca89b3fdbc83a59af21f3349b1367f0cf8dbe"
+        },
+        {
+          "service": "migrate",
+          "sha256": "1ca93d359abf61e773d6836c27daf890916ecfc8f074729160350029a07e121a"
+        }
+      ],
       "reportSha256": "048e892a50d3e84f58daf3f6b488f413b4c5c564b3c94e00acb9e85df74b25c2",
       "verdict": "passed",
       "completedRequests": 9000,
@@ -30,6 +39,26 @@
         "update": 13.778111599999999,
         "reservation": 13.455643449999998
       },
+      "stages": [
+        {
+          "index": 0,
+          "seconds": 900,
+          "requestedPerSecond": 10,
+          "completedRequests": 9000,
+          "deliveredPerScheduledSecond": 10.0,
+          "observedCompletionSpanSeconds": 899.3483679294586,
+          "observedRequestsPerSecond": 10.00613368623564,
+          "throughputTargetMet": true,
+          "unexpectedErrors": 0
+        }
+      ],
+      "latencyTargetsMet": true,
+      "throughputTargetsMet": true,
+      "resourceSummary": {
+        "meanMeasuredCpuPercentOfOneCore": 3.7980251687043647,
+        "memoryPeakBytesIncludingSetup": 182398976,
+        "resourceSampleCount": 217
+      },
       "dataInvariants": {
         "members": 100,
         "lists": 500,
@@ -44,11 +73,20 @@
       "runId": "mk816-dbfe7f220f0d",
       "sourceRevision": "b17b2a0afe0c9af97f53db65afe4f3cd90453e97",
       "sourceDirty": true,
-      "binaries": {
-        "api": "175eaf8e824c8c615972a4664b9fb204153af906186e5bfe2d0a5f027dec3e5a",
-        "worker": "2b7a5eea249f93a4d2c9922f2f83b5593fc45b8e05090967282d530bf99cbd8e",
-        "migrate": "b2c4524f29f5bca19b71c066774d7a801cacc8224212a8eff4659ff1d163afb9"
-      },
+      "binaries": [
+        {
+          "service": "api",
+          "sha256": "175eaf8e824c8c615972a4664b9fb204153af906186e5bfe2d0a5f027dec3e5a"
+        },
+        {
+          "service": "worker",
+          "sha256": "2b7a5eea249f93a4d2c9922f2f83b5593fc45b8e05090967282d530bf99cbd8e"
+        },
+        {
+          "service": "migrate",
+          "sha256": "b2c4524f29f5bca19b71c066774d7a801cacc8224212a8eff4659ff1d163afb9"
+        }
+      ],
       "reportSha256": "6b6dbc155d9ed4686e63c9371f463057861787f1aa000870ae5f0b3d4131e219",
       "verdict": "passed",
       "completedRequests": 9000,
@@ -63,6 +101,26 @@
         "lists": 1.76110825,
         "wishes": 10.76709855,
         "shared": 13.373903750000002
+      },
+      "stages": [
+        {
+          "index": 0,
+          "seconds": 900,
+          "requestedPerSecond": 10,
+          "completedRequests": 9000,
+          "deliveredPerScheduledSecond": 10.0,
+          "observedCompletionSpanSeconds": 899.5296769142151,
+          "observedRequestsPerSecond": 10.004116852342829,
+          "throughputTargetMet": true,
+          "unexpectedErrors": 0
+        }
+      ],
+      "latencyTargetsMet": true,
+      "throughputTargetsMet": true,
+      "resourceSummary": {
+        "meanMeasuredCpuPercentOfOneCore": 5.382533187009389,
+        "memoryPeakBytesIncludingSetup": 602451968,
+        "resourceSampleCount": 217
       },
       "dataInvariants": {
         "members": 100,
@@ -245,11 +303,20 @@
       "runId": "mk816-bf6f8b450354",
       "sourceRevision": "b18e3e88e1153f7e532379dc47a5b59233d88182",
       "sourceDirty": false,
-      "binaries": {
-        "api": "f9407b8eaa792ebe52d2fab2ed79d188b91118d8a241420794eecdcef9d8563d",
-        "worker": "2795ed78fa1199bd9526fed24d905dc16ab419e91ceb750fb7ea375de96dd9e7",
-        "migrate": "cccf637b2ae3313c124ca21d4fcdd1f0db6ecf64c583f8db517275d7b097fe17"
-      },
+      "binaries": [
+        {
+          "service": "api",
+          "sha256": "f9407b8eaa792ebe52d2fab2ed79d188b91118d8a241420794eecdcef9d8563d"
+        },
+        {
+          "service": "worker",
+          "sha256": "2795ed78fa1199bd9526fed24d905dc16ab419e91ceb750fb7ea375de96dd9e7"
+        },
+        {
+          "service": "migrate",
+          "sha256": "cccf637b2ae3313c124ca21d4fcdd1f0db6ecf64c583f8db517275d7b097fe17"
+        }
+      ],
       "reportSha256": "1afc7c58be6ea30fe75e48c4654cc32d893193aeb836ab871dad0b2521eb3740",
       "verdict": "passed",
       "completedRequests": 15000,
@@ -264,6 +331,26 @@
         "lists": 1.7313862,
         "wishes": 10.710639250000002,
         "shared": 13.330051150000001
+      },
+      "stages": [
+        {
+          "index": 0,
+          "seconds": 1500,
+          "requestedPerSecond": 10,
+          "completedRequests": 15000,
+          "deliveredPerScheduledSecond": 10.0,
+          "observedCompletionSpanSeconds": 1499.659078836441,
+          "observedRequestsPerSecond": 10.001606506218373,
+          "throughputTargetMet": true,
+          "unexpectedErrors": 0
+        }
+      ],
+      "latencyTargetsMet": true,
+      "throughputTargetsMet": true,
+      "resourceSummary": {
+        "meanMeasuredCpuPercentOfOneCore": 3.5791229248795453,
+        "memoryPeakBytesIncludingSetup": 185901056,
+        "resourceSampleCount": 337
       },
       "dataInvariants": {
         "members": 100,
@@ -293,6 +380,79 @@
             "bytes": 3646,
             "valid": true,
             "concurrency": 2
+          }
+        ]
+      }
+    },
+    {
+      "profile": "quotas",
+      "runId": "mk816-74300f197041",
+      "sourceRevision": "fd30129509d4ed64dc3680ce325c809168bc4e7b",
+      "sourceDirty": true,
+      "binaries": [
+        {
+          "service": "api",
+          "sha256": "f09254562a857b703eb6da4d546ffebb9556253f6c0a9f51574f8e6d616f741d"
+        },
+        {
+          "service": "worker",
+          "sha256": "197a4f9b383780c43eebe2602154d00df4cb6a928acdeaa0f6f5710ba6bd947d"
+        },
+        {
+          "service": "migrate",
+          "sha256": "d2a8b6dff95ec5d0e33c355cb3655535069035ff9cb9d6fa72e23e796ee7cf25"
+        }
+      ],
+      "reportSha256": "a8f400343ff58c74d972f5a03735420a6e289d6d3c5945dad40f620754e57303",
+      "verdict": "passed",
+      "completedRequests": 1800,
+      "unexpectedErrors": 0,
+      "rateLimited": 0,
+      "droppedIterations": 0,
+      "observedRequestsPerSecond": 10.039460712823404,
+      "memoryPeakBytes": 184123392,
+      "oom": 0,
+      "restarts": 0,
+      "p95Milliseconds": {
+        "lists": 1.6980413999999997,
+        "wishes": 12.92004835,
+        "shared": 16.758704849999997
+      },
+      "stages": [
+        {
+          "index": 0,
+          "seconds": 180,
+          "requestedPerSecond": 10,
+          "completedRequests": 1800,
+          "deliveredPerScheduledSecond": 10.0,
+          "observedCompletionSpanSeconds": 179.19289207458496,
+          "observedRequestsPerSecond": 10.039460712823404,
+          "throughputTargetMet": true,
+          "unexpectedErrors": 0
+        }
+      ],
+      "latencyTargetsMet": true,
+      "throughputTargetsMet": true,
+      "resourceSummary": {
+        "meanMeasuredCpuPercentOfOneCore": 4.025727108794001,
+        "memoryPeakBytesIncludingSetup": 184123392,
+        "resourceSampleCount": 74
+      },
+      "dataInvariants": {
+        "members": 100,
+        "lists": 500,
+        "wishes": 10000,
+        "images": 200,
+        "overReserved": 0
+      },
+      "supplement": {
+        "profile": "quotas",
+        "passed": true,
+        "results": [
+          {
+            "limited": true,
+            "retryAfter": 60,
+            "recovered": true
           }
         ]
       }

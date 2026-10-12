@@ -17,6 +17,7 @@ directory. Credentials and environment files are never part of this evidence.
 | Nominal | 9,000 | 10.0061 | 173.95 MiB | Passed |
 | Heavy images | 9,000 | 10.0041 | 574.54 MiB | Passed; all 18 supplemental cases |
 | Exports | 15,000 | 10.0016 | 177.29 MiB | Passed; three fresh ZIP exports |
+| Quotas | 1,800 | 10.0395 | 175.59 MiB | Passed; enforced limit and timed recovery |
 
 Each completed profile above has zero unexpected errors, rate-limited requests,
 dropped iterations, OOM kills and restarts. The three minutes of warmup are
@@ -26,6 +27,10 @@ Decoded output, downloads, image format and stable content are verified.
 The 25-minute export measurement verifies one fresh export followed by two fresh
 concurrent exports, completing in about 2.02 seconds each. ZIP size/CRC, member
 identity, five lists, one hundred wishes and every referenced image are checked.
+The quota supplement separately reaches the aggregate per-IP limit, verifies
+429/no-store and a 60-second Retry-After, then verifies successful recovery after
+that advertised deadline. Its expected 429 is separate from the measured business
+request error counters.
 
 Nominal p95 is 1.69 ms for lists, 13.93 ms for wishes, 16.16 ms for shared lists,
 13.78 ms for wish updates and 13.46 ms for reservation/cancellation requests.
@@ -38,11 +43,17 @@ for both services. This metadata defect is corrected in the current harness.
 Original reports are preserved unchanged. Their source is explicitly marked
 dirty, and binary/harness fingerprints distinguish them from a published release.
 
-Quota, concurrency and stress qualification is still in progress. A
+Concurrency and stress qualification is still in progress. A
 profile is included as passed only after its full duration, final invariants and
 supplemental checks succeed. The latest backend subsequently fixes conditional
 guest display-name validation; the recorded earlier measurements exercise
 authenticated enrollment and do not claim to test that corrected negative path.
+
+The original evidence used an `api` field for a public executable digest, which
+Gitleaks classified as a generic API key. The current schema represents executable
+digests as service/SHA-256 records. Historical scanning allows only the three
+exact public digests at this evidence path; actual credential detection remains
+enabled throughout the repository and history.
 
 These are local measurements, not production hardware acceptance or a comparison
 with historical .NET/Docker timings. They do not qualify backup/deployment overlap,
