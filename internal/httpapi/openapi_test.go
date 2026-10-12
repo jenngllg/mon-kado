@@ -34,6 +34,24 @@ func TestOpenAPI_WhenReadingDocument_ContainsVersionedOperationsAndExactErrorEnv
 	if err != nil || recorder.Code != 200 || document.OpenAPI != "3.1.0" || len(api.Patterns()) != 99 {
 		t.Fatalf("invalid specification: status %d patterns %d error %v", recorder.Code, len(api.Patterns()), err)
 	}
+	operationIDs := make(map[string]string)
+	for path, methods := range document.Paths {
+		for method, raw := range methods {
+			var operation struct {
+				ID string `json:"operationId"`
+			}
+			if err := json.Unmarshal(raw, &operation); err != nil {
+				t.Fatalf("invalid operation for %s %s", method, path)
+			}
+			if operation.ID == "" {
+				continue
+			}
+			if previous, exists := operationIDs[operation.ID]; exists {
+				t.Fatalf("duplicate operation identifier %s for %s and %s", operation.ID, previous, path)
+			}
+			operationIDs[operation.ID] = path
+		}
+	}
 	fields := document.Components.Schemas["ErrorResponse"].Properties
 	if len(fields) != 5 {
 		t.Fatalf("error envelope contains %d fields", len(fields))

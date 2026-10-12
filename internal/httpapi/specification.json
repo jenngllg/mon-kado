@@ -12300,7 +12300,7 @@
     },
     "/api/v1/wishlists/{wishlistId}/wishes/{wishId}/copies": {
       "post": {
-        "operationId": "Wishes_Create",
+          "operationId": "Wishes_CopyOwned",
         "summary": "Create an independent wish copy",
         "tags": [
           "Wishes"
@@ -12478,7 +12478,7 @@
     },
     "/api/v1/wishlists/{wishlistId}/wishes/copies": {
       "post": {
-        "operationId": "Wishes_Create",
+          "operationId": "Wishes_CopyShared",
         "summary": "Create an independent wish copy",
         "tags": [
           "Wishes"
