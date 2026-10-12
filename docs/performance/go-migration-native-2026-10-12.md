@@ -18,6 +18,8 @@ directory. Credentials and environment files are never part of this evidence.
 | Heavy images | 9,000 | 10.0041 | 574.54 MiB | Passed; all 18 supplemental cases |
 | Exports | 15,000 | 10.0016 | 177.29 MiB | Passed; three fresh ZIP exports |
 | Quotas | 1,800 | 10.0395 | 175.59 MiB | Passed; enforced limit and timed recovery |
+| Concurrent writes | 1,800 | 10.0399 | 178.27 MiB | Passed; ETag and reservation conflicts |
+| Stress and recovery | 12,000 | 10.0116 overall | 176.79 MiB | Passed; all four stage targets |
 
 Each completed profile above has zero unexpected errors, rate-limited requests,
 dropped iterations, OOM kills and restarts. The three minutes of warmup are
@@ -31,6 +33,18 @@ The quota supplement separately reaches the aggregate per-IP limit, verifies
 429/no-store and a 60-second Retry-After, then verifies successful recovery after
 that advertised deadline. Its expected 429 is separate from the measured business
 request error counters.
+Concurrent updates using the same ETag produce exactly one 200 and one 412,
+with the winning value persisted. Competing reservations for the full remaining
+quantity produce exactly one 201 and one 409, with no over-reserved wishes.
+
+All six profiles pass **48,600 measured business operations**. Stress has four
+five-minute stages at 5/10/20/5 requests per second; their observed completion
+rates are 5.0263/10.0223/20.0145/5.0262. All ten generators finish successfully,
+and final dataset counts remain 100/500/10,000 with zero over-reserved wishes.
+Stress p95 is 1.72/12.50/15.05 ms for list/wish/shared reads and 12.93/13.29 ms
+for updates/reservations. The stress profile keeps latency diagnostic by policy;
+all observed latencies nevertheless meet the ordinary thresholds. Its clean
+source revision is `759d4657244c1c3eac5bdf42f8533cf024ce48a7`.
 
 Nominal p95 is 1.69 ms for lists, 13.93 ms for wishes, 16.16 ms for shared lists,
 13.78 ms for wish updates and 13.46 ms for reservation/cancellation requests.
@@ -43,11 +57,12 @@ for both services. This metadata defect is corrected in the current harness.
 Original reports are preserved unchanged. Their source is explicitly marked
 dirty, and binary/harness fingerprints distinguish them from a published release.
 
-Concurrency and stress qualification is still in progress. A
-profile is included as passed only after its full duration, final invariants and
-supplemental checks succeed. The latest backend subsequently fixes conditional
-guest display-name validation; the recorded earlier measurements exercise
-authenticated enrollment and do not claim to test that corrected negative path.
+Each profile is recorded as passed only after its full duration, final invariants
+and supplemental checks succeed. The backend fixes conditional guest display-name
+validation after the earlier nominal/image/export measurements; those runs
+exercise authenticated enrollment and do not claim to test the corrected negative
+path. The later quota/concurrency/stress runs include that correction, which also
+has explicit public HTTP integration tests.
 
 The original evidence used an `api` field for a public executable digest, which
 Gitleaks classified as a generic API key. The current schema represents executable

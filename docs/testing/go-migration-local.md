@@ -77,10 +77,16 @@ private source copy. See [fixture instructions](../../tests/Native.OperationsTes
 Native encrypted backup capture/restore also has real local Restic/PostgreSQL
 qualification and installer isolation; remote Drive operations remain disabled.
 
-## Scope and outstanding qualification
+## Scope and remaining review
 
-The long performance campaign results are recorded separately in
-[the performance guide](../operations-performance.md). Performance fixtures share
+All six long performance profiles pass, totaling 48,600 measured business
+operations, without unexpected errors, measured 429 responses, OOM or restart.
+They include all eighteen image cases, three fresh ZIP exports, quota enforcement/
+recovery and competing ETag/reservation writes. Final stress reaches each
+5/10/20/5 requests-per-second target and has no over-reserved wish. Results and
+source/binary provenance are recorded in
+[the native performance evidence](../performance/go-migration-native-2026-10-12.md).
+Performance fixtures share
 a one-CPU, 768 MiB, zero-swap budget and keep authentication and business quotas
 enabled. Local performance does not qualify production hardware or deployment/
 backup overlap.

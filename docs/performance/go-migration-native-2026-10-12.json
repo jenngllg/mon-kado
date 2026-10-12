@@ -24,7 +24,22 @@
       ],
       "reportSha256": "048e892a50d3e84f58daf3f6b488f413b4c5c564b3c94e00acb9e85df74b25c2",
       "verdict": "passed",
+      "expectedRequests": 9000,
       "completedRequests": 9000,
+      "generatorExitCodes": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "stopReason": null,
+      "observedCompletionSpanSeconds": 899.3483679294586,
       "unexpectedErrors": 0,
       "rateLimited": 0,
       "droppedIterations": 0,
@@ -89,7 +104,22 @@
       ],
       "reportSha256": "6b6dbc155d9ed4686e63c9371f463057861787f1aa000870ae5f0b3d4131e219",
       "verdict": "passed",
+      "expectedRequests": 9000,
       "completedRequests": 9000,
+      "generatorExitCodes": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "stopReason": null,
+      "observedCompletionSpanSeconds": 899.5296769142151,
       "unexpectedErrors": 0,
       "rateLimited": 0,
       "droppedIterations": 0,
@@ -319,7 +349,22 @@
       ],
       "reportSha256": "1afc7c58be6ea30fe75e48c4654cc32d893193aeb836ab871dad0b2521eb3740",
       "verdict": "passed",
+      "expectedRequests": 15000,
       "completedRequests": 15000,
+      "generatorExitCodes": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "stopReason": null,
+      "observedCompletionSpanSeconds": 1499.659078836441,
       "unexpectedErrors": 0,
       "rateLimited": 0,
       "droppedIterations": 0,
@@ -405,7 +450,22 @@
       ],
       "reportSha256": "a8f400343ff58c74d972f5a03735420a6e289d6d3c5945dad40f620754e57303",
       "verdict": "passed",
+      "expectedRequests": 1800,
       "completedRequests": 1800,
+      "generatorExitCodes": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "stopReason": null,
+      "observedCompletionSpanSeconds": 179.19289207458496,
       "unexpectedErrors": 0,
       "rateLimited": 0,
       "droppedIterations": 0,
@@ -456,6 +516,207 @@
           }
         ]
       }
+    },
+    {
+      "profile": "concurrency",
+      "runId": "mk816-3c595d63284c",
+      "sourceRevision": "c92cfe5cfcd6b37de40a8e5aa58f3474905103db",
+      "sourceDirty": false,
+      "binaries": [
+        {
+          "service": "api",
+          "sha256": "1690435cabf1ff72eef70d126377126d545b609de0337c07d1174e435cff5fc5"
+        },
+        {
+          "service": "worker",
+          "sha256": "af31d4372a7f721e614d794e58796e529ac4988a96c9548f96f8dd3f2420a5fd"
+        },
+        {
+          "service": "migrate",
+          "sha256": "561fe5cfa84e310eef9afb95e940d045ae5acf4917c0292c0f8e59af7b6f740c"
+        }
+      ],
+      "reportSha256": "f47bda8e7ed2cf0117ffeaf132765a1573d8e68fb01331e028d4b59c36885ae1",
+      "verdict": "passed",
+      "expectedRequests": 1800,
+      "completedRequests": 1800,
+      "generatorExitCodes": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "stopReason": null,
+      "observedCompletionSpanSeconds": 179.18526411056519,
+      "unexpectedErrors": 0,
+      "rateLimited": 0,
+      "droppedIterations": 0,
+      "observedRequestsPerSecond": 10.03988809531758,
+      "memoryPeakBytes": 186925056,
+      "oom": 0,
+      "restarts": 0,
+      "p95Milliseconds": {
+        "lists": 1.6612405499999998,
+        "wishes": 10.52319145,
+        "shared": 13.080791799999997
+      },
+      "stages": [
+        {
+          "index": 0,
+          "seconds": 180,
+          "requestedPerSecond": 10,
+          "completedRequests": 1800,
+          "deliveredPerScheduledSecond": 10.0,
+          "observedCompletionSpanSeconds": 179.18526411056519,
+          "observedRequestsPerSecond": 10.03988809531758,
+          "throughputTargetMet": true,
+          "unexpectedErrors": 0
+        }
+      ],
+      "latencyTargetsMet": true,
+      "throughputTargetsMet": true,
+      "resourceSummary": {
+        "meanMeasuredCpuPercentOfOneCore": 3.6087679482556787,
+        "memoryPeakBytesIncludingSetup": 186925056,
+        "resourceSampleCount": 74
+      },
+      "dataInvariants": {
+        "members": 100,
+        "lists": 500,
+        "wishes": 10000,
+        "images": 200,
+        "overReserved": 0
+      },
+      "supplement": {
+        "profile": "concurrency",
+        "passed": true,
+        "results": [
+          {
+            "etagConflict": true,
+            "reservationConflict": true,
+            "valid": true
+          }
+        ]
+      }
+    },
+    {
+      "profile": "stress",
+      "runId": "mk816-882a6e87e5c0",
+      "sourceRevision": "759d4657244c1c3eac5bdf42f8533cf024ce48a7",
+      "sourceDirty": false,
+      "binaries": [
+        {
+          "service": "api",
+          "sha256": "5239d35671ee693d3177c015b07aeb9e6581c0ea804218bfd2b11e3c0174ef22"
+        },
+        {
+          "service": "worker",
+          "sha256": "8b36034c513103400c9e3a2d32c6c1d9562a6ff3f82ad1a436ebb7d74309f8b8"
+        },
+        {
+          "service": "migrate",
+          "sha256": "61a82e11bd8051abf642fa198ba7e3b53c6feeb3a74b2ee410b7e36b5f8491b0"
+        }
+      ],
+      "reportSha256": "08b6680dd545732e5295963ba0108163eb01fc11ef852087bd664ae89792fbd0",
+      "verdict": "passed",
+      "expectedRequests": 12000,
+      "completedRequests": 12000,
+      "generatorExitCodes": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "stopReason": null,
+      "observedCompletionSpanSeconds": 1198.5150859355927,
+      "unexpectedErrors": 0,
+      "rateLimited": 0,
+      "droppedIterations": 0,
+      "observedRequestsPerSecond": 10.011555249330268,
+      "memoryPeakBytes": 185376768,
+      "oom": 0,
+      "restarts": 0,
+      "p95Milliseconds": {
+        "lists": 1.7223283500000004,
+        "wishes": 12.502218749999999,
+        "shared": 15.0482986,
+        "update": 12.932513250000001,
+        "reservation": 13.28755275
+      },
+      "stages": [
+        {
+          "index": 0,
+          "seconds": 300,
+          "requestedPerSecond": 5,
+          "completedRequests": 1500,
+          "deliveredPerScheduledSecond": 5.0,
+          "observedCompletionSpanSeconds": 298.23393297195435,
+          "observedRequestsPerSecond": 5.026255681445091,
+          "throughputTargetMet": true,
+          "unexpectedErrors": 0
+        },
+        {
+          "index": 1,
+          "seconds": 300,
+          "requestedPerSecond": 10,
+          "completedRequests": 3000,
+          "deliveredPerScheduledSecond": 10.0,
+          "observedCompletionSpanSeconds": 299.2329318523407,
+          "observedRequestsPerSecond": 10.022292604745406,
+          "throughputTargetMet": true,
+          "unexpectedErrors": 0
+        },
+        {
+          "index": 2,
+          "seconds": 300,
+          "requestedPerSecond": 20,
+          "completedRequests": 6000,
+          "deliveredPerScheduledSecond": 20.0,
+          "observedCompletionSpanSeconds": 299.73201394081116,
+          "observedRequestsPerSecond": 20.014545397158134,
+          "throughputTargetMet": true,
+          "unexpectedErrors": 0
+        },
+        {
+          "index": 3,
+          "seconds": 300,
+          "requestedPerSecond": 5,
+          "completedRequests": 1500,
+          "deliveredPerScheduledSecond": 5.0,
+          "observedCompletionSpanSeconds": 298.23645305633545,
+          "observedRequestsPerSecond": 5.026213209814583,
+          "throughputTargetMet": true,
+          "unexpectedErrors": 0
+        }
+      ],
+      "latencyTargetsMet": true,
+      "throughputTargetsMet": true,
+      "resourceSummary": {
+        "meanMeasuredCpuPercentOfOneCore": 3.826195301405394,
+        "memoryPeakBytesIncludingSetup": 185376768,
+        "resourceSampleCount": 277
+      },
+      "dataInvariants": {
+        "members": 100,
+        "lists": 500,
+        "wishes": 10000,
+        "images": 200,
+        "overReserved": 0
+      },
+      "supplement": null
     }
   ]
 }
