@@ -8,4 +8,4 @@ for suite in security database-security frontend-http frontend-release installer
 done
 MONKADO_MONITOR_NATIVE_TESTS=1 \
     PYTHONPATH="$source_root/src/Operations.Monitoring:$source_root/src/Operations.Native:$source_root/tests/Operations.MonitoringTests" \
-    python3 -m unittest discover -s "$source_root/tests/Operations.MonitoringTests" -p test_monitor_container.py
+    python3 -m unittest discover -s "$source_root/tests/Operations.MonitoringTests" -p test_monitor_native.py

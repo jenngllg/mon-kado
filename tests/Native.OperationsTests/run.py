@@ -10,7 +10,7 @@ SUITES = {
     'frontend-http': ('Deployment.FrontendTests', 'test_frontend_http.py', 'MONKADO_FRONTEND_NATIVE_TESTS'),
     'frontend-release': ('Deployment.FrontendTests', 'test_frontend_campaign.py', 'MK936_NATIVE_CAMPAIGN'),
     'installer': ('Deployment.MonitoringTests', 'test_install.py', 'MONKADO_MONITOR_INSTALL_TESTS'),
-    'entrypoint': ('../deployments/production', 'test_deploy_container.py', 'MONKADO_DEPLOYMENT_SANDBOX'),
+    'entrypoint': ('../deployments/production', 'test_deploy_native.py', 'MONKADO_DEPLOYMENT_SANDBOX'),
     'database-security': ('Deployment.SecurityTests', 'test_secret_replacement.py', 'MONKADO_DATABASE_SECURITY_TESTS'),
     'go-smoke': ('Native.OperationsTests', 'test_go_smoke.py', 'MONKADO_NATIVE_GO_SMOKE'),
 }
