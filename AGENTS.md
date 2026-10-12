@@ -5,7 +5,8 @@
 - Le backend est en Go. Exécuter PostgreSQL, API, worker, outils et tests nativement ; utiliser Docker uniquement si un besoin concret le rend nécessaire et expliquer ce besoin.
 - Conserver les contrats HTTP/JSON, règles d'accès et invariants métier lors d'un changement technique.
 - Garder `GmailOAuthBootstrap` dans `src/Tools.GmailOAuthBootstrap` comme module autonome, sans déplacement sans demande explicite de Jenn. Les outils autonomes appelant un provider externe restent sous `src/`.
-- Préserver les audits historiques, prototypes et outils locaux .NET de gestion de disque existants ; ils ne sont pas nécessaires au backend Go.
+- Préserver les audits historiques et les prototypes ; ils ne sont pas nécessaires au backend Go.
+- Ne pas réintroduire les anciens outils .NET de gestion de disque ni leurs garde-fous MSBuild, supprimés à la demande de Jenn.
 - Organiser les packages par responsabilité technique. Garder les composition roots `cmd/*` concises et injecter explicitement leurs dépendances.
 - Utiliser `gofmt` et `go vet`. Préférer les sorties rapides et les opérations lisibles, sans imbrication inutile.
 - Documenter en anglais les packages, types/interfaces exportés et leurs fonctions avec GoDoc. Les commentaires internes expliquent le pourquoi ; tout TODO référence un ticket.
@@ -25,8 +26,8 @@
 - Administration : rôle vivant en base et session vérifiée avec la double authentification courante. Révocation/suppression des comptes auditées atomiquement.
 - `ErrorResponse` contient exactement `statusCode`, `title`, `message`, `errorCode`, `validationErrors`. Chaque ValidationError contient exactement `propertyName` et `errorMessage`.
 - Title/Message en anglais ; chaque erreur métier prévisible possède un code stable en UPPER_SNAKE_CASE préfixé par domaine. Le front traduit à partir de ce code.
-- Identifiants membres : pseudo libre avec tag de quatre chiffres attribué automatiquement côté serveur, immuable pendant toute la vie du compte, jamais choisi ni généré dans le front. Afficher le tag pour information dans le profil ; le changement de pseudo ne transmet pas le tag. Garantir l'unicité de l'ensemble pseudo normalisé/tag ; refuser un renommage en conflit plutôt que changer le tag. Ne pas changer les UUID d'autorisation ni les pseudonymes invités.
 - JSON camelCase ; propriétés nullables incluses même à null. Enums en chaînes camelCase ; rejeter nombres et valeurs inconnues avant validation métier.
+- Identifiants membres : pseudo libre avec tag de quatre chiffres attribué automatiquement côté serveur, immuable pendant toute la vie du compte, jamais choisi ni généré dans le front. Afficher le tag pour information dans le profil ; le changement de pseudo ne transmet pas le tag. Garantir l'unicité de l'ensemble pseudo normalisé/tag ; refuser un renommage en conflit plutôt que changer le tag. Ne pas changer les UUID d'autorisation ni les pseudonymes invités.
 - Timestamps UTC sans suffixe Utc ; dates calendaires yyyy-MM-dd. Ne pas convertir les décimales monétaires en flottants binaires.
 - Centraliser les exceptions à la frontière HTTP et documenter statuts, schémas et autorisations dans OpenAPI. Vérifier les contrats avec des assertions ciblées sans snapshots globaux.
 - Conserver CSRF, allowlists d'hôtes/origines et cookies de production __Host-, Secure, HttpOnly, SameSite. Faire confiance aux headers de proxy uniquement pour les pairs déclarés dans TRUSTED_PROXIES.
