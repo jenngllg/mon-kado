@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import shutil
 import sys
 import unittest
 import tempfile
@@ -85,17 +86,33 @@ class MonitorNativeTests(unittest.TestCase):
         self.assertEqual(0,os.geteuid())
         name = "monkado-monitor-budget-" + uuid.uuid4().hex + ".service"
         with tempfile.TemporaryDirectory(prefix='monkado-native-monitor-') as temporary:
-            fixture = Path(temporary)
+            directory = Path(temporary)
+            directory.chmod(0o711)
+            code = directory/'code'
+            code.mkdir(mode=0o755)
+            # Run the installed-code shape from a root-owned readable directory,
+            # rather than depending on traversal of a runner's private home checkout.
+            sources = [*list((root/'src/Operations.Monitoring').glob('*.py')),
+                       root/'src/Operations.Native/native_services.py',
+                       root/'tests/Operations.MonitoringTests/test_monitor_policy.py',Path(__file__).resolve()]
+            for source in sources:
+                target = code/source.name
+                shutil.copyfile(source,target)
+                target.chmod(0o444)
+            code.chmod(0o555)
+            fixture = directory/'data'
+            fixture.mkdir(mode=0o700)
             fixture.chmod(0o700)
             os.chown(fixture,65534,65534)
             command = ['systemd-run','--quiet','--wait','--pipe','--unit='+name,
                        '--property=User=nobody','--property=Group=nogroup','--property=MemoryMax=128M',
                        '--property=MemorySwapMax=0','--property=CPUQuota=10%','--property=TasksMax=64',
                        '--property=PrivateNetwork=yes','--property=NoNewPrivileges=yes',
-                       '--property=ProtectSystem=strict','--property=ReadWritePaths='+str(fixture),'--property=UMask=0077',
+                       '--property=ProtectSystem=strict','--property=ProtectHome=yes',
+                       '--property=ReadWritePaths='+str(fixture),'--property=UMask=0077',
                        '--setenv=PYTHONDONTWRITEBYTECODE=1','--setenv=MONKADO_NATIVE_FIXTURE='+str(fixture),
-                       '--setenv=PYTHONPATH='+str(root/'src/Operations.Monitoring')+':'+str(root/'tests/Operations.MonitoringTests'),
-                       sys.executable,str(Path(__file__).resolve()),'--inside']
+                       '--setenv=PYTHONPATH='+str(code),
+                       sys.executable,str(code/Path(__file__).name),'--inside']
             # Act
             try:
                 result = subprocess.run(command,capture_output=True,timeout=45,check=False)
