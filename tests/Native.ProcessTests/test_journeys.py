@@ -171,7 +171,9 @@ class NativeProcessTests(unittest.TestCase):
         record = self.event(events, lambda item: item.get("eventId") == 6001)
         message = json.loads((self.root / "mailbox" / (record["properties"]["OutboxId"] + ".json")).read_bytes())
         self.assertEqual(email, message["to"])
-        proof = urllib.parse.parse_qs(urllib.parse.urlsplit(message["actionUrl"]).query)
+        link = urllib.parse.urlsplit(message["actionUrl"])
+        self.assertEqual("", link.query)
+        proof = urllib.parse.parse_qs(link.fragment)
         browser.send("POST", "/api/v1/auth/email-confirmations", 204, {"userId": proof["userId"][0], "token": proof["token"][0]})
         access, _ = browser.send("POST", "/api/v1/auth/sessions", 200, {"email": email, "password": password})
         browser.access = access["accessToken"]
