@@ -184,7 +184,7 @@ func TestPasswordReset_WhenProofUsed_RevokesSessionsAndRejectsReplay(t *testing.
 		t.Fatal(err)
 	}
 	newPassword := "A different long password 🎁"
-	reset := jsonInput(t, map[string]string{"userId": member, "token": link.Query().Get("token"), "newPassword": newPassword})
+	reset := jsonInput(t, map[string]string{"userId": member, "token": actionCredentials(t, link).Get("token"), "newPassword": newPassword})
 	// Act
 	requireStatus(t, f.send(t, "POST", "/api/v1/auth/password-resets", reset, nil), 204, nil)
 	requireStatus(t, f.send(t, "POST", "/api/v1/auth/password-resets", reset, nil), 400, nil)

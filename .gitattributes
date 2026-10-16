@@ -4,6 +4,9 @@
 *.sum text eol=lf
 *.sql text eol=lf
 *.sh text eol=lf
+/deployments/production/monkado-deploy text eol=lf
+/deployments/backup/monkado-backup text eol=lf
+/deployments/backup/monkado-guarded-deploy text eol=lf
 *.ps1 text eol=lf
 *.json text eol=lf
 *.md text eol=lf

@@ -121,6 +121,7 @@ class TransportTests(unittest.TestCase):
             runtime.download("https://github.com/file", target, 20)
             # Assert
             self.assertEqual(b"synthetic", target.read_bytes())
+            self.assertEqual("application/octet-stream", build.return_value.open.call_args.args[0].get_header("Accept"))
             context = tls.call_args.kwargs["context"]
             self.assertEqual(runtime.ssl.CERT_REQUIRED, context.verify_mode)
             self.assertTrue(context.check_hostname)
@@ -132,6 +133,16 @@ class TransportTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 runtime.download("https://github.com/file", target, 1)
             self.assertEqual(30, build.return_value.open.call_args.kwargs["timeout"])
+
+    def test_download_publication_pointer_requests_github_json(self):
+        # Arrange
+        with tempfile.TemporaryDirectory() as directory, patch.object(runtime.urllib.request, "build_opener") as build:
+            response = build.return_value.open.return_value.__enter__.return_value
+            response.read.side_effect = [b"{}", b""]
+            # Act
+            runtime.download(runtime.POINTER, Path(directory) / "pointer.json", 20)
+            # Assert
+            self.assertEqual("application/vnd.github+json", build.return_value.open.call_args.args[0].get_header("Accept"))
 
 if __name__ == "__main__":
     unittest.main()

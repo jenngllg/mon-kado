@@ -108,7 +108,7 @@ func (s *Service) PrepareAuthenticationEmail(ctx context.Context, outboxID strin
 			}
 			query := url.Values{"userId": {user}, "token": {token}}
 			message.Subject = subject
-			message.Text = s.Config.FrontendOrigin + path + "?" + query.Encode()
+			message.Text = s.Config.FrontendOrigin + path + "#" + query.Encode()
 		}
 		if kind == "EMAIL_CHANGE_CONFIRMATION" || kind == "ACCOUNT_DELETION_CONFIRMATION" {
 			var requestID string
@@ -129,7 +129,7 @@ func (s *Service) PrepareAuthenticationEmail(ctx context.Context, outboxID strin
 			}
 			query := url.Values{"requestId": {requestID}, "token": {token}}
 			message.Subject = "Confirm your MonKado account operation"
-			message.Text = s.Config.FrontendOrigin + path + "?" + query.Encode()
+			message.Text = s.Config.FrontendOrigin + path + "#" + query.Encode()
 		}
 		message = composeEmail(kind, message, s.Config.FrontendOrigin, s.Config.Jobs().ExportLifetime)
 		data, err := json.Marshal(message)
