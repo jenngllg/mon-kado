@@ -44,7 +44,8 @@ def download(url, destination, limit):
     context.verify_mode = ssl.CERT_REQUIRED
     context.check_hostname = True
     opener = urllib.request.build_opener(SafeRedirect(), urllib.request.HTTPSHandler(context=context))
-    request = urllib.request.Request(url, headers={"Accept": "application/octet-stream", "User-Agent": "MonKado-publication"})
+    accept = "application/vnd.github+json" if url == POINTER else "application/octet-stream"
+    request = urllib.request.Request(url, headers={"Accept": accept, "User-Agent": "MonKado-publication"})
     size = 0
     with opener.open(request, timeout=30) as response, destination.open("xb") as output:
         while chunk := response.read(65536):

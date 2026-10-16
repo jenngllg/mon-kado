@@ -154,7 +154,11 @@ func (f *fixture) member(t *testing.T, email string) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	confirmation, _ := json.Marshal(map[string]string{"userId": id, "token": link.Query().Get("token")})
+	credentials := actionCredentials(t, link)
+	if link.Path != "/confirm-email" || credentials.Get("userId") != id {
+		t.Fatal("confirmation link does not target the frontend confirmation contract")
+	}
+	confirmation, _ := json.Marshal(map[string]string{"userId": id, "token": credentials.Get("token")})
 	requireStatus(t, f.send(t, "POST", "/api/v1/auth/email-confirmations", string(confirmation), nil), 204, nil)
 	login, _ := json.Marshal(map[string]string{"email": email, "password": password})
 	var tokens domain.AccessTokenResponse
@@ -363,7 +367,8 @@ func TestEmailChange_WhenConfirmed_ChangesLoginAndRevokesExistingSession(t *test
 		t.Fatal(err)
 	}
 	link, _ := url.Parse(message.ActionURL)
-	confirmation, _ := json.Marshal(map[string]string{"requestId": link.Query().Get("requestId"), "token": link.Query().Get("token")})
+	credentials := actionCredentials(t, link)
+	confirmation, _ := json.Marshal(map[string]string{"requestId": credentials.Get("requestId"), "token": credentials.Get("token")})
 	requireStatus(t, f.send(t, "POST", "/api/v1/auth/email-change-confirmations", string(confirmation), nil), 204, nil)
 	// Assert
 	requireStatus(t, f.send(t, "GET", "/api/v1/auth/sessions/current", "", nil), 401, nil)
@@ -393,7 +398,7 @@ func TestAccountDeletion_WhenConfirmed_RemovesIdentityAndPublicResources(t *test
 		t.Fatal(err)
 	}
 	link, _ := url.Parse(message.ActionURL)
-	confirmation, _ := json.Marshal(map[string]string{"token": link.Query().Get("token")})
+	confirmation, _ := json.Marshal(map[string]string{"token": actionCredentials(t, link).Get("token")})
 	requireStatus(t, f.send(t, "POST", "/api/v1/members/current/deletion-requests/confirm", string(confirmation), nil), 204, nil)
 	// Assert
 	requireStatus(t, f.send(t, "GET", "/api/v1/auth/sessions/current", "", nil), 401, nil)
