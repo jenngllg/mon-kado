@@ -44,8 +44,11 @@ jobs:
               --jq '[.workflow_runs[] | select(.event == "push" or .event == "workflow_dispatch")] | sort_by(.run_number) | last | .conclusion' \
               | grep -x success
           done
-          gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/check-runs?per_page=100" \
-            --jq '[.check_runs[] | select(.name == "CodeQL")] | sort_by(.started_at) | last | .conclusion' | grep -x success
+          # Bind every matrix analysis to the successful CodeQL run for this revision.
+          codeql_run=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/codeql.yml/runs?head_sha=$GITHUB_SHA&branch=develop&per_page=100" \
+            --jq '[.workflow_runs[] | select(.event == "push" or .event == "workflow_dispatch")] | sort_by(.run_number) | last | .id')
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$codeql_run/jobs?filter=latest&per_page=100" \
+            --jq '[.jobs[] | select(.name | startswith("Analyze ("))] | sort_by(.name) | (map(.name) == ["Analyze (actions)", "Analyze (go)", "Analyze (javascript-typescript)", "Analyze (python)"]) and all(.conclusion == "success")' | grep -x true
       - name: Set up native Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
