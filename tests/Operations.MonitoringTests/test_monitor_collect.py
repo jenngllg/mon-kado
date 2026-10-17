@@ -10,7 +10,8 @@ from unittest.mock import patch, Mock
 
 import monitor_collect as collect
 import monitor_policy as policy
-from monitor_storage import atomic_json
+from monitor_runtime import Monitor
+from monitor_storage import atomic_json, read_json
 from test_monitor_policy import NOW, snapshot
 
 
@@ -63,6 +64,49 @@ class CollectorTests(unittest.TestCase):
         self.assertEqual({"api": False, "database": False, "frontend": False}, observed["checks"])
         self.assertFalse(observed["backup"]["missedScheduledCapture"])
         self.assertTrue(all(".Config" not in str(call) for call in self.calls))
+
+    def test_run_when_snapshots_change_during_probes_uses_observation_completion_time(self):
+        # Arrange: publication crosses the monitor's start time during bounded network I/O.
+        completed = NOW + timedelta(seconds=12)
+        deployment = {"failed": False, "recoveryRequired": False, "rollbackFailed": False}
+        self.enterContext(patch.object(collect.monitor_deployment, "collect", return_value=deployment))
+        self.enterContext(patch.object(collect.monitor_deployment, "collect_frontend", return_value=deployment))
+        for offset, bad in ((5, False), (12, False), (13, True), (-168, False), (-169, True)):
+            with self.subTest(snapshotOffsetSeconds=offset):
+                published = NOW + timedelta(seconds=offset)
+                def probe(service, path):
+                    for name in ("api", "worker"):
+                        value = snapshot(name, when=published)
+                        for job in value["jobs"].values():
+                            job["nextExpectedAt"] = (NOW + timedelta(hours=1)).isoformat()
+                        atomic_json(self.root / "monkado-observability" / name / "snapshot.json",
+                                    value)
+                    return self.probe(service, path)
+                self.collector.probe = probe
+                notify = Mock()
+                root = self.root / ("monitor-" + str(offset))
+                monitor = Monitor(root, self.collector, notify, clock=lambda: completed)
+                # Act
+                report = monitor.run({"schemaVersion": 1, "frontendEnabled": True,
+                                      "notificationsEnabled": True, "thresholds": {}}, NOW)
+                # Assert: future and stale publications still alert; no timing tolerance is added.
+                self.assertEqual(completed.isoformat(), report["createdAt"])
+                for name in ("api", "worker"):
+                    self.assertEqual(bad, name + ".telemetry" in report["openIncidents"])
+                history = read_json(root / "history" / (completed.strftime("%Y%m%dT%H%MZ") + ".json"))
+                self.assertEqual(completed.isoformat(), history["createdAt"])
+                if offset <= 12:
+                    self.assertEqual(published.isoformat(), history["api"]["createdAt"])
+                    self.assertEqual(published.isoformat(), read_json(root / "state.json")["workerSnapshot"]["createdAt"])
+                else:
+                    self.assertIsNone(history["api"])
+                    self.assertIsNone(read_json(root / "state.json")["workerSnapshot"])
+                if not bad:
+                    notify.assert_not_called()
+                else:
+                    notify.assert_called_once()
+                    self.assertEqual(["api.telemetry", "worker.telemetry"], notify.call_args.args[1])
+                    self.assertEqual(completed, notify.call_args.args[2])
 
     def test_frontend_transition_is_separate_from_backend_maintenance(self):
         # Arrange

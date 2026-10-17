@@ -138,7 +138,7 @@ class Collector:
         for service in ("api", "worker"):
             try:
                 result["snapshots"][service] = self.snapshot(service)
-                age(result["snapshots"][service]["createdAt"], now)
+                # Freshness is checked against the completed observation, not the pre-I/O start time.
             except (OSError, ValueError, TypeError, KeyError):
                 result["snapshots"][service] = None
         result["containers"], samples = self.containers(now, previous.get("containerHistory", []), options["restartWindowSeconds"])

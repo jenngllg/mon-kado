@@ -52,6 +52,12 @@ Les unités API et Worker disposent chacune d'un chemin d'écriture de télémé
 Le reste de leur système de fichiers est protégé par systemd. Un fichier absent,
 invalide ou périmé n’est pas remplacé par des mesures fictives égales à zéro.
 
+La fraîcheur des fichiers est évaluée à l’heure UTC de fin de collecte, après les
+sondes réseau : un fichier publié pendant ces sondes ne doit pas être rejeté comme
+venant du futur. Les décisions, notifications et mesures persistées utilisent cette
+même heure. Les dates réellement futures et les fichiers de plus de trois minutes
+restent signalés ; aucun délai de tolérance supplémentaire n’est ajouté.
+
 ## Règles par défaut
 
 Le timer lance une observation par minute, sans rattrapage automatique. Le service est
