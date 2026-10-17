@@ -14,7 +14,7 @@ jobs:
   quality:
     name: quality
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -25,11 +25,15 @@ jobs:
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
-          cache-dependency-path: go.sum
+          cache-dependency-path: |
+            go.sum
+            deployments/caddy/build/go.sum
       - name: Install native PostgreSQL 18
         run: bash scripts/Initialize-CIPostgres.sh
-      - name: Install verified Caddy for isolated native HTTP tests
+      - name: Build and scan pinned Caddy for isolated native HTTP tests
         run: bash scripts/Initialize-CICaddy.sh
+      - name: Verify edge scan policy
+        run: python3 -m unittest discover -s tests/Native.OperationsTests -p test_caddy_security_scan.py
       - name: Scan Git history for secrets with native Gitleaks
         run: go run github.com/zricethezav/gitleaks/v8@v8.30.1 git --redact --config .gitleaks.toml
       - name: Verify formatting and modules
@@ -117,6 +121,16 @@ jobs:
             -Dsonar.go.coverage.reportPaths=coverage.sonar.out
             -Dsonar.qualitygate.wait=true
             -Dsonar.qualitygate.timeout=300
+      - name: Upload qualified edge executable and scan evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: qualified-caddy-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/monkado-native-tools/caddy
+            ${{ runner.temp }}/monkado-native-tools/caddy.sha256
+            ${{ runner.temp }}/monkado-native-tools/caddy-vulnerabilities.json
+            ${{ runner.temp }}/monkado-native-tools/caddy-dependencies.txt
+          if-no-files-found: error
       - name: Upload native binaries and coverage
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
