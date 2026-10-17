@@ -48,7 +48,8 @@ class MonitorTests(unittest.TestCase):
         cgroup.read_text.side_effect = ["oom_kill 3\n", OSError("simulated failure"), "oom_kill 4\n", "oom_kill 0\n"]
         collector = Collector(root=Path(self.directory.name), cgroup=cgroup,
                               runner=lambda arguments: (1, ""),
-                              probe=lambda service, path: (False, (NOW + timedelta(days=90)).isoformat()))
+                              probe=lambda service, path: (False, (NOW + timedelta(days=90)).isoformat()),
+                              clock=lambda: NOW + timedelta(minutes=minute))
         monitor = runtime.Monitor(self.root, collector, self.send, clock=lambda: NOW + timedelta(minutes=minute))
         configuration = self.configuration | {"notificationsEnabled": False}
         reports = []

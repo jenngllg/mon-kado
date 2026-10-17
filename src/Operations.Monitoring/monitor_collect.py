@@ -59,13 +59,20 @@ class Collector:
     """Observe known installation paths with substitutable network and process dependencies."""
 
     def __init__(self, root=Path("/var/lib"), cgroup=Path("/sys/fs/cgroup/monkado.slice/memory.events"), runner=command, probe=https,
-                 observer=native_services.observe, service_uid=None):
+                 observer=native_services.observe, service_uid=None, clock=None):
         self.root = root
         self.cgroup = cgroup
         self.runner = runner
         self.probe = probe
         self.observer = observer
         self.service_uid = service_uid
+        self.clock = clock if clock is not None else lambda: datetime.now(UTC)
+
+    def completed_at(self, started):
+        """Validate mutable host evidence against the clock after its bounded reads."""
+        completed = self.clock()
+        require(completed >= started)
+        return completed
 
     def native_command(self, arguments):
         """Adapt bounded native observations while rejecting unsuccessful process results."""
@@ -85,17 +92,20 @@ class Collector:
         """Adapt MK-813's retained status without loading its unmerged code or accessing Drive."""
         value = read_json(self.root / "monkado-backup/status.json")
         require(isinstance(value, dict))
+        active, _ = self.runner(["systemctl", "is-active", "--quiet", "monkado-backup.service", "monkado-backup-transfer.service"])
+        now = self.completed_at(now)
         selected = {key: value.get(key) for key in ("lastRemoteCapture", "lastIntegrityCheck")}
         for item in selected.values():
             if item is not None:
                 age(item, now)
-        active, _ = self.runner(["systemctl", "is-active", "--quiet", "monkado-backup.service", "monkado-backup-transfer.service"])
         selected["terminalFailure"] = bool(value.get("error")) and active != 0
         local = now.astimezone(ZoneInfo("Europe/Paris"))
         expected = local.replace(hour=3, minute=0, second=0, microsecond=0)
         if local < expected + timedelta(minutes=15):
             expected -= timedelta(days=1)
         captured = value.get("lastCapture")
+        if captured is not None:
+            age(captured, now)
         selected["missedScheduledCapture"] = captured is None or timestamp(captured) < expected
         return selected
 
@@ -162,12 +172,12 @@ class Collector:
         except (OSError, ValueError, TypeError, KeyError, subprocess.SubprocessError):
             result["backup"] = None
         try:
-            result["deployment"] = monitor_deployment.collect(self.root, self.runner, now)
+            result["deployment"] = monitor_deployment.collect(self.root, self.runner, now, self.completed_at)
         except (OSError, ValueError, TypeError, KeyError, subprocess.SubprocessError):
             result["deployment"] = None
         if frontend_enabled:
             try:
-                result["frontendDeployment"] = monitor_deployment.collect_frontend(self.root, self.runner, now)
+                result["frontendDeployment"] = monitor_deployment.collect_frontend(self.root, self.runner, now, self.completed_at)
             except (OSError, ValueError, TypeError, KeyError, subprocess.SubprocessError):
                 result["frontendDeployment"] = None
         return result, samples, oom

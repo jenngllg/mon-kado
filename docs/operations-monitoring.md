@@ -52,6 +52,11 @@ Les unités API et Worker disposent chacune d'un chemin d'écriture de télémé
 Le reste de leur système de fichiers est protégé par systemd. Un fichier absent,
 invalide ou périmé n’est pas remplacé par des mesures fictives égales à zéro.
 
+Les états de sauvegarde et de publication sont comparés à l’horloge UTC de l’hôte
+après leur lecture et celle des unités systemd. Une mise à jour intervenue pendant
+les sondes HTTPS ne devient donc pas une fausse alerte « unavailable ». Les vraies
+dates futures, les états absents ou corrompus et les délais dépassés restent signalés.
+
 La fraîcheur des fichiers est évaluée à l’heure UTC de fin de collecte, après les
 sondes réseau : un fichier publié pendant ces sondes ne doit pas être rejeté comme
 venant du futur. Les décisions, notifications et mesures persistées utilisent cette
