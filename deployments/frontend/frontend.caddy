@@ -27,7 +27,7 @@
 		# Crawlers receive only the explicitly public preview, not the bearer-protected SPA data.
 		@sharePreview {
 			path_regexp sharePreview ^/shared-wishlists/([0-9a-fA-F-]{36})/?$
-			header_regexp User-Agent (?i)(facebookexternalhit|Facebot|WhatsApp|Discordbot|Twitterbot|LinkedInBot)
+			header_regexp shareCrawler User-Agent (?i)(facebookexternalhit|Facebot|WhatsApp|Discordbot|Twitterbot|LinkedInBot)
 		}
 		handle @sharePreview {
 			rewrite * /api/v1/shared-wishlists/{re.sharePreview.1}/preview
