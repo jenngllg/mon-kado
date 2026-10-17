@@ -86,7 +86,13 @@ func (s *Service) Login(ctx context.Context, request domain.LoginRequest, curren
 		if !confirmed {
 			return domain.Failure(403, domain.AccountEmailNotConfirmed, "The email address has not been confirmed.")
 		}
-		if _, err = tx.Exec(ctx, `UPDATE users SET access_failed_count=0,lockout_end=NULL WHERE id=$1`, id); err != nil {
+		var upgradedPassword *string
+		if security.PasswordNeedsRehash(*password) {
+			value := security.HashPassword(text(request.Password))
+			upgradedPassword = &value
+		}
+		// Upgrade only a proven credential under the same account lock as session creation.
+		if _, err = tx.Exec(ctx, `UPDATE users SET access_failed_count=0,lockout_end=NULL,password_hash=COALESCE($2,password_hash) WHERE id=$1`, id, upgradedPassword); err != nil {
 			return err
 		}
 		var requiresTwoFactor bool

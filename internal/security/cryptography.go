@@ -22,7 +22,8 @@ import (
 	"github.com/google/uuid"
 )
 
-const passwordIterations = 100000
+// PBKDF2-HMAC-SHA512 uses the current OWASP minimum while retaining Identity compatibility.
+const passwordIterations = 220000
 
 // NewID creates a time-ordered UUID v7 before persistence.
 func NewID() string { return uuid.Must(uuid.NewV7()).String() }
@@ -77,6 +78,27 @@ func VerifyPassword(password, encoded string) bool {
 	offset := 13 + int(saltLength)
 	key, err := pbkdf2.Key(algorithm, password, data[13:offset], int(iterations), len(data)-offset)
 	return err == nil && subtle.ConstantTimeCompare(key, data[offset:]) == 1
+}
+
+// PasswordNeedsRehash identifies outdated parameters after a credential has been verified.
+func PasswordNeedsRehash(encoded string) bool {
+	data, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil || len(data) == 0 {
+		return false
+	}
+	if data[0] == 0 {
+		return len(data) == 49
+	}
+	if data[0] != 1 || len(data) < 13 {
+		return false
+	}
+	prf := binary.BigEndian.Uint32(data[1:5])
+	iterations := binary.BigEndian.Uint32(data[5:9])
+	saltLength := binary.BigEndian.Uint32(data[9:13])
+	if prf > 2 || iterations < 1 || iterations > 2000000 || saltLength < 16 || uint64(saltLength)+29 > uint64(len(data)) {
+		return false
+	}
+	return prf != 2 || iterations < passwordIterations || uint64(len(data))-13-uint64(saltLength) < 32
 }
 
 // RandomToken generates a canonical 256-bit Base64URL bearer secret.

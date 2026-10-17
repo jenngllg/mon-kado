@@ -2,6 +2,8 @@
 
 ## Technologie et organisation
 
+- Le frontend principal est le dépôt voisin `../mon-kado-front`. Appliquer les changements frontend et démarrer son serveur depuis ce dépôt, jamais depuis une copie sous les résultats de tests du backend.
+
 - Le backend est en Go. Exécuter PostgreSQL, API, worker, outils et tests nativement ; utiliser Docker uniquement si un besoin concret le rend nécessaire et expliquer ce besoin.
 - Conserver les contrats HTTP/JSON, règles d'accès et invariants métier lors d'un changement technique.
 - Garder `GmailOAuthBootstrap` dans `src/Tools.GmailOAuthBootstrap` comme module autonome, sans déplacement sans demande explicite de Jenn. Les outils autonomes appelant un provider externe restent sous `src/`.
@@ -80,8 +82,15 @@
 - Go mesure les statements ; compléter les branches importantes avec des scénarios explicites et ne pas présenter ce rapport comme une mesure de branches.
 - Aucun retry masquant l'instabilité CI. Horloge contrôlée, signaux/canaux déterministes, pas de sleeps/polling arbitraires ; t.Context() transmis aux E/S. Race detector sur Linux natif.
 
+## Mises en production et données réelles
+
+- La production contient désormais plusieurs utilisateurs réels. Avant chaque MEP, y compris frontend ou configuration, effectuer une nouvelle sauvegarde cohérente de PostgreSQL et des fichiers persistants nécessaires à la restauration ; vérifier son intégrité et sa copie chiffrée hors du VPS, puis conserver la référence du snapshot dans le compte rendu de déploiement.
+- Une sauvegarde quotidienne antérieure ou réalisée seulement après la MEP ne remplace pas cette sauvegarde préalable. Si la capture, la vérification ou le transfert distant échoue, ou si leur résultat est incertain, bloquer la MEP avant toute bascule ou migration.
+- L'autorisation de remise à zéro donnée pour la première bascule ne s'applique plus aux données actuelles. Préserver les comptes et données réels ; toute nouvelle remise à zéro ou purge destructive exige une nouvelle demande explicite et ciblée de Jenn.
+
 ## Git et conventions
 
+- Jenn autorise Codex à prendre en charge les déploiements de production demandés, sans redemander une autorisation générale à chaque déploiement. Conserver les contrôles qualité, approbations d'environnement, sauvegardes et vérifications après déploiement ; cette délégation ne vaut pas validation juridique ni autorisation de contourner un garde-fou.
 - Commits, titres et descriptions de PR en anglais. Ne pas versionner de plans d'implémentation ; garder *-implementation-plan.md parmi les fichiers locaux ignorés.
 - Préserver le travail utilisateur et ne pas reformater de fichiers sans rapport.
 - Pour une règle de Jenn, vérifier d'abord une option standard .editorconfig ; sinon documenter ici sans conflit avec une règle existante.
