@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
+	"github.com/JennGllg/mon-kado/internal/config"
 	"github.com/JennGllg/mon-kado/internal/domain"
 	"github.com/JennGllg/mon-kado/internal/images"
 	"net/url"
@@ -31,7 +32,7 @@ func (c *Client) Preview(ctx context.Context, value string) (domain.WishImportPr
 		} else {
 			maximum := c.MaximumHTMLBytes
 			if maximum == 0 {
-				maximum = 2 * 1024 * 1024
+				maximum = config.MaximumImportHTMLBytes
 			}
 			content, base, media, err := c.Download(budget, value, int64(maximum))
 			if err == nil && (media == "text/html" || media == "application/xhtml+xml") {

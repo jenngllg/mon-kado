@@ -14,6 +14,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/JennGllg/mon-kado/internal/importer"
 )
@@ -134,11 +135,12 @@ func TestPreview_WhenDNSRebindsAfterValidation_RefusesPrivateConnection(t *testi
 	}
 }
 
-func TestDownload_WhenResponseUnavailableOrTooLarge_RejectsWithoutRetry(t *testing.T) {
+func TestDownload_WhenResponseUnavailableOrTooLarge_RetriesOnlyTransientStatus(t *testing.T) {
 	for _, mode := range []string{"errorStatus", "oversized", "redirectLimit", "badLocation", "privateRedirect"} {
 		t.Run(mode, func(t *testing.T) {
 			// Arrange
 			client := importer.New()
+			client.Wait = func(ctx context.Context, _ time.Duration) error { return ctx.Err() }
 			client.Resolver = resolverFake{[]netip.Addr{netip.MustParseAddr("8.8.8.8")}}
 			client.MaximumRedirects = 0
 			calls := pipeMerchant(t, client, func(*http.Request) *http.Response {
@@ -162,7 +164,11 @@ func TestDownload_WhenResponseUnavailableOrTooLarge_RejectsWithoutRetry(t *testi
 			// Act
 			_, _, _, err := client.Download(t.Context(), "http://merchant.test/product", 5)
 			// Assert
-			if err == nil || *calls != 1 {
+			wantCalls := 1
+			if mode == "errorStatus" {
+				wantCalls = 3
+			}
+			if err == nil || *calls != wantCalls {
 				t.Fatal("unavailable response was accepted or repeated")
 			}
 		})

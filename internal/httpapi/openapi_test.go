@@ -53,6 +53,13 @@ func TestOpenAPI_WhenReadingDocument_ContainsVersionedOperationsAndExactErrorEnv
 		}
 	}
 	fields := document.Components.Schemas["ErrorResponse"].Properties
+	var author struct {
+		Type   string `json:"type"`
+		Format string `json:"format"`
+	}
+	if json.Unmarshal(document.Components.Schemas["SharedWishlistResponse"].Properties["ownerId"], &author) != nil || author.Type != "string" || author.Format != "uuid" {
+		t.Fatal("shared-list author identity is not documented")
+	}
 	if len(fields) != 5 {
 		t.Fatalf("error envelope contains %d fields", len(fields))
 	}

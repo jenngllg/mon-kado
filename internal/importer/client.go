@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
+	"github.com/JennGllg/mon-kado/internal/config"
 	"github.com/JennGllg/mon-kado/internal/domain"
 	"golang.org/x/net/html/charset"
 	"golang.org/x/net/idna"
@@ -39,11 +40,12 @@ type Client struct {
 	Timeout          time.Duration
 	MaximumRedirects int
 	MaximumHTMLBytes int
+	Wait             RetryWait
 }
 
 // New creates an isolated client that ignores process proxy settings.
 func New() *Client {
-	return &Client{Resolver: net.DefaultResolver, Dialer: &net.Dialer{Timeout: 10 * time.Second}, Timeout: 20 * time.Second, MaximumRedirects: 3, MaximumHTMLBytes: 2 * 1024 * 1024}
+	return &Client{Resolver: net.DefaultResolver, Dialer: &net.Dialer{Timeout: 10 * time.Second}, Timeout: 20 * time.Second, MaximumRedirects: 3, MaximumHTMLBytes: config.MaximumImportHTMLBytes}
 }
 
 var excluded = func() []netip.Prefix {
@@ -110,8 +112,7 @@ func (c *Client) Validate(ctx context.Context, value string) error {
 	return err
 }
 
-// Download validates each actual connection and manually follows bounded redirects.
-func (c *Client) Download(ctx context.Context, value string, limit int64) ([]byte, *url.URL, string, error) {
+func (c *Client) downloadAttempt(ctx context.Context, value string, limit int64) ([]byte, *url.URL, string, error) {
 	for redirects := 0; ; redirects++ {
 		u, err := webURL(value)
 		if err != nil {
@@ -130,12 +131,16 @@ func (c *Client) Download(ctx context.Context, value string, limit int64) ([]byt
 			value = u.ResolveReference(location).String()
 			continue
 		}
+		if response.StatusCode < 200 || response.StatusCode >= 300 {
+			response.Body.Close()
+			return nil, nil, "", merchantStatusError(response.StatusCode, response.Header.Get("Retry-After"))
+		}
 		content, err := io.ReadAll(io.LimitReader(response.Body, limit+1))
 		response.Body.Close()
 		if err != nil {
 			return nil, nil, "", err
 		}
-		if response.StatusCode < 200 || response.StatusCode >= 300 || int64(len(content)) > limit {
+		if int64(len(content)) > limit {
 			return nil, nil, "", errors.New("merchant response is unavailable or too large")
 		}
 		media, parameters, _ := mime.ParseMediaType(response.Header.Get("Content-Type"))

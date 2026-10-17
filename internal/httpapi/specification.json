@@ -14679,6 +14679,10 @@
             "type": "string",
             "format": "uuid"
           },
+          "ownerId": {
+            "type": "string",
+            "format": "uuid"
+          },
           "ownerDisplayName": {
             "type": "string"
           },
@@ -14732,6 +14736,7 @@
         "required": [
           "id",
           "ownerDisplayName",
+          "ownerId",
           "name",
           "occasion",
           "eventDate",
