@@ -63,7 +63,7 @@ Configuration comes from process environment, validated once at startup. Windows
 | `PROVIDER_HTTP_TIMEOUT` | `15s`, positive, at most `1m`, shorter than a job lease |
 | `PROVIDER_FAILURE_THRESHOLD`, `PROVIDER_BREAK_DURATION` | `5`, `30s` (Gmail circuit breaker) |
 | `WORKER_INTERVAL`, `OUTBOX_MAXIMUM_ATTEMPTS` | `10s`, `10` |
-| `WISH_IMPORT_TIMEOUT`, `WISH_IMPORT_MAXIMUM_HTML_BYTES` | `20s`, `2097152`; lower budgets are supported |
+| `WISH_IMPORT_TIMEOUT`, `WISH_IMPORT_MAXIMUM_HTML_BYTES` | `20s`, `4194304` (4 MiB); lower budgets are supported. Explicit older limits remain effective until deliberately updated. Each GET allows at most two transient retries with cancellable 250/500 ms backoffs inside the same preview deadline. Permanent refusals, unsafe destinations and oversized responses are never retried. The serialized preview admission gate is unchanged. |
 | `WISH_IMPORT_MAXIMUM_REDIRECTS`, `WISH_IMPORT_PERMIT_LIMIT` | `3`, `10`; preview quota is per member per minute |
 | `JOB_BATCH_SIZE`, `EXPORT_BATCH_SIZE` | `100`, `5` |
 | `JOB_LEASE_DURATION`, `JOB_RENEWAL_INTERVAL` | `2m`, `30s`; renewal precedes expiry |

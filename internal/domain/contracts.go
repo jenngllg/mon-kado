@@ -358,6 +358,7 @@ type SharedWishDetailResponse struct {
 type SharedWishlistResponse struct {
 	CanSubscribe       bool                         `json:"canSubscribe"`
 	Id                 string                       `json:"id"`
+	OwnerId            string                       `json:"ownerId"`
 	OwnerDisplayName   string                       `json:"ownerDisplayName"`
 	Name               string                       `json:"name"`
 	Occasion           string                       `json:"occasion"`

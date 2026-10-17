@@ -7,6 +7,10 @@ import (
 	"time"
 )
 
+// MaximumImportHTMLBytes bounds product pages independently of image download limits.
+// Modern merchant pages can exceed two MiB before their product metadata ends.
+const MaximumImportHTMLBytes = 4 * 1024 * 1024
+
 // ImportOptions bounds merchant previews within the supported security limits.
 type ImportOptions struct {
 	CatalogEnabled                                  bool
@@ -18,7 +22,7 @@ type ImportOptions struct {
 // Imports returns the startup-validated merchant settings or the composition defaults.
 func (c Config) Imports() ImportOptions {
 	if c.ImportOptions.Timeout == 0 {
-		return ImportOptions{Timeout: 20 * time.Second, MaximumHTMLBytes: 2 * 1024 * 1024, MaximumRedirects: 3, PermitLimit: 10, CatalogEnabled: c.ImportOptions.CatalogEnabled, CatalogIndexKey: c.ImportOptions.CatalogIndexKey}
+		return ImportOptions{Timeout: 20 * time.Second, MaximumHTMLBytes: MaximumImportHTMLBytes, MaximumRedirects: 3, PermitLimit: 10, CatalogEnabled: c.ImportOptions.CatalogEnabled, CatalogIndexKey: c.ImportOptions.CatalogIndexKey}
 	}
 	return c.ImportOptions
 }
@@ -43,7 +47,7 @@ func loadImports() (ImportOptions, error) {
 		Target           *int
 		Minimum, Maximum int
 	}{
-		{"WISH_IMPORT_MAXIMUM_HTML_BYTES", &options.MaximumHTMLBytes, 1, 2 * 1024 * 1024},
+		{"WISH_IMPORT_MAXIMUM_HTML_BYTES", &options.MaximumHTMLBytes, 1, MaximumImportHTMLBytes},
 		{"WISH_IMPORT_MAXIMUM_REDIRECTS", &options.MaximumRedirects, 0, 3},
 		{"WISH_IMPORT_PERMIT_LIMIT", &options.PermitLimit, 1, 10},
 	} {

@@ -284,7 +284,7 @@ func (s *Service) SharedWishlist(ctx context.Context, link, secret, member, gues
 		if err != nil {
 			return err
 		}
-		if err = tx.QueryRow(ctx, `SELECT w.id::text,u.display_name,w.name,w.occasion,w.event_date::text,w.message FROM wishlists w JOIN users u ON u.id=w.owner_id WHERE w.id=$1`, share.Wishlist).Scan(&r.Id, &r.OwnerDisplayName, &r.Name, &r.Occasion, &r.EventDate, &r.Message); err != nil {
+		if err = tx.QueryRow(ctx, `SELECT w.id::text,w.owner_id::text,u.display_name,w.name,w.occasion,w.event_date::text,w.message FROM wishlists w JOIN users u ON u.id=w.owner_id WHERE w.id=$1`, share.Wishlist).Scan(&r.Id, &r.OwnerId, &r.OwnerDisplayName, &r.Name, &r.Occasion, &r.EventDate, &r.Message); err != nil {
 			return err
 		}
 		r.Occasion = lowerFirst(r.Occasion)
