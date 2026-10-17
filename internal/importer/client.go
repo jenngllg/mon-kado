@@ -32,6 +32,9 @@ type Dialer interface {
 	DialContext(context.Context, string, string) (net.Conn, error)
 }
 
+// Keep the standard transport token and identify the application without impersonating a browser.
+const merchantUserAgent = "Go-http-client/1.1 MonKado/1.0 (+https://www.monkado.fr)"
+
 // Client owns the resolver and dialer used for every redirect and image request.
 type Client struct {
 	Catalog          Catalog
@@ -198,6 +201,6 @@ func (c *Client) request(ctx context.Context, target *url.URL) (*http.Response, 
 		return nil, err
 	}
 	req.Host = target.Host
-	req.Header.Set("User-Agent", "MonKado/1.0 (+product preview)")
+	req.Header.Set("User-Agent", merchantUserAgent)
 	return client.Do(req)
 }
