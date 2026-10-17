@@ -19,6 +19,7 @@ class FakeCollector:
         self.value = observation()
 
     def collect(self, now, previous, options, frontend_enabled):
+        self.completed = now
         value = copy.deepcopy(self.value)
         for snapshot in value["snapshots"].values():
             snapshot["createdAt"] = now.isoformat()
@@ -36,7 +37,7 @@ class MonitorTests(unittest.TestCase):
         self.messages = []
         self.configuration = {"schemaVersion": 1, "frontendEnabled": True,
                               "notificationsEnabled": True, "thresholds": {}}
-        self.monitor = runtime.Monitor(self.root, self.collector, self.send)
+        self.monitor = runtime.Monitor(self.root, self.collector, self.send, clock=lambda: self.collector.completed)
 
     def send(self, incidents, keys, now):
         self.messages.append(list(keys))
@@ -48,7 +49,7 @@ class MonitorTests(unittest.TestCase):
         collector = Collector(root=Path(self.directory.name), cgroup=cgroup,
                               runner=lambda arguments: (1, ""),
                               probe=lambda service, path: (False, (NOW + timedelta(days=90)).isoformat()))
-        monitor = runtime.Monitor(self.root, collector, self.send)
+        monitor = runtime.Monitor(self.root, collector, self.send, clock=lambda: NOW + timedelta(minutes=minute))
         configuration = self.configuration | {"notificationsEnabled": False}
         reports = []
         counters = []
@@ -136,6 +137,25 @@ class MonitorTests(unittest.TestCase):
             self.monitor.run(self.configuration, NOW)
         self.assertEqual("{}", (self.root / "state.json").read_text())
         self.assertEqual([], self.messages)
+
+    def test_run_when_host_clock_moves_backwards_preserves_durable_state(self):
+        # Arrange
+        self.monitor.run(self.configuration, NOW)
+        before = (self.root / "state.json").read_bytes()
+        self.monitor.clock = lambda: NOW - timedelta(seconds=1)
+        # Act / Assert
+        with self.assertRaises(ValueError):
+            self.monitor.run(self.configuration, NOW)
+        self.assertEqual(before, (self.root / "state.json").read_bytes())
+        self.assertEqual([], self.messages)
+
+    def test_utc_clock_reads_current_host_time_with_explicit_timezone(self):
+        # Arrange
+        with patch.object(runtime, "datetime") as clock:
+            clock.now.return_value = NOW
+            # Act / Assert
+            self.assertEqual(NOW, runtime.utc_now())
+        clock.now.assert_called_once_with(NOW.tzinfo)
 
     def test_state_rejects_untyped_pending_or_unrecognized_delivery(self):
         # Arrange

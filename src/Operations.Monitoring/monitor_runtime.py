@@ -1,6 +1,7 @@
 """Durable local incident orchestration. Observation failures never trigger automatic repairs."""
 
 import fcntl
+from datetime import datetime, timezone
 import os
 from pathlib import Path
 import re
@@ -13,6 +14,11 @@ from monitor_storage import append_history, atomic_json, read_json, recent_snaps
 STATE = Path("/var/lib/monkado-monitoring")
 SETTINGS = Path("/etc/monkado/monitoring.json")
 CREDENTIALS = Path("/etc/monkado/monitoring-gmail.json")
+
+
+def utc_now():
+    """Read the host UTC clock independently of application-provided timestamps."""
+    return datetime.now(timezone.utc)
 
 
 def notify(incidents, keys, now):
@@ -76,10 +82,11 @@ def validate_incident(key, incident, now):
 class Monitor:
     """Serialize observations and notification attempts under a nonblocking host-only lock."""
 
-    def __init__(self, root=STATE, collector=None, notifier=notify):
+    def __init__(self, root=STATE, collector=None, notifier=notify, clock=utc_now):
         self.root = root
         self.collector = collector if collector is not None else Collector()
         self.notifier = notifier
+        self.clock = clock
 
     def run(self, configuration, now, test_email=False):
         """Reserve each delivery durably before its POST, bounding uncertain retries across crashes."""
@@ -117,6 +124,17 @@ class Monitor:
         state_path = self.root / "state.json"
         previous = validate_state(read_json(state_path), now) if state_path.exists() else empty_state()
         observed, samples, oom = self.collector.collect(now, previous, options, configuration["frontendEnabled"])
+        completed = self.clock()
+        policy.require(completed >= now)
+        now = completed
+        # Applications may publish during the HTTPS probes. Use one post-collection clock
+        # for validation, incident decisions and persisted evidence; never trust their clock.
+        for service, snapshot in observed["snapshots"].items():
+            if snapshot is not None:
+                try:
+                    policy.age(snapshot["createdAt"], now)
+                except (ValueError, TypeError, KeyError):
+                    observed["snapshots"][service] = None
         history_path = self.root / "history"
         history = [policy.validate_snapshot(item, service) for service in ("api", "worker")
                    for item in recent_snapshots(history_path, now, service)]

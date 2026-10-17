@@ -23,6 +23,7 @@ def exercise():
 
     class Collector:
         def collect(self, now, previous, options, frontend_enabled):
+            self.completed = now
             value = observation()
             value["snapshots"] = {service: snapshot(service, now, 100) for service in ("api", "worker")}
             value["backup"]["lastRemoteCapture"] = now.isoformat()
@@ -33,7 +34,9 @@ def exercise():
     began = time.monotonic()
     sent = []
     root = Path(os.environ["MONKADO_NATIVE_FIXTURE"]) / "monitoring"
-    monitor = monitor_runtime.Monitor(root, Collector(), lambda incidents, keys, now: sent.append(keys))
+    collector = Collector()
+    monitor = monitor_runtime.Monitor(root, collector, lambda incidents, keys, now: sent.append(keys),
+                                      clock=lambda: collector.completed)
     configuration = {"schemaVersion": 1, "frontendEnabled": False, "notificationsEnabled": True, "thresholds": {}}
     # Virtual clock: no sleep, external request, database or actual e-mail.
     for minute in range(16):
