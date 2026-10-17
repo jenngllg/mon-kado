@@ -26,7 +26,7 @@ class CollectorTests(unittest.TestCase):
         self.container = {"monitorId": "a" * 64, "running": True, "oom": False, "restarts": 0}
         self.calls = []
         self.collector = collect.Collector(self.root, self.cgroup, self.run_command, self.probe,
-                                          observer=self.observe, service_uid=os.getuid())
+                                          observer=self.observe, service_uid=os.getuid(), clock=lambda: NOW)
         backup = self.root / "monkado-backup"
         backup.mkdir()
         deployment = self.root / "monkado-deployment"
@@ -121,6 +121,71 @@ class CollectorTests(unittest.TestCase):
         self.assertEqual([NOW.isoformat()], observed["frontendMaintenance"])
         self.assertEqual([], observed["maintenance"])
         self.assertNotIn("PRIVATE", json.dumps(observed))
+
+    def test_run_when_operational_status_changes_during_probes_uses_completed_host_clock(self):
+        # Arrange: a backup and both publishers write after this monitoring cycle starts.
+        completed = NOW + timedelta(seconds=12)
+        self.collector.clock = lambda: completed
+        frontend = self.root / "monkado-frontend"
+        frontend.mkdir()
+        original_runner = self.collector.runner
+        def runner(arguments):
+            code, output = original_runner(arguments)
+            if arguments[:2] == ["systemctl", "show"]:
+                return 0, "ActiveState=activating\nResult=success\n"
+            return code, output
+        self.collector.runner = runner
+        for offset in (5, 12, 13):
+            with self.subTest(publicationOffsetSeconds=offset):
+                published = (NOW + timedelta(seconds=offset)).isoformat()
+                def probe(service, path):
+                    atomic_json(self.root / "monkado-backup/status.json", {
+                        "lastCapture": published, "lastRemoteCapture": published,
+                        "lastIntegrityCheck": published, "error": None})
+                    atomic_json(self.root / "monkado-deployment/status.json", {
+                        "schemaVersion": 1, "phase": "verifying", "startedAt": published, "error": None})
+                    atomic_json(frontend / "status.json", {
+                        "schemaVersion": 2, "phase": "activating", "updatedAt": published,
+                        "paused": False, "error": None})
+                    return self.probe(service, path)
+                self.collector.probe = probe
+                for service in ("api", "worker"):
+                    value = snapshot(service)
+                    for job in value["jobs"].values():
+                        job["nextExpectedAt"] = (NOW + timedelta(hours=1)).isoformat()
+                    atomic_json(self.root / "monkado-observability" / service / "snapshot.json", value)
+                notify = Mock()
+                monitor = Monitor(self.root / ("operational-" + str(offset)), self.collector,
+                                  notify, clock=lambda: completed)
+                # Act
+                report = monitor.run({"schemaVersion": 1, "frontendEnabled": True,
+                                      "notificationsEnabled": True, "thresholds": {}}, NOW)
+                # Assert: genuinely future records remain unavailable, without loosening thresholds.
+                expected = ["backup.unavailable", "deployment.unavailable", "frontend.deployment.unavailable"] if offset > 12 else []
+                self.assertEqual(expected, report["openIncidents"])
+                if expected:
+                    notify.assert_called_once()
+                    self.assertEqual(expected, notify.call_args.args[1])
+                    self.assertEqual(completed, notify.call_args.args[2])
+                else:
+                    notify.assert_not_called()
+
+    def test_backup_when_any_record_is_future_keeps_evidence_unavailable(self):
+        # Arrange / Act / Assert
+        for key in ("lastCapture", "lastRemoteCapture", "lastIntegrityCheck"):
+            with self.subTest(field=key):
+                value = {name: NOW.isoformat() for name in ("lastCapture", "lastRemoteCapture", "lastIntegrityCheck")}
+                value[key] = (NOW + timedelta(seconds=1)).isoformat()
+                atomic_json(self.root / "monkado-backup/status.json", value)
+                observed, _, _ = self.collector.collect(NOW, {}, policy.DEFAULTS, False)
+                self.assertIsNone(observed["backup"])
+
+    def test_completed_at_when_clock_moves_backwards_rejects_evidence(self):
+        # Arrange
+        self.collector.clock = lambda: NOW - timedelta(seconds=1)
+        # Act / Assert
+        with self.assertRaises(ValueError):
+            self.collector.completed_at(NOW)
 
     def test_frontend_requires_both_page_and_release_even_when_one_probe_fails(self):
         # Arrange / Act / Assert
@@ -219,10 +284,12 @@ class CollectorTests(unittest.TestCase):
         # Arrange / Act / Assert
         for now in (datetime(2026, 3, 29, 1, 10, tzinfo=timezone.utc),
                     datetime(2026, 10, 25, 2, 10, tzinfo=timezone.utc)):
+            self.collector.clock = lambda: now
             captured = now - timedelta(hours=23)
             atomic_json(self.root / "monkado-backup/status.json", {"lastCapture": captured.isoformat()})
             with self.subTest(now=now):
                 self.assertFalse(self.collector.backup(now)["missedScheduledCapture"])
+                self.collector.clock = lambda: now + timedelta(minutes=6)
                 self.assertTrue(self.collector.backup(now + timedelta(minutes=6))["missedScheduledCapture"])
 
     def test_maintenance_reads_mtime_without_reading_secret_marker_contents(self):

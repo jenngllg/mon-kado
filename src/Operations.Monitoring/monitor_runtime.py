@@ -84,7 +84,7 @@ class Monitor:
 
     def __init__(self, root=STATE, collector=None, notifier=notify, clock=utc_now):
         self.root = root
-        self.collector = collector if collector is not None else Collector()
+        self.collector = collector if collector is not None else Collector(clock=clock)
         self.notifier = notifier
         self.clock = clock
 

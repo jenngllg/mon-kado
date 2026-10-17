@@ -19,7 +19,7 @@ def service_state(runner, service):
     return active, fields["Result"]
 
 
-def collect(root, runner, now):
+def collect(root, runner, now, completed_at):
     """Return fixed booleans only, including failures before the maintenance marker exists."""
     state = read_json(root / "monkado-deployment/status.json", private=True)
     require(isinstance(state, dict) and type(state.get("schemaVersion")) is int and state["schemaVersion"] == 1)
@@ -28,6 +28,7 @@ def collect(root, runner, now):
     error = state.get("error")
     require(error is None or isinstance(error, str))
     active, result = service_state(runner, "monkado-deploy.service")
+    now = completed_at(now)
     overdue = False
     if phase in ACTIVE:
         overdue = age(state.get("startedAt"), now) > 900
@@ -44,7 +45,7 @@ def decisions(observed):
             "deployment.rollbackFailed": None if observed is None else observed["rollbackFailed"]}
 
 
-def collect_frontend(root, runner, now):
+def collect_frontend(root, runner, now, completed_at):
     """Observe frontend release failures even when a restored site is responding normally."""
     state = read_json(root / "monkado-frontend/status.json", private=True)
     require(isinstance(state, dict) and type(state.get("schemaVersion")) is int and state["schemaVersion"] == 2)
@@ -56,6 +57,7 @@ def collect_frontend(root, runner, now):
     error = state.get("error")
     require(error is None or error in {"PUBLICATION_FAILED", "ROLLOUT_INTERRUPTED", "ROLLBACK_FAILED", "NO_PREVIOUS_RELEASE"})
     running, result = service_state(runner, "monkado-frontend.service")
+    now = completed_at(now)
     interrupted = phase in {"preparing", "activating", "recovering"} and (not running or age(state.get("updatedAt"), now) > 600)
     return {"failed": error is not None or not running and result != "success",
             "recoveryRequired": phase == "recoveryRequired" or interrupted,

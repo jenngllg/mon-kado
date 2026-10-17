@@ -30,20 +30,41 @@ class DeploymentMonitorTests(unittest.TestCase):
                 atomic_json(folder / "status.json", state)
                 runner = Mock(return_value=(0, f"ActiveState={active}\nResult={result}\n"))
                 with self.subTest(phase=phase, active=active):
-                    self.assertEqual({"failed": failed, "recoveryRequired": recovery, "rollbackFailed": rollback}, collect(root, runner, NOW))
+                    self.assertEqual({"failed": failed, "recoveryRequired": recovery, "rollbackFailed": rollback}, collect(root, runner, NOW, lambda started: NOW))
             atomic_json(folder / "status.json", {"schemaVersion": 1, "phase": "migrating", "error": None,
                                                  "startedAt": (NOW - timedelta(seconds=901)).isoformat()})
             runner.return_value = (0, "ActiveState=activating\nResult=success\n")
-            self.assertTrue(collect(root, runner, NOW)["recoveryRequired"])
+            self.assertTrue(collect(root, runner, NOW, lambda started: NOW)["recoveryRequired"])
             atomic_json(folder / "status.json", {})
             with self.assertRaises(ValueError):
-                collect(root, runner, NOW)
+                collect(root, runner, NOW, lambda started: NOW)
 
     def test_unknown_cannot_clear_failure(self):
         self.assertIsNone(decisions(None)["deployment.failed"])
         self.assertTrue(decisions(None)["deployment.unavailable"])
         healthy = decisions({"failed": False, "recoveryRequired": False, "rollbackFailed": False})
         self.assertTrue(all(value is False for value in healthy.values()))
+
+    def test_collect_when_publication_time_changes_uses_completed_clock_for_overdue_limits(self):
+        # Arrange
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            completed = NOW + timedelta(seconds=12)
+            runner = Mock(return_value=(0, "ActiveState=activating\nResult=success\n"))
+            cases = ((collect, "monkado-deployment", 1, "verifying", "startedAt", 900),
+                     (collect_frontend, "monkado-frontend", 2, "activating", "updatedAt", 600))
+            for reader, folder, version, phase, field, limit in cases:
+                (root / folder).mkdir()
+                for offset, recovery in ((5, False), (12, False), (12 - limit, False), (11 - limit, True)):
+                    with self.subTest(component=folder, offset=offset):
+                        atomic_json(root / folder / "status.json", {
+                            "schemaVersion": version, "phase": phase, "paused": False, "error": None,
+                            field: (NOW + timedelta(seconds=offset)).isoformat()})
+                        # Act
+                        observed = reader(root, runner, NOW, lambda started: completed)
+                        # Assert
+                        self.assertEqual({"failed": False, "recoveryRequired": recovery,
+                                          "rollbackFailed": False}, observed)
 
     def test_frontend_pause_rollback_and_interrupted_outcomes(self):
         # Arrange
@@ -65,16 +86,16 @@ class DeploymentMonitorTests(unittest.TestCase):
                 runner = Mock(return_value=(0, f"ActiveState={active}\nResult=success\n"))
                 with self.subTest(phase=phase):
                     self.assertEqual({"failed": failed, "recoveryRequired": recovery, "rollbackFailed": rollback},
-                                     collect_frontend(root, runner, NOW))
+                                     collect_frontend(root, runner, NOW, lambda started: NOW))
             for change in ({"schemaVersion": 1}, {"phase": "legacy"}, {"phase": "idle"}, {"phase": "bad"},
                            {"paused": "yes"}, {"error": "private-canary"}):
                 atomic_json(folder / "status.json", state | change)
                 with self.assertRaises(ValueError):
-                    collect_frontend(root, runner, NOW)
+                    collect_frontend(root, runner, NOW, lambda started: NOW)
             atomic_json(folder / "status.json", state)
             runner.return_value = (1, "")
             with self.assertRaises(ValueError):
-                collect_frontend(root, runner, NOW)
+                collect_frontend(root, runner, NOW, lambda started: NOW)
             self.assertIsNone(frontend_decisions(None)["frontend.deployment.failed"])
 
     def test_frontend_service_failure_cannot_be_hidden_by_old_healthy_state(self):
@@ -86,7 +107,7 @@ class DeploymentMonitorTests(unittest.TestCase):
                         {"schemaVersion": 2, "phase": "healthy", "error": None, "paused": False})
             runner = Mock(return_value=(0, "ActiveState=failed\nResult=exit-code\n"))
             # Act / Assert
-            self.assertTrue(collect_frontend(root, runner, NOW)["failed"])
+            self.assertTrue(collect_frontend(root, runner, NOW, lambda started: NOW)["failed"])
 
 
 if __name__ == "__main__":
