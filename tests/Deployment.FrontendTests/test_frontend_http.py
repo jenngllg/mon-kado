@@ -34,13 +34,13 @@ class FrontendHttpTests(unittest.TestCase):
             server = """import http.server
 class Handler(http.server.BaseHTTPRequestHandler):
  def do_GET(self):
-  if self.path.endswith('/preview'):
+  if self.path == '/api/v1/shared-wishlists/01900000-0000-7000-8000-000000000001/preview':
    self.send_response(200)
    self.send_header('Content-Type','text/html; charset=utf-8')
    self.end_headers()
    self.wfile.write(b'<meta property="og:title" content="Public preview">')
    return
-  if self.path.endswith('/preview/image'):
+  if self.path == '/api/v1/shared-wishlists/01900000-0000-7000-8000-000000000001/preview/image':
    self.send_response(200)
    self.send_header('Content-Type','image/jpeg')
    self.end_headers()
