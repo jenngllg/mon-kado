@@ -1,10 +1,12 @@
 # Reviewed native edge build
 
 `build/` is the upstream Caddy standard composition, pinned to Caddy 2.11.7,
-Go 1.27.2 and corrected HTTP/2 dependencies. Its module lock is independent of
+Go 1.27.3 and corrected HTTP/2 dependencies. Its module lock is independent of
 the backend and Gmail modules. It contains no application business logic.
 CI builds it with `scripts/Initialize-CICaddy.sh`, verifies module checksums,
 scans source and executable, and uses those exact bytes in native HTTPS tests.
+Go 1.27.3 includes the certificate distrust update required by GO-2026-6809;
+the backend, Gmail tool and edge build all require this patched toolchain.
 The official 2.11.7 release executable was built with Go 1.26.8 and still predates
 the October HTTP/2 fixes, so production uses the qualified pinned build.
 
