@@ -173,7 +173,8 @@ func (c *Client) request(ctx context.Context, target *url.URL) (*http.Response, 
 		scheme, port = "https", "443"
 	}
 	destination := net.JoinHostPort(addresses[0].String(), port)
-	transport := &http.Transport{Proxy: nil, DisableKeepAlives: true, ResponseHeaderTimeout: c.Timeout,
+	// Custom TLS settings and DNS pinning otherwise disable HTTP/2 negotiation.
+	transport := &http.Transport{Proxy: nil, DisableKeepAlives: true, ForceAttemptHTTP2: true, ResponseHeaderTimeout: c.Timeout,
 		TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12, ServerName: host},
 		DialContext: func(ctx context.Context, network, address string) (net.Conn, error) {
 			if address != destination {
