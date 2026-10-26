@@ -216,6 +216,19 @@ func (s *Service) removeMember(ctx context.Context, tx pgx.Tx, user string) erro
 	if _, err = tx.Exec(ctx, `DELETE FROM wishlist_participants WHERE member_id=$1`, user); err != nil {
 		return err
 	}
+	rows, err = tx.Query(ctx, `SELECT id::text FROM private_groups WHERE owner_id=$1 FOR UPDATE`, user)
+	if err != nil {
+		return err
+	}
+	groups, err := pgx.CollectRows(rows, pgx.RowTo[string])
+	if err != nil {
+		return err
+	}
+	for _, group := range groups {
+		if err = s.queueGroupImage(ctx, tx, group); err != nil {
+			return err
+		}
+	}
 	_, err = tx.Exec(ctx, `DELETE FROM users WHERE id=$1`, user)
 	return err
 }

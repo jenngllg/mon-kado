@@ -43,14 +43,16 @@ type CreateWishlistRequest struct {
 
 // CreateWishRequest preserves the versioned JSON contract.
 type CreateWishRequest struct {
-	Color      *string      `json:"color"`
-	Size       *string      `json:"size"`
-	Name       *string      `json:"name"`
-	Note       *string      `json:"note"`
-	Url        *string      `json:"url"`
-	Price      *json.Number `json:"price"`
-	Quantity   *int         `json:"quantity"`
-	IsFavorite *bool        `json:"isFavorite"`
+	IsSurprise        *bool        `json:"isSurprise"`
+	AcceptsSecondHand *bool        `json:"acceptsSecondHand"`
+	Color             *string      `json:"color"`
+	Size              *string      `json:"size"`
+	Name              *string      `json:"name"`
+	Note              *string      `json:"note"`
+	Url               *string      `json:"url"`
+	Price             *json.Number `json:"price"`
+	Quantity          *int         `json:"quantity"`
+	IsFavorite        *bool        `json:"isFavorite"`
 }
 
 // ExecuteAdministrativeAccountErasureRequest preserves the versioned JSON contract.
@@ -190,14 +192,16 @@ type UpdateWishlistRequest struct {
 
 // UpdateWishRequest preserves the versioned JSON contract.
 type UpdateWishRequest struct {
-	Color      *string      `json:"color"`
-	Size       *string      `json:"size"`
-	Name       *string      `json:"name"`
-	Note       *string      `json:"note"`
-	Url        *string      `json:"url"`
-	Price      *json.Number `json:"price"`
-	Quantity   *int         `json:"quantity"`
-	IsFavorite *bool        `json:"isFavorite"`
+	IsSurprise        *bool        `json:"isSurprise"`
+	AcceptsSecondHand *bool        `json:"acceptsSecondHand"`
+	Color             *string      `json:"color"`
+	Size              *string      `json:"size"`
+	Name              *string      `json:"name"`
+	Note              *string      `json:"note"`
+	Url               *string      `json:"url"`
+	Price             *json.Number `json:"price"`
+	Quantity          *int         `json:"quantity"`
+	IsFavorite        *bool        `json:"isFavorite"`
 }
 
 // SetWishlistArchivedRequest changes only the owner's archive preference.
@@ -255,6 +259,8 @@ type CurrentSessionResponse struct {
 
 // GiftReservationHistoryResponse preserves the versioned JSON contract.
 type GiftReservationHistoryResponse struct {
+	GroupId               *string    `json:"groupId"`
+	GroupWishPath         *string    `json:"groupWishPath"`
 	InaccessibilityReason *string    `json:"inaccessibilityReason"`
 	OwnerId               *string    `json:"ownerId"`
 	OwnerDisplayName      *string    `json:"ownerDisplayName"`
@@ -339,6 +345,8 @@ type ReportedWishResponse struct {
 
 // SharedWishDetailResponse preserves the versioned JSON contract.
 type SharedWishDetailResponse struct {
+	IsSurprise                         bool         `json:"isSurprise"`
+	AcceptsSecondHand                  bool         `json:"acceptsSecondHand"`
 	Color                              *string      `json:"color"`
 	Size                               *string      `json:"size"`
 	Id                                 string       `json:"id"`
@@ -370,10 +378,13 @@ type SharedWishlistResponse struct {
 
 // SharedWishResponse preserves the versioned JSON contract.
 type SharedWishResponse struct {
+	IsSurprise                         bool         `json:"isSurprise"`
+	AcceptsSecondHand                  bool         `json:"acceptsSecondHand"`
 	Color                              *string      `json:"color"`
 	Size                               *string      `json:"size"`
 	Id                                 string       `json:"id"`
 	Name                               string       `json:"name"`
+	Note                               *string      `json:"note"`
 	Url                                *string      `json:"url"`
 	Price                              *json.Number `json:"price"`
 	Quantity                           int          `json:"quantity"`
@@ -424,6 +435,8 @@ type WishlistSubscriptionResponse struct {
 
 // WishCollectionItemResponse preserves the versioned JSON contract.
 type WishCollectionItemResponse struct {
+	IsSurprise        bool         `json:"isSurprise"`
+	AcceptsSecondHand bool         `json:"acceptsSecondHand"`
 	Color             *string      `json:"color"`
 	Size              *string      `json:"size"`
 	Id                string       `json:"id"`
@@ -509,6 +522,8 @@ type WishOrderResponse struct {
 
 // WishResponse preserves the versioned JSON contract.
 type WishResponse struct {
+	IsSurprise        bool         `json:"isSurprise"`
+	AcceptsSecondHand bool         `json:"acceptsSecondHand"`
 	Color             *string      `json:"color"`
 	Size              *string      `json:"size"`
 	Id                string       `json:"id"`

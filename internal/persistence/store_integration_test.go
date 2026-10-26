@@ -64,7 +64,7 @@ func TestMigrate_WhenDatabaseEmpty_AppliesAllMigrationsExactlyOnce(t *testing.T)
 	}
 	// Assert
 	var count int
-	if err := store.Pool.QueryRow(t.Context(), `SELECT count(*) FROM mon_kado_migrations`).Scan(&count); err != nil || count != 12 {
+	if err := store.Pool.QueryRow(t.Context(), `SELECT count(*) FROM mon_kado_migrations`).Scan(&count); err != nil || count != 17 {
 		t.Fatal("native migration ledger differs")
 	}
 	var leaseColumn bool
@@ -72,8 +72,8 @@ func TestMigrate_WhenDatabaseEmpty_AppliesAllMigrationsExactlyOnce(t *testing.T)
 		t.Fatal("final migration was not applied")
 	}
 	var visibilityColumn bool
-	if err := store.Pool.QueryRow(t.Context(), `SELECT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='is_visible_in_member_search' AND is_nullable='NO' AND column_default='false')`).Scan(&visibilityColumn); err != nil || !visibilityColumn {
-		t.Fatal("new accounts must be hidden from search until they opt in")
+	if err := store.Pool.QueryRow(t.Context(), `SELECT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='is_visible_in_member_search' AND is_nullable='NO' AND column_default='true')`).Scan(&visibilityColumn); err != nil || !visibilityColumn {
+		t.Fatal("new accounts must be visible by default")
 	}
 	var timestamp time.Time
 	if err := store.Pool.QueryRow(t.Context(), `SELECT '2026-10-12 14:30:00+02'::timestamptz`).Scan(&timestamp); err != nil || timestamp.Location() != time.UTC || timestamp.Format(time.RFC3339) != "2026-10-12T12:30:00Z" {

@@ -16,7 +16,7 @@ func TestMetadata_WhenCatalogRequested_InspectsEmbeddedSourcesWithoutPrivateConf
 	handled, err := metadata([]string{"--catalog"}, &output)
 	// Assert
 	var catalog persistence.MigrationCatalog
-	if !handled || err != nil || json.Unmarshal(output.Bytes(), &catalog) != nil || catalog.SchemaVersion != 2 || len(catalog.Migrations) != 12 {
+	if !handled || err != nil || json.Unmarshal(output.Bytes(), &catalog) != nil || catalog.SchemaVersion != 2 || len(catalog.Migrations) != 17 {
 		t.Fatal("public catalog inspection required private configuration")
 	}
 	output.Reset()
