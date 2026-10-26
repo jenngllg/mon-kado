@@ -20,6 +20,37 @@ type groupScenario struct {
 	base, etag                   string
 }
 
+func TestGroupInvitations_WhenListingReceived_ExposesOnlyActiveRecipientInvitations(t *testing.T) {
+	// Arrange
+	s := newGroupScenario(t)
+	invitation := s.invite(t, s.memberID)
+	s.invite(t, s.foreignID)
+	path := "/api/v1/group-invitations"
+	// Act
+	var received domain.PaginatedResponse[domain.GroupInvitationResponse]
+	requireStatus(t, s.member.send(t, "GET", path, "", nil), 200, &received)
+	// Assert: pending consent permits reading the invitation, never the group.
+	if received.TotalCount != 1 || len(received.Items) != 1 || received.Items[0].Id != invitation.Id || received.Items[0].MemberId != s.memberID {
+		t.Fatal("received invitations include another recipient or omit the current one")
+	}
+	requireStatus(t, s.member.send(t, "GET", s.base, "", nil), 404, nil)
+	requireStatus(t, s.owner.send(t, "GET", path, "", nil), 200, &received)
+	if received.TotalCount != 0 || received.Items == nil || len(received.Items) != 0 {
+		t.Fatal("sending an invitation made it a received invitation")
+	}
+	requireStatus(t, s.member.send(t, "GET", path+"?page=2&pageSize=1", "", nil), 200, &received)
+	if received.CurrentPage != 2 || received.TotalCount != 1 || len(received.Items) != 0 || !received.HasPreviousPage {
+		t.Fatal("received invitation pagination differs")
+	}
+	requireStatus(t, s.member.send(t, "GET", path+"?pageSize=0", "", nil), 400, nil)
+	now := s.owner.service.Now()
+	s.owner.service.Now = func() time.Time { return now.Add(15 * 24 * time.Hour) }
+	requireStatus(t, s.member.send(t, "GET", path, "", nil), 200, &received)
+	if received.TotalCount != 0 || received.Items == nil || len(received.Items) != 0 {
+		t.Fatal("expired invitations remain in the received collection")
+	}
+}
+
 func TestGroups_WhenSharingAcrossGroups_UsesOneReservationAndRevokesMemberOwnedGrants(t *testing.T) {
 	// Arrange
 	s := newGroupScenario(t)
