@@ -70,7 +70,7 @@ class NativeCaddy:
                 self.processes.append(self.upstream)
                 ready(self.upstream, 'fixture-ready')
             config = self.directory / 'Caddyfile'
-            config.write_text(self.configuration.replace('{\n', '{\n debug\n admin off\n local_certs\n skip_install_trust\n', 1))
+            config.write_text(self.configuration.replace('{\n', '{\n log tls-cache {\n include tls.cache\n level DEBUG\n }\n admin off\n local_certs\n skip_install_trust\n', 1))
             config.chmod(0o600)
             environment = {'PATH':os.environ['PATH'], 'HOME':str(self.directory), 'LANG':'C.UTF-8',
                            'XDG_DATA_HOME':str(self.directory), 'XDG_CONFIG_HOME':str(self.directory), **self.environment}
