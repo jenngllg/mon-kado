@@ -363,6 +363,15 @@ func TestGroups_WhenInputIdentityOrCsrfIsInvalid_RejectsWithoutMutations(t *test
 	for _, query := range []string{"?page=0", "?pageSize=101", "?page="} {
 		requireStatus(t, s.owner.send(t, "GET", "/api/v1/groups"+query, "", nil), 400, nil)
 	}
+	for _, path := range []string{s.base + "/members", s.base + "/invitations", s.base + "/wishlists", "/api/v1/group-invitations"} {
+		requireStatus(t, s.owner.send(t, "GET", path+"?pageSize=0", "", nil), 400, nil)
+	}
+	requireStatus(t, s.owner.send(t, "PUT", s.base, `{"name":""}`, map[string]string{"If-Match": s.etag}), 400, nil)
+	reservation := s.base + "/wishlists/" + security.NewID() + "/wishes/" + security.NewID() + "/reservations/current"
+	requireStatus(t, s.owner.send(t, "DELETE", reservation, "", nil), 428, nil)
+	requireStatus(t, s.owner.send(t, "PUT", reservation, `{"quantity":1}`, map[string]string{"If-Match": "bad"}), 400, nil)
+	requireStatus(t, s.owner.send(t, "PUT", reservation, `{"quantity":0}`, nil), 400, nil)
+	requireStatus(t, s.owner.send(t, "PUT", s.base+"/image", "not a multipart image", map[string]string{"If-Match": s.etag}), 415, nil)
 	visitor := s.owner.visitor(t)
 	requireStatus(t, visitor.send(t, "GET", "/api/v1/groups", "", nil), 401, nil)
 	s.owner.csrf = ""

@@ -3,8 +3,11 @@
 package httpapi_test
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"image"
+	"image/png"
 	"net/url"
 	"testing"
 
@@ -37,6 +40,10 @@ func TestOperations_WhenCallerCancels_PropagatesCancellationWithoutBusinessEffec
 		t.Fatal("authenticated fixture has no refresh proof")
 	}
 	name, email, password, occasion, quantity := "Cancelled list", "cancelled-new@example.test", "A long test password 🎁", "other", 1
+	var picture bytes.Buffer
+	if err := png.Encode(&picture, image.NewRGBA(image.Rect(0, 0, 3, 3))); err != nil {
+		t.Fatal(err)
+	}
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 	var before int
@@ -146,6 +153,46 @@ func TestOperations_WhenCallerCancels_PropagatesCancellationWithoutBusinessEffec
 		{"currentSubscription", func(ctx context.Context) error { _, err := s.CurrentSubscription(ctx, member, id, flow); return err }},
 		{"subscriptions", func(ctx context.Context) error { _, err := s.Subscriptions(ctx, member, 1, 20); return err }},
 		{"deleteSubscription", func(ctx context.Context) error { return s.DeleteSubscription(ctx, member, id) }},
+		{"groups", func(ctx context.Context) error { _, err := s.Groups(ctx, member, 1, 20); return err }},
+		{"createGroup", func(ctx context.Context) error {
+			_, _, err := s.CreateGroup(ctx, member, domain.SaveGroupRequest{Name: &name})
+			return err
+		}},
+		{"group", func(ctx context.Context) error {
+			_, _, err := s.Group(ctx, member, id, "GET", domain.SaveGroupRequest{}, nil)
+			return err
+		}},
+		{"groupMembers", func(ctx context.Context) error { _, err := s.GroupMembers(ctx, member, id, 1, 20); return err }},
+		{"removeGroupMember", func(ctx context.Context) error { return s.RemoveGroupMember(ctx, member, id, member) }},
+		{"groupInvitations", func(ctx context.Context) error { _, err := s.GroupInvitations(ctx, member, "", 1, 20); return err }},
+		{"groupInvitation", func(ctx context.Context) error { _, err := s.GroupInvitation(ctx, member, "", id); return err }},
+		{"inviteGroupMember", func(ctx context.Context) error {
+			_, err := s.InviteGroupMember(ctx, member, id, domain.InviteGroupMemberRequest{MemberId: &member})
+			return err
+		}},
+		{"answerGroupInvitation", func(ctx context.Context) error { _, err := s.AnswerGroupInvitation(ctx, member, id, true); return err }},
+		{"revokeGroupInvitation", func(ctx context.Context) error { return s.RevokeGroupInvitation(ctx, member, id, id) }},
+		{"groupJoinLink", func(ctx context.Context) error { _, _, err := s.GroupJoinLink(ctx, member, id, "GET", nil); return err }},
+		{"joinGroup", func(ctx context.Context) error { _, _, err := s.JoinGroup(ctx, member, "ABCDEFGHIJKLMNOP"); return err }},
+		{"groupWishlists", func(ctx context.Context) error { _, err := s.GroupWishlists(ctx, member, id, 1, 20); return err }},
+		{"shareGroupWishlist", func(ctx context.Context) error {
+			_, err := s.ShareGroupWishlist(ctx, member, id, id, false)
+			return err
+		}},
+		{"groupWishlist", func(ctx context.Context) error { _, err := s.GroupWishlist(ctx, member, id, id, false); return err }},
+		{"groupWish", func(ctx context.Context) error { _, err := s.GroupWish(ctx, member, id, id, id); return err }},
+		{"groupReservation", func(ctx context.Context) error {
+			_, err := s.GroupReservation(ctx, member, id, id, id, "PUT", 1, nil)
+			return err
+		}},
+		{"groupPhotoRemoval", func(ctx context.Context) error {
+			_, _, err := s.GroupProfileImage(ctx, member, id, nil, 1, true)
+			return err
+		}},
+		{"groupPhotoUpload", func(ctx context.Context) error {
+			_, _, err := s.GroupProfileImage(ctx, member, id, picture.Bytes(), 1, false)
+			return err
+		}},
 		{"deleteWishImage", func(ctx context.Context) error { _, err := s.DeleteWishImage(ctx, member, id, id, 1); return err }},
 		{"readProfileImage", func(ctx context.Context) error { _, _, err := s.ReadProfileImage(ctx, member, id); return err }},
 		{"publicPreview", func(ctx context.Context) error { _, err := s.PublicSharePreview(ctx, id, false); return err }},
@@ -190,6 +237,11 @@ func TestOperations_WhenCallerCancels_PropagatesCancellationWithoutBusinessEffec
 	requireStatus(t, f.send(t, "GET", "/api/v1/wishlists", "", nil), 200, &wishlists)
 	if len(wishlists) != 0 {
 		t.Fatal("cancelled mutations created business resources")
+	}
+	var groups domain.PaginatedResponse[domain.GroupResponse]
+	requireStatus(t, f.send(t, "GET", "/api/v1/groups", "", nil), 200, &groups)
+	if groups.TotalCount != 0 || len(groups.Items) != 0 {
+		t.Fatal("cancelled mutations created private groups")
 	}
 	var current domain.CurrentSessionResponse
 	requireStatus(t, f.send(t, "GET", "/api/v1/auth/sessions/current", "", nil), 200, &current)
