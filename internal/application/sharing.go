@@ -11,6 +11,8 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+const wishlistParticipantLimit = 100
+
 // ShareLink creates, reads, rotates or revokes a wishlist's active sharing secret.
 func (s *Service) ShareLink(ctx context.Context, owner, wishlist, method string, expected *uint32) (domain.WishlistShareLinkResponse, uint32, error) {
 	var result domain.WishlistShareLinkResponse
@@ -71,6 +73,8 @@ func (s *Service) ShareLink(ctx context.Context, owner, wishlist, method string,
 }
 
 type verifiedShare struct {
+	Group        string
+	Member       string
 	Wishlist     string
 	Owner        string
 	Name         string
@@ -169,7 +173,7 @@ func (s *Service) JoinWishlist(ctx context.Context, link, secret, member, guest 
 		if err = tx.QueryRow(ctx, `SELECT count(*) FROM wishlist_participants WHERE wishlist_id=$1 AND (member_id IS NOT NULL OR guest_session_id IS NOT NULL)`, share.Wishlist).Scan(&count); err != nil {
 			return err
 		}
-		if count >= 100 {
+		if count >= wishlistParticipantLimit {
 			return domain.Failure(409, domain.WishlistParticipantLimitReached, "The wishlist has reached its participant limit.")
 		}
 		var memberID, guestID *string
@@ -237,7 +241,7 @@ func (s *Service) sharedWish(ctx context.Context, tx pgx.Tx, share verifiedShare
 	if participant != nil {
 		participantID = &participant.Id
 	}
-	err := tx.QueryRow(ctx, `SELECT w.id::text,w.name,w.note,w.url,w.price::text,w.quantity,COALESCE((SELECT sum(r.quantity) FROM gift_reservations r WHERE r.wish_id=w.id),0),CASE WHEN $3::uuid IS NULL THEN NULL ELSE COALESCE((SELECT r.quantity FROM gift_reservations r WHERE r.wish_id=w.id AND r.wishlist_participant_id=$3),0) END,w.image_id::text,w.is_favorite,w.color,w.size FROM wishes w WHERE w.wishlist_id=$1 AND w.id=$2`, share.Wishlist, id, participantID).Scan(&r.Id, &r.Name, &r.Note, &r.Url, &r.Price, &r.Quantity, &r.ReservedQuantity, &r.CurrentParticipantReservedQuantity, &image, &r.IsFavorite, &r.Color, &r.Size)
+	err := tx.QueryRow(ctx, `SELECT w.id::text,w.name,w.note,w.url,w.price::text,w.quantity,COALESCE((SELECT sum(r.quantity) FROM gift_reservations r WHERE r.wish_id=w.id),0),CASE WHEN $3::uuid IS NULL THEN NULL ELSE COALESCE((SELECT r.quantity FROM gift_reservations r WHERE r.wish_id=w.id AND r.wishlist_participant_id=$3),0) END,w.image_id::text,w.is_favorite,w.color,w.size,w.is_surprise,w.accepts_second_hand FROM wishes w WHERE w.wishlist_id=$1 AND w.id=$2`, share.Wishlist, id, participantID).Scan(&r.Id, &r.Name, &r.Note, &r.Url, &r.Price, &r.Quantity, &r.ReservedQuantity, &r.CurrentParticipantReservedQuantity, &image, &r.IsFavorite, &r.Color, &r.Size, &r.IsSurprise, &r.AcceptsSecondHand)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return r, missing(domain.SharedWishNotFound)
 	}
@@ -247,6 +251,9 @@ func (s *Service) sharedWish(ctx context.Context, tx pgx.Tx, share verifiedShare
 	}
 	if image != nil {
 		imageURL, urlErr := s.imageURL("", link, share.Wishlist, id, *image)
+		if share.Group != "" {
+			imageURL, urlErr = s.groupImageURL(share.Member, share.Group, share.Wishlist, id, *image)
+		}
 		if urlErr != nil {
 			return r, urlErr
 		}
@@ -312,7 +319,7 @@ func (s *Service) SharedWishlist(ctx context.Context, link, secret, member, gues
 			if availableOnly && wish.AvailableQuantity != nil && *wish.AvailableQuantity == 0 && (wish.CurrentParticipantReservedQuantity == nil || *wish.CurrentParticipantReservedQuantity == 0) {
 				continue
 			}
-			r.Wishes = append(r.Wishes, domain.SharedWishResponse{Id: wish.Id, Name: wish.Name, Color: wish.Color, Size: wish.Size, Url: wish.Url, Price: wish.Price, Quantity: wish.Quantity, IsFavorite: wish.IsFavorite, ReservedQuantity: wish.ReservedQuantity, AvailableQuantity: wish.AvailableQuantity, CurrentParticipantReservedQuantity: wish.CurrentParticipantReservedQuantity, ImageUrl: wish.ImageUrl})
+			r.Wishes = append(r.Wishes, domain.SharedWishResponse{Id: wish.Id, Name: wish.Name, Color: wish.Color, Size: wish.Size, Url: wish.Url, Price: wish.Price, Quantity: wish.Quantity, IsFavorite: wish.IsFavorite, Note: wish.Note, IsSurprise: wish.IsSurprise, AcceptsSecondHand: wish.AcceptsSecondHand, ReservedQuantity: wish.ReservedQuantity, AvailableQuantity: wish.AvailableQuantity, CurrentParticipantReservedQuantity: wish.CurrentParticipantReservedQuantity, ImageUrl: wish.ImageUrl})
 		}
 		return nil
 	})

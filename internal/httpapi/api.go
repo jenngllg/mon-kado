@@ -87,6 +87,7 @@ func New(service *application.Service, logger *slog.Logger) *API {
 	client.Catalog = &importer.ProductCatalog{Client: client, Enabled: imports.CatalogEnabled, IndexKey: imports.CatalogIndexKey}
 	a.Importer = client
 	a.routes()
+	a.groupRoutes()
 	a.registerOpenAPI()
 	a.validateSpecification()
 	return a
@@ -131,7 +132,7 @@ func (a *API) route(pattern string, opt options, handler endpoint) {
 				return
 			}
 		}
-		for _, key := range []string{"wishlistId", "wishId", "shareLinkId", "memberId", "reportId", "exportId", "id"} {
+		for _, key := range []string{"wishlistId", "wishId", "shareLinkId", "memberId", "reportId", "exportId", "groupId", "invitationId", "id"} {
 			if value := r.PathValue(key); value != "" {
 				id, err := uuid.Parse(value)
 				if err != nil || id == uuid.Nil {
@@ -449,7 +450,7 @@ func pagination(r *request) (int, int, error) {
 	for _, key := range []string{"page", "pageSize"} {
 		if values, present := r.URL.Query()[key]; present {
 			value, err := strconv.Atoi(values[0])
-			if err != nil || len(values) != 1 || value < 1 || key == "pageSize" && value > 100 {
+			if err != nil || len(values) != 1 || value < 1 || value > 2147483647 || key == "pageSize" && value > 100 {
 				errors = append(errors, domain.ValidationError{PropertyName: key, ErrorMessage: "The pagination value is outside the allowed range."})
 				continue
 			}

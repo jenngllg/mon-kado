@@ -193,7 +193,7 @@ func (s *Service) ProfileImage(ctx context.Context, user string, source []byte, 
 func (s *Service) removeUnreferencedImage(ctx context.Context, id string) {
 	var referenced bool
 	// Keep staged bytes when the database cannot resolve an ambiguous commit.
-	if err := s.Store.Pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM wishes WHERE image_id=$1 UNION ALL SELECT 1 FROM users WHERE profile_image_id=$1)`, id).Scan(&referenced); err == nil && !referenced {
+	if err := s.Store.Pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM wishes WHERE image_id=$1 UNION ALL SELECT 1 FROM users WHERE profile_image_id=$1 UNION ALL SELECT 1 FROM private_groups WHERE profile_image_id=$1)`, id).Scan(&referenced); err == nil && !referenced {
 		images.Remove(s.Config.ImagePath, id)
 	}
 }

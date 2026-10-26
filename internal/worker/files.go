@@ -70,7 +70,7 @@ func (w *Worker) reconcileFiles(ctx context.Context) (resultErr error) {
 						continue
 					}
 					var referenced bool
-					if err = w.Service.Store.Pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM wishes WHERE image_id=$1 UNION ALL SELECT 1 FROM users WHERE profile_image_id=$1)`, id).Scan(&referenced); err != nil {
+					if err = w.Service.Store.Pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM wishes WHERE image_id=$1 UNION ALL SELECT 1 FROM users WHERE profile_image_id=$1 UNION ALL SELECT 1 FROM private_groups WHERE profile_image_id=$1)`, id).Scan(&referenced); err != nil {
 						directory.Close()
 						return err
 					}

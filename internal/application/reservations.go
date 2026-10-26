@@ -98,7 +98,7 @@ func (s *Service) mutateReservation(ctx context.Context, tx pgx.Tx, share verifi
 		return err
 	}
 	if member != "" {
-		_, err = tx.Exec(ctx, `INSERT INTO gift_reservation_histories(id,member_id,wishlist_id,wishlist_name,wish_id,wish_name,quantity,status,created_at,last_activity_at) VALUES($1,$2,$3,$4,$5,$6,$7,'Active',$8,$9) ON CONFLICT(id) DO UPDATE SET quantity=EXCLUDED.quantity,last_activity_at=EXCLUDED.last_activity_at`, r.Id, member, share.Wishlist, share.Name, wishID, wishName, quantity, r.CreatedAt, now)
+		_, err = tx.Exec(ctx, `INSERT INTO gift_reservation_histories(id,member_id,wishlist_id,wishlist_name,wish_id,wish_name,quantity,status,created_at,last_activity_at,is_group_reservation) VALUES($1,$2,$3,$4,$5,$6,$7,'Active',$8,$9,$10) ON CONFLICT(id) DO UPDATE SET quantity=EXCLUDED.quantity,last_activity_at=EXCLUDED.last_activity_at`, r.Id, member, share.Wishlist, share.Name, wishID, wishName, quantity, r.CreatedAt, now, share.Group != "")
 	}
 	return err
 }
@@ -149,7 +149,7 @@ func (s *Service) ReservationHistory(ctx context.Context, member, status string,
 	if total == 0 || int64(page) > (int64(total)+int64(size)-1)/int64(size) {
 		return domain.Page(items, page, size, total), nil
 	}
-	rows, err := s.Store.Pool.Query(ctx, `SELECT h.id::text,h.wishlist_id::text,CASE WHEN w.owner_id=$1 OR (l.id IS NOT NULL AND NOT w.is_archived AND NOT w.is_suspended) THEN COALESCE(w.name,h.wishlist_name) ELSE h.wishlist_name END,h.wish_id::text,CASE WHEN w.owner_id=$1 OR (l.id IS NOT NULL AND NOT w.is_archived AND NOT w.is_suspended) THEN COALESCE(g.name,h.wish_name) ELSE h.wish_name END,l.id::text,h.quantity,h.status,h.created_at,h.last_activity_at,h.ended_at,u.id::text,u.display_name,COALESCE(w.is_archived,false),CASE WHEN NOT w.is_archived AND NOT w.is_suspended AND g.id IS NOT NULL THEN w.owner_id=$1 ELSE false END,CASE WHEN NOT w.is_archived AND NOT w.is_suspended AND g.id IS NOT NULL THEN l.protected_secret END,g.image_id::text,CASE WHEN u.id IS NULL THEN 'wishlistDeleted' WHEN w.owner_id<>$1 AND l.id IS NULL THEN 'notShared' WHEN w.is_suspended THEN 'suspended' WHEN w.is_archived THEN 'archived' WHEN g.id IS NULL THEN 'wishDeleted' END FROM gift_reservation_histories h LEFT JOIN wishlists w ON w.id=h.wishlist_id LEFT JOIN users u ON u.id=w.owner_id LEFT JOIN wishes g ON g.id=h.wish_id AND g.wishlist_id=h.wishlist_id LEFT JOIN wishlist_share_links l ON l.wishlist_id=h.wishlist_id WHERE h.member_id=$1 AND ($2='' OR h.status=$2) ORDER BY h.last_activity_at DESC,h.id DESC LIMIT $3 OFFSET $4`, member, upperFirst(status), size, (int64(page)-1)*int64(size))
+	rows, err := s.Store.Pool.Query(ctx, `SELECT h.id::text,h.wishlist_id::text,CASE WHEN w.owner_id=$1 OR ((l.id IS NOT NULL OR access.group_id IS NOT NULL) AND NOT w.is_archived AND NOT w.is_suspended) THEN COALESCE(w.name,h.wishlist_name) ELSE h.wishlist_name END,h.wish_id::text,CASE WHEN w.owner_id=$1 OR ((l.id IS NOT NULL OR access.group_id IS NOT NULL) AND NOT w.is_archived AND NOT w.is_suspended) THEN COALESCE(g.name,h.wish_name) ELSE h.wish_name END,l.id::text,h.quantity,h.status,h.created_at,h.last_activity_at,h.ended_at,u.id::text,u.display_name,COALESCE(w.is_archived,false),CASE WHEN NOT w.is_archived AND NOT w.is_suspended AND g.id IS NOT NULL THEN w.owner_id=$1 ELSE false END,CASE WHEN NOT w.is_archived AND NOT w.is_suspended AND g.id IS NOT NULL THEN l.protected_secret END,g.image_id::text,CASE WHEN u.id IS NULL THEN 'wishlistDeleted' WHEN w.owner_id<>$1 AND l.id IS NULL AND access.group_id IS NULL THEN 'notShared' WHEN w.is_suspended THEN 'suspended' WHEN w.is_archived THEN 'archived' WHEN g.id IS NULL THEN 'wishDeleted' END,access.group_id::text FROM gift_reservation_histories h LEFT JOIN wishlists w ON w.id=h.wishlist_id LEFT JOIN users u ON u.id=w.owner_id LEFT JOIN wishes g ON g.id=h.wish_id AND g.wishlist_id=h.wishlist_id LEFT JOIN wishlist_share_links l ON l.wishlist_id=h.wishlist_id AND NOT h.is_group_reservation LEFT JOIN LATERAL (SELECT gw.group_id FROM group_wishlists gw JOIN group_members gm ON gm.group_id=gw.group_id AND gm.member_id=h.member_id WHERE gw.wishlist_id=w.id AND NOT w.is_archived AND NOT w.is_suspended ORDER BY gw.group_id LIMIT 1) access ON true WHERE h.member_id=$1 AND ($2='' OR h.status=$2) ORDER BY h.last_activity_at DESC,h.id DESC LIMIT $3 OFFSET $4`, member, upperFirst(status), size, (int64(page)-1)*int64(size))
 	if err != nil {
 		return domain.Page(items, page, size, total), err
 	}
@@ -158,19 +158,28 @@ func (s *Service) ReservationHistory(ctx context.Context, member, status string,
 		var r domain.GiftReservationHistoryResponse
 		var owned bool
 		var protected, image *string
-		if err = rows.Scan(&r.Id, &r.WishlistId, &r.WishlistName, &r.WishId, &r.WishName, &r.ShareLinkId, &r.Quantity, &r.Status, &r.CreatedAt, &r.LastActivityAt, &r.EndedAt, &r.OwnerId, &r.OwnerDisplayName, &r.IsArchived, &owned, &protected, &image, &r.InaccessibilityReason); err != nil {
+		if err = rows.Scan(&r.Id, &r.WishlistId, &r.WishlistName, &r.WishId, &r.WishName, &r.ShareLinkId, &r.Quantity, &r.Status, &r.CreatedAt, &r.LastActivityAt, &r.EndedAt, &r.OwnerId, &r.OwnerDisplayName, &r.IsArchived, &owned, &protected, &image, &r.InaccessibilityReason, &r.GroupId); err != nil {
 			return domain.Page(items, page, size, total), err
 		}
 		if r.InaccessibilityReason != nil && *r.InaccessibilityReason != "archived" {
 			// History survives revocation; it never restores grants or current private identity.
-			r.OwnerId, r.OwnerDisplayName, r.ShareLinkId = nil, nil, nil
+			r.OwnerId, r.OwnerDisplayName, r.ShareLinkId, r.GroupId = nil, nil, nil, nil
 		} else if owned {
-			r.ShareLinkId = nil
+			r.ShareLinkId, r.GroupId = nil, nil
 		}
 		if owned {
 			r.OwnedWishPath = ptrString("/lists/" + r.WishlistId + "/wishes/" + r.WishId)
 			if image != nil {
 				address, e := s.imageURL(member, "", r.WishlistId, r.WishId, *image)
+				if e != nil {
+					return domain.Page(items, page, size, total), e
+				}
+				r.ImageUrl = &address
+			}
+		} else if r.OwnerId != nil && r.GroupId != nil && r.ShareLinkId == nil {
+			r.GroupWishPath = ptrString("/groups/" + *r.GroupId + "/wishlists/" + r.WishlistId + "/wishes/" + r.WishId)
+			if image != nil {
+				address, e := s.groupImageURL(member, *r.GroupId, r.WishlistId, r.WishId, *image)
 				if e != nil {
 					return domain.Page(items, page, size, total), e
 				}

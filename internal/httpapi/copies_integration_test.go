@@ -19,7 +19,7 @@ func TestWishCopies_WhenOwnedOrShared_CopiesContentAndIndependentImagesWithoutRe
 	requireStatus(t, f.send(t, "POST", "/api/v1/wishlists", `{"name":"Source","occasion":"other","surpriseMode":false}`, nil), 201, &source)
 	requireStatus(t, f.send(t, "POST", "/api/v1/wishlists", `{"name":"Destination","occasion":"other","surpriseMode":false}`, nil), 201, &destination)
 	var original domain.WishResponse
-	created := f.send(t, "POST", "/api/v1/wishlists/"+source.Id+"/wishes", `{"name":"Camera","note":"Private note","color":"Coral","size":"Medium","price":"12.30","quantity":3,"isFavorite":true}`, nil)
+	created := f.send(t, "POST", "/api/v1/wishlists/"+source.Id+"/wishes", `{"name":"Camera","note":"Private note","color":"Coral","size":"Medium","price":"12.30","quantity":3,"isFavorite":true,"isSurprise":true,"acceptsSecondHand":true}`, nil)
 	version := created.Header.Get("ETag")
 	requireStatus(t, created, 201, &original)
 	sourcePath := "/api/v1/wishlists/" + source.Id + "/wishes/" + original.Id
@@ -36,7 +36,7 @@ func TestWishCopies_WhenOwnedOrShared_CopiesContentAndIndependentImagesWithoutRe
 	if copied.Id == original.Id || copied.WishlistId != destination.Id || copied.Name != original.Name || copied.Price == nil || *copied.Price != "12.30" || copied.Quantity != 3 || copied.IsFavorite || copied.ReservedQuantity == nil || *copied.ReservedQuantity != 0 || copied.UpdatedAt != nil || copied.ImageUrl == nil || copyVersion == "" || copyResponse.Header.Get("Location") != "/api/v1/wishlists/"+destination.Id+"/wishes/"+copied.Id {
 		t.Fatal("independent copy contract differs")
 	}
-	if copied.Color == nil || *copied.Color != "Coral" || copied.Size == nil || *copied.Size != "Medium" {
+	if copied.Color == nil || *copied.Color != "Coral" || copied.Size == nil || *copied.Size != "Medium" || !copied.IsSurprise || !copied.AcceptsSecondHand {
 		t.Fatal("owned copy lost the source variants")
 	}
 	readImage := func(address string) []byte {
@@ -78,7 +78,7 @@ func TestWishCopies_WhenOwnedOrShared_CopiesContentAndIndependentImagesWithoutRe
 	if copied.Name != original.Name || copied.IsFavorite || copied.ImageUrl != nil {
 		t.Fatal("shared copy differs")
 	}
-	if copied.Color == nil || *copied.Color != "Coral" || copied.Size == nil || *copied.Size != "Medium" {
+	if copied.Color == nil || *copied.Color != "Coral" || copied.Size == nil || *copied.Size != "Medium" || !copied.IsSurprise || !copied.AcceptsSecondHand {
 		t.Fatal("shared copy lost the source variants")
 	}
 	requireStatus(t, visitor.send(t, "POST", sourcePath+"/copies", `{"destinationWishlistId":"`+visitorList.Id+`"}`, nil), 404, nil)

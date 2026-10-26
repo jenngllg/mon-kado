@@ -66,8 +66,9 @@ func (s *Service) CopyWish(ctx context.Context, member, destination, source, wis
 		var name string
 		var note, color, size, address, price, image *string
 		var quantity int
+		var surprise, secondHand bool
 		var hash []byte
-		err = tx.QueryRow(ctx, `SELECT name,note,color,size,url,price::text,quantity,image_id::text,image_content_hash FROM wishes WHERE wishlist_id=$1 AND id=$2 FOR UPDATE`, source, wish).Scan(&name, &note, &color, &size, &address, &price, &quantity, &image, &hash)
+		err = tx.QueryRow(ctx, `SELECT name,note,color,size,url,price::text,quantity,image_id::text,image_content_hash,is_surprise,accepts_second_hand FROM wishes WHERE wishlist_id=$1 AND id=$2 FOR UPDATE`, source, wish).Scan(&name, &note, &color, &size, &address, &price, &quantity, &image, &hash, &surprise, &secondHand)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return missing(missingWish)
 		}
@@ -104,7 +105,7 @@ func (s *Service) CopyWish(ctx context.Context, member, destination, source, wis
 		if _, err = tx.Exec(ctx, `UPDATE wish_position_sequences SET next_position=$2 WHERE wishlist_id=$1`, destination, position+1); err != nil {
 			return err
 		}
-		result, version, err = s.scanWish(member, tx.QueryRow(ctx, `INSERT INTO wishes(id,wishlist_id,name,note,url,price,quantity,position,created_at,image_id,image_content_hash,color,size) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING `+wishColumns, security.NewID(), destination, name, note, address, price, quantity, position+1, s.Now().UTC(), copiedImage, hash, color, size))
+		result, version, err = s.scanWish(member, tx.QueryRow(ctx, `INSERT INTO wishes(id,wishlist_id,name,note,url,price,quantity,position,created_at,image_id,image_content_hash,color,size,is_surprise,accepts_second_hand) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING `+wishColumns, security.NewID(), destination, name, note, address, price, quantity, position+1, s.Now().UTC(), copiedImage, hash, color, size, surprise, secondHand))
 		return err
 	})
 	if staged != "" {

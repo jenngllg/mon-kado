@@ -57,6 +57,7 @@ func ValidateAt(input any, now time.Time) error {
 	}
 	name := v.Type().Name()
 	required := map[string][]string{
+		"SaveGroupRequest": {"Name"}, "InviteGroupMemberRequest": {"MemberId"},
 		"RegisterAccountRequest": {"Email", "Password", "DisplayName"}, "LoginRequest": {"Email", "Password"},
 		"JoinSharedWishlistRequest": {"DisplayName"},
 		"CreateWishlistRequest":     {"Name", "Occasion"}, "UpdateWishlistRequest": {"Name", "Occasion"},
@@ -189,7 +190,7 @@ func ValidateAt(input any, now time.Time) error {
 				if (field.Name == "NewPassword" || name == "RegisterAccountRequest") && n < 12 {
 					add(path, "The password must contain at least 12 characters.")
 				}
-			case "UserId", "RequestId", "ConfirmedMemberId", "DestinationWishlistId", "SourceShareLinkId", "SourceWishId":
+			case "MemberId", "UserId", "RequestId", "ConfirmedMemberId", "DestinationWishlistId", "SourceShareLinkId", "SourceWishId":
 				if id, err := uuid.Parse(s); err != nil || id == uuid.Nil || len(s) != 36 {
 					add(path, "The identifier is invalid.")
 				}

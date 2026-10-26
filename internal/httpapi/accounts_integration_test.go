@@ -21,14 +21,14 @@ func TestProfile_WhenSearchVisibilityChanges_PersistsPreferenceWithoutHidingPubl
 	initial := f.send(t, "GET", "/api/v1/auth/sessions/current", "", nil)
 	etag := initial.Header.Get("ETag")
 	requireStatus(t, initial, 200, &identity)
-	if identity.IsVisibleInMemberSearch {
-		t.Fatal("new accounts must be hidden from member search by default")
+	if !identity.IsVisibleInMemberSearch {
+		t.Fatal("new accounts must be visible in member search by default")
 	}
 	var photo domain.MemberProfileResponse
 	uploaded := f.upload(t, "/api/v1/members/current/profile/image", etag, 42)
 	etag = uploaded.Header.Get("ETag")
 	requireStatus(t, uploaded, 200, &photo)
-	if photo.ProfileImageUrl == nil || photo.IsVisibleInMemberSearch {
+	if photo.ProfileImageUrl == nil || !photo.IsVisibleInMemberSearch {
 		t.Fatal("photo update lost profile visibility")
 	}
 	photoURL, err := url.Parse(*photo.ProfileImageUrl)
