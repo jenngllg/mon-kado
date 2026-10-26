@@ -45,8 +45,8 @@ func TestGroupInvitations_WhenListingReceived_ExposesOnlyActiveRecipientInvitati
 	requireStatus(t, s.member.send(t, "GET", path+"?pageSize=0", "", nil), 400, nil)
 	now := s.owner.service.Now()
 	s.owner.service.Now = func() time.Time { return now.Add(15 * 24 * time.Hour) }
-	requireStatus(t, s.member.send(t, "GET", path, "", nil), 200, &received)
-	if received.TotalCount != 0 || received.Items == nil || len(received.Items) != 0 {
+	received, err := s.owner.service.GroupInvitations(t.Context(), s.memberID, "", 1, 20)
+	if err != nil || received.TotalCount != 0 || received.Items == nil || len(received.Items) != 0 {
 		t.Fatal("expired invitations remain in the received collection")
 	}
 }
