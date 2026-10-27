@@ -31,6 +31,15 @@ type Result struct {
 
 // Process rejects animated or oversized images and honors cancellation before each expensive stage.
 func Process(ctx context.Context, source []byte, maximumEdge int, profile bool) (Result, error) {
+	return process(ctx, source, maximumEdge, profile, false)
+}
+
+// ProcessImported also accepts bounded static AVIF merchant images. Upload contracts remain unchanged.
+func ProcessImported(ctx context.Context, source []byte, maximumEdge int) (Result, error) {
+	return process(ctx, source, maximumEdge, false, true)
+}
+
+func process(ctx context.Context, source []byte, maximumEdge int, profile, imported bool) (Result, error) {
 	invalid, unsupported := domain.WishImageInvalid, domain.WishImageUnsupportedFormat
 	if profile {
 		invalid, unsupported = domain.ProfileImageInvalid, domain.ProfileImageUnsupportedFormat
@@ -45,8 +54,16 @@ func Process(ctx context.Context, source []byte, maximumEdge int, profile bool) 
 	case <-ctx.Done():
 		return Result{}, ctx.Err()
 	}
+	if err := ctx.Err(); err != nil {
+		return Result{}, err
+	}
+	if imported && len(source) >= 12 && string(source[4:8]) == "ftyp" && (string(source[8:12]) == "avif" || string(source[8:12]) == "avis") {
+		if err := validateAVIF(source); err != nil {
+			return Result{}, err
+		}
+	}
 	configuration, format, err := image.DecodeConfig(bytes.NewReader(source))
-	if format != "jpeg" && format != "png" && format != "webp" {
+	if format != "jpeg" && format != "png" && format != "webp" && !(imported && format == "avif") {
 		return fail(unsupported, "Only static JPEG, PNG and WebP images are supported.")
 	}
 	if err != nil || configuration.Width < 1 || configuration.Height < 1 || int64(configuration.Width)*int64(configuration.Height) > 40000000 {
@@ -58,9 +75,17 @@ func Process(ctx context.Context, source []byte, maximumEdge int, profile bool) 
 	if err = ctx.Err(); err != nil {
 		return Result{}, err
 	}
-	decoded, _, err := image.Decode(bytes.NewReader(source))
+	var decoded image.Image
+	if format == "avif" {
+		decoded, err = decodeAVIF(source)
+	} else {
+		decoded, _, err = image.Decode(bytes.NewReader(source))
+	}
 	if err != nil {
 		return fail(invalid, "The image cannot be decoded.")
+	}
+	if err = ctx.Err(); err != nil {
+		return Result{}, err
 	}
 	oriented := orient(decoded, orientation(source, format))
 	width, height := oriented.Bounds().Dx(), oriented.Bounds().Dy()

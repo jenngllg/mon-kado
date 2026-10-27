@@ -20,7 +20,7 @@ func TestExtract_WhenConsolidatedMerchantScenariosExist_PreservesExactProductSug
 		{"unknown selected SKU cannot choose variants", "merchant.test", `<script type="application/ld+json">{"@type":"Product","name":"Gift","sku":"unknown","offers":[{"sku":"small","price":"29.90","priceCurrency":"EUR"},{"sku":"large","price":"94.00","priceCurrency":"EUR"}]}</script>`, "Gift", "", "", false},
 		{"invalid offer prevents guessing", "merchant.test", `<meta property="product:price:amount" content="5"><meta property="product:price:currency" content="EUR"><script type="application/ld+json">{"@type":"Product","name":"Gift","offers":[{"price":"12","priceCurrency":"EUR"},{"price":"invalid","priceCurrency":"EUR"}]}</script>`, "Gift", "", "", false},
 		{"foreign currency", "merchant.test", `<script type="application/ld+json">{"@type":"Product","name":"Gift","offers":{"price":"12","priceCurrency":"USD"}}</script>`, "Gift", "", "", true},
-		{"duplicate conflicting meta", "merchant.test", `<title>Fallback</title><meta property="OG:TITLE" content="First"><meta name="og:title" content="Second"><meta property="og:image" content="https://images.test/a"><meta property="og:image" content="https://images.test/b">`, "Fallback", "", "", false},
+		{"duplicate conflicting meta", "merchant.test", `<title>Fallback</title><meta property="OG:TITLE" content="First"><meta name="og:title" content="Second"><meta property="og:image" content="https://images.test/a"><meta property="og:image" content="https://images.test/b">`, "Fallback", "", "https://images.test/a", false},
 		{"equivalent visible image", "merchant.test", `<script type="application/ld+json">{"@type":"Product","name":"Gift","image":[{"url":"image-id"}]}</script><img alt="image-id" src="https://images.test/full.jpg">`, "Gift", "", "https://images.test/full.jpg", false},
 		{"ambiguous visible equivalent", "merchant.test", `<script type="application/ld+json">{"@type":"Product","name":"Gift","image":"image-id"}</script><img alt="image-id" src="/a"><img alt="image-id" src="/b">`, "Gift", "", "https://merchant.test/image-id", false},
 		{"challenge excludes site logo", "merchant.test", `<title>Just a moment</title><meta property="og:image" content="/logo"><div id="challenge-form"></div>`, "", "", "", false},
@@ -31,18 +31,6 @@ func TestExtract_WhenConsolidatedMerchantScenariosExist_PreservesExactProductSug
 		{"microdata excludes nested scopes", "merchant.test", `<main itemscope itemtype="https://schema.org/Product" data-product-sku="large"><span itemscope itemtype="https://schema.org/Brand"><meta itemprop="name" content="Brand"></span><span itemprop="name"> Main   gift </span><img itemprop="image" src="/main.jpg"><div itemprop="offers" itemscope itemtype="http://schema.org/Offer"><meta itemprop="sku" content="small"><meta itemprop="price" content="29.9"><meta itemprop="priceCurrency" content="EUR"></div><div itemprop="offers" itemscope itemtype="https://schema.org/Offer"><meta itemprop="sku" content="large"><meta itemprop="price" content="94"><meta itemprop="priceCurrency" content="EUR"><span itemscope><meta itemprop="price" content="1"></span></div></main>`, "Main gift", "94", "https://merchant.test/main.jpg", false},
 		{"microdata conflicting scalar", "merchant.test", `<main itemscope itemtype="http://schema.org/Product"><meta itemprop="name" content="First"><meta itemprop="name" content="Second"></main>`, "", "", "", false},
 		{"structured overrides microdata", "merchant.test", `<main itemscope itemtype="http://schema.org/Product"><meta itemprop="name" content="Unrelated"></main><script type="application/ld+json">{"@type":"Product","name":"Chosen"}</script>`, "Chosen", "", "", false},
-		{"Amazon primary whole and fraction", "www.amazon.fr", `<span id="productTitle"> Example   product </span><img id="landingImage" data-old-hires="data:invalid" data-a-hires="/large.jpg" src="/small.jpg"><div id="corePriceDisplay_desktop_feature_div"><span id="apex-pricetopay-accessibility-label">11,82 € avec 14 % économies</span><span class="priceToPay"><span class="a-offscreen"> </span><span class="a-price-whole">11<span>,</span></span><span class="a-price-fraction">82</span><span class="a-price-symbol">€</span></span><span class="a-text-price">13,78 €</span></div><aside><span class="priceToPay">1,00 €</span></aside>`, "Example product", "11.82", "https://www.amazon.fr/large.jpg", false},
-		{"Amazon explicit accessible price", "amazon.de", `<span id="ebooksProductTitle">Book</span><div id="apex_mobile"><span class="apex-pricetopay-value"><span class="a-offscreen">1.234,56 EUR</span></span></div>`, "Book", "1234.56", "", false},
-		{"Amazon international price", "amazon.com", `<span id="productTitle">Gift</span><div id="buybox"><span id="apex-pricetopay-accessibility-label">1,234.56 EUR</span></div>`, "Gift", "1234.56", "", false},
-		{"Amazon legacy price", "amazon.fr", `<span id="productTitle">Gift</span><span id="priceblock_dealprice">19 €</span>`, "Gift", "19", "", false},
-		{"Amazon non euro", "amazon.co.uk", `<span id="productTitle">Gift</span><span id="priceblock_ourprice">£19</span>`, "Gift", "", "", true},
-		{"Amazon conflicting primary prices", "amazon.fr", `<span id="productTitle">Gift</span><div id="buybox"><span class="priceToPay">12 €</span><span class="priceToPay">13 €</span></div><span id="priceblock_ourprice">10 €</span>`, "Gift", "", "", false},
-		{"Amazon captcha", "amazon.fr", `<span id="productTitle">Gift</span><form action="validateCaptcha"></form>`, "", "", "", false},
-		{"Amazon ambiguous identity", "amazon.fr", `<span id="productTitle">First</span><span id="ebooksProductTitle">Second</span>`, "", "", "", false},
-		{"Amazon resembling host remains generic", "amazon.fr.attacker.test", `<title>Generic</title><span id="productTitle">Wrong</span>`, "Generic", "", "", false},
-		{"FNAC primary identity and price", "www.fnac.com", `<h1 data-automation-id="pdp-productInformation-title">Camera</h1><section aria-label="Product images"><button aria-label="Open image 1 in fullscreen"><img alt="Camera" src="/main.jpg"></button></section><div data-automation-id="pdp-buyBox-desktop"><div><div class="PricingUI-test__container"><span class="PricingUI-test__pricingLabelMain">1 234,56 €</span></div></div></div><aside>12 €</aside>`, "Camera", "1234.56", "https://www.fnac.com/main.jpg", false},
-		{"FNAC ambiguous identity", "fnac.com", `<h1 data-automation-id="pdp-productInformation-title">First</h1><h1 data-automation-id="pdp-productInformation-title">Second</h1>`, "", "", "", false},
-		{"FNAC challenge", "fnac.com", `<title>Denied</title><div id="sec-if-cpt-container"></div>`, "", "", "", false},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			// Arrange
@@ -87,7 +75,23 @@ func TestExtract_WhenPriceHasUnsupportedPrecisionOrRange_DoesNotRound(t *testing
 	}
 	base, _ := url.Parse("https://merchant.test/product")
 	result := importer.Extract([]byte(`<meta property="og:title" content="`+strings.Repeat("a", 101)+`">`), base)
-	if result.Name != nil {
-		t.Fatal("name was truncated instead of rejected")
+	if result.Name == nil || len(*result.Name) != 100 {
+		t.Fatal("long suggestion did not preserve the public name limit")
+	}
+}
+
+func TestExtract_WhenMerchantHostnameChanges_UsesTheSameStandardMetadata(t *testing.T) {
+	for _, host := range []string{"www.amazon.fr", "www.fnac.com", "www.sephora.fr", "shop.independent-store.fr"} {
+		t.Run(host, func(t *testing.T) {
+			// Arrange
+			base, _ := url.Parse("https://" + host + "/product")
+			markup := `<script type="application/ld+json">{"@type":"Product","name":"Generic product","image":"/cover.jpg","offers":{"price":"25.50","priceCurrency":"EUR"}}</script>`
+			// Act
+			metadata := importer.Extract([]byte(markup), base)
+			// Assert
+			if metadata.Name == nil || *metadata.Name != "Generic product" || metadata.Price == nil || metadata.Price.String() != "25.5" || metadata.Image == nil || *metadata.Image != "https://"+host+"/cover.jpg" {
+				t.Fatal("hostname changed standard extraction")
+			}
+		})
 	}
 }

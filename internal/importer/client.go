@@ -37,7 +37,10 @@ const merchantUserAgent = "Go-http-client/1.1 MonKado/1.0 (+https://www.monkado.
 
 // Client owns the resolver and dialer used for every redirect and image request.
 type Client struct {
-	Catalog          Catalog
+	PageSource       PageSource
+	FallbackSource   PageSource
+	ImageSource      ImageSource
+	FinalImageSource ImageSource
 	Resolver         Resolver
 	Dialer           Dialer
 	Timeout          time.Duration
@@ -48,7 +51,7 @@ type Client struct {
 
 // New creates an isolated client that ignores process proxy settings.
 func New() *Client {
-	return &Client{Resolver: net.DefaultResolver, Dialer: &net.Dialer{Timeout: 10 * time.Second}, Timeout: 20 * time.Second, MaximumRedirects: 3, MaximumHTMLBytes: config.MaximumImportHTMLBytes}
+	return &Client{Resolver: net.DefaultResolver, Dialer: &net.Dialer{Timeout: 10 * time.Second}, Timeout: config.MaximumImportDuration, MaximumRedirects: 3, MaximumHTMLBytes: config.MaximumImportHTMLBytes}
 }
 
 var excluded = func() []netip.Prefix {
@@ -115,13 +118,13 @@ func (c *Client) Validate(ctx context.Context, value string) error {
 	return err
 }
 
-func (c *Client) downloadAttempt(ctx context.Context, value string, limit int64) ([]byte, *url.URL, string, error) {
+func (c *Client) downloadAttempt(ctx context.Context, value string, limit int64, accept string) ([]byte, *url.URL, string, error) {
 	for redirects := 0; ; redirects++ {
 		u, err := webURL(value)
 		if err != nil {
 			return nil, nil, "", err
 		}
-		response, err := c.request(ctx, u)
+		response, err := c.request(ctx, u, accept)
 		if err != nil {
 			return nil, nil, "", err
 		}
@@ -159,7 +162,15 @@ func (c *Client) downloadAttempt(ctx context.Context, value string, limit int64)
 	}
 }
 
-func (c *Client) request(ctx context.Context, target *url.URL) (*http.Response, error) {
+func (c *Client) request(ctx context.Context, target *url.URL, accept string) (*http.Response, error) {
+	headers := make(http.Header)
+	if accept != "" {
+		headers.Set("Accept", accept)
+	}
+	return c.requestWithHeaders(ctx, target, http.MethodGet, nil, headers)
+}
+
+func (c *Client) requestWithHeaders(ctx context.Context, target *url.URL, method string, body io.Reader, headers http.Header) (*http.Response, error) {
 	host, err := idna.Lookup.ToASCII(target.Hostname())
 	if err != nil {
 		return nil, rejected()
@@ -197,11 +208,14 @@ func (c *Client) request(ctx context.Context, target *url.URL) (*http.Response, 
 	client := &http.Client{Transport: transport, Timeout: c.Timeout, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	// Only the validated numeric destination reaches the transport URL; preserve merchant authority for Host and TLS.
 	pinned := &url.URL{Scheme: scheme, Host: destination, Path: target.Path, RawPath: target.RawPath, RawQuery: target.RawQuery, ForceQuery: target.ForceQuery}
-	req, err := http.NewRequestWithContext(ctx, "GET", pinned.String(), nil)
+	req, err := http.NewRequestWithContext(ctx, method, pinned.String(), body)
 	if err != nil {
 		return nil, err
 	}
 	req.Host = target.Host
 	req.Header.Set("User-Agent", merchantUserAgent)
+	for name, values := range headers {
+		req.Header[name] = append([]string(nil), values...)
+	}
 	return client.Do(req)
 }

@@ -53,6 +53,10 @@ func retryableDownload(err error) (time.Duration, bool) {
 // Download retries only transient GET failures, revalidating every connection and redirect.
 // All attempts and backoffs share one timeout and the caller's cancellation budget.
 func (c *Client) Download(ctx context.Context, value string, limit int64) ([]byte, *url.URL, string, error) {
+	return c.download(ctx, value, limit, "")
+}
+
+func (c *Client) download(ctx context.Context, value string, limit int64, accept string) ([]byte, *url.URL, string, error) {
 	budget, cancel := context.WithTimeout(ctx, c.Timeout)
 	defer cancel()
 	wait := c.Wait
@@ -63,7 +67,7 @@ func (c *Client) Download(ctx context.Context, value string, limit int64) ([]byt
 		if err := budget.Err(); err != nil {
 			return nil, nil, "", err
 		}
-		content, final, media, err := c.downloadAttempt(budget, value, limit)
+		content, final, media, err := c.downloadAttempt(budget, value, limit, accept)
 		if err == nil {
 			return content, final, media, nil
 		}
