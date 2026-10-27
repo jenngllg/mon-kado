@@ -1,7 +1,6 @@
 package importer
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -36,13 +35,7 @@ func (c *LocalCloudflare) GetImage(ctx context.Context, target *url.URL) ([]byte
 	body, _ := json.Marshal(struct {
 		URL string `json:"url"`
 	}{clean.String()})
-	request, err := http.NewRequestWithContext(budget, http.MethodPost, localCloudflareImageEndpoint, bytes.NewReader(body))
-	if err != nil {
-		return nil, errors.New("development image request is unavailable")
-	}
-	request.Header.Set("Content-Type", "application/json")
-	request.Header.Set("Authorization", "Bearer "+c.key)
-	response, err := c.http.Do(request)
+	response, err := c.relayRequest(budget, "/image", body)
 	if err != nil {
 		return nil, errors.New("development image relay is unavailable")
 	}

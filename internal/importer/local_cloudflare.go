@@ -21,14 +21,43 @@ import (
 const localCloudflareEndpoint = "http://127.0.0.1:8787/preview"
 const localCloudflareBudget = 2 * time.Second
 
-// LocalCloudflare provides authenticated development previews for public merchants.
-// It is deliberately unavailable in production: Workers cannot pin merchant IPs.
+// LocalCloudflare provides authenticated relay previews for public merchants.
+// The default constructor is loopback-only; permanent origins require explicit managed-provider configuration.
 type LocalCloudflare struct {
 	validator    localURLValidator
 	maximumBytes int
 	key          string
 	http         *http.Client
 	wait         RetryWait
+	origin       string
+	request      providerRequest
+}
+
+// NewCloudflare connects to the dedicated permanent Worker with a DNS-pinned provider transport.
+// Worker merchant connections remain managed and require the separately authorized network exception.
+func NewCloudflare(client *Client, origin, key string) *LocalCloudflare {
+	provider := NewLocalCloudflare(client, key)
+	provider.origin, provider.request = origin, client.requestWithHeaders
+	return provider
+}
+
+func (c *LocalCloudflare) relayRequest(ctx context.Context, route string, body []byte) (*http.Response, error) {
+	headers := http.Header{"Content-Type": {"application/json"}, "Authorization": {"Bearer " + c.key}}
+	if c.request != nil {
+		origin, err := config.NormalizeCloudflareRelayOrigin(c.origin)
+		if err != nil {
+			return nil, err
+		}
+		endpoint, _ := url.Parse(origin + route)
+		return c.request(ctx, endpoint, http.MethodPost, bytes.NewReader(body), headers)
+	}
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, "http://127.0.0.1:8787"+route, bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	request.GetBody = nil
+	request.Header = headers
+	return c.http.Do(request)
 }
 
 type localURLValidator interface {
@@ -70,7 +99,7 @@ func (c *LocalCloudflare) CanHandle(target *url.URL) bool {
 	return cloudflareURL(target)
 }
 
-// Get uses only the bounded development relay; merchant page failures remain explicit.
+// Get uses only the bounded authenticated relay; merchant page failures remain explicit.
 func (c *LocalCloudflare) Get(ctx context.Context, target *url.URL) (Metadata, error) {
 	if ctx.Err() != nil {
 		return Metadata{}, ctx.Err()
@@ -135,13 +164,7 @@ func (c *LocalCloudflare) edgeAttempt(ctx context.Context, target *url.URL) (Met
 	if err != nil {
 		return Metadata{}, errors.New("development preview request is unavailable")
 	}
-	request, err := http.NewRequestWithContext(ctx, http.MethodPost, localCloudflareEndpoint, bytes.NewReader(body))
-	if err != nil {
-		return Metadata{}, errors.New("development preview request is unavailable")
-	}
-	request.Header.Set("Content-Type", "application/json")
-	request.Header.Set("Authorization", "Bearer "+c.key)
-	response, err := c.http.Do(request)
+	response, err := c.relayRequest(ctx, "/preview", body)
 	if err != nil {
 		if _, retry := retryableDownload(err); retry {
 			return Metadata{}, temporaryMerchantError{}
@@ -183,6 +206,11 @@ func (c *LocalCloudflare) edgeAttempt(ctx context.Context, target *url.URL) (Met
 		content, err = io.ReadAll(io.LimitReader(reader, 3*maximum+1))
 		if err != nil || int64(len(content)) > 3*maximum {
 			return Metadata{}, errors.New("development preview text is unavailable")
+		}
+	}
+	if c.request != nil {
+		if err := c.validator.Validate(ctx, clean.String()); err != nil {
+			return Metadata{}, err
 		}
 	}
 	return Extract(content, &clean), nil

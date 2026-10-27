@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/JennGllg/mon-kado/internal/importer"
 	"github.com/JennGllg/mon-kado/internal/logging"
 	"io"
 	"log/slog"
@@ -81,26 +80,7 @@ func New(service *application.Service, logger *slog.Logger) *API {
 	a := &API{Service: service, Logger: logger, mux: http.NewServeMux(), limiter: rateLimiter{windows: map[string]rateWindow{}}, operations: map[string]options{}}
 	a.ImageAdmission = admission.New(nil)
 	a.Telemetry = telemetry.New("api", func() time.Time { return service.Now() }, time.Now)
-	imports := service.Config.Imports()
-	client := importer.New()
-	client.Timeout, client.MaximumRedirects, client.MaximumHTMLBytes = imports.Timeout, imports.MaximumRedirects, imports.MaximumHTMLBytes
-	if imports.LocalCloudflareEnabled && !service.Config.Production {
-		cloudflare := importer.NewLocalCloudflare(client, imports.LocalCloudflareKey)
-		client.PageSource = cloudflare
-		if imports.LocalCloudflareImagesEnabled {
-			client.ImageSource = cloudflare
-		}
-		if imports.LocalFirecrawlEnabled {
-			client.FallbackSource = importer.NewLocalFirecrawl(client, imports.LocalFirecrawlKey, service.Now)
-			if imports.LocalFirecrawlProductEnabled {
-				client.FallbackSource = importer.NewLocalFirecrawlProduct(client, imports.LocalFirecrawlKey, service.Now)
-			}
-			if imports.LocalFirecrawlImagesEnabled {
-				client.FinalImageSource = client.FallbackSource.(*importer.LocalFirecrawl)
-			}
-		}
-	}
-	a.Importer = client
+	a.Importer = newWishImporter(service)
 	a.routes()
 	a.groupRoutes()
 	a.registerOpenAPI()

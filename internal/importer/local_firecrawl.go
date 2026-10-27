@@ -36,8 +36,8 @@ type firecrawlLocation struct {
 	Languages []string `json:"languages"`
 }
 
-// LocalFirecrawl supplies a single authenticated fallback for development previews.
-// The API composition root must reject production activation; the remote renderer
+// LocalFirecrawl supplies one authenticated managed fallback for merchant previews.
+// The API composition root requires explicit configuration; the remote renderer
 // controls its merchant connections and cannot enforce MonKado's IP pinning.
 type LocalFirecrawl struct {
 	validator               localURLValidator

@@ -1,6 +1,6 @@
-# Local Cloudflare wish-import relay
+# Authenticated Cloudflare wish-import relay
 
-This development-only Worker supplies bounded public product HTML to the existing
+This Worker supplies bounded public product HTML to the existing
 Go importer. The browser continues to use the authenticated wish-import-preview
 endpoint; no Cloudflare credential or merchant page is sent to frontend code.
 
@@ -9,7 +9,7 @@ and a random 32-byte hexadecimal `WISH_IMPORT_LOCAL_CLOUDFLARE_KEY` enable it on
 when `APP_ENV=local`. Configuration rejects this combination in production, and
 the API composition root independently excludes it in production. The connector
 only calls `http://127.0.0.1:8787/preview`, ignores process proxies, refuses relay
-redirects and allows five seconds across at most two relay attempts. It has no
+redirects and allows two seconds across at most two relay attempts. It has no
 direct merchant-page fallback. Image downloads retain their pinned direct transport. Only
 temporary failures permit a second attempt; permanent refusals and redirects do not.
 The operator's
@@ -33,11 +33,18 @@ image download, IP pinning, normalization, caller cancellation and HTTP contract
 ## Security boundary
 
 DNS preflight is **not IP pinning**. Workers `fetch` chooses its final connection
-address, and `resolveOverride` cannot pin arbitrary merchant zones. Do not claim
-otherwise or publish this relay as production-ready. Activating this development
-connector, including all public merchant domains, is covered by Jenn's explicit local-only exception recorded in
-`AGENTS.md` on 27 October 2026. It does not authorize production activation.
-Direct connections keep their existing pinning requirement.
+address, and `resolveOverride` cannot pin arbitrary merchant zones. Jenn explicitly
+extended this managed-network exception to production on 27 October 2026, recorded
+in `AGENTS.md`. Direct/provider connections still require public-DNS validation and
+IP pinning. Merchant DNS is checked before and after both HTML and image retrieval.
+
+Permanent deployment uses `WISH_IMPORT_MANAGED_ENABLED`, an authenticated dedicated
+`https://monkado-wish-import.<account>.workers.dev` origin and its `IMPORT_AUTH`
+secret binding. Its Go client calls that fixed authority through the pinned HTTPS
+transport, without redirects or process proxies. The secret never enters browser
+code or merchant headers. Default-off local loopback configuration remains separate
+and forbidden in production. The legacy `TEST_AUTH` binding is accepted only as an
+alternative when `IMPORT_AUTH` is absent; a malformed production secret fails closed.
 
 The explicitly enabled local `/image` experiment accepts the same authenticated
 JSON URL request and returns at most ten MiB of static-image bytes. It sends only

@@ -180,3 +180,31 @@ Transient GET failures allow at most two retries inside the same preview deadlin
 Mobile and desktop previews use the same server-side provider. A product opening in the member's merchant app does not prove that its short link or product metadata is available to the server. Redirects remain bounded and independently validated; a missing short-link target cannot be reconstructed from its opaque identifier. Keep the original link and any manual draft when suggestions are absent. The frontend distinguishes an empty import from partially usable suggestions and offers an explicit link to open the source and copy the full product address.
 
 CI uses deterministic synthetic documents and fake transport. Live merchant checks are explicit diagnostics outside CI and cannot guarantee permanent availability of third-party pages.
+
+
+## Permanent managed providers
+
+Jenn explicitly extended the managed-network exception to production on 27 October
+2026 when requesting deployment with wish copying. `WISH_IMPORT_MANAGED_ENABLED`
+selects the permanent provider mode. Its dedicated HTTPS Worker origin and random
+32-byte hexadecimal secret must be configured only on the backend. The Worker
+receives that secret as `IMPORT_AUTH`; `TEST_AUTH` remains a legacy local-preview
+binding. Invalid origins, keys and dependent toggles fail startup. The loopback
+local flags continue to be rejected in production and cannot be combined with the
+permanent mode.
+
+The Worker origin is limited to `monkado-wish-import.<account>.workers.dev` with no
+credentials, port, path, query or fragment. The Go transport independently validates
+and pins the provider's public DNS addresses, verifies its TLS identity, ignores
+process proxies and refuses redirects. Its authenticated request body contains only
+the public merchant URL, never member session data. Merchant public DNS is validated
+before and after retrieval in Go and the Worker. Worker merchant IPs remain managed;
+Firecrawl also manages its internal redirects and subresources. This remains an
+explicit exception, not a claim of merchant-IP pinning.
+
+The production pipeline is the same bounded Cloudflare-first flow tested locally,
+with one Firecrawl fallback if configured, direct pinned image downloads followed
+by optional Firecrawl original-image relay, and the ten-second form deadline. No
+experimental browser, CAPTCHA solver, merchant-specific parser or subscription
+upgrade is activated. The default configuration remains disabled until explicitly
+provisioned. All normal deployment backup/approval/quality gates still apply.

@@ -212,6 +212,8 @@ func (c *Client) requestWithHeaders(ctx context.Context, target *url.URL, method
 	if err != nil {
 		return nil, err
 	}
+	// Provider POSTs are admitted once; the transport must not replay their bodies.
+	req.GetBody = nil
 	req.Host = target.Host
 	req.Header.Set("User-Agent", merchantUserAgent)
 	for name, values := range headers {

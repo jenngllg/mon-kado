@@ -123,3 +123,27 @@ test('Declared and streamed response sizes, media and request sizes fail closed'
   assert.equal((await handle(request(source+'a'.repeat(9000)),env,()=>assert.fail('Oversize request reached network'))).status,400);
 });
 
+
+
+test('Permanent relay secret takes precedence and malformed bindings fail closed',async()=>{
+  const production={IMPORT_AUTH:'b'.repeat(64),TEST_AUTH:env.TEST_AUTH};
+  let calls=0;const upstream=network(async()=>{calls++;return new Response('<title>Notebook</title>',{headers:{'Content-Type':'text/html'}})});
+  const accepted=await handle(request(source,{Authorization:'Bearer '+production.IMPORT_AUTH}),production,upstream);
+  assert.equal(accepted.status,200);assert.equal(calls,1);
+  const refused=await handle(request(),production,()=>assert.fail('Legacy key reached the network'));
+  assert.equal(refused.status,401);
+  assert.equal((await handle(request(),{...production,IMPORT_AUTH:''},()=>assert.fail('Malformed key reached the network'))).status,401);
+});
+
+test('HTML is withheld if merchant DNS becomes private after retrieval',async()=>{
+  let retrieved=false;
+  const upstream=async(url,options)=>{
+    if(new URL(url).hostname==='cloudflare-dns.com'){
+      const ipv6=new URL(url).searchParams.get('type')==='AAAA';
+      return Response.json({Status:0,Answer:ipv6?[]:[{type:1,data:retrieved?'127.0.0.1':'93.184.216.34'}]});
+    }
+    retrieved=true;return new Response('<title>Private after fetch</title>',{headers:{'Content-Type':'text/html'}});
+  };
+  const result=await handle(request(),env,upstream);
+  assert.equal(result.status,502);assert.equal(await result.text(),'');
+});

@@ -1,8 +1,8 @@
 import { BlockList, isIP } from 'node:net';
 import { timingSafeEqual } from 'node:crypto';
 
-// Development-only relay. Workers controls final DNS resolution; this is not IP pinning.
-// No production route may use this module without resolving that security requirement.
+// Authenticated relay. Workers controls final DNS resolution; this is not IP pinning.
+// Production use requires the explicitly authorized managed-network exception.
 
 function merchantHost(host) {
   if (!/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$/.test(host) || isIP(host)) return false;
@@ -80,13 +80,14 @@ async function validateDNS(host, upstream, signal) {
 }
 
 function authenticated(request, env) {
-  if (typeof env.TEST_AUTH !== 'string' || !/^[a-f0-9]{64}$/.test(env.TEST_AUTH)) return false;
+  const key=env.IMPORT_AUTH ?? env.TEST_AUTH;
+  if (typeof key !== 'string' || !/^[a-f0-9]{64}$/.test(key)) return false;
   const received = new TextEncoder().encode(request.headers.get('Authorization') || '');
-  const expected = new TextEncoder().encode(`Bearer ${env.TEST_AUTH}`);
+  const expected = new TextEncoder().encode(`Bearer ${key}`);
   return received.byteLength === expected.byteLength && timingSafeEqual(received, expected);
 }
 
-/** Fetch bounded passive product HTML or image bytes for the authenticated local API only. */
+/** Fetch bounded passive product HTML or image bytes for the authenticated API only. */
 export async function handle(request, env, upstream = fetch) {
   if (!authenticated(request,env)) return new Response(null,{status:401});
   const route=new URL(request.url).pathname;
@@ -121,7 +122,7 @@ export async function handle(request, env, upstream = fetch) {
       return new Response(null,{status:502,headers});
     }
     const content = await bounded(origin.body,maximum,signal);
-    if(image)await validateDNS(target.hostname,upstream,signal);
+    await validateDNS(target.hostname,upstream,signal);
     return new Response(content,{headers:{'Content-Type':origin.headers.get('Content-Type'),'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','X-MonKado-Origin-Status':'200'}});
   } catch { return new Response(null,{status:502}); }
 }
