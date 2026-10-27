@@ -18024,6 +18024,194 @@
         ],
         "description": "Requires current group membership and current access to the wishlist. The owner cannot follow their own wishlist. Following is an explicit command and never creates a public share link, participation or reservation. The follow remains bound to its original access source; removal from that group or withdrawal of group access revokes access. At most one follow per member and wishlist, shared across group and public entry points. Responses contain an authorized frontend group URL without a share secret for group-derived follows."
       }
+    },
+    "/api/v1/groups/{groupId}/wishlists/{wishlistId}/wishes/{wishId}/copies": {
+      "post": {
+        "operationId": "CopyGroupWish",
+        "summary": "Copy an accessible group wish into an owned wishlist",
+        "tags": [
+          "Wishes"
+        ],
+        "responses": {
+          "201": {
+            "description": "201Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WishResponse"
+                }
+              }
+            },
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Quoted lowercase hexadecimal PostgreSQL xmin version."
+              },
+              "Location": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "URL of the created resource."
+              }
+            }
+          },
+          "400": {
+            "description": "400BadRequest",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "404NotFound",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "409Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "413PayloadTooLarge",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "415UnsupportedMediaType",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "503ServiceUnavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Request failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Request failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Request failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The request quota was exceeded. Retry-After gives the remaining wait in seconds."
+          }
+        },
+        "parameters": [
+          {
+            "name": "groupId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "wishlistId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "wishId",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "in": "path"
+          }
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CopyOwnedWishRequest"
+              }
+            }
+          }
+        },
+        "description": "Requires authenticated current group membership and current access to the source wishlist. Source membership and effective audience are rechecked under parent locks. The destination must be owned, active and unsuspended. Creation is explicit and returns an independent wish and image with new identifiers and version; favorites and reservations are not copied. Does not create a public sharing link, participation or reservation. Revoked membership, hidden or archived/suspended sources and foreign source children return 404. Destination conflicts and capacity limits return 409. Image copying uses the same bounded admission, hash verification and atomic database/file lifecycle as owned and publicly shared copies."
+      }
     }
   },
   "components": {
