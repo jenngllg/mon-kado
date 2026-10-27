@@ -33,7 +33,7 @@ func (s *Service) ReadGroupWishImage(ctx context.Context, group, wishlist, wish,
 		return nil, missing(domain.WishImageNotFound)
 	}
 	var image string
-	err = s.Store.Pool.QueryRow(ctx, `SELECT w.image_id::text FROM wishes w JOIN wishlists l ON l.id=w.wishlist_id JOIN group_wishlists gw ON gw.wishlist_id=l.id JOIN group_members m ON m.group_id=gw.group_id WHERE gw.group_id=$1 AND m.member_id=$2 AND w.wishlist_id=$3 AND w.id=$4 AND w.image_id=$5 AND NOT l.is_archived AND NOT l.is_suspended`, group, grant.Owner, wishlist, wish, grant.Image).Scan(&image)
+	err = s.Store.Pool.QueryRow(ctx, `SELECT w.image_id::text FROM wishes w JOIN wishlists l ON l.id=w.wishlist_id JOIN visible_group_wishlists gw ON gw.wishlist_id=l.id JOIN group_members m ON m.group_id=gw.group_id WHERE gw.group_id=$1 AND m.member_id=$2 AND w.wishlist_id=$3 AND w.id=$4 AND w.image_id=$5 AND NOT l.is_archived AND NOT l.is_suspended`, group, grant.Owner, wishlist, wish, grant.Image).Scan(&image)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, missing(domain.WishImageNotFound)
 	}

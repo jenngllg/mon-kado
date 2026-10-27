@@ -24,7 +24,26 @@
 		@unsupported not method GET HEAD
 		respond @unsupported 405
 
-		# Crawlers receive only the explicitly public preview, not the bearer-protected SPA data.
+		# Crawlers receive only the explicitly public preview, not bearer-protected SPA data.
+		@groupPreview {
+			path_regexp groupPreview ^/groups/join/([0-9a-fA-F-]{36})/?$
+			header_regexp groupCrawler User-Agent (?i)(facebookexternalhit|Facebot|WhatsApp|Discordbot|Twitterbot|LinkedInBot)
+		}
+		handle @groupPreview {
+			rewrite * /api/v1/groups/{re.groupPreview.1}/preview
+			reverse_proxy {$FRONTEND_API_ORIGIN} {
+				header_up Host {upstream_hostport}
+				header_up Accept text/html
+			}
+		}
+		@groupPreviewImage path_regexp groupPreviewImage ^/group-previews/([0-9a-fA-F-]{36})/image$
+		handle @groupPreviewImage {
+			rewrite * /api/v1/groups/{re.groupPreviewImage.1}/preview/image
+			reverse_proxy {$FRONTEND_API_ORIGIN} {
+				header_up Host {upstream_hostport}
+			}
+		}
+
 		@sharePreview {
 			path_regexp sharePreview ^/shared-wishlists/([0-9a-fA-F-]{36})/?$
 			header_regexp shareCrawler User-Agent (?i)(facebookexternalhit|Facebot|WhatsApp|Discordbot|Twitterbot|LinkedInBot)

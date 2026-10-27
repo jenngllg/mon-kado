@@ -71,7 +71,7 @@ func TestGroupJoinLink_WhenSharedByMember_JoinsWithoutApprovalAndConsumesPending
 	created := s.member.send(t, "POST", path, "", nil)
 	location, etag := created.Header.Get("Location"), created.Header.Get("ETag")
 	requireStatus(t, created, 201, &link)
-	if location != path || etag == "" || link.GroupId != s.group.Id || len(link.Code) != 16 || link.JoinUrl != "http://localhost:5173/groups/join#"+link.Code {
+	if location != path || etag == "" || link.GroupId != s.group.Id || len(link.Code) != 16 || link.JoinUrl != "http://localhost:5173/groups/join/"+s.group.Id+"#"+link.Code {
 		t.Fatal("invalid private join-link contract")
 	}
 	var hash []byte

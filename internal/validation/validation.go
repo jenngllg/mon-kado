@@ -57,7 +57,8 @@ func ValidateAt(input any, now time.Time) error {
 	}
 	name := v.Type().Name()
 	required := map[string][]string{
-		"SaveGroupRequest": {"Name"}, "InviteGroupMemberRequest": {"MemberId"},
+		"SetWishlistGroupVisibilityRequest": {"Groups"},
+		"SaveGroupRequest":                  {"Name"}, "InviteGroupMemberRequest": {"MemberId"},
 		"RegisterAccountRequest": {"Email", "Password", "DisplayName"}, "LoginRequest": {"Email", "Password"},
 		"JoinSharedWishlistRequest": {"DisplayName"},
 		"CreateWishlistRequest":     {"Name", "Occasion"}, "UpdateWishlistRequest": {"Name", "Occasion"},
@@ -106,6 +107,10 @@ func ValidateAt(input any, now time.Time) error {
 			if isRequired {
 				add(path, fmt.Sprintf(mandatory, path))
 			}
+			continue
+		}
+		if name == "SetWishlistGroupVisibilityRequest" && field.Name == "Groups" {
+			validateWishlistGroupSelections(value.Interface().([]domain.WishlistGroupVisibilitySelection), add)
 			continue
 		}
 		if value.Kind() == reflect.String {

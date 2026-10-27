@@ -187,3 +187,6 @@ func KnownErrorCode(code string) bool {
 		return false
 	}
 }
+
+// WishlistGroupVisibilityVersionConflict identifies a stale owner audience version.
+const WishlistGroupVisibilityVersionConflict = "WISHLIST_GROUP_VISIBILITY_VERSION_CONFLICT"

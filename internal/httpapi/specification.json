@@ -12300,7 +12300,7 @@
     },
     "/api/v1/wishlists/{wishlistId}/wishes/{wishId}/copies": {
       "post": {
-          "operationId": "Wishes_CopyOwned",
+        "operationId": "Wishes_CopyOwned",
         "summary": "Create an independent wish copy",
         "tags": [
           "Wishes"
@@ -12478,7 +12478,7 @@
     },
     "/api/v1/wishlists/{wishlistId}/wishes/copies": {
       "post": {
-          "operationId": "Wishes_CopyShared",
+        "operationId": "Wishes_CopyShared",
         "summary": "Create an independent wish copy",
         "tags": [
           "Wishes"
@@ -12952,8 +12952,7 @@
         ],
         "summary": "Read explicitly public share preview metadata"
       }
-    }
-  ,
+    },
     "/api/v1/groups": {
       "get": {
         "operationId": "Groups_1",
@@ -15182,7 +15181,7 @@
         "tags": [
           "Groups"
         ],
-        "description": "Private groups require accepted membership. Invitations never grant list access. All accepted members may invite and read pending invitations. Only owners rename/delete groups, revoke invitations and remove other members. Each list owner explicitly shares their own lists. All accesses are rechecked server-side; removal, leaving, archive and suspension revoke group-derived access. Public links and subscriptions remain independent. Reservations use global quantities, disclose no other participant identities and are unavailable to the list owner through group routes. Owners use their existing wishlist view. Mutations are atomic; reads never enroll or reserve. Invitations expire after 14 days. Group limit: 100 members including pending invitations; member limit: 50 groups.",
+        "description": "Requires current membership and effective group visibility. Owners may read their own list. Reservation quantities are null for owners when surprise mode is enabled; availability filtering cannot reveal hidden reservations. Owners cannot reserve through the group view.",
         "security": [
           {
             "bearerAuth": []
@@ -15259,16 +15258,6 @@
           },
           "404": {
             "description": "Absent, expired or private foreign resource",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Membership, capacity or sharing conflict",
             "content": {
               "application/json": {
                 "schema": {
@@ -15583,7 +15572,7 @@
         "tags": [
           "Groups"
         ],
-        "description": "Private groups require accepted membership. Invitations never grant list access. All accepted members may invite and read pending invitations. Only owners rename/delete groups, revoke invitations and remove other members. Each list owner explicitly shares their own lists. All accesses are rechecked server-side; removal, leaving, archive and suspension revoke group-derived access. Public links and subscriptions remain independent. Reservations use global quantities, disclose no other participant identities and are unavailable to the list owner through group routes. Owners use their existing wishlist view. Mutations are atomic; reads never enroll or reserve. Invitations expire after 14 days. Group limit: 100 members including pending invitations; member limit: 50 groups.",
+        "description": "Requires current membership and effective group visibility. Owners may read their own list. Reservation quantities are null for owners when surprise mode is enabled; availability filtering cannot reveal hidden reservations. Owners cannot reserve through the group view.",
         "security": [
           {
             "bearerAuth": []
@@ -15661,16 +15650,6 @@
           },
           "404": {
             "description": "Absent, expired or private foreign resource",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Membership, capacity or sharing conflict",
             "content": {
               "application/json": {
                 "schema": {
@@ -17368,6 +17347,422 @@
             }
           }
         }
+      },
+      "get": {
+        "operationId": "Groups_PreviewByCode",
+        "summary": "Preview an invitation without enrolling or authenticating",
+        "tags": [
+          "Groups"
+        ],
+        "security": [],
+        "parameters": [
+          {
+            "name": "X-MonKado-Share-Token",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 32
+            },
+            "description": "Invitation code, sent only in this header; never in a server URL."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Advertised group identity only",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GroupJoinPreviewResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid or unavailable invitation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Invalid or unavailable invitation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Invalid or unavailable invitation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/groups/{groupId}/preview": {
+      "get": {
+        "operationId": "Groups_PreviewInvitation",
+        "summary": "Read the publicly advertised invitation identity",
+        "tags": [
+          "Groups"
+        ],
+        "security": [],
+        "parameters": [
+          {
+            "name": "groupId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "HTML Open Graph preview; application/json when explicitly requested. Active invitations advertise only group identity, never member identities, lists, join codes or credentials. Revocation returns 404.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GroupJoinPreviewResponse"
+                }
+              },
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Invalid or unavailable invitation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Invalid or unavailable invitation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/groups/{groupId}/preview/image": {
+      "get": {
+        "operationId": "Groups_PreviewInvitationImage",
+        "summary": "Read the current advertised group photo or MonKado fallback",
+        "tags": [
+          "Groups"
+        ],
+        "security": [],
+        "parameters": [
+          {
+            "name": "groupId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Normalized current group photo or branded fallback, only while the invitation is active; no-store.",
+            "content": {
+              "image/webp": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "image/png": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Invalid or unavailable invitation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Invalid or unavailable invitation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/wishlists/{wishlistId}/group-visibility": {
+      "get": {
+        "operationId": "Wishlists_ReadGroupVisibility",
+        "summary": "Read group audience",
+        "tags": [
+          "Wishlists"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "wishlistId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "description": "Only the list owner may read or change visibility. Public lists (active public share link) are visible by default in all current and future owner groups, except explicitly unchecked groups. Private lists require explicit grants. No public capability is exposed. GET is side-effect free. PUT requires the visibility row xmin ETag, affects only supplied current memberships and atomically preserves omitted groups. Leaving removes the owner grants and exclusions. Public-link revocation removes default access without removing independent private grants. Images and reservation access use the same effective visibility.",
+        "responses": {
+          "200": {
+            "description": "Current group visibility",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Strong xmin version of the visibility policy"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WishlistGroupVisibilityResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Owned list or current membership unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Archived or suspended list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Stale visibility version",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "If-Match required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "operationId": "Wishlists_SetGroupVisibility",
+        "summary": "Set group audience atomically",
+        "tags": [
+          "Wishlists"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "wishlistId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-CSRF-TOKEN",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "description": "Only the list owner may read or change visibility. Public lists (active public share link) are visible by default in all current and future owner groups, except explicitly unchecked groups. Private lists require explicit grants. No public capability is exposed. GET is side-effect free. PUT requires the visibility row xmin ETag, affects only supplied current memberships and atomically preserves omitted groups. Leaving removes the owner grants and exclusions. Public-link revocation removes default access without removing independent private grants. Images and reservation access use the same effective visibility.",
+        "responses": {
+          "200": {
+            "description": "Current group visibility",
+            "headers": {
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Strong xmin version of the visibility policy"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WishlistGroupVisibilityResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Owned list or current membership unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Archived or suspended list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Stale visibility version",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "If-Match required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetWishlistGroupVisibilityRequest"
+              }
+            }
+          }
+        }
       }
     }
   },
@@ -18389,8 +18784,7 @@
               null
             ],
             "description": "Known current access restriction. Lifecycle status remains independent; unavailable sources grant no media or navigation."
-          }
-        ,
+          },
           "groupId": {
             "type": [
               "string",
@@ -19163,6 +19557,10 @@
           },
           "canSubscribe": {
             "type": "boolean"
+          },
+          "canReserve": {
+            "type": "boolean",
+            "description": "False for the authenticated owner: this shared view is read-only regardless of surprise mode."
           }
         },
         "required": [
@@ -19174,7 +19572,8 @@
           "eventDate",
           "message",
           "wishes",
-          "currentParticipant"
+          "currentParticipant",
+          "canReserve"
         ]
       },
       "SharedWishResponse": {
@@ -19265,8 +19664,7 @@
             ],
             "maxLength": 100,
             "description": "Optional single-line variant; blank values are normalized to null."
-          }
-        ,
+          },
           "isSurprise": {
             "description": "Open-ended wish: price is an optional maximum EUR budget per item, not an exact product price.",
             "type": "boolean"
@@ -19413,8 +19811,7 @@
             ],
             "maxLength": 100,
             "description": "Optional single-line variant; blank values are normalized to null."
-          }
-        ,
+          },
           "isSurprise": {
             "description": "Open-ended wish: price is an optional maximum EUR budget per item, not an exact product price.",
             "type": "boolean"
@@ -19422,6 +19819,10 @@
           "acceptsSecondHand": {
             "description": "Second-hand gifts are welcome; false does not require new. Omitted/null preserves the value on update, defaults to false on creation.",
             "type": "boolean"
+          },
+          "canReserve": {
+            "type": "boolean",
+            "description": "False for the authenticated owner: this shared view is read-only regardless of surprise mode."
           }
         },
         "required": [
@@ -19434,7 +19835,8 @@
           "reservedQuantity",
           "availableQuantity",
           "currentParticipantReservedQuantity",
-          "imageUrl"
+          "imageUrl",
+          "canReserve"
         ]
       },
       "GiftReservationResponse": {
@@ -19723,8 +20125,7 @@
             ],
             "maxLength": 100,
             "description": "Optional single-line variant; blank values are normalized to null."
-          }
-        ,
+          },
           "isSurprise": {
             "description": "Open-ended wish: price is an optional maximum EUR budget per item, not an exact product price.",
             "type": "boolean"
@@ -19913,8 +20314,7 @@
             ],
             "maxLength": 100,
             "description": "Optional single-line variant; blank values are normalized to null."
-          }
-        ,
+          },
           "isSurprise": {
             "description": "Open-ended wish: price is an optional maximum EUR budget per item, not an exact product price.",
             "type": "boolean"
@@ -20014,8 +20414,7 @@
             ],
             "maxLength": 100,
             "description": "Optional single-line variant; blank values are normalized to null."
-          }
-        ,
+          },
           "isSurprise": {
             "description": "Open-ended wish: name is its universe, note its preferences and price the optional maximum EUR budget per item. Omitted/null defaults to false on creation and preserves the saved value on update.",
             "type": [
@@ -20108,8 +20507,7 @@
             ],
             "maxLength": 100,
             "description": "Optional single-line variant; blank values are normalized to null."
-          }
-        ,
+          },
           "isSurprise": {
             "description": "Open-ended wish: name is its universe, note its preferences and price the optional maximum EUR budget per item. Omitted/null defaults to false on creation and preserves the saved value on update.",
             "type": [
@@ -20900,8 +21298,7 @@
             "description": "Guest display name: nonblank, no control characters, at most 80 Unicode scalar values after trimming."
           }
         }
-      }
-    ,
+      },
       "GroupResponse": {
         "type": "object",
         "additionalProperties": false,
@@ -21317,6 +21714,112 @@
           },
           "hasNextPage": {
             "type": "boolean"
+          }
+        }
+      },
+      "GroupJoinPreviewResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "name",
+          "memberCount",
+          "profileImageUrl"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "memberCount": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "profileImageUrl": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "WishlistGroupVisibilityResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "wishlistId",
+          "isPublic",
+          "groups"
+        ],
+        "properties": {
+          "wishlistId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "isPublic": {
+            "type": "boolean"
+          },
+          "groups": {
+            "type": "array",
+            "maxItems": 50,
+            "items": {
+              "$ref": "#/components/schemas/WishlistGroupVisibilityResponseItem"
+            }
+          }
+        }
+      },
+      "WishlistGroupVisibilityResponseItem": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "groupId",
+          "name",
+          "isVisible"
+        ],
+        "properties": {
+          "groupId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "isVisible": {
+            "type": "boolean"
+          }
+        }
+      },
+      "SetWishlistGroupVisibilityRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "groups"
+        ],
+        "properties": {
+          "groups": {
+            "type": "array",
+            "maxItems": 50,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "groupId",
+                "isVisible"
+              ],
+              "properties": {
+                "groupId": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "isVisible": {
+                  "type": "boolean"
+                }
+              }
+            }
           }
         }
       }

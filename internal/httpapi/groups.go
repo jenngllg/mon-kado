@@ -6,6 +6,11 @@ import (
 )
 
 func (a *API) groupRoutes() {
+	a.route("GET /api/v1/wishlists/{wishlistId}/group-visibility", options{Auth: true}, a.wishlistGroupVisibility)
+	a.route("PUT /api/v1/wishlists/{wishlistId}/group-visibility", options{Auth: true, CSRF: true}, a.wishlistGroupVisibility)
+	a.route("GET /api/v1/groups/join", options{Rate: 30}, a.previewGroupCode)
+	a.route("GET /api/v1/groups/{groupId}/preview", options{Rate: 60}, a.previewGroupInvitation)
+	a.route("GET /api/v1/groups/{groupId}/preview/image", options{Rate: 120}, a.previewGroupInvitationImage)
 	a.route("POST /api/v1/groups/join", options{Auth: true, CSRF: true, Rate: 10, RateByMember: true}, a.joinGroup)
 	for _, method := range []string{"GET", "POST", "DELETE"} {
 		a.route(method+" /api/v1/groups/{groupId}/join-link", options{Auth: true, CSRF: method != "GET", Rate: 20, RateByMember: true}, a.groupJoinLink)
@@ -254,4 +259,21 @@ func (a *API) groupProfileImage(r *request) (response, error) {
 func (a *API) readGroupProfileImage(r *request) (response, error) {
 	content, err := a.Service.ReadGroupProfileImage(r.Context(), r.PathValue("groupId"), r.URL.Query().Get("token"))
 	return response{Binary: content, MediaType: "image/webp"}, err
+}
+
+func (a *API) wishlistGroupVisibility(r *request) (response, error) {
+	if r.Method == "GET" {
+		result, version, err := a.Service.WishlistGroupVisibility(r.Context(), r.Principal.MemberID, r.PathValue("wishlistId"))
+		return response{Body: result, Version: &version}, err
+	}
+	expected, err := entityTag(r, true)
+	if err != nil {
+		return response{}, err
+	}
+	input, err := body[domain.SetWishlistGroupVisibilityRequest](r)
+	if err != nil {
+		return response{}, err
+	}
+	result, version, err := a.Service.SetWishlistGroupVisibility(r.Context(), r.Principal.MemberID, r.PathValue("wishlistId"), input, *expected)
+	return response{Body: result, Version: &version}, err
 }

@@ -307,7 +307,7 @@ func TestGroups_WhenSharingAndReserving_KeepsListsPrivateAndUsesGlobalReservatio
 	requireStatus(t, s.owner.send(t, "PUT", groupList, "", nil), 201, nil)
 	requireStatus(t, s.owner.send(t, "PUT", groupList, "", nil), 409, nil)
 	requireStatus(t, s.owner.send(t, "GET", own+"/share-link", "", nil), 404, nil)
-	requireStatus(t, s.owner.send(t, "GET", groupList, "", nil), 409, nil)
+	requireStatus(t, s.owner.send(t, "GET", groupList, "", nil), 200, nil)
 	requireStatus(t, s.foreign.send(t, "GET", groupList, "", nil), 404, nil)
 	var shared domain.SharedWishlistResponse
 	requireStatus(t, s.member.send(t, "GET", groupList, "", nil), 200, &shared)
