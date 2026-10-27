@@ -1,6 +1,14 @@
 package httpapi
 
 func (a *API) subscriptionRoutes() {
+	a.route("POST /api/v1/groups/{groupId}/wishlists/{wishlistId}/subscriptions", options{Auth: true, CSRF: true, Rate: 20, RateByMember: true}, func(r *request) (response, error) {
+		result, err := a.Service.CreateGroupSubscription(r.Context(), r.Principal.MemberID, r.PathValue("groupId"), r.PathValue("wishlistId"))
+		return response{Status: 201, Body: result, Location: "/api/v1/wishlist-subscriptions/" + result.Id}, err
+	})
+	a.route("GET /api/v1/groups/{groupId}/wishlists/{wishlistId}/subscriptions/current", options{Auth: true, Rate: 120, RateByMember: true}, func(r *request) (response, error) {
+		result, err := a.Service.CurrentGroupSubscription(r.Context(), r.Principal.MemberID, r.PathValue("groupId"), r.PathValue("wishlistId"))
+		return response{Body: result}, err
+	})
 	a.route("POST /api/v1/shared-wishlists/{shareLinkId}/subscriptions", options{Auth: true, CSRF: true, Rate: 20}, func(r *request) (response, error) {
 		result, err := a.Service.CreateSubscription(r.Context(), r.Principal.MemberID, r.PathValue("shareLinkId"), r.Header.Get(shareTokenHeader))
 		return response{Status: 201, Body: result, Location: "/api/v1/wishlist-subscriptions/" + result.Id}, err
