@@ -9,25 +9,29 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-const subscriptionColumns = `s.id::text,w.id::text,w.name,u.display_name,w.occasion,w.event_date::text,s.created_at,l.id::text,l.protected_secret`
-const subscriptionScope = ` FROM wishlist_subscriptions s JOIN wishlist_share_links l ON l.id=s.share_link_id AND l.wishlist_id=s.wishlist_id AND l.secret_hash=s.share_secret_hash JOIN wishlists w ON w.id=s.wishlist_id JOIN users u ON u.id=w.owner_id WHERE s.member_id=$1 AND NOT w.is_suspended AND NOT w.is_archived`
+const subscriptionColumns = `s.id::text,w.id::text,w.name,u.display_name,w.occasion,w.event_date::text,s.created_at,l.id::text,l.protected_secret,s.group_id::text`
+const subscriptionScope = ` FROM wishlist_subscriptions s LEFT JOIN wishlist_share_links l ON l.id=s.share_link_id AND l.wishlist_id=s.wishlist_id AND l.secret_hash=s.share_secret_hash JOIN wishlists w ON w.id=s.wishlist_id JOIN users u ON u.id=w.owner_id WHERE s.member_id=$1 AND NOT w.is_suspended AND NOT w.is_archived AND (l.id IS NOT NULL OR (s.group_id IS NOT NULL AND EXISTS(SELECT 1 FROM visible_group_wishlists gw JOIN group_members gm ON gm.group_id=gw.group_id AND gm.member_id=s.member_id WHERE gw.group_id=s.group_id AND gw.wishlist_id=s.wishlist_id)))`
 
 func (s *Service) scanSubscription(row pgx.Row) (domain.WishlistSubscriptionResponse, error) {
 	var result domain.WishlistSubscriptionResponse
-	var link, protected string
-	err := row.Scan(&result.Id, &result.WishlistId, &result.Name, &result.OwnerDisplayName, &result.Occasion, &result.EventDate, &result.CreatedAt, &link, &protected)
+	var link, protected, group *string
+	err := row.Scan(&result.Id, &result.WishlistId, &result.Name, &result.OwnerDisplayName, &result.Occasion, &result.EventDate, &result.CreatedAt, &link, &protected, &group)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return result, missing(domain.WishlistSubscriptionNotFound)
 	}
 	if err != nil {
 		return result, err
 	}
-	secret, err := s.Crypto.Unprotect(protected, "share|"+link)
+	result.Occasion = lowerFirst(result.Occasion)
+	if group != nil {
+		result.ShareUrl = s.Config.FrontendOrigin + "/groups/" + *group + "/wishlists/" + result.WishlistId
+		return result, nil
+	}
+	secret, err := s.Crypto.Unprotect(*protected, "share|"+*link)
 	if err != nil {
 		return result, err
 	}
-	result.Occasion = lowerFirst(result.Occasion)
-	result.ShareUrl = s.Config.FrontendOrigin + "/shared-wishlists/" + link + "#" + secret
+	result.ShareUrl = s.Config.FrontendOrigin + "/shared-wishlists/" + *link + "#" + secret
 	return result, nil
 }
 
@@ -65,11 +69,50 @@ func (s *Service) Subscription(ctx context.Context, member, id string) (domain.W
 func (s *Service) CurrentSubscription(ctx context.Context, member, link, secret string) (domain.WishlistSubscriptionResponse, error) {
 	var result domain.WishlistSubscriptionResponse
 	err := s.Store.Transaction(ctx, func(tx pgx.Tx) error {
-		if _, err := s.verifyShare(ctx, tx, link, secret); err != nil {
+		share, err := s.verifyShare(ctx, tx, link, secret)
+		if err != nil {
+			return err
+		}
+		result, err = s.scanSubscription(tx.QueryRow(ctx, `SELECT `+subscriptionColumns+subscriptionScope+` AND s.wishlist_id=$2`, member, share.Wishlist))
+		return err
+	})
+	return result, err
+}
+
+// CreateGroupSubscription follows an accessible group list without creating public access or participation.
+func (s *Service) CreateGroupSubscription(ctx context.Context, member, group, wishlist string) (domain.WishlistSubscriptionResponse, error) {
+	var result domain.WishlistSubscriptionResponse
+	err := s.Store.Transaction(ctx, func(tx pgx.Tx) error {
+		share, err := s.verifyGroupWishlist(ctx, tx, member, group, wishlist)
+		if err != nil {
+			return err
+		}
+		if share.Owner == member {
+			return domain.Failure(409, domain.WishlistSubscriptionSelf, "The owner cannot subscribe to their own wishlist.")
+		}
+		id := security.NewID()
+		_, err = tx.Exec(ctx, `INSERT INTO wishlist_subscriptions(id,member_id,wishlist_id,group_id,created_at) VALUES($1,$2,$3,$4,$5)`, id, member, wishlist, group, s.Now().UTC())
+		if err != nil {
+			return err
+		}
+		result, err = s.scanSubscription(tx.QueryRow(ctx, `SELECT `+subscriptionColumns+subscriptionScope+` AND s.id=$2`, member, id))
+		return err
+	})
+	if duplicate(err, "ux_wishlist_subscriptions_member_wishlist") {
+		err = domain.Failure(409, domain.WishlistSubscriptionAlreadyExists, "A subscription to this wishlist already exists.")
+	}
+	return result, err
+}
+
+// CurrentGroupSubscription rechecks private access before reading the caller's follow state.
+func (s *Service) CurrentGroupSubscription(ctx context.Context, member, group, wishlist string) (domain.WishlistSubscriptionResponse, error) {
+	var result domain.WishlistSubscriptionResponse
+	err := s.Store.Transaction(ctx, func(tx pgx.Tx) error {
+		if _, err := s.verifyGroupWishlist(ctx, tx, member, group, wishlist); err != nil {
 			return err
 		}
 		var err error
-		result, err = s.scanSubscription(tx.QueryRow(ctx, `SELECT `+subscriptionColumns+subscriptionScope+` AND s.share_link_id=$2`, member, link))
+		result, err = s.scanSubscription(tx.QueryRow(ctx, `SELECT `+subscriptionColumns+subscriptionScope+` AND s.wishlist_id=$2`, member, wishlist))
 		return err
 	})
 	return result, err
