@@ -56,7 +56,7 @@ func (s *Service) GroupJoinLink(ctx context.Context, member, group, method strin
 		if err != nil {
 			return err
 		}
-		result.JoinUrl = s.Config.FrontendOrigin + "/groups/join#" + result.Code
+		result.JoinUrl = s.Config.FrontendOrigin + "/groups/join/" + group + "#" + result.Code
 		return nil
 	})
 	return result, version, err

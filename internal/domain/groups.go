@@ -63,3 +63,37 @@ type GroupWishlistResponse struct {
 	EventDate        *string   `json:"eventDate"`
 	CreatedAt        time.Time `json:"createdAt"`
 }
+
+// GroupJoinPreviewResponse exposes only the identity advertised by an active invitation.
+type GroupJoinPreviewResponse struct {
+	Id              string  `json:"id"`
+	Name            string  `json:"name"`
+	MemberCount     int     `json:"memberCount"`
+	ProfileImageUrl *string `json:"profileImageUrl"`
+}
+
+// WishlistGroupVisibilityResponse describes the owner's current group audience.
+type WishlistGroupVisibilityResponse struct {
+	WishlistId string                                `json:"wishlistId"`
+	IsPublic   bool                                  `json:"isPublic"`
+	Groups     []WishlistGroupVisibilityResponseItem `json:"groups"`
+}
+
+// WishlistGroupVisibilityResponseItem names one current membership and its visibility.
+type WishlistGroupVisibilityResponseItem struct {
+	GroupId   string `json:"groupId"`
+	Name      string `json:"name"`
+	IsVisible bool   `json:"isVisible"`
+}
+
+// SetWishlistGroupVisibilityRequest replaces the supplied groups' visibility atomically.
+// Omitted groups, including memberships created after a read, retain their current default.
+type SetWishlistGroupVisibilityRequest struct {
+	Groups *[]WishlistGroupVisibilitySelection `json:"groups"`
+}
+
+// WishlistGroupVisibilitySelection contains one explicit owner choice.
+type WishlistGroupVisibilitySelection struct {
+	GroupId   *string `json:"groupId"`
+	IsVisible *bool   `json:"isVisible"`
+}

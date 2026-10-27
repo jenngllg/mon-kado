@@ -9,7 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-const groupWishlistSummary = `SELECT w.id::text,w.name,w.owner_id::text,u.display_name,w.occasion,w.event_date::text,gw.created_at FROM group_wishlists gw JOIN wishlists w ON w.id=gw.wishlist_id JOIN users u ON u.id=w.owner_id WHERE gw.group_id=$1 AND NOT w.is_archived AND NOT w.is_suspended`
+const groupWishlistSummary = `SELECT w.id::text,w.name,w.owner_id::text,u.display_name,w.occasion,w.event_date::text,gw.created_at FROM visible_group_wishlists gw JOIN wishlists w ON w.id=gw.wishlist_id JOIN users u ON u.id=w.owner_id WHERE gw.group_id=$1 AND NOT w.is_archived AND NOT w.is_suspended`
 
 func scanGroupWishlist(row pgx.Row) (domain.GroupWishlistResponse, error) {
 	var r domain.GroupWishlistResponse
@@ -46,11 +46,26 @@ func (s *Service) ShareGroupWishlist(ctx context.Context, member, group, wishlis
 		if _, _, err := s.lockGroup(ctx, tx, member, group, false); err != nil {
 			return err
 		}
+		var visible bool
+		if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM visible_group_wishlists WHERE group_id=$1 AND wishlist_id=$2)`, group, wishlist).Scan(&visible); err != nil {
+			return err
+		}
 		if remove {
-			command, err := tx.Exec(ctx, `DELETE FROM group_wishlists WHERE group_id=$1 AND wishlist_id=$2 AND owner_id=$3`, group, wishlist, member)
-			if err == nil && command.RowsAffected() == 0 {
+			if !visible {
 				return missing(domain.GroupWishlistNotFound)
 			}
+			if _, err := tx.Exec(ctx, `DELETE FROM group_wishlists WHERE group_id=$1 AND wishlist_id=$2 AND owner_id=$3`, group, wishlist, member); err != nil {
+				return err
+			}
+			if _, err := tx.Exec(ctx, `INSERT INTO group_wishlist_exclusions(group_id,wishlist_id,owner_id,created_at) VALUES($1,$2,$3,$4) ON CONFLICT DO NOTHING`, group, wishlist, member, s.Now().UTC()); err != nil {
+				return err
+			}
+			return s.touchWishlistGroupVisibility(ctx, tx, wishlist)
+		}
+		if visible {
+			return domain.Failure(409, domain.GroupWishlistAlreadyExists, "The wishlist is already shared with this group.")
+		}
+		if _, err := tx.Exec(ctx, `DELETE FROM group_wishlist_exclusions WHERE group_id=$1 AND wishlist_id=$2`, group, wishlist); err != nil {
 			return err
 		}
 		_, err := tx.Exec(ctx, `INSERT INTO group_wishlists(group_id,wishlist_id,owner_id,created_at)VALUES($1,$2,$3,$4)`, group, wishlist, member, s.Now().UTC())
@@ -58,6 +73,9 @@ func (s *Service) ShareGroupWishlist(ctx context.Context, member, group, wishlis
 			return domain.Failure(409, domain.GroupWishlistAlreadyExists, "The wishlist is already shared with this group.")
 		}
 		if err != nil {
+			return err
+		}
+		if err = s.touchWishlistGroupVisibility(ctx, tx, wishlist); err != nil {
 			return err
 		}
 		result, err = scanGroupWishlist(tx.QueryRow(ctx, groupWishlistSummary+` AND w.id=$2`, group, wishlist))
@@ -70,7 +88,7 @@ func (s *Service) verifyGroupWishlist(ctx context.Context, tx pgx.Tx, member, gr
 	share := verifiedShare{Group: group, Member: member}
 	// Never lock a foreign private list merely because its UUID is known.
 	// Lock the wishlist first, consistently with account erasure and public reservations.
-	err := tx.QueryRow(ctx, `SELECT w.id::text,w.owner_id::text,w.name FROM group_wishlists gw JOIN wishlists w ON w.id=gw.wishlist_id WHERE gw.group_id=$1 AND w.id=$2 AND EXISTS(SELECT 1 FROM group_members gm WHERE gm.group_id=gw.group_id AND gm.member_id=$3) AND NOT w.is_archived AND NOT w.is_suspended FOR UPDATE OF w`, group, wishlist, member).Scan(&share.Wishlist, &share.Owner, &share.Name)
+	err := tx.QueryRow(ctx, `SELECT w.id::text,w.owner_id::text,w.name,w.surprise_mode FROM visible_group_wishlists gw JOIN wishlists w ON w.id=gw.wishlist_id WHERE gw.group_id=$1 AND w.id=$2 AND EXISTS(SELECT 1 FROM group_members gm WHERE gm.group_id=gw.group_id AND gm.member_id=$3) AND NOT w.is_archived AND NOT w.is_suspended FOR UPDATE OF w`, group, wishlist, member).Scan(&share.Wishlist, &share.Owner, &share.Name, &share.SurpriseMode)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return share, missing(domain.GroupWishlistNotFound)
 	}
@@ -83,19 +101,16 @@ func (s *Service) verifyGroupWishlist(ctx context.Context, tx pgx.Tx, member, gr
 	// A withdrawal may have committed while the wishlist lock was awaited.
 	// Re-read the grant under the group lock rather than trusting the first snapshot.
 	var granted bool
-	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM group_wishlists WHERE group_id=$1 AND wishlist_id=$2)`, group, wishlist).Scan(&granted); err != nil {
+	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM visible_group_wishlists WHERE group_id=$1 AND wishlist_id=$2)`, group, wishlist).Scan(&granted); err != nil {
 		return share, err
 	}
 	if !granted {
 		return share, missing(domain.GroupWishlistNotFound)
 	}
-	if err == nil && share.Owner == member {
-		return share, domain.Failure(409, domain.GroupOwnerWishlist, "Use the owner view to preserve reservation privacy.")
-	}
 	return share, err
 }
 
-// GroupWishlist reads a group-only list; owners must use their surprise-preserving owner view.
+// GroupWishlist reads a shared list, preserving the owner's configured reservation privacy.
 func (s *Service) GroupWishlist(ctx context.Context, member, group, wishlist string, availableOnly bool) (domain.SharedWishlistResponse, error) {
 	r := domain.SharedWishlistResponse{Wishes: []domain.SharedWishResponse{}}
 	err := s.Store.Transaction(ctx, func(tx pgx.Tx) error {
@@ -103,13 +118,16 @@ func (s *Service) GroupWishlist(ctx context.Context, member, group, wishlist str
 		if err != nil {
 			return err
 		}
+		r.CanReserve = share.Owner != member
 		if err = tx.QueryRow(ctx, `SELECT w.id::text,w.owner_id::text,u.display_name,w.name,w.occasion,w.event_date::text,w.message FROM wishlists w JOIN users u ON u.id=w.owner_id WHERE w.id=$1`, wishlist).Scan(&r.Id, &r.OwnerId, &r.OwnerDisplayName, &r.Name, &r.Occasion, &r.EventDate, &r.Message); err != nil {
 			return err
 		}
 		r.Occasion = lowerFirst(r.Occasion)
-		r.CurrentParticipant, err = s.participant(ctx, tx, share, member, "")
-		if err != nil {
-			return err
+		if r.CanReserve {
+			r.CurrentParticipant, err = s.participant(ctx, tx, share, member, "")
+			if err != nil {
+				return err
+			}
 		}
 		rows, err := tx.Query(ctx, `SELECT id::text FROM wishes WHERE wishlist_id=$1 ORDER BY position`, wishlist)
 		if err != nil {
@@ -160,6 +178,9 @@ func (s *Service) GroupReservation(ctx context.Context, member, group, wishlist,
 		share, err := s.verifyGroupWishlist(ctx, tx, member, group, wishlist)
 		if err != nil {
 			return err
+		}
+		if share.Owner == member {
+			return domain.Failure(409, domain.GroupOwnerWishlist, "The owner cannot reserve through the group view.")
 		}
 		p, err := s.participant(ctx, tx, share, member, "")
 		if err != nil {

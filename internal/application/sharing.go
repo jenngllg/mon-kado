@@ -37,6 +37,9 @@ func (s *Service) ShareLink(ctx context.Context, owner, wishlist, method string,
 		}
 		if method == "DELETE" {
 			_, err = tx.Exec(ctx, `DELETE FROM wishlist_share_links WHERE wishlist_id=$1`, wishlist)
+			if err == nil {
+				err = s.touchWishlistGroupVisibility(ctx, tx, wishlist)
+			}
 			return err
 		}
 		if method == "POST" {
@@ -63,6 +66,11 @@ func (s *Service) ShareLink(ctx context.Context, owner, wishlist, method string,
 				err = tx.QueryRow(ctx, `UPDATE wishlist_share_links SET secret_hash=$2,protected_secret=$3,updated_at=$4 WHERE id=$1 RETURNING created_at,updated_at,xmin::text::bigint`, result.Id, security.HashToken(secret), protected, now).Scan(&result.CreatedAt, &result.UpdatedAt, &version)
 			}
 			if err != nil {
+				return err
+			}
+		}
+		if method == "POST" {
+			if err = s.touchWishlistGroupVisibility(ctx, tx, wishlist); err != nil {
 				return err
 			}
 		}
@@ -235,19 +243,24 @@ func (s *Service) CurrentParticipant(ctx context.Context, link, secret, member, 
 }
 
 func (s *Service) sharedWish(ctx context.Context, tx pgx.Tx, share verifiedShare, link, id string, participant *domain.WishlistParticipantResponse) (domain.SharedWishDetailResponse, error) {
-	var r domain.SharedWishDetailResponse
+	r := domain.SharedWishDetailResponse{CanReserve: share.Owner != share.Member}
 	var image *string
 	var participantID *string
-	if participant != nil {
+	if participant != nil && r.CanReserve {
 		participantID = &participant.Id
 	}
 	err := tx.QueryRow(ctx, `SELECT w.id::text,w.name,w.note,w.url,w.price::text,w.quantity,COALESCE((SELECT sum(r.quantity) FROM gift_reservations r WHERE r.wish_id=w.id),0),CASE WHEN $3::uuid IS NULL THEN NULL ELSE COALESCE((SELECT r.quantity FROM gift_reservations r WHERE r.wish_id=w.id AND r.wishlist_participant_id=$3),0) END,w.image_id::text,w.is_favorite,w.color,w.size,w.is_surprise,w.accepts_second_hand FROM wishes w WHERE w.wishlist_id=$1 AND w.id=$2`, share.Wishlist, id, participantID).Scan(&r.Id, &r.Name, &r.Note, &r.Url, &r.Price, &r.Quantity, &r.ReservedQuantity, &r.CurrentParticipantReservedQuantity, &image, &r.IsFavorite, &r.Color, &r.Size, &r.IsSurprise, &r.AcceptsSecondHand)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return r, missing(domain.SharedWishNotFound)
 	}
-	if r.ReservedQuantity != nil {
-		available := max(0, r.Quantity-*r.ReservedQuantity)
-		r.AvailableQuantity = &available
+	if err != nil {
+		return r, err
+	}
+	available := max(0, r.Quantity-*r.ReservedQuantity)
+	r.AvailableQuantity = &available
+	if !r.CanReserve && share.SurpriseMode {
+		// Null every reservation-derived value before any response or availability filter.
+		r.ReservedQuantity, r.AvailableQuantity, r.CurrentParticipantReservedQuantity = nil, nil, nil
 	}
 	if image != nil {
 		imageURL, urlErr := s.imageURL("", link, share.Wishlist, id, *image)
@@ -270,14 +283,12 @@ func (s *Service) SharedWish(ctx context.Context, link, secret, id, member, gues
 		if err != nil {
 			return err
 		}
+		share.Member = member
 		participant, err := s.participant(ctx, tx, share, member, guest)
 		if err != nil {
 			return err
 		}
 		r, err = s.sharedWish(ctx, tx, share, link, id, participant)
-		if share.Owner == member && share.SurpriseMode {
-			r.ReservedQuantity, r.AvailableQuantity, r.CurrentParticipantReservedQuantity = nil, nil, nil
-		}
 		return err
 	})
 	return r, err
@@ -291,14 +302,18 @@ func (s *Service) SharedWishlist(ctx context.Context, link, secret, member, gues
 		if err != nil {
 			return err
 		}
+		share.Member = member
+		r.CanReserve = share.Owner != member
+		r.CanSubscribe = r.CanReserve
 		if err = tx.QueryRow(ctx, `SELECT w.id::text,w.owner_id::text,u.display_name,w.name,w.occasion,w.event_date::text,w.message FROM wishlists w JOIN users u ON u.id=w.owner_id WHERE w.id=$1`, share.Wishlist).Scan(&r.Id, &r.OwnerId, &r.OwnerDisplayName, &r.Name, &r.Occasion, &r.EventDate, &r.Message); err != nil {
 			return err
 		}
 		r.Occasion = lowerFirst(r.Occasion)
-		r.CanSubscribe = share.Owner != member
-		r.CurrentParticipant, err = s.participant(ctx, tx, share, member, guest)
-		if err != nil {
-			return err
+		if r.CanReserve {
+			r.CurrentParticipant, err = s.participant(ctx, tx, share, member, guest)
+			if err != nil {
+				return err
+			}
 		}
 		rows, err := tx.Query(ctx, `SELECT id::text FROM wishes WHERE wishlist_id=$1 ORDER BY position`, share.Wishlist)
 		if err != nil {
@@ -313,13 +328,10 @@ func (s *Service) SharedWishlist(ctx context.Context, link, secret, member, gues
 			if err != nil {
 				return err
 			}
-			if share.Owner == member && share.SurpriseMode {
-				wish.ReservedQuantity, wish.AvailableQuantity, wish.CurrentParticipantReservedQuantity = nil, nil, nil
-			}
 			if availableOnly && wish.AvailableQuantity != nil && *wish.AvailableQuantity == 0 && (wish.CurrentParticipantReservedQuantity == nil || *wish.CurrentParticipantReservedQuantity == 0) {
 				continue
 			}
-			r.Wishes = append(r.Wishes, domain.SharedWishResponse{Id: wish.Id, Name: wish.Name, Color: wish.Color, Size: wish.Size, Url: wish.Url, Price: wish.Price, Quantity: wish.Quantity, IsFavorite: wish.IsFavorite, Note: wish.Note, IsSurprise: wish.IsSurprise, AcceptsSecondHand: wish.AcceptsSecondHand, ReservedQuantity: wish.ReservedQuantity, AvailableQuantity: wish.AvailableQuantity, CurrentParticipantReservedQuantity: wish.CurrentParticipantReservedQuantity, ImageUrl: wish.ImageUrl})
+			r.Wishes = append(r.Wishes, domain.SharedWishResponse{Id: wish.Id, Name: wish.Name, Note: wish.Note, Url: wish.Url, Price: wish.Price, Quantity: wish.Quantity, ReservedQuantity: wish.ReservedQuantity, AvailableQuantity: wish.AvailableQuantity, CurrentParticipantReservedQuantity: wish.CurrentParticipantReservedQuantity, ImageUrl: wish.ImageUrl, IsFavorite: wish.IsFavorite, Color: wish.Color, Size: wish.Size, IsSurprise: wish.IsSurprise, AcceptsSecondHand: wish.AcceptsSecondHand})
 		}
 		return nil
 	})

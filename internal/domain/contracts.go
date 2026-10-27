@@ -345,6 +345,7 @@ type ReportedWishResponse struct {
 
 // SharedWishDetailResponse preserves the versioned JSON contract.
 type SharedWishDetailResponse struct {
+	CanReserve                         bool         `json:"canReserve"`
 	IsSurprise                         bool         `json:"isSurprise"`
 	AcceptsSecondHand                  bool         `json:"acceptsSecondHand"`
 	Color                              *string      `json:"color"`
@@ -364,6 +365,7 @@ type SharedWishDetailResponse struct {
 
 // SharedWishlistResponse preserves the versioned JSON contract.
 type SharedWishlistResponse struct {
+	CanReserve         bool                         `json:"canReserve"`
 	CanSubscribe       bool                         `json:"canSubscribe"`
 	Id                 string                       `json:"id"`
 	OwnerId            string                       `json:"ownerId"`

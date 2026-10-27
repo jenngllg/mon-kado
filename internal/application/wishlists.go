@@ -51,7 +51,17 @@ func (s *Service) Wishlist(ctx context.Context, owner, id string) (domain.Wishli
 // CreateWishlist creates the list, relying on PostgreSQL for normalized-name uniqueness.
 func (s *Service) CreateWishlist(ctx context.Context, owner string, request domain.CreateWishlistRequest) (domain.WishlistResponse, uint32, error) {
 	name := strings.TrimSpace(text(request.Name))
-	r, v, err := scanWishlist(s.Store.Pool.QueryRow(ctx, `INSERT INTO wishlists(id,owner_id,name,normalized_name,occasion,event_date,message,created_at,is_suspended,surprise_mode) VALUES($1,$2,$3,$4,$5,$6,$7,$8,false,COALESCE($9,true)) RETURNING `+wishlistColumns, security.NewID(), owner, name, strings.ToUpper(name), upperFirst(text(request.Occasion)), request.EventDate, optional(request.Message), s.Now().UTC(), request.SurpriseMode))
+	var r domain.WishlistResponse
+	var v uint32
+	err := s.Store.Transaction(ctx, func(tx pgx.Tx) error {
+		var err error
+		r, v, err = scanWishlist(tx.QueryRow(ctx, `INSERT INTO wishlists(id,owner_id,name,normalized_name,occasion,event_date,message,created_at,is_suspended,surprise_mode) VALUES($1,$2,$3,$4,$5,$6,$7,$8,false,COALESCE($9,true)) RETURNING `+wishlistColumns, security.NewID(), owner, name, strings.ToUpper(name), upperFirst(text(request.Occasion)), request.EventDate, optional(request.Message), s.Now().UTC(), request.SurpriseMode))
+		if err != nil {
+			return err
+		}
+		_, err = tx.Exec(ctx, `INSERT INTO wishlist_group_visibility(wishlist_id) VALUES($1)`, r.Id)
+		return err
+	})
 	if duplicate(err, "ux_wishlists_owner_normalized_name") {
 		err = domain.Failure(409, domain.WishlistNameAlreadyExists, "A wishlist with this name already exists.")
 	}
