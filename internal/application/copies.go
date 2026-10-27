@@ -14,6 +14,15 @@ import (
 
 // CopyWish creates an independent owned wish from an owned or capability-authorized source.
 func (s *Service) CopyWish(ctx context.Context, member, destination, source, wish, link, secret string) (domain.WishResponse, uint32, error) {
+	return s.copyWish(ctx, member, destination, source, wish, link, secret, "")
+}
+
+// CopyGroupWish copies a currently accessible group wish into an active owned list without public sharing.
+func (s *Service) CopyGroupWish(ctx context.Context, member, group, source, wish, destination string) (domain.WishResponse, uint32, error) {
+	return s.copyWish(ctx, member, destination, source, wish, "", "", group)
+}
+
+func (s *Service) copyWish(ctx context.Context, member, destination, source, wish, link, secret, group string) (domain.WishResponse, uint32, error) {
 	var result domain.WishResponse
 	var version uint32
 	var staged string
@@ -33,6 +42,17 @@ func (s *Service) CopyWish(ctx context.Context, member, destination, source, wis
 				return err
 			}
 		}
+		if group != "" {
+			// A known private UUID must not authorize locking a foreign list. Recheck
+			// the effective grant under parent locks below before copying anything.
+			var accessible bool
+			if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM visible_group_wishlists gw JOIN group_members gm ON gm.group_id=gw.group_id AND gm.member_id=$3 WHERE gw.group_id=$1 AND gw.wishlist_id=$2)`, group, source, member).Scan(&accessible); err != nil {
+				return err
+			}
+			if !accessible {
+				return missing(domain.GroupWishlistNotFound)
+			}
+		}
 		// Both parents use one order, including reciprocal copies, to prevent deadlocks.
 		rows, err := tx.Query(ctx, `SELECT id FROM wishlists WHERE id=$1 OR id=$2 ORDER BY id FOR UPDATE`, source, destination)
 		if err != nil {
@@ -49,7 +69,12 @@ func (s *Service) CopyWish(ctx context.Context, member, destination, source, wis
 			return err
 		}
 		missingWish := domain.WishNotFound
-		if link == "" {
+		if group != "" {
+			if _, err = s.verifyGroupWishlist(ctx, tx, member, group, source); err != nil {
+				return err
+			}
+			missingWish = domain.SharedWishNotFound
+		} else if link == "" {
 			if err = s.lockWishlist(ctx, tx, member, source, true); err != nil {
 				return err
 			}
