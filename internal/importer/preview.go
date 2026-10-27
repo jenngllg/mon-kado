@@ -40,11 +40,14 @@ func (c *Client) Preview(ctx context.Context, value string) (domain.WishImportPr
 	pageUnavailable, primaryUsed := false, false
 	if validationErr == nil {
 		original, _ := url.Parse(value)
-		if c.PageSource != nil && c.PageSource.CanHandle(original) {
+		if c.PageSource != nil {
 			primaryUsed = true
-			var err error
-			metadata, err = c.PageSource.Get(budget, original)
-			if err != nil {
+			if c.PageSource.CanHandle(original) {
+				var err error
+				metadata, err = c.PageSource.Get(budget, original)
+				pageUnavailable = err != nil
+			} else {
+				// A configured relay owns page access; unsupported inputs must not bypass it.
 				pageUnavailable = true
 			}
 		} else {

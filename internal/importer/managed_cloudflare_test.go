@@ -129,3 +129,20 @@ func TestCloudflare_WhenCallerCancelled_DoesNotSendPermanentRequest(t *testing.T
 		t.Fatal("caller cancellation lost")
 	}
 }
+
+func TestPreview_WhenManagedRelayRejectsPublicNumericHost_DoesNotUseDirectPageAccess(t *testing.T) {
+	// Arrange
+	client := New()
+	resolutions := 0
+	client.Resolver = managedResolver(func(context.Context, string, string) ([]netip.Addr, error) {
+		resolutions++
+		return []netip.Addr{netip.MustParseAddr("93.184.216.34")}, nil
+	})
+	client.PageSource = NewCloudflare(client, "https://monkado-wish-import.account.workers.dev", "secret")
+	// Act
+	result, err := client.Preview(t.Context(), "https://93.184.216.34/product")
+	// Assert
+	if err != nil || result.Name != nil || result.Image != nil || resolutions != 1 {
+		t.Fatal("unsupported managed destination bypassed the relay")
+	}
+}
