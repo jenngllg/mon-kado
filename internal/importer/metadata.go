@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+	"unicode/utf8"
 )
 
 // Metadata contains untrusted suggestions that have passed text and monetary validation.
@@ -16,8 +17,12 @@ type Metadata struct {
 	Name, Image         *string
 	Price               *json.Number
 	UnsupportedCurrency bool
+	// Images contains ordered alternative product images, bounded by the preview pipeline.
+	Images []string
 }
 type price struct{ Amount, Currency string }
+
+const maximumProductCandidates = 256
 
 // Extract reads passive metadata, selecting only unambiguous page identities and euro amounts.
 func Extract(content []byte, base *url.URL) Metadata {
@@ -25,10 +30,7 @@ func Extract(content []byte, base *url.URL) Metadata {
 	if err != nil {
 		return Metadata{}
 	}
-	if amazonHost(base.Hostname()) {
-		return extractAmazon(root, base)
-	}
-	var products []map[string]any
+	var documents []any
 	for _, script := range selectNodes(root, func(n *html.Node) bool {
 		return n.Data == "script" && strings.EqualFold(attr(n, "type"), "application/ld+json")
 	}) {
@@ -37,76 +39,77 @@ func Extract(content []byte, base *url.URL) Metadata {
 		decoder := json.NewDecoder(strings.NewReader(text))
 		decoder.UseNumber()
 		if json.Valid([]byte(text)) && decoder.Decode(&value) == nil {
-			products = append(products, findProducts(value, 0)...)
+			documents = append(documents, value)
 		}
 	}
+	products, valid := linkedProducts(documents, base)
+	if !valid {
+		return Metadata{}
+	}
 	if len(products) == 0 {
-		products = microdata(root)
+		products = microdata(root, base)
+	}
+	if len(products) > maximumProductCandidates {
+		return Metadata{}
 	}
 	if len(products) == 0 && browserChallenge(root) {
 		return Metadata{}
 	}
-	if len(products) == 0 && (base.Hostname() == "fnac.com" || strings.HasSuffix(base.Hostname(), ".fnac.com")) {
-		return extractFnac(root, base)
-	}
-	var matching []map[string]any
-	for _, p := range products {
-		matched := matchesDocument(scalar(p, "url"), base)
-		for _, offer := range offerNodes(p) {
-			matched = matched || matchesDocument(scalar(offer, "url"), base)
-		}
-		if matched {
-			matching = append(matching, p)
-		}
-	}
-	if len(products) > 1 && len(matching) != 1 {
+	canonical := documentReference(root, base)
+	product, ambiguous := selectProduct(products, base, canonical)
+	if ambiguous {
 		return Metadata{}
 	}
-	var product map[string]any
-	if len(matching) == 1 {
-		product = matching[0]
-	} else if len(products) == 1 {
-		product = products[0]
+	product = selectedMarkupVariant(root, product, base, canonical)
+	// A redirected storefront or category must not become a product suggestion.
+	if product == nil && canonical.String() != base.String() &&
+		(canonical.Path == "" || canonical.Path == "/" || canonical.Hostname() != base.Hostname()) {
+		return Metadata{}
 	}
 	result := Metadata{}
-	for _, name := range []string{scalar(product, "name"), readMeta(root, "og:title"), firstText(root, func(n *html.Node) bool { return n.Data == "title" })} {
+	names := []string{scalar(product, "name"), readMeta(root, "og:title"), firstText(root, func(n *html.Node) bool { return n.Data == "title" }), firstText(root, func(n *html.Node) bool { return n.Data == "h1" })}
+	if variantLabel.MatchString(strings.TrimSpace(names[0])) {
+		names = append(names[1:], names[0])
+	}
+	for _, name := range names {
 		if result.Name = cleanName(name); result.Name != nil {
+			if name != scalar(product, "name") && siteBrandName(*result.Name, root, base) {
+				result.Name = nil
+				continue
+			}
 			break
 		}
 	}
-	image := readImage(product["image"])
-	if strings.TrimSpace(image) == "" {
-		image = readMeta(root, "og:image")
+	result.Images = imageCandidates(root, base, product, result.Name)
+	if len(result.Images) > 0 {
+		result.Image = &result.Images[0]
 	}
-	result.Image = resolveImage(root, base, image)
-	offers := offerNodes(product)
-	var selected []map[string]any
-	for _, offer := range offers {
-		if matchesDocument(scalar(offer, "url"), base) {
-			selected = append(selected, offer)
-		}
+	prices := offerPrices(productOffers(product, base, canonical))
+	if len(prices) == 0 {
+		prices = standaloneOfferPrices(root, base, canonical)
 	}
-	if len(selected) == 0 && strings.TrimSpace(scalar(product, "sku")) != "" {
-		for _, offer := range offers {
-			if scalar(offer, "sku") == scalar(product, "sku") {
-				selected = append(selected, offer)
+	if len(prices) == 0 {
+		// Both metadata vocabularies describe the page's product. Keep conflicting
+		// declarations visible to choosePrice instead of silently picking one.
+		for _, prefix := range []string{"product:price:", "og:price:"} {
+			amount, currency := readMeta(root, prefix+"amount"), readMeta(root, prefix+"currency")
+			// Localized HTML metadata can use a decimal comma. JSON-LD remains strict;
+			// grouped or mixed separators are never interpreted as a price.
+			if commaAmount.MatchString(amount) {
+				amount = strings.Replace(amount, ",", ".", 1)
+			}
+			if amount != "" || currency != "" {
+				prices = append(prices, price{amount, currency})
 			}
 		}
 	}
-	if len(selected) > 0 {
-		offers = selected
+	result.Price, result.UnsupportedCurrency = choosePrice(prices)
+	if result.Price == nil && !result.UnsupportedCurrency {
+		result.Price = selectedStateOffer(root, product, base, canonical)
 	}
-	var prices []price
-	hasAmount := false
-	for _, offer := range offers {
-		p := price{scalar(offer, "price"), scalar(offer, "priceCurrency")}
-		prices = append(prices, p)
-		hasAmount = hasAmount || strings.TrimSpace(p.Amount) != ""
+	if len(prices) == 0 && result.Price == nil && !result.UnsupportedCurrency {
+		result.Price = passiveProductStatePrice(root, product, base, canonical)
 	}
-	if !hasAmount {
-		prices = []price{{readMeta(root, "product:price:amount"), readMeta(root, "product:price:currency")}}
-	}
-	result.Price, result.UnsupportedCurrency = choosePrice(prices, false)
 	return result
 }
 
@@ -194,9 +197,15 @@ func unique(values []string) string {
 	return ""
 }
 func cleanName(name string) *string {
-	name = strings.TrimSpace(name)
-	if name == "" || !validation.Text(name, 100, false) {
+	name = normalizeText(html.UnescapeString(name))
+	if name == "" || !validation.Text(name, utf8.RuneCountInString(name), false) {
 		return nil
+	}
+	if runes := []rune(name); len(runes) > 100 {
+		name = strings.TrimSpace(string(runes[:100]))
+		if i := strings.LastIndex(name, " "); i >= 60 {
+			name = name[:i]
+		}
 	}
 	return &name
 }
@@ -231,12 +240,16 @@ func findProducts(value any, depth int) []map[string]any {
 	case []any:
 		for _, item := range object {
 			products = append(products, findProducts(item, depth+1)...)
+			if len(products) > maximumProductCandidates {
+				return products[:maximumProductCandidates+1]
+			}
 		}
 	case map[string]any:
-		if productType(object["@type"]) {
+		if productType(object["@type"]) || schemaKind(object["@type"], "ProductGroup") || offeredEntity(object) {
 			products = append(products, object)
 		} else {
 			products = append(products, findProducts(object["@graph"], depth+1)...)
+			products = append(products, findProducts(object["mainEntity"], depth+1)...)
 		}
 	}
 	return products
@@ -341,6 +354,7 @@ func resolveImage(root *html.Node, base *url.URL, value string) *string {
 }
 
 var decimalAmount = regexp.MustCompile(`^[0-9]*(?:\.[0-9]*)?$`)
+var commaAmount = regexp.MustCompile(`^[0-9]+,[0-9]{1,2}$`)
 
 func parseAmount(value string) *json.Number {
 	if !decimalAmount.MatchString(value) {
@@ -362,19 +376,14 @@ func parseAmount(value string) *json.Number {
 	number := json.Number(canonical)
 	return &number
 }
-func choosePrice(prices []price, localized bool) (*json.Number, bool) {
+func choosePrice(prices []price) (*json.Number, bool) {
 	distinct := map[string]*json.Number{}
 	unsupported := false
 	for _, p := range prices {
 		if p.Amount != "" && !strings.EqualFold(p.Currency, "EUR") {
 			unsupported = true
 		}
-		var amount *json.Number
-		if localized {
-			amount = parseLocalizedPrice(p.Amount)
-		} else {
-			amount = parseAmount(p.Amount)
-		}
+		amount := parseAmount(p.Amount)
 		key := "invalid"
 		if amount != nil {
 			key = amount.String()
@@ -396,56 +405,70 @@ func nearestScope(n *html.Node) *html.Node {
 	}
 	return nil
 }
-func microValue(scope *html.Node, key string) string {
-	var values []string
-	for _, n := range selectNodes(scope, func(n *html.Node) bool {
-		return !hasAttr(n, "itemscope") && token(attr(n, "itemprop"), key) && nearestScope(n) == scope
-	}) {
-		value := nodeText(n)
-		for _, a := range []string{"content", "href", "src"} {
-			if hasAttr(n, a) {
-				value = attr(n, a)
-				break
-			}
-		}
-		values = append(values, normalizeText(value))
-	}
-	return unique(values)
-}
 func schemaType(n *html.Node, kind string) bool {
 	return hasAttr(n, "itemscope") && (token(attr(n, "itemtype"), "https://schema.org/"+kind) || token(attr(n, "itemtype"), "http://schema.org/"+kind))
 }
-func microdata(root *html.Node) []map[string]any {
-	var products []map[string]any
-	for _, node := range selectNodes(root, func(n *html.Node) bool { return schemaType(n, "Product") }) {
-		product := map[string]any{}
-		for _, key := range []string{"name", "url", "image", "sku"} {
-			product[key] = microValue(node, key)
-		}
-		if product["sku"] == "" {
-			product["sku"] = normalizeText(attr(node, "data-product-sku"))
-		}
-		var offers []any
-		for _, offer := range selectNodes(node, func(n *html.Node) bool {
-			return schemaType(n, "Offer") && token(attr(n, "itemprop"), "offers") && nearestScope(n.Parent) == node
+func microdata(root *html.Node, base *url.URL) []map[string]any {
+	var products, headingProducts []map[string]any
+	canonical := documentReference(root, base)
+	for _, rdfa := range []bool{false, true} {
+		for _, node := range selectNodes(root, func(n *html.Node) bool {
+			return markupType(n, "Product", rdfa) || markupType(n, "ProductGroup", rdfa)
 		}) {
-			data := map[string]any{}
-			for _, key := range []string{"price", "priceCurrency", "url", "sku"} {
-				data[key] = microValue(offer, key)
+			product := markupObject(root, node, rdfa, 0)
+			if scalar(product, "sku") == "" {
+				product["sku"] = normalizeText(attr(node, "data-product-sku"))
 			}
-			offers = append(offers, data)
+			products = append(products, product)
+			headings := selectNodes(node, func(n *html.Node) bool {
+				return n.Data == "h1" && markupScope(n, rdfa) == node
+			})
+			if len(headings) == 1 && scalar(product, "name") != "" && selectionText(nodeText(headings[0])) == selectionText(scalar(product, "name")) {
+				_, hasURL := product["url"]
+				validIdentity := !hasURL || productMatch(product, base, canonical) > 0
+				for _, key := range []string{"itemid", "about"} {
+					if declared := attr(node, key); declared != "" && !matchesDocument(declared, base) && !matchesDocument(declared, canonical) {
+						validIdentity = false
+					}
+				}
+				if validIdentity {
+					headingProducts = append(headingProducts, product)
+				}
+			}
+			if len(products) > maximumProductCandidates {
+				return products
+			}
 		}
-		product["offers"] = offers
-		products = append(products, product)
+	}
+	if len(headingProducts) == 1 {
+		// A uniquely owned main heading can identify a URL-less primary item
+		// among recommendation scopes. Never override a different explicit URL.
+		var selected []map[string]any
+		for _, product := range products {
+			if productMatch(product, base, canonical) > 0 && !sameProduct(product, headingProducts[0], base) {
+				return products
+			}
+			if sameProduct(product, headingProducts[0], base) {
+				selected = append(selected, product)
+			}
+		}
+		return selected
 	}
 	return products
 }
 func browserChallenge(root *html.Node) bool {
+	title := strings.ToLower(firstText(root, func(n *html.Node) bool { return n.Data == "title" }))
+	for _, heading := range []string{title, firstText(root, func(n *html.Node) bool { return n.Data == "h1" })} {
+		switch strings.Trim(strings.ToLower(normalizeText(heading)), " .!") {
+		case "you have been blocked", "access denied", "request blocked", "request rejected":
+			return true
+		}
+	}
 	return len(selectNodes(root, func(n *html.Node) bool {
 		switch attr(n, "id") {
 		case "challenge-form", "cf-challenge-running", "px-captcha", "sec-if-cpt-container":
 			return true
 		}
-		return n.Data == "script" && (strings.Contains(attr(n, "src"), "/cdn-cgi/challenge-platform/") || strings.Contains(nodeText(n), "/cdn-cgi/challenge-platform/"))
+		return n.Data == "script" && (strings.Contains(title, "just a moment") || strings.Contains(title, "access denied") || strings.Contains(title, "attention required")) && (strings.Contains(attr(n, "src"), "/cdn-cgi/challenge-platform/") || strings.Contains(nodeText(n), "/cdn-cgi/challenge-platform/"))
 	})) > 0
 }
