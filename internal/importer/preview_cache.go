@@ -53,12 +53,12 @@ func cacheKey(value string) previewKey {
 
 func (c *previewCache) acquire(ctx context.Context, key previewKey) (domain.WishImportPreview, bool, func(), error) {
 	for {
-		if err := ctx.Err(); err != nil {
+		if err := previewContextError(ctx); err != nil {
 			return domain.WishImportPreview{}, false, nil, err
 		}
 		c.mu.Lock()
 		c.expire(c.now())
-		if err := ctx.Err(); err != nil {
+		if err := previewContextError(ctx); err != nil {
 			c.mu.Unlock()
 			return domain.WishImportPreview{}, false, nil, err
 		}
@@ -92,6 +92,19 @@ func (c *previewCache) acquire(ctx context.Context, key previewKey) (domain.Wish
 			c.mu.Unlock()
 		}, nil
 	}
+}
+
+func previewContextError(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	// The owner's completion and a waiter's deadline may become ready together.
+	// Its cancellation callback can run just after the key is released, so also
+	// check the deadline itself before admitting another provider operation.
+	if deadline, ok := ctx.Deadline(); ok && time.Until(deadline) <= 0 {
+		return context.DeadlineExceeded
+	}
+	return nil
 }
 
 func (c *previewCache) put(key previewKey, value domain.WishImportPreview) {

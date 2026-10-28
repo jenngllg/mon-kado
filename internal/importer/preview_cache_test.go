@@ -436,7 +436,7 @@ func TestPreview_WhenDuplicateWaitsForTimedOutOwner_KeepsTheEightSecondServerBud
 			}
 		}
 		if time.Since(started) != 8*time.Second || page.calls.Load() != 1 {
-			t.Fatal("duplicate wait reset the deadline or started a late provider")
+			t.Fatalf("duplicate wait reset the deadline or started a late provider: elapsed=%v calls=%d", time.Since(started), page.calls.Load())
 		}
 	})
 }
