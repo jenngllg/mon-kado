@@ -126,6 +126,7 @@ export async function handleRender(request, env, execution = { waitUntil() {} },
         if (message.method === 'Page.domContentEventFired') settle(true);
         if (message.method === 'Network.responseReceived' && data.type === 'Document' && data.frameId === mainFrame) {
           originStatus = data.response.status; finalURL = data.response.url;
+          if (originStatus !== 200) settle(false);
         }
         if (message.method === 'Network.responseReceived' && data.type === 'Image' && data.response.url === imageURL) {
           imageRequest = data.requestId;
