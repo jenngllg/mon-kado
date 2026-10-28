@@ -373,33 +373,36 @@ func TestPreview_WhenPendingKeyLimitIsReached_RemainsBoundedWithoutBlockingDisti
 }
 
 func TestPreview_WhenImageBytesFillCache_EvictsWithinMemoryBudget(t *testing.T) {
-	// Arrange
-	client, page, picture := cachedPreviewFixture(t, time.Now)
-	canvas := image.NewNRGBA(image.Rect(0, 0, 1400, 1400))
-	state := uint32(0x12345678)
-	for i := range canvas.Pix {
-		state ^= state << 13
-		state ^= state >> 17
-		state ^= state << 5
-		canvas.Pix[i] = byte(state)
-	}
-	var content bytes.Buffer
-	if err := png.Encode(&content, canvas); err != nil {
-		t.Fatal(err)
-	}
-	picture.content = content.Bytes()
-	// Act
-	for _, id := range []string{"first", "second", "first"} {
-		result, err := client.Preview(t.Context(), "https://merchant.test/product/"+id)
-		requireCompleteCachedPreview(t, result, err)
-		if len(result.Image.ContentBase64) <= 8*1024*1024 {
-			t.Fatal("fixture does not require byte-budget eviction")
+	// Encoding cost under race instrumentation must not decide cache eviction.
+	synctest.Test(t, func(t *testing.T) {
+		// Arrange
+		client, page, picture := cachedPreviewFixture(t, time.Now)
+		canvas := image.NewNRGBA(image.Rect(0, 0, 1400, 1400))
+		state := uint32(0x12345678)
+		for i := range canvas.Pix {
+			state ^= state << 13
+			state ^= state >> 17
+			state ^= state << 5
+			canvas.Pix[i] = byte(state)
 		}
-	}
-	// Assert
-	if page.calls.Load() != 3 {
-		t.Fatal("two large previews were retained beyond the sixteen-MiB cache budget")
-	}
+		var content bytes.Buffer
+		if err := png.Encode(&content, canvas); err != nil {
+			t.Fatal(err)
+		}
+		picture.content = content.Bytes()
+		// Act
+		for _, id := range []string{"first", "second", "first"} {
+			result, err := client.Preview(t.Context(), "https://merchant.test/product/"+id)
+			requireCompleteCachedPreview(t, result, err)
+			if len(result.Image.ContentBase64) <= 8*1024*1024 {
+				t.Fatal("fixture does not require byte-budget eviction")
+			}
+		}
+		// Assert
+		if page.calls.Load() != 3 {
+			t.Fatal("two large previews were retained beyond the sixteen-MiB cache budget")
+		}
+	})
 }
 
 func TestPreview_WhenDuplicateWaitsForTimedOutOwner_KeepsTheEightSecondServerBudget(t *testing.T) {
