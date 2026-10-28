@@ -31,5 +31,9 @@ func newWishImporter(service *application.Service) *importer.Client {
 			client.FinalImageSource = provider
 		}
 	}
+	if options.ManagedProvidersEnabled && options.LocalCloudflareRenderEnabled && !service.Config.Production {
+		client.RenderedSource = importer.NewLocalCloudflareRenderer(client, options.LocalCloudflareRenderOrigin, options.LocalCloudflareRenderKey)
+		client.ImageSource = client.PageSource.(importer.ImageSource)
+	}
 	return client
 }

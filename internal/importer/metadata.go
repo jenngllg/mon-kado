@@ -19,6 +19,8 @@ type Metadata struct {
 	UnsupportedCurrency bool
 	// Images contains ordered alternative product images, bounded by the preview pipeline.
 	Images []string
+	// ImageData contains optional bounded provider bytes; Preview still normalizes them.
+	ImageData []byte
 }
 type price struct{ Amount, Currency string }
 

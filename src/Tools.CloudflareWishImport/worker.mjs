@@ -128,3 +128,6 @@ export async function handle(request, env, upstream = fetch) {
 }
 
 export default { fetch(request,env) { return handle(request,env); } };
+
+// Shared guards for the separately deployed, local-only browser experiment.
+export { authenticated, bounded, merchantHost, validateDNS };

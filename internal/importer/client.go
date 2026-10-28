@@ -39,6 +39,8 @@ const merchantUserAgent = "Go-http-client/1.1 MonKado/1.0 (+https://www.monkado.
 type Client struct {
 	cache            *previewCache
 	PageSource       PageSource
+	// RenderedSource optionally recovers dynamic markup before the metered fallback.
+	RenderedSource   PageSource
 	FallbackSource   PageSource
 	ImageSource      ImageSource
 	FinalImageSource ImageSource

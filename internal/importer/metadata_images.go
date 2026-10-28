@@ -67,9 +67,17 @@ func imageCandidates(root *html.Node, base *url.URL, product map[string]any, nam
 	} else if unique(variantImages) != "" {
 		candidates = append(candidates, variantImages...)
 	}
+	// Keep the selected product's primary picture first, but give the page's
+	// explicit preview image a chance before a long gallery consumes the budget.
+	var gallery []string
+	if len(candidates) > 1 {
+		gallery = candidates[1:]
+		candidates = candidates[:1:1]
+	}
 	for _, key := range []string{"og:image:secure_url", "og:image", "og:image:url", "twitter:image", "twitter:image:src"} {
 		candidates = append(candidates, metaValues(root, key)...)
 	}
+	candidates = append(candidates, gallery...)
 	for _, n := range selectNodes(root, func(n *html.Node) bool { return n.Data == "link" && token(attr(n, "rel"), "image_src") }) {
 		candidates = append(candidates, attr(n, "href"))
 	}

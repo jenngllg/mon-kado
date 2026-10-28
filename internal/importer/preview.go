@@ -81,16 +81,44 @@ func (c *Client) Preview(ctx context.Context, value string) (domain.WishImportPr
 	result.Name, result.Price = metadata.Name, metadata.Price
 	original, _ := url.Parse(value)
 	fallbackReady := primaryUsed && c.FallbackSource != nil && c.FallbackSource.CanHandle(original)
+	renderReady := primaryUsed && c.RenderedSource != nil && c.RenderedSource.CanHandle(original)
 	tried := make(map[string]bool)
 	finalTried := make(map[string]bool)
 	imageContext := budget
 	imageCancel := func() {}
-	if fallbackReady {
+	if fallbackReady || renderReady {
 		// Reserve time for the final provider when a primary image host stalls.
 		imageContext, imageCancel = context.WithTimeout(budget, time.Second)
 	}
-	result.Image = c.previewImage(imageContext, metadata, tried, nil)
+	result.Image = normalizePreviewImage(imageContext, metadata.ImageData)
+	if result.Image == nil {
+		result.Image = c.previewImage(imageContext, metadata, tried, nil)
+	}
 	imageCancel()
+	if renderReady && budget.Err() == nil && (result.Name == nil || result.Price == nil || result.Image == nil) {
+		rendered, err := c.RenderedSource.Get(budget, original)
+		if err == nil {
+			pageUnavailable = false
+			if result.Name == nil {
+				result.Name = rendered.Name
+			}
+			if result.Price == nil && !metadata.UnsupportedCurrency {
+				result.Price = rendered.Price
+			}
+			metadata.UnsupportedCurrency = metadata.UnsupportedCurrency || rendered.UnsupportedCurrency
+			if result.Image == nil {
+				result.Image = normalizePreviewImage(budget, rendered.ImageData)
+				if result.Image == nil {
+					result.Image = c.previewImage(budget, rendered, tried, nil)
+				}
+			}
+			// Later byte recovery must use the document that supplied the product.
+			metadata.Name, metadata.Price = result.Name, result.Price
+			if rendered.Image != nil || len(rendered.Images) != 0 {
+				metadata.Image, metadata.Images = rendered.Image, rendered.Images
+			}
+		}
+	}
 	if fallbackReady && result.Image == nil && result.Name != nil && result.Price != nil && c.FinalImageSource != nil {
 		// Known product text needs image bytes, not another rendered document.
 		// Spend the remaining short budget on the missing resource first.
@@ -202,6 +230,9 @@ func (c *Client) previewImage(ctx context.Context, metadata Metadata, tried, fin
 }
 
 func normalizePreviewImage(ctx context.Context, content []byte) *domain.WishImportImage {
+	if len(content) == 0 {
+		return nil
+	}
 	normalized, err := images.ProcessImported(ctx, content, 1600)
 	if err != nil {
 		return nil

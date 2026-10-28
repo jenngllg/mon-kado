@@ -18,6 +18,17 @@ the existing budget; an image for a different selected variant is not substitute
 There are no hostname-specific selectors or external storefront
 catalogues. Missing or ambiguous information remains available for manual entry.
 
+For long galleries, the selected product's primary picture remains first; an
+explicit Open Graph/Twitter preview is considered before the remaining gallery.
+This keeps alternate, optimized preview URLs inside the three-download budget.
+
+The optional local browser experiment is documented in
+`src/Tools.CloudflareWishImport/README.md`. It can recover dynamic public markup
+and one declared picture after fast Cloudflare fetch, before Firecrawl, while
+retaining the existing eight-second server / ten-second form ceilings. It is
+default-off and independently refused in production. This does not change the
+production workflow or establish a new 99-merchant success rate.
+
 JSON-LD offers, images, variants and price specifications can reference entities
 declared elsewhere in the same document, including another JSON-LD script.
 Compatible definitions are combined; conflicting definitions, unresolved references
