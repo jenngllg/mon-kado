@@ -36,6 +36,19 @@ func (c *Client) Preview(ctx context.Context, value string) (domain.WishImportPr
 	if errors.As(validationErr, &business) {
 		return result, validationErr
 	}
+	var key previewKey
+	if validationErr == nil && c.cache != nil {
+		key = cacheKey(value)
+		cached, hit, release, err := c.cache.acquire(budget, key)
+		if err != nil {
+			validationErr = err
+		} else if hit {
+			cached.Url = &value
+			return cached, nil
+		} else {
+			defer release()
+		}
+	}
 	var metadata Metadata
 	pageUnavailable, primaryUsed := false, false
 	if validationErr == nil {
@@ -130,6 +143,9 @@ func (c *Client) Preview(ctx context.Context, value string) (domain.WishImportPr
 			warning = "WISH_IMPORT_CURRENCY_UNSUPPORTED"
 		}
 		result.Warnings = append(result.Warnings, warning)
+	}
+	if c.cache != nil && validationErr == nil && budget.Err() == nil {
+		c.cache.put(key, result)
 	}
 	return result, nil
 }

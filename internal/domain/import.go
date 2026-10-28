@@ -12,7 +12,7 @@ type WishImportPreview struct {
 	Warnings []string         `json:"warnings"`
 }
 
-// WishImportImage contains normalized bytes held in browser memory only.
+// WishImportImage contains normalized preview bytes without persisting a source image.
 type WishImportImage struct {
 	ContentBase64 string `json:"contentBase64"`
 	ContentType   string `json:"contentType"`

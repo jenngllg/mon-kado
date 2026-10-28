@@ -86,6 +86,19 @@ or cancellation and transferred explicitly on success. Historical audits using
 the former 20/35-second budgets remain archived; their coverage is not evidence
 of the shorter deadline's current live success rate.
 
+Complete previews can be reused from a process-local cache for two minutes after
+successful retrieval. The expiry does not slide on access. The cache holds at
+most 128 entries and sixteen MiB of accounted payload, with least-recently-used
+eviction; URL strings are not stored as keys. Each request still validates the
+current public DNS set before lookup, preserves its exact query and returned URL,
+and receives independent mutable response fields. Only the fragment is ignored
+for identity because it is never sent to a merchant. Partial previews and provider
+errors are not cached. Concurrent requests for the same uncached URL share one
+provider operation; a waiting caller can cancel independently, and an owner's
+cancellation releases the key for another caller. Waiting, retrieval and image
+processing stay inside each caller's existing eight-second budget. This reduces
+duplicate provider requests without claiming to unblock a refused first access.
+
 The generic parser also recognizes named Schema.org entities connected to typed
 offers, including books, recordings, services and events. It excludes catalogues,
 organizations and page containers; ISBNs distinguish editions with the same title.

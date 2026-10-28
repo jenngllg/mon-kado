@@ -7,7 +7,7 @@ import (
 
 func newWishImporter(service *application.Service) *importer.Client {
 	options := service.Config.Imports()
-	client := importer.New()
+	client := importer.NewWithPreviewCache(service.Now)
 	client.Timeout, client.MaximumRedirects, client.MaximumHTMLBytes = options.Timeout, options.MaximumRedirects, options.MaximumHTMLBytes
 	firecrawl, product, images, key := false, false, false, ""
 	if options.ManagedProvidersEnabled {

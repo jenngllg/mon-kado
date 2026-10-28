@@ -37,6 +37,7 @@ const merchantUserAgent = "Go-http-client/1.1 MonKado/1.0 (+https://www.monkado.
 
 // Client owns the resolver and dialer used for every redirect and image request.
 type Client struct {
+	cache            *previewCache
 	PageSource       PageSource
 	FallbackSource   PageSource
 	ImageSource      ImageSource
