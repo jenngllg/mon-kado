@@ -18,6 +18,7 @@ const localFirecrawlEndpoint = "https://api.firecrawl.dev/v2/scrape"
 const localFirecrawlBudget = 6 * time.Second
 const firecrawlStartInterval = 6100 * time.Millisecond
 const firecrawlImageReserve = time.Second
+const firecrawlMinimumTransferBudget = time.Second
 
 type providerRequest func(context.Context, *url.URL, string, io.Reader, http.Header) (*http.Response, error)
 
@@ -47,6 +48,7 @@ type LocalFirecrawl struct {
 	now                     func() time.Time
 	wait                    RetryWait
 	slots                   chan struct{}
+	admission               chan struct{}
 	mu                      sync.Mutex
 	nextStart, blockedUntil time.Time
 	disabled                bool
@@ -55,18 +57,18 @@ type LocalFirecrawl struct {
 }
 
 // NewLocalFirecrawlProduct enables deterministic product fields alongside raw HTML.
-// It shares the same local-only transport, admission and monetary validation.
+// It shares the same guarded transport, admission and monetary validation.
 func NewLocalFirecrawlProduct(client *Client, key string, now func() time.Time) *LocalFirecrawl {
 	provider := NewLocalFirecrawl(client, key, now)
 	provider.product = true
 	return provider
 }
 
-// NewLocalFirecrawl creates a local-only provider with a fixed API authority.
+// NewLocalFirecrawl creates a managed provider with a fixed API authority.
 // Its clock is injected so quota and admission behavior can be tested deterministically.
 func NewLocalFirecrawl(client *Client, key string, now func() time.Time) *LocalFirecrawl {
 	return &LocalFirecrawl{validator: client, request: client.requestWithHeaders, key: key,
-		maximumBytes: client.MaximumHTMLBytes, now: now, wait: waitForRetry, slots: make(chan struct{}, 2),
+		maximumBytes: client.MaximumHTMLBytes, now: now, wait: waitForRetry, slots: make(chan struct{}, 2), admission: make(chan struct{}, 1),
 		pageBudget: min(localFirecrawlBudget, client.Timeout-firecrawlImageReserve)}
 }
 
@@ -103,7 +105,7 @@ func (c *LocalFirecrawl) get(ctx context.Context, target *url.URL, includeProduc
 	if deadline, ok := ctx.Deadline(); ok {
 		duration = min(duration, time.Until(deadline)-firecrawlImageReserve)
 	}
-	if duration < time.Second {
+	if duration < firecrawlMinimumTransferBudget {
 		return Metadata{}, errors.New("development fallback budget is unavailable")
 	}
 	budget, cancel := context.WithTimeout(ctx, duration)
@@ -119,7 +121,7 @@ func (c *LocalFirecrawl) get(ctx context.Context, target *url.URL, includeProduc
 	}
 	deadline, _ := budget.Deadline()
 	remaining := time.Until(deadline)
-	if remaining < time.Second {
+	if remaining < firecrawlMinimumTransferBudget {
 		return Metadata{}, errors.New("development fallback budget is unavailable")
 	}
 	formats := []string{"rawHtml"}
@@ -214,6 +216,15 @@ func (c *LocalFirecrawl) post(ctx context.Context, body []byte, maximum int) ([]
 }
 
 func (c *LocalFirecrawl) admit(ctx context.Context) error {
+	select {
+	case c.admission <- struct{}{}:
+		defer func() { <-c.admission }()
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	c.mu.Lock()
 	now := c.now()
 	if c.disabled || now.Before(c.blockedUntil) {
@@ -221,21 +232,28 @@ func (c *LocalFirecrawl) admit(ctx context.Context) error {
 		return errors.New("development fallback admission is unavailable")
 	}
 	start := maxTime(c.nextStart, now)
-	c.nextStart = start.Add(firecrawlStartInterval)
 	c.mu.Unlock()
 	if delay := start.Sub(now); delay > 0 {
 		if err := c.wait(ctx, delay); err != nil {
 			return err
 		}
 	}
-	// Another admitted request may exhaust the account while this one waits.
+	// An in-flight request may exhaust the account while this one waits.
 	c.mu.Lock()
-	blocked := c.disabled || c.now().Before(c.blockedUntil)
-	c.mu.Unlock()
-	if blocked {
+	defer c.mu.Unlock()
+	if c.disabled || c.now().Before(c.blockedUntil) {
 		return errors.New("development fallback admission is unavailable")
 	}
-	return ctx.Err()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if deadline, ok := ctx.Deadline(); ok && time.Until(deadline) < firecrawlMinimumTransferBudget {
+		return errors.New("development fallback budget is unavailable")
+	}
+	// Commit pacing only for work that can start. Canceled waiters never reserve
+	// future slots and cannot accumulate delays for unrelated previews.
+	c.nextStart = maxTime(start, c.now()).Add(firecrawlStartInterval)
+	return nil
 }
 
 func maxTime(a, b time.Time) time.Time {

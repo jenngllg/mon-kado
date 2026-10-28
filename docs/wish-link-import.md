@@ -154,6 +154,15 @@ applies only to local testing, not production qualification.
 The final page provider receives one POST without transparent retries, capped at
 six seconds inside the eight-second server preview. Page and image admission
 waits consume that same deadline; requests that cannot fit return partial fields.
+Canceled admission waiters do not reserve future starts. A shared cancellable
+gate commits the 6.1-second pacing interval only when a request has a usable
+transfer budget and can actually begin. Account cooldown and the two-request
+in-flight limit still apply to both page and image calls.
+If the primary document already supplied the name and exact price, a missing
+image is requested as bounded original bytes before spending another provider
+call on rendering the known product text. Missing text still prioritizes page
+metadata; invalid image bytes still permit a page-based alternative within the
+same overall deadline. No known primary name or price is overwritten.
 HTML is capped at four MiB and the JSON envelope at six times that size
 to allow JSON escaping. Each provider can contribute at most three image download
 attempts. API starts are spaced by at least 6.1 seconds, with at most two in flight.

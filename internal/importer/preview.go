@@ -78,6 +78,11 @@ func (c *Client) Preview(ctx context.Context, value string) (domain.WishImportPr
 	}
 	result.Image = c.previewImage(imageContext, metadata, tried, nil)
 	imageCancel()
+	if fallbackReady && result.Image == nil && result.Name != nil && result.Price != nil && c.FinalImageSource != nil {
+		// Known product text needs image bytes, not another rendered document.
+		// Spend the remaining short budget on the missing resource first.
+		result.Image = c.previewImage(budget, metadata, tried, finalTried)
+	}
 	if fallbackReady && budget.Err() == nil && (result.Name == nil || result.Price == nil || result.Image == nil) {
 		var alternative Metadata
 		var err error
