@@ -99,6 +99,14 @@ cancellation releases the key for another caller. Waiting, retrieval and image
 processing stay inside each caller's existing eight-second budget. This reduces
 duplicate provider requests without claiming to unblock a refused first access.
 
+Duplicate structured product descriptions may use different publisher-local SKUs.
+The parser can reconcile them using a matching GTIN with a valid GS1 check digit,
+including GTIN-8/12/13/14 and exact decimal JSON numbers. The identifier may be on
+the product or consistently identify every direct offer; missing or conflicting
+offer identities never select an unchosen variant. Conflicting GTINs and ISBNs
+remain distinct, and merged offer price disagreements remain unavailable. This
+uses standard structured data only and performs no additional merchant requests.
+
 The generic parser also recognizes named Schema.org entities connected to typed
 offers, including books, recordings, services and events. It excludes catalogues,
 organizations and page containers; ISBNs distinguish editions with the same title.
