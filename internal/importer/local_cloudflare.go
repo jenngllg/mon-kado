@@ -37,7 +37,13 @@ type LocalCloudflare struct {
 // Worker merchant connections remain managed and require the separately authorized network exception.
 func NewCloudflare(client *Client, origin, key string) *LocalCloudflare {
 	provider := NewLocalCloudflare(client, key)
-	provider.origin, provider.request = origin, client.requestWithHeaders
+	provider.origin = origin
+	// The relay's HTTP/2 path can produce upstream throttling for otherwise
+	// available documents. Select the compatible protocol before the request;
+	// do not retry a refusal or change any DNS, TLS or credential boundary.
+	provider.request = func(ctx context.Context, target *url.URL, method string, body io.Reader, headers http.Header) (*http.Response, error) {
+		return client.requestWithProtocol(ctx, target, method, body, headers, false)
+	}
 	return provider
 }
 

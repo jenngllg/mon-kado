@@ -9,6 +9,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 )
 
@@ -104,4 +105,56 @@ func TestLocalFirecrawl_WhenConcurrentWaitersCanceled_PreservesNextUsableSlot(t 
 	if !errors.Is(firstError, context.Canceled) || !errors.Is(secondError, context.Canceled) || nextError != nil || calls.Load() != 1 || result.Name == nil {
 		t.Fatal("canceled concurrent waiters prevented the next usable request")
 	}
+}
+
+func TestLocalFirecrawl_WhenAdmissionGateBusy_CallerCancellationSkipsProviderAndPacing(t *testing.T) {
+	// Arrange
+	client := firecrawlFixture(t, func(context.Context, *url.URL, string, io.Reader, http.Header) (*http.Response, error) {
+		t.Fatal("canceled admission reached the provider")
+		return nil, nil
+	})
+	client.admission <- struct{}{}
+	defer func() { <-client.admission }()
+	// This handshake observes public Get reaching its concurrency boundary,
+	// allowing cancellation without timers or scheduler-dependent polling.
+	client.slots = make(chan struct{})
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	target, _ := url.Parse("https://merchant.fr/product")
+	result := make(chan error, 1)
+	// Act
+	go func() { _, err := client.Get(ctx, target); result <- err }()
+	<-client.slots
+	cancel()
+	client.slots <- struct{}{}
+	err := <-result
+	// Assert
+	if !errors.Is(err, context.Canceled) || !client.nextStart.IsZero() {
+		t.Fatal("canceled gate wait consumed future request capacity")
+	}
+}
+
+func TestLocalFirecrawl_WhenOnlyMinimumBudgetRemains_DoesNotReserveUnusableStart(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		// Arrange
+		client := firecrawlFixture(t, func(context.Context, *url.URL, string, io.Reader, http.Header) (*http.Response, error) {
+			t.Fatal("provider called without its minimum transfer budget")
+			return nil, nil
+		})
+		client.pageBudget = firecrawlMinimumTransferBudget
+		available := client.now().Add(firecrawlMinimumTransferBudget / 2)
+		client.nextStart = available
+		client.wait = func(ctx context.Context, delay time.Duration) error {
+			// synctest advances its controlled clock; no wall-clock delay occurs.
+			time.Sleep(delay)
+			return ctx.Err()
+		}
+		target, _ := url.Parse("https://merchant.fr/product")
+		// Act
+		_, err := client.Get(t.Context(), target)
+		// Assert
+		if err == nil || client.nextStart != available {
+			t.Fatal("processing overhead left an unusable reservation")
+		}
+	})
 }

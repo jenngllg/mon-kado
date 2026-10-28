@@ -217,3 +217,10 @@ by optional Firecrawl original-image relay, and the ten-second form deadline. No
 experimental browser, CAPTCHA solver, merchant-specific parser or subscription
 upgrade is activated. The default configuration remains disabled until explicitly
 provisioned. All normal deployment backup/approval/quality gates still apply.
+
+The permanent relay client selects HTTP/1.1 before sending its request. Controlled
+manual comparisons found upstream HTTP 429 responses over HTTP/2 for documents
+that the same authenticated relay returned successfully over HTTP/1.1. This
+selection does not retry a refusal or change the user agent, provider authority,
+DNS pinning, public-address checks, TLS verification, redirects or deadlines.
+Other merchant and provider transports retain their existing HTTP/2 support.

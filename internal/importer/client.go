@@ -171,6 +171,10 @@ func (c *Client) request(ctx context.Context, target *url.URL, accept string) (*
 }
 
 func (c *Client) requestWithHeaders(ctx context.Context, target *url.URL, method string, body io.Reader, headers http.Header) (*http.Response, error) {
+	return c.requestWithProtocol(ctx, target, method, body, headers, true)
+}
+
+func (c *Client) requestWithProtocol(ctx context.Context, target *url.URL, method string, body io.Reader, headers http.Header, http2 bool) (*http.Response, error) {
 	host, err := idna.Lookup.ToASCII(target.Hostname())
 	if err != nil {
 		return nil, rejected()
@@ -185,7 +189,7 @@ func (c *Client) requestWithHeaders(ctx context.Context, target *url.URL, method
 	}
 	destination := net.JoinHostPort(addresses[0].String(), port)
 	// Custom TLS settings and DNS pinning otherwise disable HTTP/2 negotiation.
-	transport := &http.Transport{Proxy: nil, DisableKeepAlives: true, ForceAttemptHTTP2: true, ResponseHeaderTimeout: c.Timeout,
+	transport := &http.Transport{Proxy: nil, DisableKeepAlives: true, ForceAttemptHTTP2: http2, ResponseHeaderTimeout: c.Timeout,
 		TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12, ServerName: host},
 		DialContext: func(ctx context.Context, network, address string) (net.Conn, error) {
 			if address != destination {
