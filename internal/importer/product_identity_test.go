@@ -2,6 +2,7 @@ package importer_test
 
 import (
 	"net/url"
+	"strings"
 	"testing"
 
 	"github.com/JennGllg/mon-kado/internal/importer"
@@ -32,6 +33,7 @@ func TestExtract_WhenDuplicateProductsShareValidatedGTIN_ReconcilesIndependentSK
 		{"matching offer IDs retain price conflict", `"gtin14":"17841945768163",`, ``, `[{"gtin14":"17841945768163","price":"69.95","priceCurrency":"EUR"},{"gtin14":"17841945768163","price":"79.95","priceCurrency":"EUR"}]`, "Book nook", ""},
 		{"conflicting GTIN properties", `"gtin14":"17841945768163","gtin13":"6291041500213",`, `"gtin14":"17841945768163",`, `{"price":"69.95","priceCurrency":"EUR"}`, "", ""},
 		{"root and offer identity conflict", `"gtin14":"17841945768163",`, `"gtin14":"17841945768163",`, `{"gtin13":"6291041500213","price":"69.95","priceCurrency":"EUR"}`, "", ""},
+		{"excessive offers cannot establish identity", `"gtin14":"17841945768163",`, `"gtin14":"17841945768163",`, `[` + strings.Repeat(`{"gtin14":"17841945768163","price":"69.95","priceCurrency":"EUR"},`, 256) + `{"gtin14":"17841945768163","price":"69.95","priceCurrency":"EUR"}]`, "", ""},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			// Arrange
