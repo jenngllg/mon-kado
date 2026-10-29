@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+	"time"
 	"unicode/utf8"
 )
 
@@ -17,8 +18,16 @@ type Metadata struct {
 	Name, Image         *string
 	Price               *json.Number
 	UnsupportedCurrency bool
+	// PriceAmbiguous indicates conflicting or unselected prices must remain unset.
+	PriceAmbiguous bool
 	// Images contains ordered alternative product images, bounded by the preview pipeline.
 	Images []string
+	// ImageData contains optional bounded provider bytes; Preview still normalizes them.
+	ImageData []byte
+	// priceFreshUntil is set only from validated provider cache metadata.
+	priceFreshUntil time.Time
+	// productIdentity is a validated GTIN used only to reject conflicting sources.
+	productIdentity string
 }
 type price struct{ Amount, Currency string }
 
@@ -57,9 +66,21 @@ func Extract(content []byte, base *url.URL) Metadata {
 	}
 	canonical := documentReference(root, base)
 	product, ambiguous := selectProduct(products, base, canonical)
+	suppressPrice := false
 	if ambiguous {
-		return Metadata{}
+		product = partialVariantGroup(root, products, base, canonical)
+		if product == nil {
+			return Metadata{}
+		}
+		suppressPrice = true
 	}
+	// A page may preselect a default option even though the pasted URL does not
+	// encode the user's choice. Preserve the choice-independent price decision
+	// before using markup selection to improve the representative image.
+	if hasDifferentUnselectedOfferPrices(product, base, canonical) {
+		suppressPrice = true
+	}
+	unknownDefaultPrice, unsupportedDefaultPrice := hasIncompleteUnselectedVariantPrices(product, base, canonical)
 	product = selectedMarkupVariant(root, product, base, canonical)
 	// A redirected storefront or category must not become a product suggestion.
 	if product == nil && canonical.String() != base.String() &&
@@ -67,6 +88,9 @@ func Extract(content []byte, base *url.URL) Metadata {
 		return Metadata{}
 	}
 	result := Metadata{}
+	if identity, conflict := productGTIN(product); !conflict {
+		result.productIdentity = identity
+	}
 	names := []string{scalar(product, "name"), readMeta(root, "og:title"), firstText(root, func(n *html.Node) bool { return n.Data == "title" }), firstText(root, func(n *html.Node) bool { return n.Data == "h1" })}
 	if variantLabel.MatchString(strings.TrimSpace(names[0])) {
 		names = append(names[1:], names[0])
@@ -83,6 +107,19 @@ func Extract(content []byte, base *url.URL) Metadata {
 	result.Images = imageCandidates(root, base, product, result.Name)
 	if len(result.Images) > 0 {
 		result.Image = &result.Images[0]
+	}
+	if hasUnselectedDescriptionVolumes(root, base, result.Name) {
+		result.PriceAmbiguous = true
+		return result
+	}
+	if suppressPrice {
+		result.PriceAmbiguous = true
+		return result
+	}
+	if unknownDefaultPrice {
+		// Another provider may have complete pricing for every variant.
+		result.UnsupportedCurrency = unsupportedDefaultPrice
+		return result
 	}
 	prices := offerPrices(productOffers(product, base, canonical))
 	if len(prices) == 0 {
@@ -109,6 +146,23 @@ func Extract(content []byte, base *url.URL) Metadata {
 	}
 	if len(prices) == 0 && result.Price == nil && !result.UnsupportedCurrency {
 		result.Price = passiveProductStatePrice(root, product, base, canonical)
+	}
+	if len(prices) == 0 && result.Price == nil && !result.UnsupportedCurrency && product == nil {
+		result.Price = passiveDataLayerPrice(root, base)
+	}
+	if len(prices) == 0 && result.Price == nil && !result.UnsupportedCurrency {
+		result.Price = passiveVariantPrice(root, base, result.Name)
+	}
+	if len(prices) == 0 && result.Price == nil && !result.UnsupportedCurrency && product == nil {
+		result.Price = displayedProductPrice(root, result.Name)
+	}
+	if hasDisplayedPriceConflict(root, product, result.Price) || hasDisplayedStartingPrice(root, base, result.Name, result.Price) {
+		result.Price = nil
+		result.PriceAmbiguous = true
+		return result
+	}
+	if result.Price == nil && !result.UnsupportedCurrency {
+		result.PriceAmbiguous = hasDifferentUnselectedOfferPrices(product, base, canonical) || hasUnselectedStartingPrice(root, product, base, canonical)
 	}
 	return result
 }
@@ -458,11 +512,32 @@ func microdata(root *html.Node, base *url.URL) []map[string]any {
 }
 func browserChallenge(root *html.Node) bool {
 	title := strings.ToLower(firstText(root, func(n *html.Node) bool { return n.Data == "title" }))
-	for _, heading := range []string{title, firstText(root, func(n *html.Node) bool { return n.Data == "h1" })} {
+	firstHeading := firstText(root, func(n *html.Node) bool { return n.Data == "h1" })
+	// Maintenance documents can arrive with HTTP 200; require the generic
+	// title and the accompanying unavailability message before rejecting one.
+	if strings.HasSuffix(strings.TrimSpace(title), " - maintenance") {
+		body := strings.ToLower(normalizeText(firstText(root, func(n *html.Node) bool { return n.Data == "body" })))
+		if strings.Contains(body, "notre site n'est actuellement pas disponible") {
+			return true
+		}
+	}
+	for _, heading := range []string{title, firstHeading} {
 		switch strings.Trim(strings.ToLower(normalizeText(heading)), " .!") {
 		case "you have been blocked", "access denied", "request blocked", "request rejected":
 			return true
 		}
+	}
+	// Some verification pages return HTTP 200 with a storefront name in the title.
+	if strings.HasPrefix(strings.ToLower(normalizeText(firstHeading)), "vérification de votre navigateur") &&
+		strings.HasPrefix(strings.ToLower(normalizeText(title)), "vérification de sécurité") {
+		return true
+	}
+	// This interstitial can be returned as a successful HTML response. Require
+	// both its heading and script marker so ordinary product names remain valid.
+	if strings.EqualFold(strings.TrimSpace(firstHeading), "Pardon Our Interruption") && len(selectNodes(root, func(n *html.Node) bool {
+		return n.Data == "script" && strings.Contains(nodeText(n), "reeseSkipExpirationCheck")
+	})) > 0 {
+		return true
 	}
 	return len(selectNodes(root, func(n *html.Node) bool {
 		switch attr(n, "id") {

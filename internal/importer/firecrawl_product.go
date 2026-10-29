@@ -120,7 +120,7 @@ func supplementFirecrawlProduct(current Metadata, raw json.RawMessage, content [
 			hasOfferEvidence = true
 		}
 	}
-	if current.Price == nil && valid && !ambiguous && !hasOfferEvidence && !current.UnsupportedCurrency {
+	if current.Price == nil && valid && !ambiguous && !hasOfferEvidence && !current.UnsupportedCurrency && !current.PriceAmbiguous {
 		current.Price, current.UnsupportedCurrency = choosePrice(prices)
 	}
 	for _, photo := range photos {

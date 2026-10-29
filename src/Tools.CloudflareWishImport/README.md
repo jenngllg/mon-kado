@@ -57,6 +57,36 @@ local Firecrawl binary fallback is documented in `docs/wish-link-import.md`.
 No live Worker deployment, production route, MonKado DNS change, database
 migration or paid subscription is needed for an ephemeral local test.
 
-Run the deterministic Worker tests with `node --test worker.test.mjs`. Go connector
+## Separate local browser experiment
+
+`browser-worker.mjs` is a separate, explicitly enabled local experiment; it does not
+replace or update the production fetch Worker. Configure a dedicated
+`monkado-wish-render-local.<account>.workers.dev` Worker with a `BROWSER` binding
+and an independent random `IMPORT_AUTH` secret. Enable
+`WISH_IMPORT_LOCAL_CLOUDFLARE_RENDER_ENABLED` with its matching `_ORIGIN` and `_KEY`
+only alongside managed imports in `APP_ENV=local`. Startup and composition reject
+production use. No browser SDK or paid plan is required.
+
+The shared preview pipeline tries fast Cloudflare fetch first, then this browser
+only for incomplete suggestions, then the existing metered fallback. The Worker
+uses at most six seconds and its pinned Go connector at most seven including
+transport, always inside the shared eight-second preview deadline. It refuses to
+queue when another session is active, an acquisition is unavailable or reported
+daily usage exceeds 500 seconds, leaving reserve within the free ten-minute quota.
+The complete-preview cache and exact query identity remain unchanged.
+
+Each browser is anonymous, clears cookies, and closes only its own acquired
+session. Document/resource DNS is validated before continuing and again before
+returning; redirects, private authorities, credentials, unsafe methods, workers,
+frames and popups are denied. The response CSP keeps scripts in the intercepted
+page. Requests, hosts, protocol payloads, total network bytes and HTML are bounded.
+One declared Open Graph image may reuse that same session, limited to one request,
+one extra second and two MiB. Go accepts its bytes only for a generic parser image
+candidate with public DNS, then normalizes and strips metadata through the usual
+image pipeline. Image failure preserves usable product text. No credentials or
+active merchant markup reach the frontend. DNS preflight remains the existing
+explicitly authorized managed-network exception, not merchant IP pinning.
+
+Run the deterministic Worker tests with `node --test *.test.mjs`. Go connector
 and environment-boundary tests live under `internal/importer`, `internal/config`
 and `internal/httpapi`; their providers are fakes and never contact merchants.

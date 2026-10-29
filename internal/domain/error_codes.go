@@ -190,3 +190,6 @@ func KnownErrorCode(code string) bool {
 
 // WishlistGroupVisibilityVersionConflict identifies a stale owner audience version.
 const WishlistGroupVisibilityVersionConflict = "WISHLIST_GROUP_VISIBILITY_VERSION_CONFLICT"
+
+// WishImportPriceMayBeStale identifies a cached provider price that may have changed.
+const WishImportPriceMayBeStale = "WISH_IMPORT_PRICE_MAY_BE_STALE"

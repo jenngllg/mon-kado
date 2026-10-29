@@ -75,6 +75,20 @@ func productMatch(p map[string]any, base, canonical *url.URL) int {
 }
 
 func sameProduct(a, b map[string]any, base *url.URL) bool {
+	leftGTIN, leftConflict := productGTIN(a)
+	rightGTIN, rightConflict := productGTIN(b)
+	if leftConflict || rightConflict {
+		return false
+	}
+	if leftGTIN != "" && rightGTIN != "" {
+		if leftISBN, rightISBN := scalar(a, "isbn"), scalar(b, "isbn"); leftISBN != "" && rightISBN != "" && leftISBN != rightISBN {
+			return false
+		}
+		// Independent feeds can assign different local SKUs to one trade item.
+		// A validated global identity is stronger; conflicting prices still survive
+		// deduplication and are rejected by the existing offer selection.
+		return leftGTIN == rightGTIN
+	}
 	for _, key := range []string{"sku", "gtin", "gtin13", "productID", "isbn"} {
 		if x, y := scalar(a, key), scalar(b, key); x != "" && y != "" {
 			return x == y

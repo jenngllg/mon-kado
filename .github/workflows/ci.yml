@@ -62,6 +62,8 @@ jobs:
         run: |
           PYTHONPATH="$GITHUB_WORKSPACE/src/Operations.Performance" python3 -m unittest discover -s tests/Operations.PerformanceTests
           node --experimental-vm-modules --test tests/Operations.PerformanceTests/test_scenarios.mjs
+      - name: Test guarded Cloudflare fetch and local browser relay contracts
+        run: node --test src/Tools.CloudflareWishImport/*.test.mjs
       - name: Test backup installer in a private native mount namespace
         run: |
           sudo env MONKADO_NATIVE_BACKUP_INSTALL_TESTS=1 \

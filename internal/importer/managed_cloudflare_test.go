@@ -70,7 +70,7 @@ func TestCloudflare_WhenPermanentOriginUsed_ConfinesSecretAndValidatesMerchantBe
 }
 
 func TestCloudflare_WhenPermanentBoundaryFails_RejectsWithoutDirectPageFallback(t *testing.T) {
-	for _, scenario := range []string{"invalid origin", "private provider DNS", "redirect", "rebound merchant"} {
+	for _, scenario := range []string{"invalid origin", "private provider DNS", "redirect", "rebound merchant", "rate limited"} {
 		t.Run(scenario, func(t *testing.T) {
 			// Arrange
 			direct := New()
@@ -96,6 +96,12 @@ func TestCloudflare_WhenPermanentBoundaryFails_RejectsWithoutDirectPageFallback(
 					if scenario == "redirect" {
 						r := relayResponse(302, "", "text/html")
 						r.Header.Set("Location", "https://attacker.example")
+						return r, nil
+					}
+					if scenario == "rate limited" {
+						r := relayResponse(502, "", "text/html")
+						r.Header.Set("X-MonKado-Origin-Status", "429")
+						r.Header.Set("X-MonKado-Origin-Retry-After", "60")
 						return r, nil
 					}
 					return relayResponse(200, "<title>Notebook</title>", "text/html"), nil

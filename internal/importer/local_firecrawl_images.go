@@ -34,7 +34,7 @@ func (c *LocalFirecrawl) GetImage(ctx context.Context, target *url.URL) ([]byte,
 	if deadline, ok := ctx.Deadline(); ok {
 		duration = min(duration, time.Until(deadline)-firecrawlImageDecodeReserve)
 	}
-	if duration < time.Second {
+	if duration < firecrawlMinimumTransferBudget {
 		return nil, errors.New("development image budget is unavailable")
 	}
 	budget, cancel := context.WithTimeout(ctx, duration)
@@ -50,7 +50,7 @@ func (c *LocalFirecrawl) GetImage(ctx context.Context, target *url.URL) ([]byte,
 	}
 	deadline, _ := budget.Deadline()
 	remaining := time.Until(deadline)
-	if remaining < time.Second {
+	if remaining < firecrawlMinimumTransferBudget {
 		return nil, errors.New("development image budget is unavailable")
 	}
 	body, _ := json.Marshal(firecrawlRequest{URL: clean.String(), Formats: []string{"rawBase64"}, OnlyMainContent: false, Proxy: "auto", Timeout: max(1000, remaining.Milliseconds()-250), SkipTLSVerification: false, Location: firecrawlLocation{Country: "FR", Languages: []string{"fr-FR", "fr"}}})

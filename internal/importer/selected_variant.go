@@ -7,9 +7,9 @@ import (
 	"golang.org/x/net/html"
 )
 
-// The selected HTML option can disambiguate structured variants even when their
-// URLs are identical. Read passive selection state, never run page JavaScript or
-// infer a variant from its position or price. Query-selected URLs retain priority.
+// The page's selected option can identify its representative image even when
+// variant URLs are identical. Price decisions retain the unselected variants;
+// markup is passive and query-selected URLs retain priority.
 func selectedMarkupVariant(root *html.Node, product map[string]any, base, canonical *url.URL) map[string]any {
 	variants := groupVariants(product, base, canonical)
 	if !schemaKind(product["@type"], "ProductGroup") || len(variants) < 2 || base.RawQuery != "" {

@@ -13,7 +13,7 @@ func TestExtract_WhenCapacityVaries_RequiresAnIdentifiedVariant(t *testing.T) {
 	for _, tc := range []struct{ name, query, selection, want string }{
 		{"placeholder leaves price empty", "", `<select><option selected>Choose capacity</option><option>30 ml</option><option>150 ml</option></select>`, ""},
 		{"URL selects capacity", "?capacity=150", "", "27"},
-		{"explicit control selects capacity", "", `<select><option>30 ml</option><option selected>150 ml</option></select>`, "27"},
+		{"page default does not select capacity in URL", "", `<select><option>30 ml</option><option selected>150 ml</option></select>`, ""},
 		{"URL takes priority over default control", "?capacity=150", `<select><option selected>30 ml</option><option>150 ml</option></select>`, "27"},
 		{"unknown capacity is not guessed", "?capacity=75", `<select><option selected>30 ml</option><option>150 ml</option></select>`, ""},
 	} {

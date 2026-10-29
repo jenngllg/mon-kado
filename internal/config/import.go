@@ -27,8 +27,14 @@ type ImportOptions struct {
 	LocalFirecrawlEnabled                                             bool
 	LocalFirecrawlKey                                                 string
 	LocalFirecrawlProductEnabled                                      bool
+	LocalFirecrawlRollingEnabled                                      bool
+	LocalFirecrawlKeylessEnabled                                      bool
+	LocalFirecrawlKeylessImagesEnabled                                bool
+	LocalFirecrawlAccountImageFallbackEnabled                         bool
 	LocalCloudflareImagesEnabled                                      bool
 	LocalFirecrawlImagesEnabled                                       bool
+	LocalCloudflareRenderEnabled                                      bool
+	LocalCloudflareRenderOrigin, LocalCloudflareRenderKey             string
 	Timeout                                                           time.Duration
 	MaximumHTMLBytes, MaximumRedirects, PermitLimit                   int
 }
@@ -99,6 +105,23 @@ func loadImports() (ImportOptions, error) {
 			return options, errors.New("WISH_IMPORT_LOCAL_CLOUDFLARE_KEY must be a 32-byte hexadecimal secret")
 		}
 	}
+	options.LocalCloudflareRenderEnabled, err = strconv.ParseBool(value("WISH_IMPORT_LOCAL_CLOUDFLARE_RENDER_ENABLED", "false"))
+	if err != nil {
+		return options, errors.New("WISH_IMPORT_LOCAL_CLOUDFLARE_RENDER_ENABLED must be a boolean")
+	}
+	if options.LocalCloudflareRenderEnabled {
+		if value("APP_ENV", "local") != "local" || !options.ManagedProvidersEnabled {
+			return options, errors.New("Cloudflare browser rendering requires local managed imports")
+		}
+		options.LocalCloudflareRenderOrigin, err = NormalizeCloudflareRenderOrigin(os.Getenv("WISH_IMPORT_LOCAL_CLOUDFLARE_RENDER_ORIGIN"))
+		if err != nil {
+			return options, err
+		}
+		options.LocalCloudflareRenderKey = os.Getenv("WISH_IMPORT_LOCAL_CLOUDFLARE_RENDER_KEY")
+		if !regexp.MustCompile(`^[a-f0-9]{64}$`).MatchString(options.LocalCloudflareRenderKey) {
+			return options, errors.New("Cloudflare browser rendering requires a 32-byte hexadecimal secret")
+		}
+	}
 	options.LocalFirecrawlEnabled, err = strconv.ParseBool(value("WISH_IMPORT_LOCAL_FIRECRAWL_ENABLED", "false"))
 	if err != nil {
 		return options, errors.New("WISH_IMPORT_LOCAL_FIRECRAWL_ENABLED must be a boolean")
@@ -111,6 +134,34 @@ func loadImports() (ImportOptions, error) {
 		if !regexp.MustCompile(`^fc-[A-Za-z0-9_-]{16,256}$`).MatchString(options.LocalFirecrawlKey) {
 			return options, errors.New("FIRECRAWL_API_KEY is required for the development fallback")
 		}
+	}
+	options.LocalFirecrawlRollingEnabled, err = strconv.ParseBool(value("WISH_IMPORT_LOCAL_FIRECRAWL_ROLLING_ENABLED", "false"))
+	if err != nil {
+		return options, errors.New("WISH_IMPORT_LOCAL_FIRECRAWL_ROLLING_ENABLED must be a boolean")
+	}
+	if options.LocalFirecrawlRollingEnabled && (value("APP_ENV", "local") != "local" || !options.FirecrawlEnabled && !options.LocalFirecrawlEnabled) {
+		return options, errors.New("rolling Firecrawl admission requires a local authenticated fallback")
+	}
+	options.LocalFirecrawlKeylessEnabled, err = strconv.ParseBool(value("WISH_IMPORT_LOCAL_FIRECRAWL_KEYLESS_ENABLED", "false"))
+	if err != nil {
+		return options, errors.New("WISH_IMPORT_LOCAL_FIRECRAWL_KEYLESS_ENABLED must be a boolean")
+	}
+	if options.LocalFirecrawlKeylessEnabled && (value("APP_ENV", "local") != "local" || !options.FirecrawlEnabled && !options.LocalFirecrawlEnabled) {
+		return options, errors.New("keyless Firecrawl requires a local authenticated fallback")
+	}
+	options.LocalFirecrawlKeylessImagesEnabled, err = strconv.ParseBool(value("WISH_IMPORT_LOCAL_FIRECRAWL_KEYLESS_IMAGES_ENABLED", "false"))
+	if err != nil {
+		return options, errors.New("WISH_IMPORT_LOCAL_FIRECRAWL_KEYLESS_IMAGES_ENABLED must be a boolean")
+	}
+	if options.LocalFirecrawlKeylessImagesEnabled && (value("APP_ENV", "local") != "local" || !options.LocalFirecrawlKeylessEnabled) {
+		return options, errors.New("keyless Firecrawl images require the local keyless fallback")
+	}
+	options.LocalFirecrawlAccountImageFallbackEnabled, err = strconv.ParseBool(value("WISH_IMPORT_LOCAL_FIRECRAWL_ACCOUNT_IMAGE_FALLBACK_ENABLED", "false"))
+	if err != nil {
+		return options, errors.New("WISH_IMPORT_LOCAL_FIRECRAWL_ACCOUNT_IMAGE_FALLBACK_ENABLED must be a boolean")
+	}
+	if options.LocalFirecrawlAccountImageFallbackEnabled && (value("APP_ENV", "local") != "local" || !options.LocalFirecrawlKeylessImagesEnabled) {
+		return options, errors.New("account image recovery requires local keyless images")
 	}
 	for _, setting := range []struct {
 		key    string
@@ -150,6 +201,15 @@ func loadImports() (ImportOptions, error) {
 		*setting.Target = number
 	}
 	return options, nil
+}
+
+// NormalizeCloudflareRenderOrigin permits only the dedicated local browser Worker.
+func NormalizeCloudflareRenderOrigin(value string) (string, error) {
+	u, err := url.Parse(value)
+	if err != nil || u.Scheme != "https" || u.User != nil || u.Port() != "" || u.ForceQuery || u.RawQuery != "" || u.Fragment != "" || u.RawFragment != "" || u.Path != "" && u.Path != "/" || !regexp.MustCompile(`^monkado-wish-render-local\.[a-z0-9-]+\.workers\.dev$`).MatchString(u.Host) {
+		return "", errors.New("Cloudflare browser origin must be the dedicated local HTTPS Worker")
+	}
+	return "https://" + u.Host, nil
 }
 
 // NormalizeCloudflareRelayOrigin restricts the configured provider to its dedicated HTTPS Worker authority.

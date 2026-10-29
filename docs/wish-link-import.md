@@ -13,10 +13,48 @@ select an explicitly matching product/offer URL or SKU, never a cheapest or firs
 ambiguous variant. Equal variant prices, concrete offers, single-price aggregate
 offers and active price specifications are supported without rounding or converting
 foreign currencies. A range remains unset rather than becoming a guessed price.
+Passive serialized variant data can supply an otherwise missing price only when
+one product variant matches the requested URL and name, no multiple page choice
+is visible, and the amount is corroborated beside the product heading.
+When no structured product or price is available, a uniquely marked visible
+euro price near a matching product heading can also be used. Conflicting values,
+starting prices, product choice controls, old prices and linked or separate
+recommendations are not used to infer that price.
+When an aggregate starting price is displayed beside an explicitly unselected
+size, the preview keeps the price empty without requesting another provider just
+to guess it. The complete name and image can be reused by the bounded cache.
+An explicitly displayed starting price also remains empty when metadata reports
+the minimum as a concrete price for an unconfigured product.
+The same safeguard applies when a clearly marked price alongside the product
+heading disagrees with the structured price.
+Multiple explicit, differently priced offers without a URL selection are likewise
+kept unset and do not trigger a provider request solely to choose a price.
+A page's default selection does not establish the user's choice when the link
+identifies no variant; an incomplete price set can still be retried by a provider.
+For ambiguous product/group identity, standard `utm_*`, `gclid` and `fbclid`
+tracking parameters do not prevent recovery of the shared name and image. Other
+query parameters may select a variant and remain subject to the usual selection rules.
 Up to three ordered product-image candidates are downloaded and normalized inside
 the existing budget; an image for a different selected variant is not substituted.
 There are no hostname-specific selectors or external storefront
 catalogues. Missing or ambiguous information remains available for manual entry.
+
+For long galleries, the selected product's primary picture remains first; an
+explicit Open Graph/Twitter preview is considered before the remaining gallery.
+This keeps alternate, optimized preview URLs inside the three-download budget.
+For an explicitly colored Product linked to a ProductGroup, a unique visible
+high-priority product image may instead represent that selected color more
+accurately than the group's structured gallery; ambiguous markup is ignored.
+Responsive image descriptors retain commas inside URLs. When image metadata is
+missing, a unique preloaded responsive image may be used only if its path
+explicitly identifies the selected variant from the request.
+
+The optional local browser experiment is documented in
+`src/Tools.CloudflareWishImport/README.md`. It can recover dynamic public markup
+and one declared picture after fast Cloudflare fetch, before Firecrawl, while
+retaining the existing eight-second server / ten-second form ceilings. It is
+default-off and independently refused in production. This does not change the
+production workflow or establish a new 99-merchant success rate.
 
 JSON-LD offers, images, variants and price specifications can reference entities
 declared elsewhere in the same document, including another JSON-LD script.
@@ -58,6 +96,21 @@ production activation. The provider authority is fixed to `api.firecrawl.dev`;
 its POST uses the public DNS/IP-pinned transport without process proxies or
 redirects. No merchant cookie, header, credential or URL fragment is forwarded.
 The raw HTML uses the same generic parser and pinned image pipeline.
+Page requests explicitly accept Firecrawl cache entries up to 47 hours,
+49 minutes and 50 seconds old, leaving room within Jenn's 48-hour preference
+for the local preview cache and the bounded provider transfer;
+this limits stale product prices compared with Firecrawl's two-day default.
+Image requests retain their existing cache behavior. Cached Firecrawl requests
+may still consume credits, independently of MonKado's own preview cache.
+
+The optional `WISH_IMPORT_LOCAL_FIRECRAWL_ROLLING_ENABLED` experiment allows
+bursts while bounding starts to ten per rolling minute within one API process.
+It requires an authenticated Firecrawl fallback and is rejected in production.
+This process-local guard does not coordinate other processes or account users;
+provider rate limits and the remaining credit balance still apply.
+When this local experiment and authenticated image recovery are both enabled,
+the account image provider makes at most one attempt per preview after the
+other image sources fail. A separate page request may also consume credits.
 `WISH_IMPORT_LOCAL_FIRECRAWL_PRODUCT_ENABLED=true` additionally requests the
 deterministic `product` format in that same call. Product URL identity, exact EUR
 amounts, variant agreement and existing ambiguous offers are checked locally;
@@ -74,7 +127,10 @@ for the whole form analysis. Cloudflare has at most two seconds including its
 single transient retry; the initial image phase uses at most one second. The
 single Firecrawl page POST uses at most six seconds inside the remaining shared
 deadline, reserving one second for images. Raw HTML and product enrichment use
-the same budget. Former twenty/thirty-five-second overrides are rejected.
+the same budget. When a local browser renderer is enabled and only a usable
+price is missing, its attempt is capped at four seconds and reserves up to
+three seconds of the remaining budget for the configured final fallback. Former twenty/thirty-five-second
+overrides are rejected.
 
 Both create and edit forms debounce input for 250 ms and cap the complete operation
 at another 9,750 ms, including authentication refresh, response handling and image
@@ -85,6 +141,55 @@ late results cannot replace subsequent edits. Blob URLs are released on failure
 or cancellation and transferred explicitly on success. Historical audits using
 the former 20/35-second budgets remain archived; their coverage is not evidence
 of the shorter deadline's current live success rate.
+
+Complete previews and previews with a confirmed ambiguous price, name and image
+can normally be reused from a process-local cache for ten minutes after retrieval.
+In managed production mode or with local rolling admission enabled, a price supplied by Firecrawl can
+instead be reused until its confirmed capture time plus 48 hours, less ten seconds.
+For `cacheState: hit`, a valid non-future `cachedAt` supplies that capture time;
+for `miss`, the request's start is used. A missing, invalid, future or unknown
+cache timestamp retains the ten-minute lifetime, and a reported timestamp already
+outside the limit is rejected. Prices obtained from the initial Cloudflare page
+or local Cloudflare browser are reusable for up to 48 hours from the beginning
+of the observation, less ten seconds; this bounds MonKado's own cache age but
+cannot establish the age of an upstream merchant or CDN response. When such a
+price has been in MonKado's cache for ten minutes, the same editable-price
+advisory is added on cache hits. Ambiguous prices retain the ordinary lifetime.
+Firecrawl's requested maximum age leaves
+room for the ordinary cache and bounded transfer within the selected 48-hour
+limit, provided the provider honors its cache metadata. Merchant prices may
+change during this period. In adaptive mode, when the first page already provides a name and a
+usable or explicitly ambiguous price, its free image path can take up to two
+seconds before the browser or paid page fallback is used. This budget is reduced
+when needed to reserve three seconds for an available final page provider. It
+adds no paid request and does not extend the overall import deadline.
+When adaptive mode supplies the price through the managed fallback, the form
+keeps the editable value and displays an advisory that it may be up to 48 hours
+old. The advisory is retained on cache hits and does not make an otherwise
+complete preview ineligible for reuse.
+The expiry does not slide on access. The cache holds at
+most 128 entries and sixteen MiB of accounted payload, with least-recently-used
+eviction; URL strings are not stored as keys. Each request still validates the
+current public DNS set before lookup, preserves its exact query and returned URL,
+and receives independent mutable response fields. In the adaptive cache,
+normalized image bytes are stored without their base64 representation and are
+encoded again on a cache hit; the same sixteen-MiB bound applies to the binary
+payload. The ordinary cache is unchanged. The cache ignores fragments,
+normalizes hostname casing and omits an explicit default port; path and query
+remain exact because they can select different products or variants. Other partial previews and
+provider errors are not cached. Concurrent requests for the same uncached URL share one
+provider operation; a waiting caller can cancel independently, and an owner's
+cancellation releases the key for another caller. Waiting, retrieval and image
+processing stay inside each caller's existing eight-second budget. This reduces
+duplicate provider requests without claiming to unblock a refused first access.
+
+Duplicate structured product descriptions may use different publisher-local SKUs.
+The parser can reconcile them using a matching GTIN with a valid GS1 check digit,
+including GTIN-8/12/13/14 and exact decimal JSON numbers. The identifier may be on
+the product or consistently identify every direct offer; missing or conflicting
+offer identities never select an unchosen variant. Conflicting GTINs and ISBNs
+remain distinct, and merged offer price disagreements remain unavailable. This
+uses standard structured data only and performs no additional merchant requests.
 
 The generic parser also recognizes named Schema.org entities connected to typed
 offers, including books, recordings, services and events. It excludes catalogues,
@@ -154,6 +259,15 @@ applies only to local testing, not production qualification.
 The final page provider receives one POST without transparent retries, capped at
 six seconds inside the eight-second server preview. Page and image admission
 waits consume that same deadline; requests that cannot fit return partial fields.
+Canceled admission waiters do not reserve future starts. A shared cancellable
+gate commits the 6.1-second pacing interval only when a request has a usable
+transfer budget and can actually begin. Account cooldown and the two-request
+in-flight limit still apply to both page and image calls.
+If the primary document already supplied the name and exact price, a missing
+image is requested as bounded original bytes before spending another provider
+call on rendering the known product text. Missing text still prioritizes page
+metadata; invalid image bytes still permit a page-based alternative within the
+same overall deadline. No known primary name or price is overwritten.
 HTML is capped at four MiB and the JSON envelope at six times that size
 to allow JSON escaping. Each provider can contribute at most three image download
 attempts. API starts are spaced by at least 6.1 seconds, with at most two in flight.
@@ -208,3 +322,10 @@ by optional Firecrawl original-image relay, and the ten-second form deadline. No
 experimental browser, CAPTCHA solver, merchant-specific parser or subscription
 upgrade is activated. The default configuration remains disabled until explicitly
 provisioned. All normal deployment backup/approval/quality gates still apply.
+
+The permanent relay client selects HTTP/1.1 before sending its request. Controlled
+manual comparisons found upstream HTTP 429 responses over HTTP/2 for documents
+that the same authenticated relay returned successfully over HTTP/1.1. This
+selection does not retry a refusal or change the user agent, provider authority,
+DNS pinning, public-address checks, TLS verification, redirects or deadlines.
+Other merchant and provider transports retain their existing HTTP/2 support.
