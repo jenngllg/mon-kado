@@ -6,6 +6,28 @@ import (
 	"testing"
 )
 
+func TestExtract_WhenMaintenancePageIsReturned_RejectsOnlyConfirmedOutage(t *testing.T) {
+	for _, tc := range []struct {
+		name, markup string
+		wantName     bool
+	}{
+		{"outage", `<title>Example - Maintenance</title><body>Malheureusement notre site n'est actuellement pas disponible.</body>`, false},
+		{"product about maintenance", `<title>Example - Maintenance</title><body>Guide pour la maintenance de votre vélo.</body>`, true},
+		{"unrelated unavailable text", `<title>Gift</title><body>Notre site n'est actuellement pas disponible.</body>`, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			// Arrange
+			base, _ := url.Parse("https://merchant.test/product")
+			// Act
+			result := importer.Extract([]byte(tc.markup), base)
+			// Assert
+			if (result.Name != nil) != tc.wantName {
+				t.Fatalf("unexpected product name: %v", result.Name)
+			}
+		})
+	}
+}
+
 func TestExtract_WhenPriceUsesAlternativeMetadata_RequiresUnambiguousEuroAmount(t *testing.T) {
 	for _, scenario := range []struct {
 		name, html, price string
@@ -72,6 +94,53 @@ func TestExtract_WhenPageIsExplicitBlockMessage_DoesNotSuggestErrorHeadingAsProd
 				t.Fatal("block page suggested as product")
 			}
 		})
+	}
+}
+
+func TestExtract_WhenInterstitialIsReturnedAsHTML_DoesNotSuggestChallengeAsProduct(t *testing.T) {
+	// Arrange
+	base, _ := url.Parse("https://merchant.example/product")
+	markup := `<html><head><noscript><title>Pardon Our Interruption</title></noscript><script>window.reeseSkipExpirationCheck = true; const isInterstitial = window.isImpervaSpaSupport;</script></head><body><h1>Pardon Our Interruption</h1></body></html>`
+	// Act
+	metadata := importer.Extract([]byte(markup), base)
+	// Assert
+	if metadata.Name != nil || metadata.Price != nil || metadata.Image != nil {
+		t.Fatalf("interstitial was suggested as product: %+v", metadata)
+	}
+}
+
+func TestExtract_WhenHeadingResemblesInterstitialWithoutMarker_PreservesProduct(t *testing.T) {
+	// Arrange
+	base, _ := url.Parse("https://merchant.example/product")
+	// Act
+	metadata := importer.Extract([]byte(`<h1>Pardon Our Interruption</h1>`), base)
+	// Assert
+	if metadata.Name == nil || *metadata.Name != "Pardon Our Interruption" {
+		t.Fatal("ordinary product heading was rejected")
+	}
+}
+
+func TestExtract_WhenFrenchBrowserVerificationPageIsReturned_DoesNotSuggestItsTitle(t *testing.T) {
+	// Arrange
+	base, _ := url.Parse("https://merchant.example/product")
+	markup := `<title>Vérification de sécurité | Boutique</title><h1>Vérification de votre navigateur ...</h1>`
+	// Act
+	metadata := importer.Extract([]byte(markup), base)
+	// Assert
+	if metadata.Name != nil || metadata.Price != nil || metadata.Image != nil {
+		t.Fatal("browser verification page became a product")
+	}
+}
+
+func TestExtract_WhenFrenchVerificationHeadingHasAnOrdinaryTitle_RetainsTitle(t *testing.T) {
+	// Arrange
+	base, _ := url.Parse("https://merchant.example/product")
+	markup := `<title>Guide de sécurité numérique</title><h1>Vérification de votre navigateur</h1>`
+	// Act
+	metadata := importer.Extract([]byte(markup), base)
+	// Assert
+	if metadata.Name == nil || *metadata.Name != "Guide de sécurité numérique" {
+		t.Fatal("ordinary page was mistaken for a verification interstitial")
 	}
 }
 

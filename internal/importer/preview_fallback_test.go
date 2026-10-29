@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/netip"
 	"net/url"
+	"slices"
 	"strings"
 	"testing"
 
@@ -24,6 +25,40 @@ func (s fallbackPage) CanHandle(*url.URL) bool { return true }
 func (s fallbackPage) Get(ctx context.Context, u *url.URL) (importer.Metadata, error) {
 	return s.get(ctx, u)
 }
+
+func TestPreview_WhenProvidersReturnEmptyDocuments_ReportsPageUnavailable(t *testing.T) {
+	for _, test := range []struct {
+		name                      string
+		primaryName, fallbackName *string
+		wantUnavailable           bool
+	}{
+		{name: "both empty", wantUnavailable: true},
+		{name: "primary name survives empty fallback", primaryName: stringPointer("Primary gift")},
+		{name: "fallback name survives empty primary", fallbackName: stringPointer("Fallback gift")},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			// Arrange
+			client := importer.New()
+			client.Resolver = resolverFake{[]netip.Addr{netip.MustParseAddr("8.8.8.8")}}
+			client.PageSource = fallbackPage{get: func(context.Context, *url.URL) (importer.Metadata, error) {
+				return importer.Metadata{Name: test.primaryName}, nil
+			}}
+			calls := 0
+			client.FallbackSource = fallbackPage{get: func(context.Context, *url.URL) (importer.Metadata, error) {
+				calls++
+				return importer.Metadata{Name: test.fallbackName}, nil
+			}}
+			// Act
+			result, err := client.Preview(t.Context(), "https://merchant.test/product")
+			// Assert
+			if err != nil || calls != 1 || slices.Contains(result.Warnings, "WISH_IMPORT_PAGE_UNAVAILABLE") != test.wantUnavailable {
+				t.Fatalf("unexpected page status: calls %d, warnings %v, error %v", calls, result.Warnings, err)
+			}
+		})
+	}
+}
+
+func stringPointer(value string) *string { return &value }
 
 func TestPreview_WhenPrimaryFailedOrPartial_UsesFinalProviderOnceAndPreservesAvailableFields(t *testing.T) {
 	for _, scenario := range []string{"blocked page", "missing price", "blocked image", "fallback unavailable", "complete primary"} {

@@ -93,14 +93,66 @@ func TestPreview_WhenCompleteProductIsRepeated_UsesIsolatedCacheAndRevalidatesDN
 	}
 }
 
-func TestPreview_WhenCacheExpires_RefreshesAtTwoMinutesWithoutSlidingExpiry(t *testing.T) {
+func TestPreview_WhenPrimaryPageContainsUnstructuredPrice_AvoidsFallback(t *testing.T) {
+	// Arrange
+	client, page, _ := cachedPreviewFixture(t, time.Now)
+	page.get = func(ctx context.Context, target *url.URL) (importer.Metadata, error) {
+		markup := `<meta property="og:title" content="Green ceramic mug"><meta property="og:image" content="https://merchant.test/photo"><main><h1>Green ceramic mug</h1><span class="product-price">12,50 €</span></main>`
+		return importer.Extract([]byte(markup), target), ctx.Err()
+	}
+	fallbackCalls := 0
+	client.FallbackSource = fallbackPage{get: func(context.Context, *url.URL) (importer.Metadata, error) {
+		fallbackCalls++
+		return importer.Metadata{}, errors.New("unexpected fallback")
+	}}
+
+	// Act
+	result, err := client.Preview(t.Context(), "https://merchant.test/product")
+
+	// Assert
+	if err != nil || result.Name == nil || result.Price == nil || result.Price.String() != "12.5" || result.Image == nil || fallbackCalls != 0 {
+		t.Fatalf("primary page did not provide a complete preview without the fallback: %v", err)
+	}
+}
+
+func TestPreview_WhenOnlyAuthoritySpellingChanges_ReusesCacheWithoutMergingVariants(t *testing.T) {
+	for _, scenario := range []struct {
+		name      string
+		first     string
+		second    string
+		wantCalls int32
+	}{
+		{"HTTPS hostname and default port", "https://merchant.test/product?variant=blue", "https://MERCHANT.TEST:443/product?variant=blue#image", 1},
+		{"HTTP hostname and default port", "http://merchant.test/product", "http://MERCHANT.TEST:80/product", 1},
+		{"different schemes", "http://merchant.test/product", "https://merchant.test/product", 2},
+		{"different selected variants", "https://merchant.test/product?variant=blue", "https://MERCHANT.TEST:443/product?variant=red", 2},
+		{"different query order", "https://merchant.test/product?a=1&b=2", "https://MERCHANT.TEST:443/product?b=2&a=1", 2},
+		{"different encoded paths", "https://merchant.test/product%2Fblue", "https://MERCHANT.TEST:443/product/blue", 2},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
+			// Arrange
+			client, page, _ := cachedPreviewFixture(t, time.Now)
+			// Act
+			first, err := client.Preview(t.Context(), scenario.first)
+			requireCompleteCachedPreview(t, first, err)
+			second, err := client.Preview(t.Context(), scenario.second)
+			// Assert
+			requireCompleteCachedPreview(t, second, err)
+			if page.calls.Load() != scenario.wantCalls || second.Url == nil || *second.Url != scenario.second {
+				t.Fatal("cache confused product identity or changed the caller's URL")
+			}
+		})
+	}
+}
+
+func TestPreview_WhenCacheExpires_RefreshesAtTenMinutesWithoutSlidingExpiry(t *testing.T) {
 	// Arrange
 	now := time.Date(2026, 10, 28, 12, 0, 0, 0, time.UTC)
 	client, page, _ := cachedPreviewFixture(t, func() time.Time { return now })
 	// Act
 	first, err := client.Preview(t.Context(), "https://merchant.test/product")
 	requireCompleteCachedPreview(t, first, err)
-	now = now.Add(119 * time.Second)
+	now = now.Add(599 * time.Second)
 	second, err := client.Preview(t.Context(), "https://merchant.test/product")
 	requireCompleteCachedPreview(t, second, err)
 	if page.calls.Load() != 1 {
@@ -116,7 +168,7 @@ func TestPreview_WhenCacheExpires_RefreshesAtTwoMinutesWithoutSlidingExpiry(t *t
 }
 
 func TestPreview_WhenProductIsPartialOrUnavailable_DoesNotCacheIt(t *testing.T) {
-	for _, missing := range []string{"name", "price", "image", "page"} {
+	for _, missing := range []string{"name", "price", "image", "page", "ambiguous image", "unsupported currency"} {
 		t.Run(missing, func(t *testing.T) {
 			// Arrange
 			client, page, picture := cachedPreviewFixture(t, time.Now)
@@ -132,6 +184,11 @@ func TestPreview_WhenProductIsPartialOrUnavailable_DoesNotCacheIt(t *testing.T) 
 					picture.content = []byte("<svg/>")
 				case "page":
 					return importer.Metadata{}, errors.New("merchant unavailable")
+				case "ambiguous image":
+					metadata.Price, metadata.PriceAmbiguous = nil, true
+					picture.content = []byte("<svg/>")
+				case "unsupported currency":
+					metadata.Price, metadata.UnsupportedCurrency = nil, true
 				}
 				return metadata, err
 			}
@@ -147,6 +204,45 @@ func TestPreview_WhenProductIsPartialOrUnavailable_DoesNotCacheIt(t *testing.T) 
 				t.Fatal("a partial or unavailable product prevented another actual attempt")
 			}
 		})
+	}
+}
+
+func TestPreview_WhenPriceIsExplicitlyAmbiguous_CachesOnlyUntilExpiry(t *testing.T) {
+	// Arrange
+	now := time.Date(2026, 10, 28, 12, 0, 0, 0, time.UTC)
+	client, page, picture := cachedPreviewFixture(t, func() time.Time { return now })
+	original := page.get
+	page.get = func(ctx context.Context, target *url.URL) (importer.Metadata, error) {
+		metadata, err := original(ctx, target)
+		metadata.Price = nil
+		metadata.PriceAmbiguous = true
+		return metadata, err
+	}
+	assertAmbiguous := func(result domain.WishImportPreview, err error) {
+		t.Helper()
+		if err != nil || result.Name == nil || result.Image == nil || result.Price != nil || len(result.Warnings) != 1 || result.Warnings[0] != "WISH_IMPORT_PRICE_UNAVAILABLE" {
+			t.Fatalf("ambiguous preview changed: %v, warnings %v", err, result.Warnings)
+		}
+	}
+
+	// Act
+	first, err := client.Preview(t.Context(), "https://merchant.test/product")
+	assertAmbiguous(first, err)
+	*first.Name = "Changed draft"
+	first.Warnings[0] = "changed"
+	now = now.Add(599 * time.Second)
+	second, err := client.Preview(t.Context(), "https://merchant.test/product")
+	assertAmbiguous(second, err)
+
+	// Assert
+	if *second.Name != "Notebook" || page.calls.Load() != 1 || picture.calls.Load() != 1 {
+		t.Fatal("cached ambiguous result was mutated or provider was called again")
+	}
+	now = now.Add(time.Second)
+	third, err := client.Preview(t.Context(), "https://merchant.test/product")
+	assertAmbiguous(third, err)
+	if page.calls.Load() != 2 || picture.calls.Load() != 2 {
+		t.Fatal("ambiguous preview did not expire")
 	}
 }
 

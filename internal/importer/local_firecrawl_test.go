@@ -47,6 +47,37 @@ func TestLocalFirecrawl_WhenProductRedirectsToStorefront_DoesNotImportStoreName(
 	}
 }
 
+func TestLocalFirecrawl_WhenProductRedirectsToAnErrorPage_DoesNotImportErrorTitle(t *testing.T) {
+	for _, tc := range []struct {
+		name, final string
+		wantName    bool
+	}{
+		{"unavailable page", "https://shop.merchant.fr/fr/page-indisponible", false},
+		{"not found page", "https://shop.merchant.fr/not-found.html", false},
+		{"localized unavailable product", "https://shop.merchant.fr/produit-introuvable", false},
+		{"normal product redirect", "https://shop.merchant.fr/new-product", true},
+		{"product slug contains a term", "https://shop.merchant.fr/product-unavailable-art-print", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			// Arrange
+			calls := 0
+			client := firecrawlFixture(t, func(context.Context, *url.URL, string, io.Reader, http.Header) (*http.Response, error) {
+				calls++
+				return firecrawlDocument(`<title>Page indisponible | Store</title>`, "https://shop.merchant.fr/item", tc.final, 200), nil
+			})
+			target, _ := url.Parse("https://shop.merchant.fr/item")
+
+			// Act
+			result, err := client.Get(t.Context(), target)
+
+			// Assert
+			if err != nil || calls != 1 || (result.Name != nil) != tc.wantName || result.Price != nil || result.Image != nil {
+				t.Fatal("redirected document was not handled as expected")
+			}
+		})
+	}
+}
+
 func TestLocalFirecrawl_WhenDocumentReturned_AuthenticatesOnlyToFixedProviderAndParsesRawHTML(t *testing.T) {
 	// Arrange
 	target, _ := url.Parse("http://shop.merchant.fr:80/product#private")
@@ -58,7 +89,7 @@ func TestLocalFirecrawl_WhenDocumentReturned_AuthenticatesOnlyToFixedProviderAnd
 			t.Fatal("provider boundary changed")
 		}
 		var input map[string]any
-		if json.NewDecoder(body).Decode(&input) != nil || len(input) != 7 || input["url"] != "https://shop.merchant.fr/product" || input["onlyMainContent"] != false || input["proxy"] != "auto" || input["timeout"].(float64) > 12000 || input["skipTlsVerification"] != false {
+		if json.NewDecoder(body).Decode(&input) != nil || len(input) != 8 || input["url"] != "https://shop.merchant.fr/product" || input["onlyMainContent"] != false || input["proxy"] != "auto" || input["timeout"].(float64) > 12000 || input["maxAge"] != float64((47*time.Hour+49*time.Minute+50*time.Second).Milliseconds()) || input["skipTlsVerification"] != false {
 			t.Fatal("raw HTML request changed")
 		}
 		location, ok := input["location"].(map[string]any)

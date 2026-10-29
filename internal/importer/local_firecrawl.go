@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -20,6 +21,18 @@ const firecrawlStartInterval = 6100 * time.Millisecond
 const firecrawlImageReserve = time.Second
 const firecrawlMinimumTransferBudget = time.Second
 
+// Leave room for the local preview cache and the bounded provider transfer
+// within the user-selected maximum age of 48 hours.
+const firecrawlPageMaxAge = maximumPriceFreshness - previewCacheLifetime - providerFreshnessSafety
+const keylessWindow = time.Minute
+const keylessWindowLimit = 10
+
+var (
+	errKeylessQuota     = errors.New("keyless fallback quota is unavailable")
+	errKeylessBusy      = errors.New("keyless fallback pacing is unavailable")
+	errKeylessTransient = errors.New("keyless fallback failed transiently")
+)
+
 type providerRequest func(context.Context, *url.URL, string, io.Reader, http.Header) (*http.Response, error)
 
 type firecrawlRequest struct {
@@ -28,6 +41,7 @@ type firecrawlRequest struct {
 	OnlyMainContent     bool              `json:"onlyMainContent"`
 	Proxy               string            `json:"proxy"`
 	Timeout             int64             `json:"timeout"`
+	MaxAge              int64             `json:"maxAge,omitempty"`
 	SkipTLSVerification bool              `json:"skipTlsVerification"`
 	Location            firecrawlLocation `json:"location"`
 }
@@ -51,6 +65,8 @@ type LocalFirecrawl struct {
 	admission               chan struct{}
 	mu                      sync.Mutex
 	nextStart, blockedUntil time.Time
+	rollingStarts           []time.Time
+	localRolling            bool
 	disabled                bool
 	product                 bool
 	pageBudget              time.Duration
@@ -61,6 +77,14 @@ type LocalFirecrawl struct {
 func NewLocalFirecrawlProduct(client *Client, key string, now func() time.Time) *LocalFirecrawl {
 	provider := NewLocalFirecrawl(client, key, now)
 	provider.product = true
+	return provider
+}
+
+// NewLocalFirecrawlRolling enables a bounded rolling admission window for a
+// local experiment. Page and image requests share the same account window.
+func NewLocalFirecrawlRolling(client *Client, key string, now func() time.Time, product bool) *LocalFirecrawl {
+	provider := NewLocalFirecrawl(client, key, now)
+	provider.localRolling, provider.product = true, product
 	return provider
 }
 
@@ -130,7 +154,7 @@ func (c *LocalFirecrawl) get(ctx context.Context, target *url.URL, includeProduc
 	}
 	body, _ := json.Marshal(firecrawlRequest{
 		URL: clean.String(), Formats: formats, OnlyMainContent: false, Proxy: "auto",
-		Timeout: max(1000, remaining.Milliseconds()-500), SkipTLSVerification: false,
+		Timeout: max(1000, remaining.Milliseconds()-500), MaxAge: firecrawlPageMaxAge.Milliseconds(), SkipTLSVerification: false,
 		// The app imports EUR amounts; the provider otherwise defaults to the US market.
 		Location: firecrawlLocation{Country: "FR", Languages: []string{"fr-FR", "fr"}},
 	})
@@ -139,6 +163,7 @@ func (c *LocalFirecrawl) get(ctx context.Context, target *url.URL, includeProduc
 		maximum = 4 * 1024 * 1024
 	}
 	// JSON escaping can expand raw HTML while its decoded size remains bounded.
+	started := c.now().UTC()
 	content, err := c.post(budget, body, 6*maximum)
 	if err != nil {
 		return Metadata{}, err
@@ -149,9 +174,11 @@ func (c *LocalFirecrawl) get(ctx context.Context, target *url.URL, includeProduc
 			RawHTML  string          `json:"rawHtml"`
 			Product  json.RawMessage `json:"product"`
 			Metadata struct {
-				Status    int    `json:"statusCode"`
-				SourceURL string `json:"sourceURL"`
-				URL       string `json:"url"`
+				Status     int    `json:"statusCode"`
+				SourceURL  string `json:"sourceURL"`
+				URL        string `json:"url"`
+				CacheState string `json:"cacheState"`
+				CachedAt   string `json:"cachedAt"`
 			} `json:"metadata"`
 		} `json:"data"`
 	}
@@ -177,13 +204,49 @@ func (c *LocalFirecrawl) get(ctx context.Context, target *url.URL, includeProduc
 	}
 	// The provider may follow a retired product URL to its storefront. Its title
 	// is not the requested item, even when the storefront responds with HTTP 200.
-	if (base.Path == "" || base.Path == "/") && clean.Path != "" && clean.Path != "/" {
+	if isNonProductRedirect(&clean, base) {
 		return Metadata{}, nil
 	}
+	var result Metadata
 	if includeProduct {
-		return ExtractFirecrawlProduct([]byte(envelope.Data.RawHTML), envelope.Data.Product, base, &clean), nil
+		result = ExtractFirecrawlProduct([]byte(envelope.Data.RawHTML), envelope.Data.Product, base, &clean)
+	} else {
+		result = Extract([]byte(envelope.Data.RawHTML), base)
 	}
-	return Extract([]byte(envelope.Data.RawHTML), base), nil
+	switch envelope.Data.Metadata.CacheState {
+	case "miss":
+		result.priceFreshUntil = started.Add(maximumPriceFreshness - providerFreshnessSafety)
+	case "hit":
+		cachedAt, parseErr := time.Parse(time.RFC3339Nano, envelope.Data.Metadata.CachedAt)
+		if parseErr == nil && !cachedAt.After(started) {
+			result.priceFreshUntil = cachedAt.UTC().Add(maximumPriceFreshness - providerFreshnessSafety)
+			if !result.priceFreshUntil.After(started) {
+				return Metadata{}, errors.New("development fallback cache is stale")
+			}
+		}
+	}
+	return result, nil
+}
+
+// A provider may follow a retired product to a successful HTML error page.
+// Restrict this guard to explicit destination names and actual path changes so
+// ordinary product redirects continue through the normal extraction checks.
+func isNonProductRedirect(requested, final *url.URL) bool {
+	if requested.Path == final.Path {
+		return false
+	}
+	path := strings.Trim(strings.ToLower(final.Path), "/")
+	if path == "" {
+		return requested.Path != "" && requested.Path != "/"
+	}
+	parts := strings.Split(path, "/")
+	last := strings.TrimSuffix(parts[len(parts)-1], ".html")
+	switch last {
+	case "404", "not-found", "page-not-found", "product-not-found", "page-unavailable", "product-unavailable", "page-indisponible", "produit-indisponible", "page-introuvable", "produit-introuvable":
+		return true
+	default:
+		return false
+	}
 }
 
 func (c *LocalFirecrawl) post(ctx context.Context, body []byte, maximum int) ([]byte, error) {
@@ -191,7 +254,9 @@ func (c *LocalFirecrawl) post(ctx context.Context, body []byte, maximum int) ([]
 	headers := make(http.Header)
 	headers.Set("Content-Type", "application/json")
 	headers.Set("Accept", "application/json")
-	headers.Set("Authorization", "Bearer "+c.key)
+	if c.key != "" {
+		headers.Set("Authorization", "Bearer "+c.key)
+	}
 	response, err := c.request(ctx, endpoint, http.MethodPost, bytes.NewReader(body), headers)
 	if err != nil {
 		if ctx.Err() != nil {
@@ -202,6 +267,12 @@ func (c *LocalFirecrawl) post(ctx context.Context, body []byte, maximum int) ([]
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusOK {
 		c.block(response.StatusCode, response.Header.Get("Retry-After"))
+		if c.key == "" && response.StatusCode == http.StatusTooManyRequests {
+			return nil, errKeylessQuota
+		}
+		if c.key == "" && (response.StatusCode == http.StatusRequestTimeout || response.StatusCode >= 500 && response.StatusCode <= 599) {
+			return nil, errKeylessTransient
+		}
 		return nil, errors.New("development fallback is unavailable")
 	}
 	media, _, _ := mime.ParseMediaType(response.Header.Get("Content-Type"))
@@ -228,12 +299,31 @@ func (c *LocalFirecrawl) admit(ctx context.Context) error {
 	c.mu.Lock()
 	now := c.now()
 	if c.disabled || now.Before(c.blockedUntil) {
+		quota := c.key == "" && now.Before(c.blockedUntil)
 		c.mu.Unlock()
+		if quota {
+			return errKeylessQuota
+		}
 		return errors.New("development fallback admission is unavailable")
 	}
 	start := maxTime(c.nextStart, now)
+	if c.key == "" || c.localRolling {
+		c.pruneRollingStarts(now)
+		start = now
+		if len(c.rollingStarts) >= keylessWindowLimit {
+			start = c.rollingStarts[0].Add(keylessWindow)
+		}
+	}
 	c.mu.Unlock()
 	if delay := start.Sub(now); delay > 0 {
+		if c.key == "" || c.localRolling {
+			if deadline, ok := ctx.Deadline(); ok && time.Until(deadline) < delay+2*firecrawlMinimumTransferBudget {
+				if c.key == "" {
+					return errKeylessBusy
+				}
+				return errors.New("development fallback pacing is unavailable")
+			}
+		}
 		if err := c.wait(ctx, delay); err != nil {
 			return err
 		}
@@ -242,6 +332,9 @@ func (c *LocalFirecrawl) admit(ctx context.Context) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.disabled || c.now().Before(c.blockedUntil) {
+		if c.key == "" && c.now().Before(c.blockedUntil) {
+			return errKeylessQuota
+		}
 		return errors.New("development fallback admission is unavailable")
 	}
 	if err := ctx.Err(); err != nil {
@@ -252,8 +345,26 @@ func (c *LocalFirecrawl) admit(ctx context.Context) error {
 	}
 	// Commit pacing only for work that can start. Canceled waiters never reserve
 	// future slots and cannot accumulate delays for unrelated previews.
-	c.nextStart = maxTime(start, c.now()).Add(firecrawlStartInterval)
+	if c.key == "" || c.localRolling {
+		c.pruneRollingStarts(c.now())
+		if len(c.rollingStarts) >= keylessWindowLimit {
+			if c.key == "" {
+				return errKeylessBusy
+			}
+			return errors.New("development fallback pacing is unavailable")
+		}
+		c.rollingStarts = append(c.rollingStarts, c.now())
+	} else {
+		c.nextStart = maxTime(start, c.now()).Add(firecrawlStartInterval)
+	}
 	return nil
+}
+
+// pruneRollingStarts is called only while holding c.mu.
+func (c *LocalFirecrawl) pruneRollingStarts(now time.Time) {
+	for len(c.rollingStarts) > 0 && !c.rollingStarts[0].Add(keylessWindow).After(now) {
+		c.rollingStarts = c.rollingStarts[1:]
+	}
 }
 
 func maxTime(a, b time.Time) time.Time {

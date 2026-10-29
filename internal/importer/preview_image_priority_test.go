@@ -12,6 +12,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/JennGllg/mon-kado/internal/importer"
 )
@@ -19,6 +20,25 @@ import (
 type priorityImageSource struct {
 	content []byte
 	order   *[]string
+}
+
+func TestPreview_WhenFreeImageSourceSucceeds_DoesNotUseAccountImageFallback(t *testing.T) {
+	// Arrange
+	client, _, picture := cachedPreviewFixture(t, time.Now)
+	var calls []string
+	client.FinalImageSource = importer.NewLocalSingleImageAttempt(priorityImageSource{order: &calls})
+	client.FallbackSource = fallbackPage{get: func(ctx context.Context, _ *url.URL) (importer.Metadata, error) {
+		return importer.Metadata{}, ctx.Err()
+	}}
+
+	// Act
+	result, err := client.Preview(t.Context(), "https://merchant.test/product")
+
+	// Assert
+	requireCompleteCachedPreview(t, result, err)
+	if picture.calls.Load() != 1 || len(calls) != 0 {
+		t.Fatal("a successful free image must not spend an account image request")
+	}
 }
 
 func (s priorityImageSource) GetImage(ctx context.Context, _ *url.URL) ([]byte, error) {

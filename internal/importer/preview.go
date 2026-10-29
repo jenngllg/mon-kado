@@ -26,9 +26,21 @@ type ImageSource interface {
 	GetImage(context.Context, *url.URL) ([]byte, error)
 }
 
+type previewImageSourceFactory interface {
+	newPreviewImageSource() ImageSource
+}
+
+const partialPriceRenderBudget = 4 * time.Second
+const fallbackReserve = 3 * time.Second
+const localCompleteTextImageBudget = 2 * time.Second
+
 // Preview downloads suggestions without persisting any resource or source image.
 func (c *Client) Preview(ctx context.Context, value string) (domain.WishImportPreview, error) {
 	result := domain.WishImportPreview{Url: &value, Quantity: 1, Warnings: []string{}}
+	var observedAt time.Time
+	if c.cache != nil && c.cache.adaptive {
+		observedAt = c.cache.now()
+	}
 	budget, cancel := context.WithTimeout(ctx, c.Timeout)
 	defer cancel()
 	validationErr := c.Validate(budget, value)
@@ -50,6 +62,8 @@ func (c *Client) Preview(ctx context.Context, value string) (domain.WishImportPr
 		}
 	}
 	var metadata Metadata
+	var priceFreshUntil time.Time
+	priceFromFallback := false
 	pageUnavailable, primaryUsed := false, false
 	if validationErr == nil {
 		original, _ := url.Parse(value)
@@ -79,37 +93,86 @@ func (c *Client) Preview(ctx context.Context, value string) (domain.WishImportPr
 		pageUnavailable = true
 	}
 	result.Name, result.Price = metadata.Name, metadata.Price
+	if result.Price != nil && !observedAt.IsZero() {
+		priceFreshUntil = observedAt.Add(maximumPriceFreshness - providerFreshnessSafety)
+	}
+	needsPrice := func() bool {
+		return result.Price == nil && !metadata.PriceAmbiguous && !metadata.UnsupportedCurrency
+	}
 	original, _ := url.Parse(value)
 	fallbackReady := primaryUsed && c.FallbackSource != nil && c.FallbackSource.CanHandle(original)
 	renderReady := primaryUsed && c.RenderedSource != nil && c.RenderedSource.CanHandle(original)
+	finalSource := c.FinalImageSource
+	if factory, ok := finalSource.(previewImageSourceFactory); ok {
+		finalSource = factory.newPreviewImageSource()
+	}
 	tried := make(map[string]bool)
 	finalTried := make(map[string]bool)
 	imageContext := budget
 	imageCancel := func() {}
 	if fallbackReady || renderReady {
 		// Reserve time for the final provider when a primary image host stalls.
-		imageContext, imageCancel = context.WithTimeout(budget, time.Second)
+		imageBudget := time.Second
+		if c.cache != nil && c.cache.adaptive && result.Name != nil && !needsPrice() && (metadata.Image != nil || len(metadata.Images) > 0) {
+			// When only the image is missing, allow the free image path more time
+			// before spending a browser session or another provider request.
+			imageBudget = localCompleteTextImageBudget
+			if deadline, ok := budget.Deadline(); fallbackReady && ok {
+				imageBudget = min(imageBudget, max(0, time.Until(deadline)-fallbackReserve))
+			}
+		}
+		imageContext, imageCancel = context.WithTimeout(budget, imageBudget)
 	}
 	result.Image = normalizePreviewImage(imageContext, metadata.ImageData)
 	if result.Image == nil {
-		result.Image = c.previewImage(imageContext, metadata, tried, nil)
+		result.Image = c.previewImage(imageContext, metadata, tried, nil, finalSource)
 	}
 	imageCancel()
-	if renderReady && budget.Err() == nil && (result.Name == nil || result.Price == nil || result.Image == nil) {
-		rendered, err := c.RenderedSource.Get(budget, original)
-		if err == nil {
+	if renderReady && budget.Err() == nil && (result.Name == nil || needsPrice() || result.Image == nil) {
+		renderContext := budget
+		renderCancel := func() {}
+		// Leave the fallback enough time even when the primary document has no
+		// usable fields. A stalled browser otherwise consumes the whole budget.
+		if deadline, ok := budget.Deadline(); fallbackReady && ok {
+			duration := time.Until(deadline) - fallbackReserve
+			if result.Name != nil && result.Image != nil && needsPrice() {
+				duration = min(duration, partialPriceRenderBudget)
+			}
+			if duration < 0 {
+				duration = 0
+			}
+			renderContext, renderCancel = context.WithTimeout(budget, duration)
+		}
+		rendered, err := c.RenderedSource.Get(renderContext, original)
+		renderCancel()
+		if err == nil && compatibleProductIdentity(metadata, rendered) {
 			pageUnavailable = false
+			if metadata.productIdentity == "" {
+				metadata.productIdentity = rendered.productIdentity
+			}
 			if result.Name == nil {
 				result.Name = rendered.Name
 			}
-			if result.Price == nil && !metadata.UnsupportedCurrency {
+			if needsPrice() {
 				result.Price = rendered.Price
+				if result.Price != nil && !observedAt.IsZero() {
+					priceFreshUntil = observedAt.Add(maximumPriceFreshness - providerFreshnessSafety)
+				}
+			}
+			if result.Price == nil {
+				metadata.PriceAmbiguous = metadata.PriceAmbiguous || rendered.PriceAmbiguous
 			}
 			metadata.UnsupportedCurrency = metadata.UnsupportedCurrency || rendered.UnsupportedCurrency
 			if result.Image == nil {
 				result.Image = normalizePreviewImage(budget, rendered.ImageData)
 				if result.Image == nil {
-					result.Image = c.previewImage(budget, rendered, tried, nil)
+					imageContext := budget
+					imageCancel := func() {}
+					if deadline, ok := budget.Deadline(); fallbackReady && ok {
+						imageContext, imageCancel = context.WithDeadline(budget, deadline.Add(-fallbackReserve))
+					}
+					result.Image = c.previewImage(imageContext, rendered, tried, nil, finalSource)
+					imageCancel()
 				}
 			}
 			// Later byte recovery must use the document that supplied the product.
@@ -119,12 +182,25 @@ func (c *Client) Preview(ctx context.Context, value string) (domain.WishImportPr
 			}
 		}
 	}
-	if fallbackReady && result.Image == nil && result.Name != nil && result.Price != nil && c.FinalImageSource != nil {
+	if fallbackReady && result.Image == nil && result.Name != nil && !needsPrice() {
 		// Known product text needs image bytes, not another rendered document.
 		// Spend the remaining short budget on the missing resource first.
-		result.Image = c.previewImage(budget, metadata, tried, finalTried)
+		imageContext := budget
+		imageCancel := func() {}
+		if c.cache != nil && c.cache.adaptive {
+			// The final image source can stall too. Keep time for a different
+			// image discovered by the page fallback in this local experiment.
+			if deadline, ok := budget.Deadline(); ok {
+				imageContext, imageCancel = context.WithDeadline(budget, deadline.Add(-fallbackReserve))
+			}
+		} else if finalSource == nil {
+			// Do not let a previously interrupted image consume the page fallback budget.
+			imageContext, imageCancel = context.WithTimeout(budget, 2*time.Second)
+		}
+		result.Image = c.previewImage(imageContext, metadata, tried, finalTried, finalSource)
+		imageCancel()
 	}
-	if fallbackReady && budget.Err() == nil && (result.Name == nil || result.Price == nil || result.Image == nil) {
+	if fallbackReady && budget.Err() == nil && (result.Name == nil || needsPrice() || result.Image == nil) {
 		var alternative Metadata
 		var err error
 		if html, ok := c.FallbackSource.(htmlPageSource); ok && metadata.Name == nil && metadata.Price == nil && metadata.Image == nil && len(metadata.Images) == 0 {
@@ -135,7 +211,7 @@ func (c *Client) Preview(ctx context.Context, value string) (domain.WishImportPr
 			alternative, err = c.FallbackSource.Get(budget, original)
 		}
 		finalMetadata := metadata
-		if err == nil {
+		if err == nil && compatibleProductIdentity(metadata, alternative) {
 			finalMetadata = alternative
 			if len(finalMetadata.Images) == 0 && finalMetadata.Image == nil {
 				finalMetadata.Images, finalMetadata.Image = metadata.Images, metadata.Image
@@ -144,17 +220,32 @@ func (c *Client) Preview(ctx context.Context, value string) (domain.WishImportPr
 			if result.Name == nil {
 				result.Name = alternative.Name
 			}
-			if result.Price == nil {
+			if needsPrice() {
 				result.Price = alternative.Price
-				metadata.UnsupportedCurrency = metadata.UnsupportedCurrency || alternative.UnsupportedCurrency
+				if result.Price != nil {
+					priceFreshUntil = alternative.priceFreshUntil
+					priceFromFallback = true
+				}
 			}
+			if result.Price == nil {
+				metadata.PriceAmbiguous = metadata.PriceAmbiguous || alternative.PriceAmbiguous
+			}
+			metadata.UnsupportedCurrency = metadata.UnsupportedCurrency || alternative.UnsupportedCurrency
 		}
 		if result.Image == nil && budget.Err() == nil {
-			result.Image = c.previewImage(budget, finalMetadata, tried, finalTried)
+			result.Image = normalizePreviewImage(budget, finalMetadata.ImageData)
+			if result.Image == nil {
+				result.Image = c.previewImage(budget, finalMetadata, tried, finalTried, finalSource)
+			}
 		}
 	}
 	if ctx.Err() != nil {
 		return result, ctx.Err()
+	}
+	// A successful HTTP response can still be an empty or blocked document.
+	// Treat it as unavailable when no suggestion survived the whole pipeline.
+	if result.Name == nil && result.Price == nil && result.Image == nil {
+		pageUnavailable = true
 	}
 	if pageUnavailable {
 		result.Warnings = append(result.Warnings, "WISH_IMPORT_PAGE_UNAVAILABLE")
@@ -172,13 +263,23 @@ func (c *Client) Preview(ctx context.Context, value string) (domain.WishImportPr
 		}
 		result.Warnings = append(result.Warnings, warning)
 	}
+	if priceFromFallback && c.cache != nil && c.cache.adaptive {
+		result.Warnings = append(result.Warnings, domain.WishImportPriceMayBeStale)
+	}
 	if c.cache != nil && validationErr == nil && budget.Err() == nil {
-		c.cache.put(key, result)
+		c.cache.put(key, result, metadata.PriceAmbiguous, priceFreshUntil)
 	}
 	return result, nil
 }
 
-func (c *Client) previewImage(ctx context.Context, metadata Metadata, tried, finalTried map[string]bool) *domain.WishImportImage {
+// A shared URL alone does not prove that two providers returned the same item.
+// Reject a mixture when both documents identify different global trade items;
+// missing identifiers remain inconclusive and do not prevent recovery.
+func compatibleProductIdentity(left, right Metadata) bool {
+	return left.productIdentity == "" || right.productIdentity == "" || left.productIdentity == right.productIdentity
+}
+
+func (c *Client) previewImage(ctx context.Context, metadata Metadata, tried, finalTried map[string]bool, finalSource ImageSource) *domain.WishImportImage {
 	candidates := metadata.Images
 	if len(candidates) == 0 && metadata.Image != nil {
 		candidates = []string{*metadata.Image}
@@ -188,13 +289,12 @@ func (c *Client) previewImage(ctx context.Context, metadata Metadata, tried, fin
 		if attempts == 3 || ctx.Err() != nil {
 			break
 		}
-		useFinal := finalTried != nil && c.FinalImageSource != nil && !finalTried[candidate]
+		useFinal := finalTried != nil && finalSource != nil && !finalTried[candidate]
 		if tried[candidate] && !useFinal {
 			continue
 		}
 		attempts++
 		if !tried[candidate] {
-			tried[candidate] = true
 			content, _, _, err := c.download(ctx, candidate, images.MaximumInputBytes, "image/jpeg,image/png,image/webp,image/avif")
 			if err == nil {
 				if picture := normalizePreviewImage(ctx, content); picture != nil {
@@ -212,12 +312,17 @@ func (c *Client) previewImage(ctx context.Context, metadata Metadata, tried, fin
 					}
 				}
 			}
+			// A short preliminary budget may expire before image sources run.
+			// Leave that candidate eligible when the remaining budget is available.
+			if ctx.Err() == nil {
+				tried[candidate] = true
+			}
 		}
 		if useFinal && ctx.Err() == nil {
 			finalTried[candidate] = true
 			target, err := url.Parse(candidate)
 			if err == nil && c.Validate(ctx, candidate) == nil {
-				content, err := c.FinalImageSource.GetImage(ctx, target)
+				content, err := finalSource.GetImage(ctx, target)
 				if err == nil {
 					if picture := normalizePreviewImage(ctx, content); picture != nil {
 						return picture

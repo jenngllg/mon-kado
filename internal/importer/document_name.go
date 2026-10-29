@@ -24,5 +24,6 @@ func siteBrandName(name string, root *html.Node, base *url.URL) bool {
 		return false
 	}
 	suffix, _ := publicsuffix.PublicSuffix(domain)
-	return name == normalize(strings.TrimSuffix(domain, "."+suffix))
+	return name == normalize(strings.TrimSuffix(domain, "."+suffix)) ||
+		name == normalize(domain) || name == normalize(base.Hostname())
 }

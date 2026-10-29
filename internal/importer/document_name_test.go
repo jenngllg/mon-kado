@@ -10,6 +10,9 @@ import (
 func TestExtract_WhenTitleIsOnlySiteBrand_DoesNotMaskProductName(t *testing.T) {
 	for _, tc := range []struct{ name, host, markup, want string }{
 		{"unloaded shell", "gift-shop.fr", `<title>Gift Shop</title><meta property="og:title" content="Gift Shop">`, ""},
+		{"registrable domain as title", "www.gift-shop.fr", `<title>gift-shop.fr</title>`, ""},
+		{"full host as title", "shop.gift-shop.fr", `<title>shop.gift-shop.fr</title>`, ""},
+		{"full domain with product heading", "www.gift-shop.fr", `<title>gift-shop.fr</title><h1>Ceramic lamp</h1>`, "Ceramic lamp"},
 		{"site metadata", "store.test", `<meta property="og:site_name" content="Example Brand"><meta property="og:title" content="Example Brand">`, ""},
 		{"real heading behind brand metadata", "gift-shop.fr", `<title>Gift Shop</title><meta property="og:title" content="Gift Shop"><h1>A personalised photo album</h1>`, "A personalised photo album"},
 		{"country suffix", "shop.example.co.uk", `<title>Example</title><h1>Ceramic workshop</h1>`, "Ceramic workshop"},

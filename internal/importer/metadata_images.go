@@ -11,6 +11,7 @@ import (
 )
 
 var variantLabel = regexp.MustCompile(`(?i)^\d+(?:[.,]\d+)?\s*(?:ml|cl|litres?|kg|g|cm|mm|oz)\b|^(?:taille|size)\s`)
+var safeVariantIdentifier = regexp.MustCompile(`^[A-Za-z0-9_-]{4,128}$`)
 
 func imageValues(value any) []string {
 	return collectImageValues(value, 0)
@@ -67,6 +68,9 @@ func imageCandidates(root *html.Node, base *url.URL, product map[string]any, nam
 	} else if unique(variantImages) != "" {
 		candidates = append(candidates, variantImages...)
 	}
+	if selected := priorityVariantImage(root, base, product); selected != "" {
+		candidates = append([]string{selected}, candidates...)
+	}
 	// Keep the selected product's primary picture first, but give the page's
 	// explicit preview image a chance before a long gallery consumes the budget.
 	var gallery []string
@@ -90,22 +94,7 @@ func imageCandidates(root *html.Node, base *url.URL, product map[string]any, nam
 				candidates = append(candidates, s)
 			}
 		}
-		type size struct {
-			url   string
-			width int
-		}
-		var sources []size
-		for _, part := range strings.Split(attr(n, "srcset"), ",") {
-			fields := strings.Fields(part)
-			if len(fields) == 2 {
-				width, _ := strconv.Atoi(strings.TrimSuffix(fields[1], "w"))
-				sources = append(sources, size{fields[0], width})
-			}
-		}
-		sort.SliceStable(sources, func(i, j int) bool { return sources[i].width > sources[j].width })
-		for _, s := range sources {
-			candidates = append(candidates, s.url)
-		}
+		candidates = append(candidates, widthImageSources(attr(n, "srcset"))...)
 	}
 	var result []string
 	seen := map[string]bool{}
@@ -119,7 +108,151 @@ func imageCandidates(root *html.Node, base *url.URL, product map[string]any, nam
 			}
 		}
 	}
+	// Invalid placeholders or branding are not usable product images. They
+	// must not prevent a separately verified selected-variant preload fallback.
+	if len(result) == 0 && name != nil {
+		if selected := preloadedSelectedImage(root, base); selected != "" {
+			result = append(result, selected)
+		}
+	}
 	return result
+}
+
+// Commas can occur inside an image URL; only a comma after a width descriptor
+// separates srcset candidates. Unsupported descriptor forms are ignored.
+func widthImageSources(srcset string) []string {
+	type source struct {
+		url   string
+		width int
+	}
+	var sources []source
+	for i, count := 0, 0; i < len(srcset) && count < 64; count++ {
+		for i < len(srcset) && (srcsetSpace(srcset[i]) || srcset[i] == ',') {
+			i++
+		}
+		start := i
+		for i < len(srcset) && !srcsetSpace(srcset[i]) {
+			i++
+		}
+		address := srcset[start:i]
+		for i < len(srcset) && srcsetSpace(srcset[i]) {
+			i++
+		}
+		start = i
+		for i < len(srcset) && !srcsetSpace(srcset[i]) && srcset[i] != ',' {
+			i++
+		}
+		descriptor := srcset[start:i]
+		for i < len(srcset) && srcsetSpace(srcset[i]) {
+			i++
+		}
+		validEnd := i == len(srcset) || srcset[i] == ','
+		for i < len(srcset) && srcset[i] != ',' {
+			i++
+		}
+		if !validEnd || !strings.HasSuffix(descriptor, "w") {
+			continue
+		}
+		width, err := strconv.Atoi(strings.TrimSuffix(descriptor, "w"))
+		if err == nil && width > 0 && address != "" {
+			sources = append(sources, source{address, width})
+		}
+	}
+	sort.SliceStable(sources, func(i, j int) bool {
+		if (sources[i].width <= 1600) != (sources[j].width <= 1600) {
+			return sources[i].width <= 1600
+		}
+		if sources[i].width > 1600 {
+			return sources[i].width < sources[j].width
+		}
+		return sources[i].width > sources[j].width
+	})
+	result := make([]string, 0, len(sources))
+	for _, item := range sources {
+		result = append(result, item.url)
+	}
+	return result
+}
+
+func srcsetSpace(value byte) bool {
+	return value == ' ' || value == '\t' || value == '\n' || value == '\r' || value == '\f'
+}
+
+// Only a single unique responsive preload explicitly containing the requested
+// variant identifier can stand in for missing product image metadata.
+func preloadedSelectedImage(root *html.Node, base *url.URL) string {
+	query, err := url.ParseQuery(base.RawQuery)
+	if err != nil || len(query["variant"]) != 1 || !safeVariantIdentifier.MatchString(query.Get("variant")) {
+		return ""
+	}
+	for key := range query {
+		if key != "variant" && !strings.HasPrefix(strings.ToLower(key), "utm_") && key != "gclid" && key != "fbclid" {
+			return ""
+		}
+	}
+	identifier := regexp.MustCompile(`(?:^|[^A-Za-z0-9])` + regexp.QuoteMeta(query.Get("variant")) + `(?:[^A-Za-z0-9]|$)`)
+	var found string
+	for _, link := range selectNodes(root, func(n *html.Node) bool {
+		return n.Data == "link" && token(attr(n, "rel"), "preload") && strings.EqualFold(attr(n, "as"), "image")
+	}) {
+		sources := widthImageSources(attr(link, "imagesrcset"))
+		if len(sources) == 0 {
+			continue
+		}
+		candidate := resolveImage(root, base, sources[0])
+		if candidate == nil || brandingImage(*candidate) {
+			continue
+		}
+		address, err := url.Parse(*candidate)
+		if err != nil || !identifier.MatchString(address.Path) {
+			continue
+		}
+		if found != "" && found != *candidate {
+			return ""
+		}
+		found = *candidate
+	}
+	return found
+}
+
+// A unique visible, high-priority product image can describe a selected color
+// more precisely than the parent group's structured gallery. Require both the
+// structured variant relationship and explicit markup signals before preferring it.
+func priorityVariantImage(root *html.Node, base *url.URL, product map[string]any) string {
+	group, ok := product["isVariantOf"].(map[string]any)
+	if !ok || !schemaKind(product["@type"], "Product") || !schemaKind(group["@type"], "ProductGroup") || scalar(product, "color") == "" || len(imageValues(product["image"])) == 0 {
+		return ""
+	}
+	var found string
+	for _, n := range selectNodes(root, func(n *html.Node) bool { return n.Data == "img" }) {
+		width, widthErr := strconv.Atoi(attr(n, "width"))
+		height, heightErr := strconv.Atoi(attr(n, "height"))
+		if !strings.EqualFold(attr(n, "fetchpriority"), "high") || !token(attr(n, "class"), "product") || widthErr != nil || heightErr != nil || width < 200 || height < 200 {
+			continue
+		}
+		if hiddenMarkup(n) {
+			continue
+		}
+		candidate := resolveImage(root, base, attr(n, "src"))
+		if candidate == nil || brandingImage(*candidate) {
+			continue
+		}
+		if found != "" && found != *candidate {
+			return ""
+		}
+		found = *candidate
+	}
+	return found
+}
+
+func hiddenMarkup(node *html.Node) bool {
+	for ancestor := node; ancestor != nil; ancestor = ancestor.Parent {
+		style := strings.ToLower(strings.Join(strings.Fields(attr(ancestor, "style")), ""))
+		if hasAttr(ancestor, "hidden") || token(attr(ancestor, "class"), "hidden") || strings.EqualFold(attr(ancestor, "aria-hidden"), "true") || strings.Contains(style, "display:none") || strings.Contains(style, "visibility:hidden") {
+			return true
+		}
+	}
+	return false
 }
 
 func brandingImage(value string) bool {

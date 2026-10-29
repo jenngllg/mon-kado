@@ -28,9 +28,12 @@ func TestLocalFirecrawlImage_WhenOriginalBytesReturned_UsesOneBinaryFormatAndSha
 			t.Fatal("provider boundary changed")
 		}
 		if calls == 1 {
+			if input.MaxAge != (47*time.Hour + 49*time.Minute + 50*time.Second).Milliseconds() {
+				t.Fatal("page cache freshness limit was not supplied")
+			}
 			return firecrawlDocument(`<title>Gift</title>`, "", "", 200), nil
 		}
-		if len(input.Formats) != 1 || input.Formats[0] != "rawBase64" || input.URL != "https://media.merchant.fr/photo" || input.SkipTLSVerification {
+		if len(input.Formats) != 1 || input.Formats[0] != "rawBase64" || input.URL != "https://media.merchant.fr/photo" || input.SkipTLSVerification || input.MaxAge != 0 {
 			t.Fatal("binary request changed")
 		}
 		return firecrawlImageDocument(base64.StdEncoding.EncodeToString([]byte("original-image-bytes")), "image/png", "https://media.merchant.fr/photo", 200), nil
