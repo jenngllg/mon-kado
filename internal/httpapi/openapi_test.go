@@ -31,7 +31,7 @@ func TestOpenAPI_WhenReadingDocument_ContainsVersionedOperationsAndExactErrorEnv
 	}
 	err := json.Unmarshal(recorder.Body.Bytes(), &document)
 	// Assert
-	if err != nil || recorder.Code != 200 || document.OpenAPI != "3.1.0" || len(api.Patterns()) != 139 {
+	if err != nil || recorder.Code != 200 || document.OpenAPI != "3.1.0" || len(api.Patterns()) != 140 {
 		t.Fatalf("invalid specification: status %d patterns %d error %v", recorder.Code, len(api.Patterns()), err)
 	}
 	operationIDs := make(map[string]string)
