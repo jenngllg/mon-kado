@@ -3,7 +3,7 @@
 from datetime import datetime, timezone
 from pathlib import Path
 
-from coordinated_backup import capture
+from coordinated_backup import capture, run as backup_command
 from coordinated_policy import validate_backup, validate_intent, validate_pairs
 from deploy_policy import DeploymentError, ensure
 
@@ -73,7 +73,11 @@ class CoordinatedRuntime:
 
     def restore_backend(self, previous):
         ensure(previous == self.previous and self.candidate is not None, "PAIR_INVALID")
-        ensure(not self.maintenance.exists() and not self.maintenance.is_symlink(), "BACKUP_RECOVERY_REQUIRED")
+        ensure(not self.maintenance.is_symlink(), "BACKUP_RECOVERY_REQUIRED")
+        if self.maintenance.exists():
+            backup_command("recover", inherited=True)
+            self.gate.verify()
+            ensure(not self.maintenance.exists() and not self.maintenance.is_symlink(), "BACKUP_RECOVERY_REQUIRED")
         self.backend.restore(previous, self.candidate)
 
     def restore_frontend(self, previous):

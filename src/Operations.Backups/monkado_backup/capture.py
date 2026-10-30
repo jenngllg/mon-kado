@@ -235,7 +235,7 @@ def verify_native_manifest(root, value):
 
 def verify_coordinator(root, inventory):
     """Bind the captured coordination and backup code to its reviewed manifest."""
-    from coordinated_integrity import FILES as tool_files, validate
+    from coordinated_integrity import BACKUP_FILES as tool_backup_files, FILES as tool_files, validate
     from release_manifest import configuration_hash
 
     path = root / "configuration/coordinated-manifest.json"
@@ -243,7 +243,8 @@ def verify_coordinator(root, inventory):
         raise BackupError("COORDINATOR_MANIFEST_INVALID")
     manifest = validate(json.loads(path.read_bytes()), configuration_hash(root / "configuration"))
     for name in tool_files:
-        if inventory["configuration/" + name]["sha256"] != manifest["files"][name]:
+        captured = "src/Operations.Coordinator/backup/" + Path(name).name if name in tool_backup_files else name
+        if inventory["configuration/" + captured]["sha256"] != manifest["files"][name]:
             raise BackupError("COORDINATOR_INTEGRITY_FAILED")
 
 

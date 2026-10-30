@@ -12,11 +12,11 @@ BACKUP = "/usr/local/sbin/monkado-backup"
 
 def run(action, inherited=False):
     """Run one fixed backup operation without exposing credentials or provider output."""
-    ensure(action in {"backup", "check", "status"}, "BACKUP_OPERATION_INVALID")
+    ensure(action in {"backup", "check", "status", "recover"}, "BACKUP_OPERATION_INVALID")
     environment = {"PATH": "/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin", "HOME": "/root",
                    "LANG": "C.UTF-8", "TZ": "UTC"}
     if inherited:
-        ensure(action == "backup", "BACKUP_OPERATION_INVALID")
+        ensure(action in {"backup", "recover"}, "BACKUP_OPERATION_INVALID")
         environment.update(MONKADO_BACKUP_COORDINATION_FD="8", MONKADO_BACKUP_DEPLOYMENT_FD="9")
     try:
         result = subprocess.run([BACKUP, action], env=environment, pass_fds=(8, 9) if inherited else (),

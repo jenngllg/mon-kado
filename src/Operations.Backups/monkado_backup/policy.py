@@ -68,11 +68,17 @@ FILES = LEGACY_NATIVE_FILES + (
     "src/Operations.Deployment/coordinated_backup.py",
     "src/Operations.Deployment/coordinated_backend.py",
     "src/Operations.Deployment/coordinated_boot.py",
+    "src/Operations.Deployment/coordinated_bootstrap.py",
     "src/Operations.Deployment/coordinated_cli.py",
     "src/Operations.Deployment/coordinated_engine.py",
     "src/Operations.Deployment/coordinated_frontend.py",
     "src/Operations.Deployment/coordinated_gate.py",
     "src/Operations.Deployment/coordinated_integrity.py",
+    "src/Operations.Deployment/coordinated_install_engine.py",
+    "src/Operations.Deployment/coordinated_install_cli.py",
+    "src/Operations.Deployment/coordinated_install_files.py",
+    "src/Operations.Deployment/coordinated_install_policy.py",
+    "src/Operations.Deployment/coordinated_install_runtime.py",
     "src/Operations.Deployment/coordinated_locks.py",
     "src/Operations.Deployment/coordinated_package.py",
     "src/Operations.Deployment/coordinated_policy.py",
@@ -81,7 +87,7 @@ FILES = LEGACY_NATIVE_FILES + (
     "src/Operations.Deployment/coordinated_swap.py",
     "deployments/production/monkado-transition-guard.service",
     "deployments/production/monkado-coordinate",
-) + tuple("src/Operations.Backups/monkado_backup/" + name for name in
+) + tuple("src/Operations.Coordinator/backup/" + name for name in
           ("__init__.py", "policy.py", "capture.py", "operations.py", "cli.py", "restore.py", "credentials.py"))
 
 

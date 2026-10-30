@@ -5,7 +5,7 @@ from pathlib import Path
 import sys
 import tempfile
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 ROOT = Path(__file__).resolve().parents[2]
 for path in ("src/Operations.Deployment", "src/Operations.Frontend", "deployments/production",
@@ -62,8 +62,10 @@ class CoordinatedRuntimeTests(unittest.TestCase):
     def test_restore_when_backup_maintenance_remains_refuses(self):
         self.runtime.validate_intent(self.intent)
         self.maintenance.touch()
-        with self.assertRaisesRegex(DeploymentError, "BACKUP_RECOVERY_REQUIRED"):
-            self.runtime.restore_backend(self.previous)
+        with patch("coordinated_runtime.backup_command") as recover:
+            with self.assertRaisesRegex(DeploymentError, "BACKUP_RECOVERY_REQUIRED"):
+                self.runtime.restore_backend(self.previous)
+        recover.assert_called_once_with("recover", inherited=True)
         self.backend.restore.assert_not_called()
 
     def test_close_gate_when_nft_fails_stops_caddy_and_reports_failure(self):

@@ -46,13 +46,19 @@ class CliTests(unittest.TestCase):
 
     def test_recover_only_locks_when_maintenance_marker_exists(self):
         # Arrange / Act / Assert
-        with patch.object(cli, "STATE", self.root), patch.object(cli, "lock", side_effect=lambda path: contextlib.nullcontext()) as lock:
+        with patch.object(cli, "STATE", self.root), patch.object(cli, "lock", side_effect=lambda path, inherited=None: contextlib.nullcontext()) as lock:
             cli.execute("recover", self.operations)
             lock.assert_not_called()
             (self.root / "maintenance.json").write_text("{}")
             cli.execute("recover", self.operations)
             self.assertEqual([cli.DEPLOYMENT / "backup-coordination.lock", cli.DEPLOYMENT / "deploy.lock"],
                              [entry.args[0] for entry in lock.call_args_list])
+            self.operations.recover.assert_called_once()
+            self.assertEqual([None, None], [entry.args[1] for entry in lock.call_args_list])
+            self.operations.reset_mock(); lock.reset_mock()
+            with patch.object(cli, "inherited_capture_locks", return_value=(8, 9)):
+                cli.execute("recover", self.operations)
+            self.assertEqual([8, 9], [entry.args[1] for entry in lock.call_args_list])
             self.operations.recover.assert_called_once()
         with patch.object(cli, "install_password") as install:
             cli.execute("credentials", self.operations)

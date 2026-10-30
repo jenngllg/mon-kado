@@ -63,3 +63,25 @@ class CoordinatedStore:
             ensure(private_read(target, MAXIMUM_INTENT_BYTES) == data, "TRANSITION_RECEIPT_CHANGED")
         else:
             atomic_write(target, data)
+
+
+class InstallationStore(CoordinatedStore):
+    """Retain independent tool-install intent and its non-secret snapshot receipt."""
+
+    def __init__(self, directory):
+        super().__init__(directory)
+        self.path = self.directory / "coordinated-install.json"
+
+    def complete(self, intent):
+        """Record both immutable backup references before clearing install intent."""
+        revision = intent["manifest"]["revision"]
+        ensure(isinstance(revision, str) and re.fullmatch(r"[0-9a-f]{40}", revision), "TOOL_INSTALL_INTENT_INVALID")
+        receipt = {"schemaVersion": 1, "revision": revision, "preInstallSnapshot": intent["backup"],
+                   "postInstallSnapshot": intent["postInstallBackup"]}
+        data = json.dumps(receipt, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        target = self.directory / ("coordinated-install-receipt-" + revision + ".json")
+        ensure(not target.is_symlink(), "UNSAFE_TRANSITION_RECEIPT")
+        if target.exists():
+            ensure(private_read(target, MAXIMUM_INTENT_BYTES) == data, "TRANSITION_RECEIPT_CHANGED")
+        else:
+            atomic_write(target, data)

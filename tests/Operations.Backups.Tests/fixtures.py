@@ -1,5 +1,7 @@
 """Small deterministic disk fixtures; never read production credentials."""
 
+from pathlib import Path
+
 from monkado_backup.capture import create_manifest
 from monkado_backup.policy import LEGACY_CURRENT_FILES as FILES
 
@@ -58,8 +60,12 @@ def native_capture(root, catalog=None, migrator=None, revision=None):
     release = {"schemaVersion": 3, "revision": revision, "publicationId": "123-1",
                "configurationHash": configuration_hash(configuration), "migrationCatalog": catalog,
                "migrationHash": fingerprint(catalog), "rollbackAllowed": True, "binaries": binaries}
-    from coordinated_integrity import create as create_coordinator_manifest
-    coordinator = create_coordinator_manifest(configuration, revision, release["configurationHash"], "a" * 64)
+    from coordinated_integrity import BACKUP_FILES, FILES as coordinator_files
+    coordinator = {"schemaVersion": 1, "revision": revision, "configurationHash": release["configurationHash"],
+                   "archiveSha256": "a" * 64, "files": {}}
+    for name in coordinator_files:
+        captured = "src/Operations.Coordinator/backup/" + Path(name).name if name in BACKUP_FILES else name
+        coordinator["files"][name] = hashlib.sha256((configuration / captured).read_bytes()).hexdigest()
     (configuration / "coordinated-manifest.json").write_text(json.dumps(coordinator))
     for name in ("current.env", "active.env"):
         (configuration / name).write_text(dotenv(release))

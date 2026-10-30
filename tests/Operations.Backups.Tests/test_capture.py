@@ -30,8 +30,9 @@ class CaptureTests(unittest.TestCase):
         # Act / Assert
         self.assertEqual(set(release["FILES"]), set(LEGACY_NATIVE_FILES))
         self.assertTrue(set(release["FILES"]).issubset(FILES))
-        from coordinated_integrity import FILES as coordinator_files
-        self.assertTrue(set(coordinator_files).issubset(FILES))
+        from coordinated_integrity import BACKUP_FILES, COORDINATOR_FILES
+        self.assertTrue(set(COORDINATOR_FILES).issubset(FILES))
+        self.assertTrue({"src/Operations.Coordinator/backup/" + Path(name).name for name in BACKUP_FILES}.issubset(FILES))
 
     def test_changed_and_missing_bytes_are_rejected(self):
         # Arrange
