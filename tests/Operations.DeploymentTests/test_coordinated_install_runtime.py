@@ -70,6 +70,19 @@ class InstallationRuntimeTests(unittest.TestCase):
             self.runtime.close_gate()
         self.native.run.assert_called_once_with(["systemctl", "stop", "caddy.service"], timeout=120)
 
+    def test_verify_pair_when_saved_frontend_marker_is_stale_uses_verified_current_pair(self):
+        old_marker = {"revision": "c" * 40, "apiOrigin": "https://api.monkado.fr", "googleEnabled": True}
+        baseline = {"infrastructure": {"caddy": {}, "postgres": {}}, "frontend": old_marker}
+        self.backend_store.load.return_value = {"baseline": baseline}
+        self.native.smoke.return_value = {"technical": True, "functional": True, "frontend": True}
+        with patch.object(self.runtime, "_pair", return_value=self.previous):
+            self.runtime.verify_active_pair(self.intent)
+        restored = self.native.restore_baseline.call_args.args[0]
+        self.assertEqual(restored["frontend"]["revision"], self.previous["frontend"]["revision"])
+        self.assertEqual(restored["frontend"]["apiOrigin"], "https://api.monkado.fr")
+        self.assertEqual(baseline["frontend"], old_marker)
+        self.native.smoke.assert_called_once_with(self.previous["backend"])
+
 
 if __name__ == "__main__":
     unittest.main()
