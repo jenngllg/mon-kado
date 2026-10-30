@@ -70,7 +70,7 @@ func ValidateAt(input any, now time.Time) error {
 		"ConfirmEmailRequest": {"UserId", "Token"}, "ConfirmMemberEmailChangeRequest": {"RequestId", "Token"},
 		"RequestEmailConfirmationRequest": {"Email"}, "RequestPasswordResetRequest": {"Email"},
 		"ResetPasswordRequest": {"UserId", "Token", "NewPassword"}, "ConfirmMemberAccountDeletionRequest": {"Token"},
-		"CreateWishImportPreviewRequest": {"Url"}, "ReportSharedWishlistRequest": {"Reason"},
+		"CreateWishImportPreviewRequest": {"Url"}, "ResolveWishImageRequest": {"Url"}, "ReportSharedWishlistRequest": {"Reason"},
 		"ReorderWishesRequest": {"WishIds"}, "UpdateWishlistModerationRequest": {"IsSuspended"},
 		"UpdateWishlistReportReviewRequest": {"Status"}, "RequestAdministrativeDataExportRequest": {"RequestReference"},
 		"ExecuteAdministrativeAccountErasureRequest": {"RequestReference", "ConfirmedMemberId"},

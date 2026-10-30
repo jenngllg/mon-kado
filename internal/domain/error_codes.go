@@ -24,6 +24,7 @@ const (
 	MemberDataExportGenerationFailed       = "MEMBER_DATA_EXPORT_GENERATION_FAILED"
 	MemberDataExportTooLarge               = "MEMBER_DATA_EXPORT_TOO_LARGE"
 	WishImportUrlRejected                  = "WISH_IMPORT_URL_REJECTED"
+	WishImageImportUnavailable             = "WISH_IMAGE_IMPORT_UNAVAILABLE"
 	AccountTwoFactorAuthenticationFailed   = "ACCOUNT_TWO_FACTOR_AUTHENTICATION_FAILED"
 	AccountTwoFactorOperationConflict      = "ACCOUNT_TWO_FACTOR_OPERATION_CONFLICT"
 	AccountTwoFactorRateLimited            = "ACCOUNT_TWO_FACTOR_RATE_LIMITED"
@@ -109,6 +110,7 @@ func KnownErrorCode(code string) bool {
 		MemberDataExportGenerationFailed,
 		MemberDataExportTooLarge,
 		WishImportUrlRejected,
+		WishImageImportUnavailable,
 		AccountTwoFactorAuthenticationFailed,
 		AccountTwoFactorOperationConflict,
 		AccountTwoFactorRateLimited,

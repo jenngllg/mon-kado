@@ -32,6 +32,11 @@ type CreateWishImportPreviewRequest struct {
 	Url *string `json:"url"`
 }
 
+// ResolveWishImageRequest identifies an image selected by a member.
+type ResolveWishImageRequest struct {
+	Url *string `json:"url"`
+}
+
 // CreateWishlistRequest preserves the versioned JSON contract.
 type CreateWishlistRequest struct {
 	Name         *string `json:"name"`

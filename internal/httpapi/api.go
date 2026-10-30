@@ -37,6 +37,7 @@ type API struct {
 	limiter        rateLimiter
 	Google         application.GoogleClient
 	Importer       application.WishImportClient
+	ImageImporter  SelectedImageResolver
 	ImageAdmission *admission.Limiter
 	Telemetry      *telemetry.Collector
 	operations     map[string]options
@@ -80,7 +81,10 @@ func New(service *application.Service, logger *slog.Logger) *API {
 	a := &API{Service: service, Logger: logger, mux: http.NewServeMux(), limiter: rateLimiter{windows: map[string]rateWindow{}}, operations: map[string]options{}}
 	a.ImageAdmission = admission.New(nil)
 	a.Telemetry = telemetry.New("api", func() time.Time { return service.Now() }, time.Now)
-	a.Importer = newWishImporter(service)
+	importer := newWishImporter(service)
+	a.Importer = importer
+	imports := service.Config.Imports()
+	a.ImageImporter = &selectedImageClient{client: importer, permits: make(chan struct{}, imports.PermitLimit), timeout: imports.Timeout}
 	a.routes()
 	a.groupRoutes()
 	a.registerOpenAPI()

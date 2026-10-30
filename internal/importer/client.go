@@ -121,6 +121,11 @@ func (c *Client) Validate(ctx context.Context, value string) error {
 	return err
 }
 
+// DownloadSelectedImage retrieves one user-selected image through the public-only transport.
+func (c *Client) DownloadSelectedImage(ctx context.Context, value string, limit int64) ([]byte, *url.URL, string, error) {
+	return c.downloadAttempt(ctx, value, limit, "image/jpeg,image/png,image/webp")
+}
+
 func (c *Client) downloadAttempt(ctx context.Context, value string, limit int64, accept string) ([]byte, *url.URL, string, error) {
 	for redirects := 0; ; redirects++ {
 		u, err := webURL(value)

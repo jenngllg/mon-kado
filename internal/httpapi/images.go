@@ -13,6 +13,7 @@ import (
 )
 
 func (a *API) imageRoutes() {
+	a.route("POST /api/v1/wishlists/{wishlistId}/wish-images/resolve", options{Auth: true, CSRF: true, Rate: 30, RateByMember: true}, a.resolveWishImage)
 	for _, method := range []string{"PUT", "DELETE"} {
 		a.route(method+" /api/v1/wishlists/{wishlistId}/wishes/{wishId}/image", options{Auth: true, Rate: 10, ImageAdmission: method == "PUT", RateByMember: true, RatePolicy: "giftImageUpload"}, a.wishImage)
 	}
