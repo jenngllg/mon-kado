@@ -1,0 +1,13 @@
+[Unit]
+Description=Restore the MonKado coordinated-transition traffic gate
+After=local-fs.target
+Before=caddy.service
+
+[Service]
+Type=oneshot
+User=root
+UMask=0077
+Environment=PYTHONPATH=/opt/monkado/src/Operations.Deployment
+ExecStart=/usr/bin/python3 /opt/monkado/src/Operations.Deployment/coordinated_boot.py
+RemainAfterExit=yes
+TimeoutStartSec=30s

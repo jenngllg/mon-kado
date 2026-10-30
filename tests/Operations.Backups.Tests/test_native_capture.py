@@ -7,7 +7,7 @@ import unittest
 
 from fixtures import native_capture
 from monkado_backup.capture import NATIVE_IMAGE_NAME, copy_files, entries, verify_manifest
-from monkado_backup.policy import BackupError
+from monkado_backup.policy import BackupError, FILES, LEGACY_NATIVE_FILES
 
 
 class NativeCaptureTests(unittest.TestCase):
@@ -19,7 +19,7 @@ class NativeCaptureTests(unittest.TestCase):
 
     def test_native_inventory_verifies_all_executables_and_keeps_private_environment_in_encrypted_capture(self):
         self.assertEqual(self.manifest, verify_manifest(self.root))
-        self.assertEqual(5, self.manifest["schemaVersion"])
+        self.assertEqual(6, self.manifest["schemaVersion"])
         self.assertEqual({"binaries/api", "binaries/worker", "binaries/migrate"},
                          {name for name in self.manifest["files"] if name.startswith("binaries/")})
         self.assertIn("configuration/production.env", self.manifest["files"])
@@ -33,6 +33,14 @@ class NativeCaptureTests(unittest.TestCase):
         (self.root / "manifest.json").write_text(json.dumps(value))
         with self.assertRaisesRegex(BackupError, "BINARY_INTEGRITY_FAILED"):
             verify_manifest(self.root)
+
+    def test_schema_five_capture_remains_verifiable_after_inventory_upgrade(self):
+        # Reconstruct the previous immutable inventory and its original hash.
+        for name in set(FILES) - set(LEGACY_NATIVE_FILES):
+            (self.root / "configuration" / name).unlink()
+        old = self.manifest | {"schemaVersion": 5, "files": entries(self.root)}
+        (self.root / "manifest.json").write_text(json.dumps(old))
+        self.assertEqual(verify_manifest(self.root), old)
 
     def test_missing_private_pointer_and_staging_artifacts_are_rejected(self):
         (self.root / "configuration/active.env").unlink()

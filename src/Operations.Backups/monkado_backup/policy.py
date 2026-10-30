@@ -54,7 +54,7 @@ LEGACY_CURRENT_FILES = DEPLOYMENT_FILES + (
     "src/Operations.Frontend/frontend_state.py",
     "src/Operations.Frontend/frontend_probe.py",
 )
-FILES = tuple(name for name in LEGACY_CURRENT_FILES if name not in
+LEGACY_NATIVE_FILES = tuple(name for name in LEGACY_CURRENT_FILES if name not in
               ("compose.yaml", "deployments/production/compose.production.yaml")) + (
     "deployments/systemd/mon-kado-api.service",
     "deployments/systemd/mon-kado-worker.service",
@@ -63,6 +63,18 @@ FILES = tuple(name for name in LEGACY_CURRENT_FILES if name not in
     "src/Operations.Native/native_services.py",
     "src/Operations.Native/native_artifacts.py",
     "src/Operations.Native/native_configuration.py",
+)
+FILES = LEGACY_NATIVE_FILES + (
+    "src/Operations.Deployment/coordinated_backup.py",
+    "src/Operations.Deployment/coordinated_backend.py",
+    "src/Operations.Deployment/coordinated_boot.py",
+    "src/Operations.Deployment/coordinated_engine.py",
+    "src/Operations.Deployment/coordinated_frontend.py",
+    "src/Operations.Deployment/coordinated_gate.py",
+    "src/Operations.Deployment/coordinated_policy.py",
+    "src/Operations.Deployment/coordinated_runtime.py",
+    "src/Operations.Deployment/coordinated_store.py",
+    "deployments/production/monkado-transition-guard.service",
 )
 
 
