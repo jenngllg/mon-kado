@@ -9,7 +9,7 @@ import stat
 import tempfile
 from pathlib import Path
 
-from .policy import BackupError, FILES, LEGACY_FILES, PREVIOUS_FILES, DEPLOYMENT_FILES, LEGACY_CURRENT_FILES, HASH, release_metadata, timestamp
+from .policy import BackupError, FILES, LEGACY_FILES, PREVIOUS_FILES, DEPLOYMENT_FILES, LEGACY_CURRENT_FILES, LEGACY_NATIVE_FILES, HASH, release_metadata, timestamp
 
 IMAGE_NAME = re.compile(r"(?P<a>[0-9a-f]{2})/(?P<b>[0-9a-f]{2})/(?P=a)(?P=b)[0-9a-f]{28}\.(webp|pending)")
 NATIVE_IMAGE_NAME = re.compile(r"[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\.(webp|pending)")
@@ -83,11 +83,14 @@ def entries(root):
 def validate_shape(paths, schema_version=4):
     """Prevent a restored archive from injecting extra configuration or secrets."""
     required = {"postgres.dump", "configuration/production.env", RELEASE_PATH}
-    configuration = {1: LEGACY_FILES, 2: PREVIOUS_FILES, 3: DEPLOYMENT_FILES, 4: LEGACY_CURRENT_FILES, 5: FILES}[schema_version]
+    configuration = {1: LEGACY_FILES, 2: PREVIOUS_FILES, 3: DEPLOYMENT_FILES, 4: LEGACY_CURRENT_FILES,
+                     5: LEGACY_NATIVE_FILES, 6: FILES}[schema_version]
     required.update("configuration/" + name for name in configuration)
-    if schema_version == 5:
+    if schema_version >= 5:
         required.update({"configuration/caddy.env", "configuration/active.env", "configuration/deployment-status.json",
                          "binaries/api", "binaries/worker", "binaries/migrate"})
+    if schema_version >= 6:
+        required.add("configuration/coordinated-manifest.json")
     if not required.issubset(paths):
         raise BackupError("INCOMPLETE_CAPTURE")
     for name in paths:
@@ -96,7 +99,7 @@ def validate_shape(paths, schema_version=4):
         if schema_version >= 3 and name in {"configuration/deployment-smoke.json", "configuration/deployment-status.json"}:
             continue
         parent, _, filename = name.rpartition("/")
-        pattern = NATIVE_IMAGE_NAME if schema_version == 5 else IMAGE_NAME
+        pattern = NATIVE_IMAGE_NAME if schema_version >= 5 else IMAGE_NAME
         if name.startswith("images/") and pattern.fullmatch(name[len("images/"):]):
             continue
         if schema_version < 5 and parent == "keys" and KEY_NAME.fullmatch(filename):
@@ -134,9 +137,9 @@ def verify_manifest(root):
     """Verify every byte and reject unexpected files before a restore can run."""
     regular(root / MANIFEST_NAME)
     value = json.loads((root / MANIFEST_NAME).read_text())
-    if not isinstance(value, dict) or type(value.get("schemaVersion")) is not int or value["schemaVersion"] not in (1, 2, 3, 4, 5):
+    if not isinstance(value, dict) or type(value.get("schemaVersion")) is not int or value["schemaVersion"] not in (1, 2, 3, 4, 5, 6):
         raise BackupError("INVALID_MANIFEST")
-    if value["schemaVersion"] == 5:
+    if value["schemaVersion"] >= 5:
         return verify_native_manifest(root, value)
     fields = {"schemaVersion", "createdAt", "postgresImage", "postgresVersion", "release", "files"}
     if value["schemaVersion"] >= 2:
@@ -194,10 +197,11 @@ def native_release(root, inventory):
 
 def create_native_manifest(root, created_at, postgres_digest, postgres_version, caddy_digest):
     """Record a coherent native capture including stable private keys and all executable bytes."""
-    value = {"schemaVersion": 5, "createdAt": created_at, "postgresSHA256": postgres_digest,
+    value = {"schemaVersion": 6, "createdAt": created_at, "postgresSHA256": postgres_digest,
              "postgresVersion": postgres_version, "caddySHA256": caddy_digest, "files": entries(root)}
-    validate_shape(value["files"], 5)
+    validate_shape(value["files"], 6)
     value["release"] = native_release(root, value["files"])
+    verify_coordinator(root, value["files"])
     validate_native_metadata(value)
     atomic_json(root / MANIFEST_NAME, value)
     return value
@@ -219,17 +223,35 @@ def verify_native_manifest(root, value):
     """Verify native captured bytes and approval metadata before any restoration side effect."""
     validate_native_metadata(value)
     inventory = entries(root)
-    validate_shape(inventory, 5)
+    validate_shape(inventory, value["schemaVersion"])
     if inventory != value["files"]:
         raise BackupError("CAPTURE_INTEGRITY_FAILED")
     if native_release(root, inventory) != value["release"]:
         raise BackupError("RELEASE_MISMATCH")
+    if value["schemaVersion"] >= 6:
+        verify_coordinator(root, inventory)
     return value
+
+
+def verify_coordinator(root, inventory):
+    """Bind the captured coordination and backup code to its reviewed manifest."""
+    from coordinated_integrity import BACKUP_FILES as tool_backup_files, FILES as tool_files, validate
+    from release_manifest import configuration_hash
+
+    path = root / "configuration/coordinated-manifest.json"
+    if path.stat().st_size > 65536:
+        raise BackupError("COORDINATOR_MANIFEST_INVALID")
+    manifest = validate(json.loads(path.read_bytes()), configuration_hash(root / "configuration"))
+    for name in tool_files:
+        captured = "src/Operations.Coordinator/backup/" + Path(name).name if name in tool_backup_files else name
+        if inventory["configuration/" + captured]["sha256"] != manifest["files"][name]:
+            raise BackupError("COORDINATOR_INTEGRITY_FAILED")
 
 
 def copy_deployment_private(settings, state, configuration):
     """Include only explicit deployment credentials/state, inside the encrypted capture."""
     for source, name in ((settings / "deployment-smoke.json", "deployment-smoke.json"),
+                         (settings / "coordinated-manifest.json", "coordinated-manifest.json"),
                          (state / "status.json", "deployment-status.json")):
         if not source.exists() and not source.is_symlink():
             continue

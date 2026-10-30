@@ -43,7 +43,7 @@ class Restore:
         if not stat.S_ISDIR(metadata.st_mode) or metadata.st_uid != 0 or stat.S_IMODE(metadata.st_mode) != 0o700:
             raise BackupError("UNSAFE_RESTORE_CAPTURE")
         manifest = verify_manifest(capture)
-        if manifest["schemaVersion"] != 5:
+        if manifest["schemaVersion"] not in (5, 6):
             raise BackupError("NATIVE_CAPTURE_REQUIRED")
         self.root.mkdir(mode=0o711, parents=True, exist_ok=True)
         metadata = self.root.lstat()

@@ -5,6 +5,7 @@ import fcntl
 import json
 import os
 import shutil
+import stat
 import subprocess
 import sys
 import time
@@ -62,14 +63,37 @@ def command(arguments, *, output=None, input_file=None, timeout=600, cwd=None, e
 
 
 @contextlib.contextmanager
-def lock(path):
-    """Use the same advisory lock protocol as the installed deployment service."""
-    with path.open("a") as stream:
+def lock(path, inherited=None):
+    """Acquire the existing lock or reuse the coordinator's exact locked file."""
+    if inherited is None:
+        stream = path.open("a")
+    else:
+        try:
+            observed = os.fstat(inherited)
+            expected = path.lstat()
+            if (not stat.S_ISREG(expected.st_mode) or expected.st_uid != 0 or
+                    (observed.st_dev, observed.st_ino) != (expected.st_dev, expected.st_ino)):
+                raise BackupError("INHERITED_LOCK_INVALID")
+            stream = os.fdopen(os.dup(inherited), "a")
+        except (OSError, ValueError):
+            raise BackupError("INHERITED_LOCK_INVALID") from None
+    with stream:
         try:
             fcntl.flock(stream, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
             raise BackupError("OPERATION_ALREADY_RUNNING") from None
         yield
+
+
+def inherited_capture_locks():
+    """Accept only the fixed descriptor pair supplied by the root coordinator."""
+    coordination = os.environ.get("MONKADO_BACKUP_COORDINATION_FD")
+    deployment = os.environ.get("MONKADO_BACKUP_DEPLOYMENT_FD")
+    if coordination is None and deployment is None:
+        return None, None
+    if coordination != "8" or deployment != "9":
+        raise BackupError("INHERITED_LOCK_INVALID")
+    return 8, 9
 
 
 def private_file(path):
@@ -189,7 +213,8 @@ class Operations:
 
     def capture(self):
         """Stop writers only while taking the consistent local copy, never during upload."""
-        with lock(DEPLOYMENT / "backup-coordination.lock"), lock(DEPLOYMENT / "deploy.lock"):
+        coordination, deployment = inherited_capture_locks()
+        with lock(DEPLOYMENT / "backup-coordination.lock", coordination), lock(DEPLOYMENT / "deploy.lock", deployment):
             if (DEPLOYMENT / "in-progress.env").exists():
                 raise BackupError("DEPLOYMENT_INCOMPLETE")
             self.recover()

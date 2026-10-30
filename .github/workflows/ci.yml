@@ -58,6 +58,10 @@ jobs:
             sudo env PYTHONPATH="$GITHUB_WORKSPACE/src/Operations.Native:$GITHUB_WORKSPACE/src/Operations.Deployment:$GITHUB_WORKSPACE/src/Operations.Monitoring:$GITHUB_WORKSPACE/src/Operations.Frontend:$GITHUB_WORKSPACE/src/Operations.Backups:$GITHUB_WORKSPACE/deployments/production:$GITHUB_WORKSPACE/tests/Native.OperationsTests:$GITHUB_WORKSPACE/tests/$suite" \
               python3 -m unittest discover -s "tests/$suite"
           done
+      - name: Test coordinated traffic isolation in private Linux namespaces
+        run: |
+          sudo env MONKADO_TEST_NFT=/usr/sbin/nft \
+            unshare -m -n --propagation private bash tests/Operations.DeploymentTests/native_coordinated_gate.sh
       - name: Test native performance orchestration and request accounting
         run: |
           PYTHONPATH="$GITHUB_WORKSPACE/src/Operations.Performance" python3 -m unittest discover -s tests/Operations.PerformanceTests

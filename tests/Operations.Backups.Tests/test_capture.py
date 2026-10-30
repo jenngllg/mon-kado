@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 from fixtures import capture
 from monkado_backup.capture import IMAGE_NAME, KEY_NAME, atomic_json, copy_files, copy_deployment_private, create_manifest, entries, regular, validate_shape, verify_manifest
-from monkado_backup.policy import BackupError, FILES, LEGACY_CURRENT_FILES, LEGACY_FILES, PREVIOUS_FILES, DEPLOYMENT_FILES
+from monkado_backup.policy import BackupError, FILES, LEGACY_CURRENT_FILES, LEGACY_FILES, PREVIOUS_FILES, DEPLOYMENT_FILES, LEGACY_NATIVE_FILES
 
 
 class CaptureTests(unittest.TestCase):
@@ -28,7 +28,11 @@ class CaptureTests(unittest.TestCase):
         repository = Path(__file__).resolve().parents[2]
         release = runpy.run_path(str(repository / "deployments/production/release_manifest.py"))
         # Act / Assert
-        self.assertEqual(set(release["FILES"]), set(FILES))
+        self.assertEqual(set(release["FILES"]), set(LEGACY_NATIVE_FILES))
+        self.assertTrue(set(release["FILES"]).issubset(FILES))
+        from coordinated_integrity import BACKUP_FILES, COORDINATOR_FILES
+        self.assertTrue(set(COORDINATOR_FILES).issubset(FILES))
+        self.assertTrue({"src/Operations.Coordinator/backup/" + Path(name).name for name in BACKUP_FILES}.issubset(FILES))
 
     def test_changed_and_missing_bytes_are_rejected(self):
         # Arrange

@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# Invoke only the root-owned reviewed coordinator; do not inherit process proxies.
+set -Eeuo pipefail
+[[ $EUID -eq 0 ]] || { echo 'Run with sudo.' >&2; exit 1; }
+exec env -i PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin LANG=C.UTF-8 TZ=UTC \
+    PYTHONPATH=/opt/monkado/src/Operations.Native:/opt/monkado/src/Operations.Deployment:/opt/monkado/src/Operations.Frontend:/opt/monkado/deployments/production \
+    /usr/bin/python3 /opt/monkado/src/Operations.Deployment/coordinated_cli.py "$@"

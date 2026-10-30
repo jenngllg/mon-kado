@@ -4,7 +4,7 @@ import json
 import os
 import sys
 
-from .operations import DEPLOYMENT, STATE, Operations, lock
+from .operations import DEPLOYMENT, STATE, Operations, inherited_capture_locks, lock
 from .policy import BackupError
 from .restore import Restore
 from .credentials import install_password
@@ -17,7 +17,8 @@ def execute(action, operations):
         return
     if action == "recover":
         if (STATE / "maintenance.json").exists():
-            with lock(DEPLOYMENT / "backup-coordination.lock"), lock(DEPLOYMENT / "deploy.lock"):
+            coordination, deployment = inherited_capture_locks()
+            with lock(DEPLOYMENT / "backup-coordination.lock", coordination), lock(DEPLOYMENT / "deploy.lock", deployment):
                 operations.recover()
         return
     if action == "credentials":
