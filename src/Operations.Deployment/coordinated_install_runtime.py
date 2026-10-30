@@ -1,9 +1,11 @@
 """Native effects for first installation of the reviewed coordination tools."""
 
+import copy
 from datetime import datetime, timezone
 from pathlib import Path
 
 import frontend_runtime as hosting
+import frontend_contract
 from coordinated_backup import capture, run as backup_command
 from coordinated_install_files import activate_backup, backup_hashes, stage_guard, stage_tool
 from coordinated_install_policy import validate_install_intent
@@ -132,7 +134,11 @@ class InstallationRuntime:
         self.gate.verify()
         ensure(self._pair() == intent["previousPair"], "PAIR_CHANGED")
         state = self.backend_store.load()
-        self.native.restore_baseline(state["baseline"])
+        baseline = copy.deepcopy(state["baseline"])
+        ensure(isinstance(baseline, dict) and baseline.get("frontend") is not None, "FRONTEND_BASELINE_REQUIRED")
+        frontend = intent["previousPair"]["frontend"]
+        baseline["frontend"] = frontend_contract.release_marker(frontend["revision"], frontend.get("googleEnabled", False))
+        self.native.restore_baseline(baseline)
         ensure(self.native.smoke(intent["previousPair"]["backend"]) ==
                {"technical": True, "functional": True, "frontend": True}, "BACKEND_VERIFICATION_FAILED")
         self.gate.verify()
