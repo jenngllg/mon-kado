@@ -58,6 +58,9 @@ def native_capture(root, catalog=None, migrator=None, revision=None):
     release = {"schemaVersion": 3, "revision": revision, "publicationId": "123-1",
                "configurationHash": configuration_hash(configuration), "migrationCatalog": catalog,
                "migrationHash": fingerprint(catalog), "rollbackAllowed": True, "binaries": binaries}
+    from coordinated_integrity import create as create_coordinator_manifest
+    coordinator = create_coordinator_manifest(configuration, revision, release["configurationHash"], "a" * 64)
+    (configuration / "coordinated-manifest.json").write_text(json.dumps(coordinator))
     for name in ("current.env", "active.env"):
         (configuration / name).write_text(dotenv(release))
     state = initial_state() | {"phase": "succeeded", "current": release}

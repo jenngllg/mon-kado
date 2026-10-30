@@ -34,10 +34,18 @@ class NativeCaptureTests(unittest.TestCase):
         with self.assertRaisesRegex(BackupError, "BINARY_INTEGRITY_FAILED"):
             verify_manifest(self.root)
 
+    def test_rewritten_coordinator_cannot_be_accepted_even_after_an_inventory_rewrite(self):
+        path = self.root / "configuration/src/Operations.Deployment/coordinated_gate.py"
+        path.write_text("changed")
+        (self.root / "manifest.json").write_text(json.dumps(self.manifest | {"files": entries(self.root)}))
+        with self.assertRaisesRegex(BackupError, "COORDINATOR_INTEGRITY_FAILED"):
+            verify_manifest(self.root)
+
     def test_schema_five_capture_remains_verifiable_after_inventory_upgrade(self):
         # Reconstruct the previous immutable inventory and its original hash.
         for name in set(FILES) - set(LEGACY_NATIVE_FILES):
             (self.root / "configuration" / name).unlink()
+        (self.root / "configuration/coordinated-manifest.json").unlink()
         old = self.manifest | {"schemaVersion": 5, "files": entries(self.root)}
         (self.root / "manifest.json").write_text(json.dumps(old))
         self.assertEqual(verify_manifest(self.root), old)

@@ -34,6 +34,11 @@ class CoordinatedBootTests(unittest.TestCase):
         self.assertEqual(guard(self.state, self.gate), "closed")
         self.gate.close.assert_called_once_with()
 
+    def test_guard_when_tool_install_is_interrupted_closes(self):
+        (self.state / "coordinated-install.json").write_text("interrupted")
+        self.assertEqual(guard(self.state, self.gate), "closed")
+        self.gate.close.assert_called_once_with()
+
     def test_guard_when_gate_is_orphaned_verifies_and_never_opens_it(self):
         self.gate.exists.return_value = True
         self.assertEqual(guard(self.state, self.gate), "closed")

@@ -14,8 +14,8 @@ STATE = Path("/var/lib/monkado-deployment")
 def guard(state, gate):
     """Keep a recorded or pre-existing maintenance gate closed at boot."""
     ensure(state.is_dir() and not state.is_symlink(), "TRANSITION_STATE_UNAVAILABLE")
-    intent = state / "coordinated-transition.json"
-    if os.path.lexists(intent):
+    markers = (state / "coordinated-transition.json", state / "coordinated-install.json")
+    if any(os.path.lexists(path) for path in markers):
         # Any entry, including a damaged file or symlink, is uncertainty and
         # must close the gate. Only explicit recovery can remove the intent.
         gate.close()

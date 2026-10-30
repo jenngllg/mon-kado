@@ -1,0 +1,80 @@
+name: Publish approved coordinated deployment tools
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: coordinated-tool-publication
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/develop'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: production
+    permissions:
+      actions: read
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Require production protection and green checks for this exact revision
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'jenngllg/mon-kado'
+          gh api "repos/$GITHUB_REPOSITORY/environments/production" \
+            --jq '.protection_rules | any(.type == "required_reviewers" and (.reviewers | length > 0))' | grep -x true
+          for workflow in ci.yml codeql.yml; do
+            gh api "repos/$GITHUB_REPOSITORY/actions/workflows/$workflow/runs?head_sha=$GITHUB_SHA&branch=develop&per_page=100" \
+              --jq '[.workflow_runs[] | select(.event == "push" or .event == "workflow_dispatch")] | sort_by(.run_number) | last | .conclusion' \
+              | grep -x success
+          done
+          codeql_run=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/codeql.yml/runs?head_sha=$GITHUB_SHA&branch=develop&per_page=100" \
+            --jq '[.workflow_runs[] | select(.event == "push" or .event == "workflow_dispatch")] | sort_by(.run_number) | last | .id')
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$codeql_run/jobs?filter=latest&per_page=100" \
+            --jq '[.jobs[] | select(.name | startswith("Analyze ("))] | sort_by(.name) | (map(.name) == ["Analyze (actions)", "Analyze (go)", "Analyze (javascript-typescript)", "Analyze (python)"]) and all(.conclusion == "success")' | grep -x true
+      - name: Package the reviewed, fixed inventory
+        shell: bash
+        run: |
+          set -euo pipefail
+          PYTHONPATH="$GITHUB_WORKSPACE/src/Operations.Deployment:$GITHUB_WORKSPACE/deployments/production" python3 - <<'PY'
+          import os
+          from pathlib import Path
+          from coordinated_package import package
+          from release_manifest import configuration_hash
+          root = Path.cwd()
+          package(root, Path(os.environ['RUNNER_TEMP']) / 'coordinator-package',
+                  os.environ['GITHUB_SHA'], configuration_hash(root))
+          PY
+      - name: Publish immutable tools before changing the protected pointer
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="coordinator-$GITHUB_SHA"
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release download "$tag" --repo "$GITHUB_REPOSITORY" --pattern coordinator.tar.gz \
+              --pattern manifest.json --dir "$RUNNER_TEMP/existing-coordinator"
+            cmp "$RUNNER_TEMP/existing-coordinator/manifest.json" "$RUNNER_TEMP/coordinator-package/manifest.json"
+            cmp "$RUNNER_TEMP/existing-coordinator/coordinator.tar.gz" "$RUNNER_TEMP/coordinator-package/coordinator.tar.gz"
+          else
+            gh release create "$tag" "$RUNNER_TEMP/coordinator-package/coordinator.tar.gz" \
+              "$RUNNER_TEMP/coordinator-package/manifest.json" --repo "$GITHUB_REPOSITORY" \
+              --target "$GITHUB_SHA" --title "Coordinated tools $GITHUB_SHA" --notes 'Reviewed coordination tool package.' --latest=false
+          fi
+          if gh release view coordinator-production --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release edit coordinator-production --repo "$GITHUB_REPOSITORY" \
+              --notes-file "$RUNNER_TEMP/coordinator-package/manifest.json" --latest=false
+          else
+            gh release create coordinator-production --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+              --title 'Approved coordinated deployment tools' --notes-file "$RUNNER_TEMP/coordinator-package/manifest.json" --latest=false
+          fi

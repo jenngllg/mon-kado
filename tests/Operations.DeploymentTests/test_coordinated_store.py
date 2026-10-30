@@ -58,6 +58,20 @@ class CoordinatedStoreTests(unittest.TestCase):
             self.store.save({"value": "a" * MAXIMUM_INTENT_BYTES})
         self.assertEqual(self.store.load(), {"phase": "prepared"})
 
+    def test_complete_when_repeated_preserves_exact_snapshot_receipt(self):
+        intent = {"previous": {"backend": {"revision": "a" * 40}, "frontend": {"revision": "b" * 40}},
+                  "candidate": {"backend": {"revision": "c" * 40, "publicationId": "42-1"},
+                                "frontend": {"revision": "d" * 40}},
+                  "backup": "e" * 64, "frontendBackup": "f" * 64, "toolDigest": "0" * 64}
+        self.store.complete(intent)
+        self.store.complete(intent)
+        target = self.directory / "coordinated-receipt-42-1.json"
+        import json
+        self.assertEqual(json.loads(target.read_bytes())["frontendSnapshot"], "f" * 64)
+        self.assertEqual(stat.S_IMODE(target.stat().st_mode), 0o600)
+        with self.assertRaisesRegex(DeploymentError, "TRANSITION_RECEIPT_CHANGED"):
+            self.store.complete(intent | {"frontendBackup": "1" * 64})
+
 
 if __name__ == "__main__":
     unittest.main()

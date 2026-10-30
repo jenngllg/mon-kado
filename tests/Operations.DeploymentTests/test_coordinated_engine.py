@@ -21,6 +21,8 @@ class MemoryStore:
     def __init__(self):
         self.value = None
         self.interrupt_phase = None
+        self.receipt = None
+        self.fail_complete = False
 
     def load(self):
         return copy.deepcopy(self.value)
@@ -33,6 +35,11 @@ class MemoryStore:
 
     def clear(self):
         self.value = None
+
+    def complete(self, value):
+        if self.fail_complete:
+            raise OSError("receipt unavailable")
+        self.receipt = copy.deepcopy(value)
 
 
 class Runtime:
@@ -125,13 +132,16 @@ class CoordinatedEngineTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             CoordinatedEngine(store, runtime).deploy(OLD, NEW, "unverified")
         self.assertIsNone(store.load())
+        self.assertIsNone(store.receipt)
         self.assertEqual(runtime.active, OLD)
         self.assertTrue(runtime.gate_open)
         self.assertEqual(runtime.calls, [])
 
     def test_deploy_when_checks_pass_exposes_only_candidate_pair(self):
         store, runtime = MemoryStore(), Runtime()
-        CoordinatedEngine(store, runtime).deploy(OLD, NEW, BACKUP)
+        receipt = CoordinatedEngine(store, runtime).deploy(OLD, NEW, BACKUP)
+        self.assertEqual(receipt, {"backendSnapshot": BACKUP, "frontendSnapshot": FRONTEND_BACKUP})
+        self.assertEqual(store.receipt["frontendBackup"], FRONTEND_BACKUP)
         self.assertEqual(runtime.active, NEW)
         self.assertTrue(runtime.gate_open)
         self.assertIsNone(store.load())
@@ -169,6 +179,20 @@ class CoordinatedEngineTests(unittest.TestCase):
         self.assertNotIn("installFrontend", runtime.calls)
         self.assertEqual(runtime.active, OLD)
         self.assertTrue(runtime.gate_open)
+
+    def test_deploy_when_receipt_fails_keeps_candidate_closed_for_explicit_recovery(self):
+        store, runtime = MemoryStore(), Runtime()
+        store.fail_complete = True
+        with self.assertRaisesRegex(TransitionError, "RECOVERY_REQUIRED"):
+            CoordinatedEngine(store, runtime).deploy(OLD, NEW, BACKUP)
+        self.assertEqual(store.load()["phase"], "committed")
+        self.assertEqual(runtime.active, NEW)
+        self.assertFalse(runtime.gate_open)
+        store.fail_complete = False
+        self.assertEqual(CoordinatedEngine(store, runtime).recover(), "completed")
+        self.assertEqual(runtime.active, NEW)
+        self.assertTrue(runtime.gate_open)
+        self.assertIsNone(store.load())
 
     def test_recover_when_restore_fails_keeps_gate_closed_and_intent(self):
         store, runtime = MemoryStore(), Runtime()

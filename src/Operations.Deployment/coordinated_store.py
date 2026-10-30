@@ -3,6 +3,7 @@
 import json
 import os
 from pathlib import Path
+import re
 
 from deploy_policy import ensure
 from deploy_storage import atomic_write, private_read, sync_directory
@@ -42,3 +43,23 @@ class CoordinatedStore:
         private_read(self.path, MAXIMUM_INTENT_BYTES)
         os.unlink(self.path)
         sync_directory(self.directory)
+
+    def complete(self, intent):
+        """Persist a deterministic non-secret receipt before removing the intent."""
+        publication = intent["candidate"]["backend"]["publicationId"]
+        ensure(isinstance(publication, str) and re.fullmatch(r"[1-9][0-9]{0,19}-[1-9][0-9]{0,5}", publication),
+               "TRANSITION_INTENT_INVALID")
+        receipt = {"schemaVersion": 1, "publicationId": publication,
+                   "previousBackend": intent["previous"]["backend"]["revision"],
+                   "previousFrontend": intent["previous"]["frontend"]["revision"],
+                   "backend": intent["candidate"]["backend"]["revision"],
+                   "frontend": intent["candidate"]["frontend"]["revision"],
+                   "backendSnapshot": intent["backup"], "frontendSnapshot": intent["frontendBackup"],
+                   "toolDigest": intent["toolDigest"]}
+        data = json.dumps(receipt, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        target = self.directory / ("coordinated-receipt-" + publication + ".json")
+        ensure(not target.is_symlink(), "UNSAFE_TRANSITION_RECEIPT")
+        if target.exists():
+            ensure(private_read(target, MAXIMUM_INTENT_BYTES) == data, "TRANSITION_RECEIPT_CHANGED")
+        else:
+            atomic_write(target, data)

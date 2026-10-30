@@ -38,7 +38,17 @@ class CoordinatedEngine:
         self.store.save(intent)
         try:
             self._install(intent)
+            return {"backendSnapshot": intent["backup"], "frontendSnapshot": intent["frontendBackup"]}
         except Exception as error:
+            if intent["phase"] == "committed":
+                # The candidate may already be live or its receipt durable. Do
+                # not silently reverse a committed pair after an uncertain
+                # acknowledgement; retain intent for explicit reconciliation.
+                try:
+                    self.runtime.close_gate()
+                except Exception:
+                    pass
+                raise TransitionError("RECOVERY_REQUIRED") from error
             try:
                 self._restore(intent)
             except Exception:
@@ -56,11 +66,20 @@ class CoordinatedEngine:
                 self.runtime.close_gate()
                 self.runtime.verify_pair(intent["candidate"])
                 self.runtime.open_gate()
-                self.store.clear()
-                return "completed"
             except Exception:
                 # A committed candidate is not trusted after a failed recheck.
-                pass
+                self._restore(intent)
+                return "rolledBack"
+            try:
+                self.store.complete(intent)
+                self.store.clear()
+            except Exception:
+                try:
+                    self.runtime.close_gate()
+                except Exception:
+                    pass
+                raise TransitionError("RECOVERY_REQUIRED") from None
+            return "completed"
         self._restore(intent)
         return "rolledBack"
 
@@ -86,6 +105,7 @@ class CoordinatedEngine:
         # A crash before this durable commit must restore the old pair.
         self._save_phase(intent, "committed")
         self.runtime.open_gate()
+        self.store.complete(intent)
         self.store.clear()
 
     def _restore(self, intent):

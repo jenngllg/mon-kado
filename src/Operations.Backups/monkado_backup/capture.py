@@ -89,6 +89,8 @@ def validate_shape(paths, schema_version=4):
     if schema_version >= 5:
         required.update({"configuration/caddy.env", "configuration/active.env", "configuration/deployment-status.json",
                          "binaries/api", "binaries/worker", "binaries/migrate"})
+    if schema_version >= 6:
+        required.add("configuration/coordinated-manifest.json")
     if not required.issubset(paths):
         raise BackupError("INCOMPLETE_CAPTURE")
     for name in paths:
@@ -199,6 +201,7 @@ def create_native_manifest(root, created_at, postgres_digest, postgres_version, 
              "postgresVersion": postgres_version, "caddySHA256": caddy_digest, "files": entries(root)}
     validate_shape(value["files"], 6)
     value["release"] = native_release(root, value["files"])
+    verify_coordinator(root, value["files"])
     validate_native_metadata(value)
     atomic_json(root / MANIFEST_NAME, value)
     return value
@@ -225,12 +228,29 @@ def verify_native_manifest(root, value):
         raise BackupError("CAPTURE_INTEGRITY_FAILED")
     if native_release(root, inventory) != value["release"]:
         raise BackupError("RELEASE_MISMATCH")
+    if value["schemaVersion"] >= 6:
+        verify_coordinator(root, inventory)
     return value
+
+
+def verify_coordinator(root, inventory):
+    """Bind the captured coordination and backup code to its reviewed manifest."""
+    from coordinated_integrity import FILES as tool_files, validate
+    from release_manifest import configuration_hash
+
+    path = root / "configuration/coordinated-manifest.json"
+    if path.stat().st_size > 65536:
+        raise BackupError("COORDINATOR_MANIFEST_INVALID")
+    manifest = validate(json.loads(path.read_bytes()), configuration_hash(root / "configuration"))
+    for name in tool_files:
+        if inventory["configuration/" + name]["sha256"] != manifest["files"][name]:
+            raise BackupError("COORDINATOR_INTEGRITY_FAILED")
 
 
 def copy_deployment_private(settings, state, configuration):
     """Include only explicit deployment credentials/state, inside the encrypted capture."""
     for source, name in ((settings / "deployment-smoke.json", "deployment-smoke.json"),
+                         (settings / "coordinated-manifest.json", "coordinated-manifest.json"),
                          (state / "status.json", "deployment-status.json")):
         if not source.exists() and not source.is_symlink():
             continue

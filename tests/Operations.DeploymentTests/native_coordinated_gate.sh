@@ -2,6 +2,11 @@
 # Run in a new mount/network namespace; never modify the caller's firewall.
 set -Eeuo pipefail
 [[ ${EUID} == 0 && -n ${MONKADO_TEST_NFT:-} ]] || exit 1
+[[ $(readlink /proc/self/ns/net) != $(readlink /proc/1/ns/net) &&
+   $(readlink /proc/self/ns/mnt) != $(readlink /proc/1/ns/mnt) ]] || {
+    echo 'An isolated mount and network namespace is required.' >&2
+    exit 1
+}
 repo=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)
 work=$(mktemp -d /tmp/monkado-gate-test-XXXXXX)
 server=
