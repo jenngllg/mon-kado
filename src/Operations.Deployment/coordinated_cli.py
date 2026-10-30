@@ -18,6 +18,7 @@ from coordinated_runtime import CoordinatedRuntime
 from coordinated_store import CoordinatedStore
 from deploy_cli import approved_release
 from deploy_policy import DeploymentError, ensure
+from deploy_process import command
 from deploy_runtime import Runtime
 from deploy_storage import Store
 import frontend_runtime as hosting
@@ -51,15 +52,16 @@ def installed_tool():
 
 def require_protected_tool(manifest):
     """Require the installed manifest to equal the protected public channel."""
-    with tempfile.TemporaryDirectory(prefix="coordinator-approved-") as temporary:
-        path = Path(temporary) / "release.json"
-        hosting.download(TOOL_POINTER, path, 131072)
-        release = json.loads(path.read_text(encoding="utf-8"))
-        ensure(isinstance(release, dict) and release.get("tag_name") == "coordinator-production" and
-               release.get("draft") is False and release.get("prerelease") is False and
-               isinstance(release.get("body"), str) and len(release["body"]) <= 65536, "TOOL_APPROVAL_INVALID")
-        value = validate_tool(json.loads(release["body"]), configuration_hash(ROOT))
-        ensure(value == manifest, "TOOL_APPROVAL_CHANGED")
+    raw = command(["curl", "--disable", "--fail", "--silent", "--show-error", "--location", "--max-redirs", "0",
+                   "--proto", "=https", "--proto-redir", "=https", "--noproxy", "*", "--connect-timeout", "10",
+                   "--max-time", "30", "--max-filesize", "131072", "--header", "Accept: application/vnd.github+json",
+                   TOOL_POINTER], maximum=131072)
+    release = json.loads(raw)
+    ensure(isinstance(release, dict) and release.get("tag_name") == "coordinator-production" and
+           release.get("draft") is False and release.get("prerelease") is False and
+           isinstance(release.get("body"), str) and len(release["body"]) <= 65536, "TOOL_APPROVAL_INVALID")
+    value = validate_tool(json.loads(release["body"]), configuration_hash(ROOT))
+    ensure(value == manifest, "TOOL_APPROVAL_CHANGED")
 
 
 def approved_pairs(publisher, backend_store):
