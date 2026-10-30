@@ -1,6 +1,7 @@
 """Check production entrypoint ordering without invoking real services."""
 
 from contextlib import contextmanager
+import json
 from pathlib import Path
 import sys
 import unittest
@@ -29,6 +30,31 @@ class CoordinatedCliTests(unittest.TestCase):
             yield
         finally:
             self.events.append("unlock")
+
+    def test_require_protected_tool_when_approved_requests_json_without_redirects(self):
+        manifest = {"revision": "reviewed"}
+        release = {"tag_name": "coordinator-production", "draft": False, "prerelease": False,
+                   "body": json.dumps(manifest)}
+        with patch.object(cli, "command", return_value=json.dumps(release).encode()) as command, \
+             patch.object(cli, "configuration_hash", return_value="configuration"), \
+             patch.object(cli, "validate_tool", return_value=manifest) as validate:
+            cli.require_protected_tool(manifest)
+        args, kwargs = command.call_args
+        self.assertEqual(args[0][-1], cli.TOOL_POINTER)
+        self.assertIn("Accept: application/vnd.github+json", args[0])
+        self.assertEqual(args[0][args[0].index("--max-redirs") + 1], "0")
+        self.assertEqual(args[0][args[0].index("--noproxy") + 1], "*")
+        self.assertEqual(kwargs["maximum"], 131072)
+        validate.assert_called_once_with(manifest, "configuration")
+
+    def test_require_protected_tool_when_channel_changes_fails_closed(self):
+        release = {"tag_name": "coordinator-production", "draft": False, "prerelease": False,
+                   "body": json.dumps({"revision": "different"})}
+        with patch.object(cli, "command", return_value=json.dumps(release).encode()), \
+             patch.object(cli, "configuration_hash", return_value="configuration"), \
+             patch.object(cli, "validate_tool", return_value={"revision": "different"}), \
+             self.assertRaisesRegex(DeploymentError, "TOOL_APPROVAL_CHANGED"):
+            cli.require_protected_tool({"revision": "reviewed"})
 
     def test_deploy_when_ready_takes_backup_before_lock_and_transition(self):
         with patch.object(cli, "installed_tool", return_value=({"reviewed": True}, "digest")), \
