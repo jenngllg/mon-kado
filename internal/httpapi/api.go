@@ -164,7 +164,7 @@ func (a *API) route(pattern string, opt options, handler endpoint) {
 			}
 		}
 		if opt.CSRF && !a.validCSRF(r, p.MemberID) {
-			a.writeError(w, r, domain.Failure(400, domain.RequestBadRequest, "The CSRF token is invalid."))
+			a.writeError(w, r, domain.Failure(400, domain.SecurityCSRFValidationFailed, "The CSRF token is invalid."))
 			return
 		}
 		result, err := handler(&request{Request: r, Principal: p, Now: a.Service.Now()})

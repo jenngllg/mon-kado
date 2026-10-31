@@ -59,6 +59,7 @@ const (
 	RequestPreconditionRequired            = "REQUEST_PRECONDITION_REQUIRED"
 	SecurityUnauthorized                   = "SECURITY_UNAUTHORIZED"
 	SecurityForbidden                      = "SECURITY_FORBIDDEN"
+	SecurityCSRFValidationFailed           = "SECURITY_CSRF_VALIDATION_FAILED"
 	MemberDisplayNameTagUnavailable        = "MEMBER_DISPLAY_NAME_TAG_UNAVAILABLE"
 	MemberHandleAlreadyUsed                = "MEMBER_HANDLE_ALREADY_USED"
 	MemberProfileVersionConflict           = "MEMBER_PROFILE_VERSION_CONFLICT"
@@ -144,6 +145,7 @@ func KnownErrorCode(code string) bool {
 		RequestPreconditionRequired,
 		SecurityUnauthorized,
 		SecurityForbidden,
+		SecurityCSRFValidationFailed,
 		MemberDisplayNameTagUnavailable,
 		MemberHandleAlreadyUsed,
 		MemberProfileVersionConflict,
