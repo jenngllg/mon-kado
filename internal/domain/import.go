@@ -5,6 +5,9 @@ import "encoding/json"
 // WishImportPreview contains editable suggestions without creating a wish.
 type WishImportPreview struct {
 	Name     *string          `json:"name"`
+	Note     *string          `json:"note"`
+	Color    *string          `json:"color"`
+	Size     *string          `json:"size"`
 	Url      *string          `json:"url"`
 	Price    *json.Number     `json:"price"`
 	Quantity int              `json:"quantity"`
