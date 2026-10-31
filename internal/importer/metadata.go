@@ -15,9 +15,11 @@ import (
 
 // Metadata contains untrusted suggestions that have passed text and monetary validation.
 type Metadata struct {
-	Name, Image         *string
-	Price               *json.Number
-	UnsupportedCurrency bool
+	Name, Image                   *string
+	Note, Color, Size             *string
+	colorAmbiguous, sizeAmbiguous bool
+	Price                         *json.Number
+	UnsupportedCurrency           bool
 	// PriceAmbiguous indicates conflicting or unselected prices must remain unset.
 	PriceAmbiguous bool
 	// Images contains ordered alternative product images, bounded by the preview pipeline.
@@ -81,13 +83,14 @@ func Extract(content []byte, base *url.URL) Metadata {
 		suppressPrice = true
 	}
 	unknownDefaultPrice, unsupportedDefaultPrice := hasIncompleteUnselectedVariantPrices(product, base, canonical)
+	details := productDetails(root, product, base, canonical)
 	product = selectedMarkupVariant(root, product, base, canonical)
 	// A redirected storefront or category must not become a product suggestion.
 	if product == nil && canonical.String() != base.String() &&
 		(canonical.Path == "" || canonical.Path == "/" || canonical.Hostname() != base.Hostname()) {
 		return Metadata{}
 	}
-	result := Metadata{}
+	result := details
 	if identity, conflict := productGTIN(product); !conflict {
 		result.productIdentity = identity
 	}
@@ -103,6 +106,11 @@ func Extract(content []byte, base *url.URL) Metadata {
 			}
 			break
 		}
+	}
+	if result.Name == nil {
+		// A storefront/app shell description is not a product description and
+		// must not survive when a later provider supplies the real product.
+		result.Note, result.Color, result.Size = nil, nil, nil
 	}
 	result.Images = imageCandidates(root, base, product, result.Name)
 	if len(result.Images) > 0 {

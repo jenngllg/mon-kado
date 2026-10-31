@@ -1,5 +1,35 @@
 # Wish link import (#988)
 
+## Editable product details in wish creation
+
+The creation route connects the existing authenticated preview service again.
+Pasting an HTTP(S) product URL starts the bounded analysis in the background.
+The user can continue through the form and edit suggestions while it finishes;
+late responses never replace a field changed since analysis started. Existing
+personal text, prices and preferences are retained. Replacing or clearing a link
+withdraws only unchanged suggestions belonging to the previous product.
+
+The additive nullable preview fields `note`, `color` and `size` map to the
+existing Description, Colour and Size / dimensions controls. Description uses
+the selected Schema.org Product first, then Open Graph, Twitter and ordinary
+description metadata. HTML is reduced to plain text, normalized to NFC and
+bounded to the existing 500-character note limit. Colour and size use explicit
+structured attributes, including standard microdata/RDFa. URL-selected variants
+win; unselected attributes must agree across every relevant variant. A page's
+default size control does not select a size for the user, and a fallback cannot
+resolve a known ambiguous attribute by guessing one variant.
+
+Missing optional details do not trigger additional provider requests. Quantity,
+favourite, surprise mode and second-hand preferences remain personal choices.
+Surprise mode does not analyze a product link. Suggestions and image bytes remain
+temporary until explicit final submission; the existing create/upload flow owns
+persistence. Merchant price conflicts, including CSS-marked visible amounts that
+disagree with structured offers, leave the price empty for manual verification.
+
+The [30-merchant live report](testing/product-link-import/README.md) records the
+actual tested configuration and refusals. It does not claim universal merchant
+support or qualify an unconfigured Cloudflare/Firecrawl relay.
+
 The existing authenticated preview endpoint remains unchanged. It returns suggestions only: no wish or image is persisted until the member submits the form.
 
 ## Merchant support

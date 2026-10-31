@@ -1,0 +1,1567 @@
+{
+  "mode": "direct-default-providers-disabled",
+  "note": "Download uses the unchanged secure transport. HTTP status on failure comes from a second diagnostic request with the same validated public-only transport and can differ from the first response. Raw HTML is private and not intended for Git.",
+  "records": [
+    {
+      "merchant": "Amazon",
+      "url": "https://www.amazon.fr/dp/B0DHSDNPHC",
+      "observedAt": "2026-10-31T11:26:27.3145665Z",
+      "elapsedMs": 1700,
+      "finalUrl": "https://www.amazon.fr/dp/B0DHSDNPHC",
+      "media": "text/html",
+      "bytes": 1773997,
+      "htmlSha256": "a258e0fee6cf0bfb5434fd9c4aed34b4e0eb500d59758ef8188729fea7b8ef49",
+      "privateHtmlFile": "01.html",
+      "metadata": [
+        {
+          "content": "LEGO Super Mario : Mario Kart – Yoshimoto 72031 | Jeu de construction pour enfant dès 7 ans, maquette collector, figurine de Yoshi, cadeau pour fan de jeux vidéo, 133 pièces : Amazon.fr: Jeux et Jouets",
+          "key": "description"
+        }
+      ],
+      "visiblePriceContexts": [
+        "sures et bijoux pour garçons Vêtements, chaussures et bijoux pour bébés Moins de 10€ Musique : CD & Vinyles Musique classique Prime Video Prévoyez et Économisez Secteu",
+        "de Personnage – Série 2, Jouet de Collection, 1 unité (modèle Choisi au Hasard) 4,6 3 270 10,49€ 10 , 49 € Super Mario 7356 Blow Up! Shaky Tower 4,6 12 948 14,99€ 14 , 99 € LE",
+        "érie 2, Jouet de Collection, 1 unité (modèle Choisi au Hasard) 4,6 3 270 10,49€ 10 , 49 € Super Mario 7356 Blow Up! Shaky Tower 4,6 12 948 14,99€ 14 , 99 € LEGO Ensemble ",
+        "si au Hasard) 4,6 3 270 10,49€ 10 , 49 € Super Mario 7356 Blow Up! Shaky Tower 4,6 12 948 14,99€ 14 , 99 € LEGO Ensemble d'extension Surprise de Super Champignon 4,6 1 554 8,85€",
+        "3 270 10,49€ 10 , 49 € Super Mario 7356 Blow Up! Shaky Tower 4,6 12 948 14,99€ 14 , 99 € LEGO Ensemble d'extension Surprise de Super Champignon 4,6 1 554 8,85€ 8 , 85 € ",
+        "6 12 948 14,99€ 14 , 99 € LEGO Ensemble d'extension Surprise de Super Champignon 4,6 1 554 8,85€ 8 , 85 € Jeux et Jouets › Jeux de construction › Sets de jeux de construction ",
+        "14 , 99 € LEGO Ensemble d'extension Surprise de Super Champignon 4,6 1 554 8,85€ 8 , 85 € Jeux et Jouets › Jeux de construction › Sets de jeux de construction Prix plus ",
+        "u pour fan de jeux vidéo, 321 pièces 4,7 sur 5 étoiles 692 43 offres à partir de 3030€ 30 30 € LEGO Sonic The Hedgehog : Knuckles Contre l’Egg Crusher de Dr. Eggman 77",
+        "an de jeux vidéo, 321 pièces 4,7 sur 5 étoiles 692 43 offres à partir de 3030€ 30 30 € LEGO Sonic The Hedgehog : Knuckles Contre l’Egg Crusher de Dr. Eggman 77005 | Joue",
+        "s du Chaos, cadeau pour fan de jeux vidéo, 350 pièces 4,8 sur 5 étoiles 205 -48 % 20,99€ 20 , 99 € Conseillé : 39,99 € LEGO Disney Marvel Ultron Contre Iron Man 11209 |",
+        "s, cadeau pour fan de jeux vidéo, 350 pièces 4,8 sur 5 étoiles 205 -48 % 20,99€ 20 , 99 € Conseillé : 39,99 € LEGO Disney Marvel Ultron Contre Iron Man 11209 | Jouet pour ",
+        "x vidéo, 350 pièces 4,8 sur 5 étoiles 205 -48 % 20,99€ 20 , 99 € Conseillé : 39,99 € LEGO Disney Marvel Ultron Contre Iron Man 11209 | Jouet pour garçon ou fille dès 4",
+        " super-héros, 2 minifigurines, idée cadeau, 96 pièces 4,6 sur 5 étoiles 51 -30 % 13,99€ 13 , 99 € Conseillé : 19,99 € LEGO Sonic The Hedgehog : Voiture Silver & Monste",
+        "ros, 2 minifigurines, idée cadeau, 96 pièces 4,6 sur 5 étoiles 51 -30 % 13,99€ 13 , 99 € Conseillé : 19,99 € LEGO Sonic The Hedgehog : Voiture Silver & Monster Truck Knuc",
+        "ée cadeau, 96 pièces 4,6 sur 5 étoiles 51 -30 % 13,99€ 13 , 99 € Conseillé : 19,99 € LEGO Sonic The Hedgehog : Voiture Silver & Monster Truck Knuckles 77118 | Jouet pour",
+        "os, jouet camion et voiture, cadeau gaming, 378 pièces 4,8 sur 5 étoiles 192 -28 % 28,99€ 28 , 99 € Conseillé : 39,99 € LEGO Marvel Spider-Man et sa voiture contre Wolve",
+        " camion et voiture, cadeau gaming, 378 pièces 4,8 sur 5 étoiles 192 -28 % 28,99€ 28 , 99 € Conseillé : 39,99 € LEGO Marvel Spider-Man et sa voiture contre Wolverine vénomi",
+        "u gaming, 378 pièces 4,8 sur 5 étoiles 192 -28 % 28,99€ 28 , 99 € Conseillé : 39,99 € LEGO Marvel Spider-Man et sa voiture contre Wolverine vénomisé 76336 | Jouet pour ",
+        "uet de super-héros, voiture, idée cadeau, 134 pièces 4,7 sur 5 étoiles 373 -25 % 14,99€ 14 , 99 € Conseillé : 19,99 € 65 Pcs Thème du Jeu Anniversaire Vaisselle Kit, ",
+        "per-héros, voiture, idée cadeau, 134 pièces 4,7 sur 5 étoiles 373 -25 % 14,99€ 14 , 99 € Conseillé : 19,99 € 65 Pcs Thème du Jeu Anniversaire Vaisselle Kit, Décoration ",
+        "e cadeau, 134 pièces 4,7 sur 5 étoiles 373 -25 % 14,99€ 14 , 99 € Conseillé : 19,99 € 65 Pcs Thème du Jeu Anniversaire Vaisselle Kit, Décoration Danniversaire Vaisselle",
+        "te,Décorations de Table D'anniversaire Assiettes,Serviette,Nappe 4,7 sur 5 étoiles 9 25,98€ 25 , 98 € Recevez-le mardi 3 novembre Livraison GRATUITE par Amazon Série suivant",
+        "ions de Table D'anniversaire Assiettes,Serviette,Nappe 4,7 sur 5 étoiles 9 25,98€ 25 , 98 € Recevez-le mardi 3 novembre Livraison GRATUITE par Amazon Série suivante de diaposi"
+      ],
+      "classification": "html_retrieved",
+      "priceVerification": {
+        "evidence": "No product JSON-LD Offer or price metadata; selected ASIN corePrice_desktop content empty; visible amounts belong to recommendations or other offer contexts",
+        "verdict": "correctly_unset"
+      }
+    },
+    {
+      "merchant": "Maisons du Monde",
+      "url": "https://www.maisonsdumonde.com/FR/fr/p/vase-en-verre-teinte-vert-h18-241834.htm",
+      "observedAt": "2026-10-31T11:26:29.0261342Z",
+      "elapsedMs": 170,
+      "downloadError": "merchant response is unavailable",
+      "diagnosticHttpStatus": 403,
+      "classification": "http_403_on_second_secure_request"
+    },
+    {
+      "merchant": "Decathlon",
+      "url": "https://www.decathlon.fr/p/gourde-900-isotherme-inox-0-8l-bouchon-a-ouverture-rapide-pour-la-randonnee/301275/c328m8971230",
+      "observedAt": "2026-10-31T11:26:29.3599421Z",
+      "elapsedMs": 38,
+      "downloadError": "merchant response is unavailable",
+      "diagnosticHttpStatus": 403,
+      "classification": "http_403_on_second_secure_request"
+    },
+    {
+      "merchant": "Cdiscount",
+      "url": "https://www.cdiscount.com/juniors/jeux-de-construction/lego-city-60454-le-camping-car-d-aventures-jeu-d/f-12083-lego60454.html",
+      "observedAt": "2026-10-31T11:26:29.4248784Z",
+      "elapsedMs": 50,
+      "downloadError": "merchant response is unavailable",
+      "diagnosticHttpStatus": 403,
+      "classification": "http_403_on_second_secure_request"
+    },
+    {
+      "merchant": "Fnac",
+      "url": "https://www.fnac.com/LEGO-Icons-10281-Bonsai/a15233617/w-4",
+      "observedAt": "2026-10-31T11:26:29.5107584Z",
+      "elapsedMs": 56,
+      "downloadError": "merchant response is unavailable",
+      "diagnosticHttpStatus": 403,
+      "classification": "http_403_on_second_secure_request"
+    },
+    {
+      "merchant": "Darty",
+      "url": "https://www.darty.com/nav/achat/accessoires/casque_ecouteurs/casque_arceau/marshall_major_v_black.html",
+      "observedAt": "2026-10-31T11:26:29.6298572Z",
+      "elapsedMs": 94,
+      "downloadError": "merchant response is unavailable",
+      "diagnosticHttpStatus": 403,
+      "classification": "http_403_on_second_secure_request"
+    },
+    {
+      "merchant": "IKEA",
+      "url": "https://www.ikea.com/fr/fr/p/kallax-etagere-blanc-20275814/",
+      "observedAt": "2026-10-31T11:26:29.8002869Z",
+      "elapsedMs": 391,
+      "finalUrl": "https://www.ikea.com/fr/fr/p/kallax-etagere-blanc-20275814/",
+      "media": "text/html",
+      "bytes": 1172994,
+      "htmlSha256": "18fe22aa46190a89c2e0ca1ef0a28c2a893708ec89a863c02c59ef1ba40a13bf",
+      "privateHtmlFile": "07.html",
+      "metadata": [
+        {
+          "content": "En ligne ou en magasin, trouvez notre produit KALLAX Étagère, blanc, 77x77 cm. Profitez de prix IKEA toute l'année ✅ Faites vous facilement livrer à domicile.",
+          "key": "description"
+        },
+        {
+          "content": "En ligne ou en magasin, trouvez notre produit KALLAX Étagère, blanc, 77x77 cm. Profitez de prix IKEA toute l'année ✅ Faites vous facilement livrer à domicile.",
+          "key": "og:description"
+        },
+        {
+          "content": "KALLAX Étagère, blanc, 77x77 cm",
+          "key": "og:title"
+        },
+        {
+          "content": "KALLAX Étagère, blanc, 77x77 cm  - IKEA",
+          "key": "og:title"
+        },
+        {
+          "content": "En ligne ou en magasin, trouvez notre produit KALLAX Étagère, blanc, 77x77 cm. Profitez de prix IKEA toute l'année ✅ Faites vous facilement livrer à domicile.",
+          "key": "og:description"
+        },
+        {
+          "content": "product",
+          "key": "og:type"
+        },
+        {
+          "content": "https://www.ikea.com/fr/fr/images/products/kallax-etagere-blanc__0644753_pe702937_s5.jpg",
+          "key": "og:image"
+        },
+        {
+          "content": "https://www.ikea.com/fr/fr/p/kallax-etagere-blanc-20275814/",
+          "key": "og:url"
+        },
+        {
+          "content": "IKEA",
+          "key": "og:site_name"
+        }
+      ],
+      "structured": [
+        {
+          "@type": "Product",
+          "color": "blanc",
+          "name": "KALLAX Étagère - blanc 77x77 cm",
+          "path": "$",
+          "sku": "202.758.14",
+          "url": "https://www.ikea.com/fr/fr/p/kallax-etagere-blanc-20275814/"
+        },
+        {
+          "@type": "Offer",
+          "availability": "https://schema.org/InStock",
+          "path": "$.offers",
+          "url": "https://www.ikea.com/fr/fr/p/kallax-etagere-blanc-20275814/"
+        },
+        {
+          "@type": "UnitPriceSpecification",
+          "path": "$.offers.priceSpecification[0]",
+          "price": "34.99",
+          "priceCurrency": "EUR",
+          "validFrom": "2026-09-01Z",
+          "validThrough": "2027-08-31Z"
+        },
+        {
+          "@type": "UnitPriceSpecification",
+          "path": "$.offers.priceSpecification[1]",
+          "price": "39.99",
+          "priceCurrency": "EUR"
+        },
+        {
+          "@type": "OfferShippingDetails",
+          "path": "$.offers.shippingDetails"
+        }
+      ],
+      "visiblePriceContexts": [
+        "pte Favoris Panier Nouveau : Faites vous livrer plus près de chez vous à partir de 2€ Produits Rangements Bibliothèques et étagères Meubles étagères KALLAX Étagère",
+        "ormal view Tous Plus de KALLAX série Prix baissé KALLAX Étagère, blanc, 77x77 cm 39 , 99 € Ancien prix 39,99€ 34 , 99 € Prix 34,99€ Ancien prix: 39,99€ Prix valable de",
+        "KALLAX série Prix baissé KALLAX Étagère, blanc, 77x77 cm 39 , 99 € Ancien prix 39,99€ 34 , 99 € Prix 34,99€ Ancien prix: 39,99€ Prix valable depuis le 1 sept. 2026 ",
+        "rie Prix baissé KALLAX Étagère, blanc, 77x77 cm 39 , 99 € Ancien prix 39,99€ 34 , 99 € Prix 34,99€ Ancien prix: 39,99€ Prix valable depuis le 1 sept. 2026 Dont Éco-pa",
+        " KALLAX Étagère, blanc, 77x77 cm 39 , 99 € Ancien prix 39,99€ 34 , 99 € Prix 34,99€ Ancien prix: 39,99€ Prix valable depuis le 1 sept. 2026 Dont Éco-part. Ecomaison ",
+        "nc, 77x77 cm 39 , 99 € Ancien prix 39,99€ 34 , 99 € Prix 34,99€ Ancien prix: 39,99€ Prix valable depuis le 1 sept. 2026 Dont Éco-part. Ecomaison 1,50€ Avis: 4.6 sur ",
+        " Ancien prix: 39,99€ Prix valable depuis le 1 sept. 2026 Dont Éco-part. Ecomaison 1,50€ Avis: 4.6 sur 5 étoiles Nombre total d'avis: 1803 (1803) Choisissez couleur : Blanc"
+      ],
+      "classification": "html_retrieved",
+      "priceVerification": {
+        "evidence": "JSON-LD offer or active price specification and visible product price agree in the same downloaded HTML",
+        "currency": "EUR",
+        "verdict": "corroborated_current_html",
+        "price": 34.99
+      }
+    },
+    {
+      "merchant": "LEGO",
+      "url": "https://www.lego.com/fr-fr/product/bonsai-tree-10281",
+      "observedAt": "2026-10-31T11:26:30.1973278Z",
+      "elapsedMs": 41,
+      "downloadError": "merchant response is unavailable",
+      "diagnosticHttpStatus": 403,
+      "classification": "http_403_on_second_secure_request"
+    },
+    {
+      "merchant": "Boulanger",
+      "url": "https://www.boulanger.com/ref/1204873",
+      "observedAt": "2026-10-31T11:26:30.2769512Z",
+      "elapsedMs": 81,
+      "finalUrl": "https://www.boulanger.com/ref/1204873",
+      "media": "text/html",
+      "bytes": 531679,
+      "htmlSha256": "585730fb1564464cd105ad47823a5a34ea8f30a0aeb16d840cc1b78da5c0c9d3",
+      "privateHtmlFile": "09.html",
+      "metadata": [
+        {
+          "content": "Casque MARSHALL Major V Noir - Bluetooth, autonomie 100h, pliable au meilleur rapport qualité/prix ! Livraison Offerte* - Retrait 30min en Magasin* - Retrait Drive* - Garantie 2 ans* - SAV 7j/7",
+          "key": "description"
+        },
+        {
+          "content": "product",
+          "key": "og:type"
+        },
+        {
+          "content": "Casque MARSHALL Major V Noir - Bluetooth, autonomie 100h, pliable | Boulanger",
+          "key": "og:title"
+        },
+        {
+          "content": "Casque MARSHALL Major V Noir - Bluetooth, autonomie 100h, pliable au meilleur rapport qualité/prix ! Livraison Offerte* - Retrait 30min en Magasin* - Retrait Drive* - Garantie 2 ans* - SAV 7j/7",
+          "key": "og:description"
+        },
+        {
+          "content": "https://www.boulanger.com/ref/1204873",
+          "key": "og:url"
+        },
+        {
+          "content": "https://boulanger.scene7.com/is/image/Boulanger/7340055401104_h_f_l_0",
+          "key": "og:image"
+        },
+        {
+          "content": "www.boulanger.com",
+          "key": "og:site_name"
+        },
+        {
+          "content": "fr-FR",
+          "key": "og:locale"
+        }
+      ],
+      "structured": [
+        {
+          "@type": "Product",
+          "color": "",
+          "name": "Casque MARSHALL Major V Noir - Bluetooth, autonomie 100h, pliable",
+          "path": "$",
+          "sku": "860fa2a4-0147-4ea3-b50d-5e0e3c38cb62",
+          "url": "https://www.boulanger.com/ref/1204873"
+        },
+        {
+          "@type": "Offer",
+          "availability": "https://schema.org/InStock",
+          "path": "$.offers",
+          "price": "149.99",
+          "priceCurrency": "EUR",
+          "url": "https://www.boulanger.com/ref/1204873"
+        },
+        {
+          "@type": "OfferShippingDetails",
+          "path": "$.offers.shippingDetails"
+        }
+      ],
+      "visiblePriceContexts": [
+        "me> 🎉 C'est parti pour le Black Friday : Réglez vos achats en 3X sans frais dès 100€ d'achat* Besoin d'aide ? Assistant IA Me connecter Bonjour Mon compte Mes achats en ",
+        "inity Economiser avec le Rachat Caractéristiques Avis clients Ajouter au panier • 149,99€ Accueil Tv - Image - Son Casque audio MARSHALL Réf. 120 4873 Casque MARSHALL Major ",
+        "suel(s) du produit neuf Voir les vidéos Quitter la vue 360° Ajouter au comparateur 149,99€ dont 0,04€ d'éco-part. cagnottés avec Le Club+ Payez en 3x sans frais 49,99€ /",
+        "uit neuf Voir les vidéos Quitter la vue 360° Ajouter au comparateur 149,99€ dont 0,04€ d'éco-part. cagnottés avec Le Club+ Payez en 3x sans frais 49,99€ /mois en 3x (T",
+        " 149,99€ dont 0,04€ d'éco-part. cagnottés avec Le Club+ Payez en 3x sans frais 49,99€ /mois en 3x (TAEG 0.0%) sans frais Attention ! Un crédit coûte de l'argent et doit",
+        "carte cadeau Estimer un produit Supprimer Options de livraison Ajouter au panier • 149,99€ Garantie légale : 2 ans Facilitez votre installation Livraison dans la pièce de vo",
+        "RSHALL Casque MARSHALL Major IV Noir - Bluetooth, autonomie 80h, pliable 4,8/5 (126) 149,99€ MARSHALL Casque MARSHALL Major V Marron - Bluetooth, autonomie 100h, pliable 4,8/5 (",
+        "SHALL Casque MARSHALL Major V Marron - Bluetooth, autonomie 100h, pliable 4,8/5 (18) 149,99€ MARSHALL Casque MARSHALL Monitor III ANC Noir - Réduction de bruit active, Bluetoot",
+        "ANC Noir - Réduction de bruit active, Bluetooth, autonomie 100h, pliable 4,8/5 (25) 349,99€ MARSHALL Casque MARSHALL Major V Crème Prix de référence 149,99€ -38% 92,50€ ",
+        "ble 4,8/5 (25) 349,99€ MARSHALL Casque MARSHALL Major V Crème Prix de référence 149,99€ -38% 92,50€ SONY Casque SONY WH-CH520 Bleu - Bluetooth, Autonomie 50h, Charge rapi",
+        "349,99€ MARSHALL Casque MARSHALL Major V Crème Prix de référence 149,99€ -38% 92,50€ SONY Casque SONY WH-CH520 Bleu - Bluetooth, Autonomie 50h, Charge rapide 4,7/5 (133)",
+        "SONY Casque SONY WH-CH520 Bleu - Bluetooth, Autonomie 50h, Charge rapide 4,7/5 (133) 34,99€ SONY Casque SONY WH-CH520 Noir - Bluetooth, Autonomie 50h, Charge rapide 4,7/5 (133)",
+        "SONY Casque SONY WH-CH520 Noir - Bluetooth, Autonomie 50h, Charge rapide 4,7/5 (133) 34,99€ JBL Casque JBL Tune 720BT Noir 4,7/5 (217) 60,44€ SONY Casque SONY WH-CH520 Blanc ",
+        "e 50h, Charge rapide 4,7/5 (133) 34,99€ JBL Casque JBL Tune 720BT Noir 4,7/5 (217) 60,44€ SONY Casque SONY WH-CH520 Blanc - Bluetooth, Autonomie 50h, Charge rapide 4,7/5 (133",
+        "ONY Casque SONY WH-CH520 Blanc - Bluetooth, Autonomie 50h, Charge rapide 4,7/5 (133) 52,99€ MARSHALL Casque MARSHALL Milton ANC Noir - Réduction de bruit active, Bluetooth, au",
+        "ANC Noir - Réduction de bruit active, Bluetooth, autonomie 100h, pliable 4,7/5 (15) 199,99€ JBL Casque JBL Tune 730BT Noir 4,1/5 (11) 79,99€ SONY Casque SONY WH-CH520 Rose Re",
+        "tonomie 100h, pliable 4,7/5 (15) 199,99€ JBL Casque JBL Tune 730BT Noir 4,1/5 (11) 79,99€ SONY Casque SONY WH-CH520 Rose Reconditionné 4,7/5 (133) 59,00€ SONY Casque SONY ",
+        "T Noir 4,1/5 (11) 79,99€ SONY Casque SONY WH-CH520 Rose Reconditionné 4,7/5 (133) 59,00€ SONY Casque SONY WH-1000XM4 Noir Reconditionné 4,7/5 (491) 199,00€ SONY Casque SO",
+        "né 4,7/5 (133) 59,00€ SONY Casque SONY WH-1000XM4 Noir Reconditionné 4,7/5 (491) 199,00€ SONY Casque SONY WH-1000XM4 Argent Reconditionné 4,7/5 (491) 199,00€ JBL Casque J",
+        " 4,7/5 (491) 199,00€ SONY Casque SONY WH-1000XM4 Argent Reconditionné 4,7/5 (491) 199,00€ JBL Casque JBL Live 660 NC Noir Reconditionné 4,3/5 (55) 79,00€ BOSE Casque BOSE ",
+        "nné 4,7/5 (491) 199,00€ JBL Casque JBL Live 660 NC Noir Reconditionné 4,3/5 (55) 79,00€ BOSE Casque BOSE QC45 Noir Reconditionné 4,7/5 (87) Prix de référence 139,00€ -",
+        "5) 79,00€ BOSE Casque BOSE QC45 Noir Reconditionné 4,7/5 (87) Prix de référence 139,00€ -6% 130,00€ *L'offre de rachat proposée est une estimation basée sur l'état dé",
+        "SE Casque BOSE QC45 Noir Reconditionné 4,7/5 (87) Prix de référence 139,00€ -6% 130,00€ *L'offre de rachat proposée est une estimation basée sur l'état déclaré de votr"
+      ],
+      "classification": "html_retrieved",
+      "priceVerification": {
+        "evidence": "JSON-LD offer or active price specification and visible product price agree in the same downloaded HTML",
+        "currency": "EUR",
+        "verdict": "corroborated_current_html",
+        "price": 149.99
+      }
+    },
+    {
+      "merchant": "Cultura",
+      "url": "https://www.cultura.com/p-azul-3504871.html",
+      "observedAt": "2026-10-31T11:26:30.3649202Z",
+      "elapsedMs": 42,
+      "downloadError": "merchant response is unavailable",
+      "diagnosticHttpStatus": 403,
+      "classification": "http_403_on_second_secure_request"
+    },
+    {
+      "merchant": "Sephora",
+      "url": "https://www.sephora.fr/p/335957.html",
+      "observedAt": "2026-10-31T11:26:30.4480493Z",
+      "elapsedMs": 238,
+      "downloadError": "merchant response is unavailable",
+      "diagnosticHttpStatus": 403,
+      "classification": "http_403_on_second_secure_request"
+    },
+    {
+      "merchant": "Nocibé",
+      "url": "https://www.nocibe.fr/fr/p/3000056790?variant=606251",
+      "observedAt": "2026-10-31T11:26:30.7479149Z",
+      "elapsedMs": 79,
+      "downloadError": "merchant response is unavailable",
+      "diagnosticHttpStatus": 403,
+      "classification": "http_403_on_second_secure_request"
+    },
+    {
+      "merchant": "La Redoute",
+      "url": "https://www.laredoute.fr/ppdp/prod-602685461.aspx",
+      "observedAt": "2026-10-31T11:26:30.8782524Z",
+      "elapsedMs": 65,
+      "downloadError": "merchant response is unavailable",
+      "diagnosticHttpStatus": 403,
+      "classification": "http_403_on_second_secure_request"
+    },
+    {
+      "merchant": "L'Occitane",
+      "url": "https://fr.loccitane.com/creme-mains-karite-01MA150K26.html",
+      "observedAt": "2026-10-31T11:26:31.0114709Z",
+      "elapsedMs": 486,
+      "downloadError": "merchant redirect limit exceeded",
+      "diagnosticHttpStatus": 302,
+      "classification": "redirect_limit"
+    },
+    {
+      "merchant": "Rituals",
+      "url": "https://www.rituals.com/fr-fr/the-ritual-of-sakura---large-gift-set-2024-1118461.html",
+      "observedAt": "2026-10-31T11:26:31.9575292Z",
+      "elapsedMs": 96,
+      "finalUrl": "https://www.rituals.com/fr-fr/the-ritual-of-sakura---large-gift-set-2024-1118461.html",
+      "media": "text/html",
+      "bytes": 686012,
+      "htmlSha256": "1e30bb685fd3e8384d1ac9b4c06caec76a6b510ca2b9b9b515c18a44d58144fb",
+      "privateHtmlFile": "15.html",
+      "metadata": [
+        {
+          "content": "Ce très beau coffret cadeau est parfait pour offrir à un ami, à un membre de la famille ou pour se faire plaisir ! Il contient une mousse de douche, une bougie parfumée, une crème pour le corps et des mini bâtonnets parfumés. Célébrez chaque jour comme un nouveau départ avec ces essentiels bien-être formulés à partir des ingrédients raffinés que sont les fleurs de cerisier et le lait de riz. Donnez une seconde vie à votre coffret cadeau offert réutilisable en y rangeant des photos, des lettres ou d’autres objets.",
+          "key": "description"
+        }
+      ],
+      "structured": [
+        {
+          "@type": "Product",
+          "name": "The Ritual of Sakura Gift Set L",
+          "path": "$",
+          "sku": "1118461",
+          "url": "https://www.rituals.com/fr-fr/the-ritual-of-sakura---large-gift-set-2024-1118461.html"
+        },
+        {
+          "@type": "Offer",
+          "availability": "https://schema.org/OutOfStock",
+          "path": "$.offers",
+          "price": 39.92,
+          "priceCurrency": "EUR"
+        }
+      ],
+      "visiblePriceContexts": [
+        "t. Ce produit est temporairement indisponible sur rituals.com Livraison offerte dès 35€ d'achat Menu Magazine Impact Assistance Trouver une boutique Nouveautés Shop Cadeau",
+        "40 g, mini bâtonnets parfumés 70 ml Collection: The Ritual of Sakura Format: Large 49,90€ The price is Value price is Valeur produit 62,60€ Vérifier la disponibilité en b",
+        "e Ritual of Sakura Format: Large 49,90€ The price is Value price is Valeur produit 62,60€ Vérifier la disponibilité en boutique Gift Set L 49,90€ 49,90€ 62.599999999999",
+        " price is Valeur produit 62,60€ Vérifier la disponibilité en boutique Gift Set L 49,90€ 49,90€ 62.599999999999994 Valeur produit 62,60€ Livraison offerte dès 35€ d'a",
+        " Valeur produit 62,60€ Vérifier la disponibilité en boutique Gift Set L 49,90€ 49,90€ 62.599999999999994 Valeur produit 62,60€ Livraison offerte dès 35€ d'achat Prof",
+        "nibilité en boutique Gift Set L 49,90€ 49,90€ 62.599999999999994 Valeur produit 62,60€ Livraison offerte dès 35€ d'achat Profitez de votre cadeau membre My Rituals dès",
+        " 49,90€ 49,90€ 62.599999999999994 Valeur produit 62,60€ Livraison offerte dès 35€ d'achat Profitez de votre cadeau membre My Rituals dès 50€ d’achat Livraison so",
+        "Livraison offerte dès 35€ d'achat Profitez de votre cadeau membre My Rituals dès 50€ d’achat Livraison sous 2 - 4 jours. Livraison sous 2 à 3 jours Obtenir des consei"
+      ],
+      "classification": "html_retrieved",
+      "priceVerification": {
+        "structuredPrice": 39.92,
+        "evidence": "Same HTML Product Offer 39.92 vs active displayed 49.90; original-price test id is not sufficient evidence of an old price; no strikethrough",
+        "currency": "EUR",
+        "verdict": "conflict_reproduced",
+        "importedPrice": 39.92,
+        "visibleProductPrice": 49.9
+      }
+    },
+    {
+      "merchant": "Lush",
+      "url": "https://www.lush.com/fr/fr/p/sleepy-body-lotion",
+      "observedAt": "2026-10-31T11:26:32.0591294Z",
+      "elapsedMs": 47,
+      "downloadError": "merchant response is unavailable",
+      "diagnosticHttpStatus": 403,
+      "classification": "http_403_on_second_secure_request"
+    },
+    {
+      "merchant": "Nike",
+      "url": "https://www.nike.com/fr/t/chaussure-nike-air-force-1-07-pour-homme-n8juM1H2/CW2288-111",
+      "observedAt": "2026-10-31T11:26:32.1542584Z",
+      "elapsedMs": 366,
+      "finalUrl": "https://www.nike.com/fr/t/chaussure-nike-air-force-1-07-pour-homme-n8juM1H2/CW2288-111",
+      "media": "text/html",
+      "bytes": 860549,
+      "htmlSha256": "5fc770a96d79b0a77ee59adc8ce091aa22798034ebc140237ac5abf6757c0591",
+      "privateHtmlFile": "17.html",
+      "metadata": [
+        {
+          "content": "Chaussure Nike Air Force 1 '07 pour homme, à retrouver sur Nike.com.  Commande sur Nike.com.",
+          "key": "description"
+        },
+        {
+          "content": "Chaussure Nike Air Force 1 '07 pour homme",
+          "key": "og:title"
+        },
+        {
+          "content": "Chaussure Nike Air Force 1 '07 pour homme, à retrouver sur Nike.com.  Commande sur Nike.com.",
+          "key": "og:description"
+        },
+        {
+          "content": "website",
+          "key": "og:type"
+        },
+        {
+          "content": "https://www.nike.com/fr/t/chaussure-nike-air-force-1-07-pour-homme-n8juM1H2/CW2288-111",
+          "key": "og:url"
+        },
+        {
+          "content": "https://static.nike.com/a/images/t_default/u_9ddf04c7-2a9a-4d76-add1-d15af8f0263d,c_scale,fl_relative,w_1.0,h_1.0,fl_layer_apply/b7d9211c-26e7-431a-ac24-b0540fb3c00f/AIR+FORCE+1+%2707.png",
+          "key": "og:image"
+        },
+        {
+          "content": "fr_FR",
+          "key": "og:locale"
+        },
+        {
+          "content": "Nike.com",
+          "key": "og:site_name"
+        },
+        {
+          "content": "summary_large_image",
+          "key": "twitter:card"
+        },
+        {
+          "content": "@nike",
+          "key": "twitter:site"
+        },
+        {
+          "content": "@nike",
+          "key": "twitter:creator"
+        },
+        {
+          "content": "Chaussure Nike Air Force 1 '07 pour homme",
+          "key": "twitter:title"
+        },
+        {
+          "content": "Chaussure Nike Air Force 1 '07 pour homme, à retrouver sur Nike.com.  Commande sur Nike.com.",
+          "key": "twitter:description"
+        },
+        {
+          "content": "https://static.nike.com/a/images/t_default/u_9ddf04c7-2a9a-4d76-add1-d15af8f0263d,c_scale,fl_relative,w_1.0,h_1.0,fl_layer_apply/b7d9211c-26e7-431a-ac24-b0540fb3c00f/AIR+FORCE+1+%2707.png",
+          "key": "twitter:image"
+        }
+      ],
+      "structured": [
+        {
+          "@id": "https://www.nike.com/fr/t/chaussure-nike-air-force-1-07-pour-homme-n8juM1H2#group",
+          "@type": "ProductGroup",
+          "name": "Chaussure Nike Air Force 1 '07 pour homme",
+          "path": "$[0]",
+          "url": "https://www.nike.com/fr/t/chaussure-nike-air-force-1-07-pour-homme-n8juM1H2"
+        },
+        {
+          "@id": "https://www.nike.com/fr/t/chaussure-nike-air-force-1-07-pour-homme-n8juM1H2/CW2288-111#size-3.5",
+          "@type": "Product",
+          "color": "Blanc/Blanc",
+          "name": "Chaussure Nike Air Force 1 '07 pour homme - Blanc/Blanc - Size 3.5",
+          "path": "$[0].hasVariant[0]",
+          "size": "3.5"
+        },
+        {
+          "@type": "Offer",
+          "path": "$[0].hasVariant[0].offers",
+          "price": 119.99,
+          "priceCurrency": "EUR",
+          "url": "https://www.nike.com/fr/t/chaussure-nike-air-force-1-07-pour-homme-n8juM1H2/CW2288-111"
+        },
+        {
+          "@id": "https://www.nike.com/fr/t/chaussure-nike-air-force-1-07-pour-homme-n8juM1H2/CW2288-111#size-4",
+          "@type": "Product",
+          "color": "Blanc/Blanc",
+          "name": "Chaussure Nike Air Force 1 '07 pour homme - Blanc/Blanc - Size 4",
+          "path": "$[0].hasVariant[1]",
+          "size": "4"
+        },
+        {
+          "@type": "Offer",
+          "path": "$[0].hasVariant[1].offers",
+          "price": 119.99,
+          "priceCurrency": "EUR",
+          "url": "https://www.nike.com/fr/t/chaussure-nike-air-force-1-07-pour-homme-n8juM1H2/CW2288-111"
+        },
+        {
+          "@id": "https://www.nike.com/fr/t/chaussure-nike-air-force-1-07-pour-homme-n8juM1H2/CW2288-111#size-4.5",
+          "@type": "Product",
+          "color": "Blanc/Blanc",
+          "name": "Chaussure Nike Air Force 1 '07 pour homme - Blanc/Blanc - Size 4.5",
+          "path": "$[0].hasVariant[2]",
+          "size": "4.5"
+        },
+        {
+          "@type": "Offer",
+          "path": "$[0].hasVariant[2].offers",
+          "price": 119.99,
+          "priceCurrency": "EUR",
+          "url": "https://www.nike.com/fr/t/chaussure-nike-air-force-1-07-pour-homme-n8juM1H2/CW2288-111"
+        },
+        {
+          "@id": "https://www.nike.com/fr/t/chaussure-nike-air-force-1-07-pour-homme-n8juM1H2/CW2288-111#size-5",
+          "@type": "Product",
+          "color": "Blanc/Blanc",
+          "name": "Chaussure Nike Air Force 1 '07 pour homme - Blanc/Blanc - Size 5",
+          "path": "$[0].hasVariant[3]",
+          "size": "5"
+        },
+        {
+          "@type": "Offer",
+          "path": "$[0].hasVariant[3].offers",
+          "price": 119.99,
+          "priceCurrency": "EUR",
+          "url": "https://www.nike.com/fr/t/chaussure-nike-air-force-1-07-pour-homme-n8juM1H2/CW2288-111"
+        },
+        {
+          "@id": "https://www.nike.com/fr/t/chaussure-nike-air-force-1-07-pour-homme-n8juM1H2/CW2288-111#size-6",
+          "@type": "Product",
+          "color": "Blanc/Blanc",
+          "name": "Chaussure Nike Air Force 1 '07 pour homme - Blanc/Blanc - Size 6",
+          "path": "$[0].hasVariant[4]",
+          "size": "6"
+        },
+        {
+          "@type": "Offer",
+          "path": "$[0].hasVariant[4].offers",
+          "price": 119.99,
+          "priceCurrency": "EUR",
+          "url": "https://www.nike.com/fr/t/chaussure-nike-air-force-1-07-pour-homme-n8juM1H2/CW2288-111"
+        },
+        {
+          "@id": "https://www.nike.com/fr/t/chaussure-nike-air-force-1-07-pour-homme-n8juM1H2/CW2288-111#size-5.5",
+          "@type": "Product",
+          "color": "Blanc/Blanc",
+          "name": "Chaussure Nike Air Force 1 '07 pour homme - Blanc/Blanc - Size 5.5",
+          "path": "$[0].hasVariant[5]",
+          "size": "5.5"
+        },
+        {
+          "@type": "Offer",
+          "path": "$[0].hasVariant[5].offers",
+          "price": 119.99,
+          "priceCurrency": "EUR",
+          "url": "https://www.nike.com/fr/t/chaussure-nike-air-force-1-07-pour-homme-n8juM1H2/CW2288-111"
+        },
+        {
+          "@id": "https://www.nike.com/fr/t/chaussure-nike-air-force-1-07-pour-homme-n8juM1H2/CW2288-111#size-6.5",
+          "@type": "Product",
+          "color": "Blanc/Blanc",
+          "name": "Chaussure Nike Air Force 1 '07 pour homme - Blanc/Blanc - Size 6.5",
+          "path": "$[0].hasVariant[6]",
+          "size": "6.5"
+        },
+        {
+          "@type": "Offer",
+          "path": "$[0].hasVariant[6].offers",
+          "price": 119.99,
+          "priceCurrency": "EUR",
+          "url": "https://www.nike.com/fr/t/chaussure-nike-air-force-1-07-pour-homme-n8juM1H2/CW2288-111"
+        },
+        {
+          "@id": "https://www.nike.com/fr/t/chaussure-nike-air-force-1-07-pour-homme-n8juM1H2/CW2288-111#size-7",
+          "@type": "Product",
+          "color": "Blanc/Blanc",
+          "name": "Chaussure Nike Air Force 1 '07 pour homme - Blanc/Blanc - Size 7",
+          "path": "$[0].hasVariant[7]",
+          "size": "7"
+        },
+        {
+          "@type": "Offer",
+          "path": "$[0].hasVariant[7].offers",
+          "price": 119.99,
+          "priceCurrency": "EUR",
+          "url": "https://www.nike.com/fr/t/chaussure-nike-air-force-1-07-pour-homme-n8juM1H2/CW2288-111"
+        },
+        {
+          "@id": "https://www.nike.com/fr/t/chaussure-nike-air-force-1-07-pour-homme-n8juM1H2/CW2288-111#size-7.5",
+          "@type": "Product",
+          "color": "Blanc/Blanc",
+          "name": "Chaussure Nike Air Force 1 '07 pour homme - Blanc/Blanc - Size 7.5",
+          "path": "$[0].hasVariant[8]",
+          "size": "7.5"
+        },
+        {
+          "@type": "Offer",
+          "path": "$[0].hasVariant[8].offers",
+          "price": 119.99,
+          "priceCurrency": "EUR",
+          "url": "https://www.nike.com/fr/t/chaussure-nike-air-force-1-07-pour-homme-n8juM1H2/CW2288-111"
+        },
+        {
+          "@id": "https://www.nike.com/fr/t/chaussure-nike-air-force-1-07-pour-homme-n8juM1H2/CW2288-111#size-8",
+          "@type": "Product",
+          "color": "Blanc/Blanc",
+          "name": "Chaussure Nike Air Force 1 '07 pour homme - Blanc/Blanc - Size 8",
+          "path": "$[0].hasVariant[9]",
+          "size": "8"
+        },
+        {
+          "@type": "Offer",
+          "path": "$[0].hasVariant[9].offers",
+          "price": 119.99,
+          "priceCurrency": "EUR",
+          "url": "https://www.nike.com/fr/t/chaussure-nike-air-force-1-07-pour-homme-n8juM1H2/CW2288-111"
+        },
+        {
+          "@id": "https://www.nike.com/fr/t/chaussure-nike-air-force-1-07-pour-homme-n8juM1H2/CW2288-111#size-8.5",
+          "@type": "Product",
+          "color": "Blanc/Blanc",
+          "name": "Chaussure Nike Air Force 1 '07 pour homme - Blanc/Blanc - Size 8.5",
+          "path": "$[0].hasVariant[10]",
+          "size": "8.5"
+        },
+        {
+          "@type": "Offer",
+          "path": "$[0].hasVariant[10].offers",
+          "price": 119.99,
+          "priceCurrency": "EUR",
+          "url": "https://www.nike.com/fr/t/chaussure-nike-air-force-1-07-pour-homme-n8juM1H2/CW2288-111"
+        },
+        {
+          "@id": "https://www.nike.com/fr/t/chaussure-nike-air-force-1-07-pour-homme-n8juM1H2/CW2288-111#size-9",
+          "@type": "Product",
+          "color": "Blanc/Blanc",
+          "name": "Chaussure Nike Air Force 1 '07 pour homme - Blanc/Blanc - Size 9",
+          "path": "$[0].hasVariant[11]",
+          "size": "9"
+        },
+        {
+          "@type": "Offer",
+          "path": "$[0].hasVariant[11].offers",
+          "price": 119.99,
+          "priceCurrency": "EUR",
+          "url": "https://www.nike.com/fr/t/chaussure-nike-air-force-1-07-pour-homme-n8juM1H2/CW2288-111"
+        },
+        {
+          "@id": "https://www.nike.com/fr/t/chaussure-nike-air-force-1-07-pour-homme-n8juM1H2/CW2288-111#size-9.5",
+          "@type": "Product",
+          "color": "Blanc/Blanc",
+          "name": "Chaussure Nike Air Force 1 '07 pour homme - Blanc/Blanc - Size 9.5",
+          "path": "$[0].hasVariant[12]",
+          "size": "9.5"
+        },
+        {
+          "@type": "Offer",
+          "path": "$[0].hasVariant[12].offers",
+          "price": 119.99,
+          "priceCurrency": "EUR",
+          "url": "https://www.nike.com/fr/t/chaussure-nike-air-force-1-07-pour-homme-n8juM1H2/CW2288-111"
+        },
+        {
+          "@id": "https://www.nike.com/fr/t/chaussure-nike-air-force-1-07-pour-homme-n8juM1H2/CW2288-111#size-10",
+          "@type": "Product",
+          "color": "Blanc/Blanc",
+          "name": "Chaussure Nike Air Force 1 '07 pour homme - Blanc/Blanc - Size 10",
+          "path": "$[0].hasVariant[13]",
+          "size": "10"
+        },
+        {
+          "@type": "Offer",
+          "path": "$[0].hasVariant[13].offers",
+          "price": 119.99,
+          "priceCurrency": "EUR",
+          "url": "https://www.nike.com/fr/t/chaussure-nike-air-force-1-07-pour-homme-n8juM1H2/CW2288-111"
+        },
+        {
+          "@id": "https://www.nike.com/fr/t/chaussure-nike-air-force-1-07-pour-homme-n8juM1H2/CW2288-111#size-15.5",
+          "@type": "Product",
+          "color": "Blanc/Blanc",
+          "name": "Chaussure Nike Air Force 1 '07 pour homme - Blanc/Blanc - Size 15.5",
+          "path": "$[0].hasVariant[14]",
+          "size": "15.5"
+        },
+        {
+          "@type": "Offer",
+          "path": "$[0].hasVariant[14].offers",
+          "price": 119.99,
+          "priceCurrency": "EUR",
+          "url": "https://www.nike.com/fr/t/chaussure-nike-air-force-1-07-pour-homme-n8juM1H2/CW2288-111"
+        },
+        {
+          "@id": "https://www.nike.com/fr/t/chaussure-nike-air-force-1-07-pour-homme-n8juM1H2/CW2288-111#size-10.5",
+          "@type": "Product",
+          "color": "Blanc/Blanc",
+          "name": "Chaussure Nike Air Force 1 '07 pour homme - Blanc/Blanc - Size 10.5",
+          "path": "$[0].hasVariant[15]",
+          "size": "10.5"
+        },
+        {
+          "@type": "Offer",
+          "path": "$[0].hasVariant[15].offers",
+          "price": 119.99,
+          "priceCurrency": "EUR",
+          "url": "https://www.nike.com/fr/t/chaussure-nike-air-force-1-07-pour-homme-n8juM1H2/CW2288-111"
+        },
+        {
+          "@id": "https://www.nike.com/fr/t/chaussure-nike-air-force-1-07-pour-homme-n8juM1H2/CW2288-111#size-11",
+          "@type": "Product",
+          "color": "Blanc/Blanc",
+          "name": "Chaussure Nike Air Force 1 '07 pour homme - Blanc/Blanc - Size 11",
+          "path": "$[0].hasVariant[16]",
+          "size": "11"
+        },
+        {
+          "@type": "Offer",
+          "path": "$[0].hasVariant[16].offers",
+          "price": 119.99,
+          "priceCurrency": "EUR",
+          "url": "https://www.nike.com/fr/t/chaussure-nike-air-force-1-07-pour-homme-n8juM1H2/CW2288-111"
+        },
+        {
+          "@id": "https://www.nike.com/fr/t/chaussure-nike-air-force-1-07-pour-homme-n8juM1H2/CW2288-111#size-11.5",
+          "@type": "Product",
+          "color": "Blanc/Blanc",
+          "name": "Chaussure Nike Air Force 1 '07 pour homme - Blanc/Blanc - Size 11.5",
+          "path": "$[0].hasVariant[17]",
+          "size": "11.5"
+        },
+        {
+          "@type": "Offer",
+          "path": "$[0].hasVariant[17].offers",
+          "price": 119.99,
+          "priceCurrency": "EUR",
+          "url": "https://www.nike.com/fr/t/chaussure-nike-air-force-1-07-pour-homme-n8juM1H2/CW2288-111"
+        },
+        {
+          "@id": "https://www.nike.com/fr/t/chaussure-nike-air-force-1-07-pour-homme-n8juM1H2/CW2288-111#size-12",
+          "@type": "Product",
+          "color": "Blanc/Blanc",
+          "name": "Chaussure Nike Air Force 1 '07 pour homme - Blanc/Blanc - Size 12",
+          "path": "$[0].hasVariant[18]",
+          "size": "12"
+        },
+        {
+          "@type": "Offer",
+          "path": "$[0].hasVariant[18].offers",
+          "price": 119.99,
+          "priceCurrency": "EUR",
+          "url": "https://www.nike.com/fr/t/chaussure-nike-air-force-1-07-pour-homme-n8juM1H2/CW2288-111"
+        },
+        {
+          "@id": "https://www.nike.com/fr/t/chaussure-nike-air-force-1-07-pour-homme-n8juM1H2/CW2288-111#size-12.5",
+          "@type": "Product",
+          "color": "Blanc/Blanc",
+          "name": "Chaussure Nike Air Force 1 '07 pour homme - Blanc/Blanc - Size 12.5",
+          "path": "$[0].hasVariant[19]",
+          "size": "12.5"
+        },
+        {
+          "@type": "Offer",
+          "path": "$[0].hasVariant[19].offers",
+          "price": 119.99,
+          "priceCurrency": "EUR",
+          "url": "https://www.nike.com/fr/t/chaussure-nike-air-force-1-07-pour-homme-n8juM1H2/CW2288-111"
+        },
+        {
+          "@id": "https://www.nike.com/fr/t/chaussure-nike-air-force-1-07-pour-homme-n8juM1H2/CW2288-111#size-13",
+          "@type": "Product",
+          "color": "Blanc/Blanc",
+          "name": "Chaussure Nike Air Force 1 '07 pour homme - Blanc/Blanc - Size 13",
+          "path": "$[0].hasVariant[20]",
+          "size": "13"
+        },
+        {
+          "@type": "Offer",
+          "path": "$[0].hasVariant[20].offers",
+          "price": 119.99,
+          "priceCurrency": "EUR",
+          "url": "https://www.nike.com/fr/t/chaussure-nike-air-force-1-07-pour-homme-n8juM1H2/CW2288-111"
+        },
+        {
+          "@id": "https://www.nike.com/fr/t/chaussure-nike-air-force-1-07-pour-homme-n8juM1H2/CW2288-111#size-14",
+          "@type": "Product",
+          "color": "Blanc/Blanc",
+          "name": "Chaussure Nike Air Force 1 '07 pour homme - Blanc/Blanc - Size 14",
+          "path": "$[0].hasVariant[21]",
+          "size": "14"
+        },
+        {
+          "@type": "Offer",
+          "path": "$[0].hasVariant[21].offers",
+          "price": 119.99,
+          "priceCurrency": "EUR",
+          "url": "https://www.nike.com/fr/t/chaussure-nike-air-force-1-07-pour-homme-n8juM1H2/CW2288-111"
+        },
+        {
+          "@id": "https://www.nike.com/fr/t/chaussure-nike-air-force-1-07-pour-homme-n8juM1H2/CW2288-111#size-15",
+          "@type": "Product",
+          "color": "Blanc/Blanc",
+          "name": "Chaussure Nike Air Force 1 '07 pour homme - Blanc/Blanc - Size 15",
+          "path": "$[0].hasVariant[22]",
+          "size": "15"
+        },
+        {
+          "@type": "Offer",
+          "path": "$[0].hasVariant[22].offers",
+          "price": 119.99,
+          "priceCurrency": "EUR",
+          "url": "https://www.nike.com/fr/t/chaussure-nike-air-force-1-07-pour-homme-n8juM1H2/CW2288-111"
+        },
+        {
+          "@id": "https://www.nike.com/fr/t/chaussure-nike-air-force-1-07-pour-homme-n8juM1H2/CW2288-111#size-16",
+          "@type": "Product",
+          "color": "Blanc/Blanc",
+          "name": "Chaussure Nike Air Force 1 '07 pour homme - Blanc/Blanc - Size 16",
+          "path": "$[0].hasVariant[23]",
+          "size": "16"
+        },
+        {
+          "@type": "Offer",
+          "path": "$[0].hasVariant[23].offers",
+          "price": 119.99,
+          "priceCurrency": "EUR",
+          "url": "https://www.nike.com/fr/t/chaussure-nike-air-force-1-07-pour-homme-n8juM1H2/CW2288-111"
+        },
+        {
+          "@id": "https://www.nike.com/fr/t/chaussure-nike-air-force-1-07-pour-homme-n8juM1H2/CW2288-111#size-17",
+          "@type": "Product",
+          "color": "Blanc/Blanc",
+          "name": "Chaussure Nike Air Force 1 '07 pour homme - Blanc/Blanc - Size 17",
+          "path": "$[0].hasVariant[24]",
+          "size": "17"
+        },
+        {
+          "@type": "Offer",
+          "path": "$[0].hasVariant[24].offers",
+          "price": 119.99,
+          "priceCurrency": "EUR",
+          "url": "https://www.nike.com/fr/t/chaussure-nike-air-force-1-07-pour-homme-n8juM1H2/CW2288-111"
+        },
+        {
+          "@id": "https://www.nike.com/fr/t/chaussure-nike-air-force-1-07-pour-homme-n8juM1H2/CW2288-111#size-18",
+          "@type": "Product",
+          "color": "Blanc/Blanc",
+          "name": "Chaussure Nike Air Force 1 '07 pour homme - Blanc/Blanc - Size 18",
+          "path": "$[0].hasVariant[25]",
+          "size": "18"
+        },
+        {
+          "@type": "Offer",
+          "path": "$[0].hasVariant[25].offers",
+          "price": 119.99,
+          "priceCurrency": "EUR",
+          "url": "https://www.nike.com/fr/t/chaussure-nike-air-force-1-07-pour-homme-n8juM1H2/CW2288-111"
+        }
+      ],
+      "visiblePriceContexts": [
+        "tball Training et renfo Skateboard Chaussures personnalisées Chaussures à moins de 100 € Vêtements Tous les vêtements Sweats à capuche et sweats Vestes Survêtements Pant",
+        "Running Training et renfo Football Chaussures personnalisées Chaussures à moins de 100 € Vêtements Tous les vêtements Sweats à capuche et sweats Vestes Pantalons Leggings",
+        "estyle Jordan Football Running Basketball Éducation physique Chaussures à moins de 100 € Vêtements Tous les vêtements Sweats à capuche et sweats Vestes Survêtements Pant",
+        "turn chevron right, next, forward, proceed Nike Air Force 1 '07 Chaussure pour homme 119,99 € Ajouter aux favoris heart, like, love, save, wishlist non-filled Ce produit est excl",
+        " Blanc/Blanc Article : CW2288-111 Afficher les détails du produit Nike Air Force 1 '07 119,99 € Confortable, résistante et intemporelle : elle n'est pas numéro 1 pour rien. La co",
+        "t retours Pour les personnes n'étant pas membres Nike, la livraison standard coûte 5 € pour les achats de moins de 99 €. Pour les membres Nike, elle coûte 5 € pour le",
+        "ant pas membres Nike, la livraison standard coûte 5 € pour les achats de moins de 99 €. Pour les membres Nike, elle coûte 5 € pour les achats de moins de 50 €. Retrai",
+        " coûte 5 € pour les achats de moins de 99 €. Pour les membres Nike, elle coûte 5 € pour les achats de moins de 50 €. Retrait en magasin gratuit et retours gratuits s",
+        "oins de 99 €. Pour les membres Nike, elle coûte 5 € pour les achats de moins de 50 €. Retrait en magasin gratuit et retours gratuits sous 30 jours. Des exclusions s'appl",
+        "view star, score, rank, review Aucun avis X, dismiss, cancel, exit Nike Air Force 1 '07 119,99 € Rédiger un avis Ce produit peut être recyclé. En savoir plus Ressources Cartes ca"
+      ],
+      "classification": "html_retrieved",
+      "priceVerification": {
+        "evidence": "JSON-LD offer or active price specification and visible product price agree in the same downloaded HTML",
+        "currency": "EUR",
+        "verdict": "corroborated_current_html",
+        "price": 119.99
+      }
+    },
+    {
+      "merchant": "Adidas",
+      "url": "https://www.adidas.fr/chaussure-y-3-stan-smith/KI3464.html",
+      "observedAt": "2026-10-31T11:26:32.5266392Z",
+      "elapsedMs": 120,
+      "downloadError": "merchant response is unavailable",
+      "diagnosticHttpStatus": 403,
+      "classification": "http_403_on_second_secure_request"
+    },
+    {
+      "merchant": "Zalando",
+      "url": "https://www.zalando.fr/adidas-originals-stan-smith-unisex-baskets-basses-core-black-ad115o0w8-q11.html",
+      "observedAt": "2026-10-31T11:26:32.7691608Z",
+      "elapsedMs": 8000,
+      "downloadError": "Get \"https://23.48.32.148:443/adidas-originals-stan-smith-unisex-baskets-basses-core-black-ad115o0w8-q11.html\": context deadline exceeded",
+      "diagnosticStatusError": "Get \"https://23.48.32.139:443/adidas-originals-stan-smith-unisex-baskets-basses-core-black-ad115o0w8-q11.html\": context deadline exceeded",
+      "classification": "timeout_8s"
+    },
+    {
+      "merchant": "E.Leclerc",
+      "url": "https://www.e.leclerc/fp/nike-air-force-1-triple-white-blanc-0194500874862",
+      "observedAt": "2026-10-31T11:26:48.7706265Z",
+      "elapsedMs": 134,
+      "finalUrl": "https://www.e.leclerc/fp/nike-air-force-1-triple-white-blanc-0194500874862",
+      "media": "text/html",
+      "bytes": 694446,
+      "htmlSha256": "e5ff43b521e4f25f59b1f32483a8cedbf220834d536b7c495921a2d4227fc886",
+      "privateHtmlFile": "20.html",
+      "metadata": [
+        {
+          "content": "Nike  Air Force 1 Triple White Blanc achat en ligne au meilleur prix sur E.Leclerc. Retrait gratuit dans + de 700 magasins",
+          "key": "description"
+        }
+      ],
+      "structured": [
+        {
+          "@type": "Product",
+          "name": "Nike  Air Force 1 Triple White Blanc",
+          "path": "$",
+          "sku": "0194500874862"
+        },
+        {
+          "@type": "Offer",
+          "availability": "https://schema.org/InStock",
+          "path": "$.offers[0]",
+          "price": 102.95,
+          "priceCurrency": "EUR",
+          "url": "fp/nike-air-force-1-triple-white-blanc-0194500874862"
+        },
+        {
+          "@type": "AggregateOffer",
+          "highPrice": 102.95,
+          "lowPrice": 102.95,
+          "offerCount": 1,
+          "path": "$.offers[1]",
+          "priceCurrency": "EUR"
+        }
+      ],
+      "visiblePriceContexts": [
+        "oduits à prix E.LECLERC Paiements 100% sécurisés Options de livraisons du produit 102 € , 95 Vendu 102.95€ En stock Couleur Blanc Blanc Taille (chaussure) 37 ½ 35 ½ 36 ",
+        "CLERC Paiements 100% sécurisés Options de livraisons du produit 102 € , 95 Vendu 102.95€ En stock Couleur Blanc Blanc Taille (chaussure) 37 ½ 35 ½ 36 36 ½ 37 ½ 38 39 44 ",
+        "tionnez votre mode de livraison préféré Livraison Livraison standard à partir de 8,95€ - Prévue le 06/11/26 Livraison express à partir de 10,95€ - Prévue le 05/11/26 ",
+        "n standard à partir de 8,95€ - Prévue le 06/11/26 Livraison express à partir de 10,95€ - Prévue le 05/11/26 Neuf Vendu par MK DISTRIBUTION Pays d'expédition : France Cha"
+      ],
+      "classification": "html_retrieved",
+      "priceVerification": {
+        "evidence": "JSON-LD offer or active price specification and visible product price agree in the same downloaded HTML",
+        "currency": "EUR",
+        "verdict": "corroborated_current_html",
+        "price": 102.95
+      }
+    },
+    {
+      "merchant": "Starcow Paris",
+      "url": "https://www.starcowparis.com/products/nike-air-force-1-07-white",
+      "observedAt": "2026-10-31T11:26:48.9119948Z",
+      "elapsedMs": 75,
+      "downloadError": "merchant response is unavailable",
+      "diagnosticHttpStatus": 429,
+      "classification": "http_429_on_second_secure_request"
+    },
+    {
+      "merchant": "Sony",
+      "url": "https://www.sony.fr/store/product/wh1000xm6b.ce7/1000X-SERIES-Casque-sans-fil-%25C3%25A0-r%25C3%25A9duction-de-bruit-WH-1000XM6",
+      "observedAt": "2026-10-31T11:26:49.0752735Z",
+      "elapsedMs": 68,
+      "downloadError": "merchant response is unavailable",
+      "diagnosticHttpStatus": 403,
+      "classification": "http_403_on_second_secure_request"
+    },
+    {
+      "merchant": "Materiel.net",
+      "url": "https://www.materiel.net/produit/202508270041.html",
+      "observedAt": "2026-10-31T11:26:49.2125448Z",
+      "elapsedMs": 82,
+      "finalUrl": "https://www.materiel.net/produit/202508270041.html",
+      "media": "text/html",
+      "bytes": 225697,
+      "htmlSha256": "628e446e6e692148d240d1894991518693994cca392ae70f3cd9e0f60edd05b0",
+      "privateHtmlFile": "23.html",
+      "metadata": [
+        {
+          "content": "Achetez votre Souris PC Logitech MX Master 3S Bluetooth Edition - Graphite (910-007501) sur Materiel.net ! Paiement en 3X dès 50€, livraison rapide ou retrait en magasin | Bureautique, Capteur optique, Sans-fil, Pour droitier, 8 000 dpi, 7 boutons.",
+          "key": "description"
+        },
+        {
+          "content": "Achetez votre Souris PC Logitech MX Master 3S Bluetooth Edition - Graphite (910-007501) sur Materiel.net ! Paiement en 3X dès 50€, livraison rapide ou retrait en magasin | Bureautique, Capteur optique, Sans-fil, Pour droitier, 8 000 dpi, 7 boutons.",
+          "key": "og:description"
+        },
+        {
+          "content": "Logitech MX Master 3S Bluetooth Edition - Graphite - Souris PC Logitech | Materiel.net",
+          "key": "og:title"
+        },
+        {
+          "content": "https://media.materiel.net/r900/products/MN0006283459.jpg",
+          "key": "og:image"
+        },
+        {
+          "content": "https://www.materiel.net/produit/202508270041.html",
+          "key": "og:url"
+        },
+        {
+          "content": "Logitech MX Master 3S Bluetooth Edition - Graphite - Souris PC Logitech | Materiel.net",
+          "key": "twitter:title"
+        },
+        {
+          "content": "Achetez votre Souris PC Logitech MX Master 3S Bluetooth Edition - Graphite (910-007501) sur Materiel.net ! Paiement en 3X dès 50€, livraison rapide ou retrait en magasin | Bureautique, Capteur optique, Sans-fil, Pour droitier, 8 000 dpi, 7 boutons.",
+          "key": "twitter:description"
+        },
+        {
+          "content": "https://media.materiel.net/r900/products/MN0006283459.jpg",
+          "key": "twitter:image"
+        },
+        {
+          "content": "summary",
+          "key": "twitter:card"
+        },
+        {
+          "content": "@materielnet",
+          "key": "twitter:site"
+        }
+      ],
+      "structured": [
+        {
+          "@type": "Product",
+          "name": "Logitech MX Master 3S Bluetooth Edition - Graphite",
+          "path": "$",
+          "sku": "AR202508270041"
+        },
+        {
+          "@type": "Offer",
+          "availability": "https://schema.org/InStock",
+          "path": "$.offers",
+          "price": "89.95",
+          "priceCurrency": "EUR",
+          "priceValidUntil": "2026-11-22",
+          "url": "https://www.materiel.net/produit/202508270041.html"
+        },
+        {
+          "@type": "UnitPriceSpecification",
+          "path": "$.offers.priceSpecification",
+          "price": "109.95",
+          "priceCurrency": "EUR"
+        }
+      ],
+      "visiblePriceContexts": [
+        "dpi, 7 boutons Donnez votre avis Posez votre question Alerte baisse de prix Prix ↓ 82€ 46 Prix le + bas sur 30j 89€ 95 Prix promo jusqu'au 22/11 inclus dont éco-partici",
+        "s Posez votre question Alerte baisse de prix Prix ↓ 82€ 46 Prix le + bas sur 30j 89€ 95 Prix promo jusqu'au 22/11 inclus dont éco-participation 0€ 05 3x 4x Livraison ",
+        "x le + bas sur 30j 89€ 95 Prix promo jusqu'au 22/11 inclus dont éco-participation 0€ 05 3x 4x Livraison à domicile ou en relais En stock En stock dans 1 magasin Choisir",
+        " Noir Tapis de souris ergonomique avec repose poignet en mousse à mémoire de forme 19€ 95 9/10 INOVU BW10 (AZERTY) Bureautique, Classique, Filaire, Classique (Membrane) 16",
+        " 95 9/10 INOVU BW10 (AZERTY) Bureautique, Classique, Filaire, Classique (Membrane) 16€ 95 10/10 Top des ventes INOVU Airjet - Dépoussiéreur / souffleur d'air Dépoussié",
+        "ssiéreur / souffleur d'air mobile électrique 160 watts, 5 embouts interchangeables 59€ 95 INOVU Hello Pro Bureautique / VoIP, Stéréo, Supra-aural (posé sur les oreilles",
+        "IP, Stéréo, Supra-aural (posé sur les oreilles), 1x USB, Compatible PC et mobiles 24€ 95 10/10 Goobay Set Cable Management - Noir Lot de dispositifs de gestion de câbles",
+        "95 10/10 Goobay Set Cable Management - Noir Lot de dispositifs de gestion de câbles 6€ 59 Il n'y a pas encore de question sur ce produit Une hésitation ? Un doute ? Solli",
+        "que, Filaire, Pour droitier, 16 000 dpi, 11 boutons Prix promo jusqu'au 22/11 inclus 49€ 95 10/10 Top des ventes Logitech B110 Silent Bureautique, Capteur optique, Filaire, ",
+        " B110 Silent Bureautique, Capteur optique, Filaire, Ambidextre, 1 000 dpi, 3 boutons 11€ 95 10/10 Top des ventes Razer Basilisk V3 Souris gamer, Capteur optique, Filaire, Po",
+        "isk V3 Souris gamer, Capteur optique, Filaire, Pour droitier, 26 000 dpi, 11 boutons 57€ 95 9/10 Top des ventes INOVU EG200V Souris bureautique sans fil, Capteur optique 2 4",
+        "U EG200V Souris bureautique sans fil, Capteur optique 2 400 dpi, Droitier, 6 boutons 19€ 95 10/10 Top des ventes Razer DeathAdder Essential 2021 - Noir Souris gamer, Capteur",
+        "21 - Noir Souris gamer, Capteur optique, Filaire, Pour droitier, 6400 dpi, 5 boutons 26€ 95 9/10 Promotion Logitech G G203 LightSync - Noir Souris gamer, Capteur optique, Fi",
+        "tique, Filaire, Pour droitier, 8 000 dpi, 6 boutons Prix promo jusqu'au 22/11 inclus 36€ 95 29€ 95 INOVU FM 1200 - Noir Souris PC filaire, ambidextre, capteur optique 1200",
+        " Filaire, Pour droitier, 8 000 dpi, 6 boutons Prix promo jusqu'au 22/11 inclus 36€ 95 29€ 95 INOVU FM 1200 - Noir Souris PC filaire, ambidextre, capteur optique 1200 dpi, 3 b",
+        "1200 dpi, 3 boutons, molette bidirectionnelle, poids 88.6 grammes, cordon 1.5 mètre 7€ 96 10/10 Logitech Marathon Mouse M705 - Argent Bureautique, Capteur laser, Sans-fil,",
+        "se M705 - Argent Bureautique, Capteur laser, Sans-fil, Pour droitier, 5 boutons, 910-006034 29€ 95 9/10 Promotion Logitech MX Vertical Bureautique, Capteur optique, Sans-fil, Pour ",
+        "ique, Sans-fil, Pour droitier, 4 000 dpi, 4 boutons Prix promo jusqu'au 01/11 inclus 74€ 95 59€ 95 10/10 Promotion Logitech Lift - Graphite Bureautique, Capteur optique, S",
+        "Sans-fil, Pour droitier, 4 000 dpi, 4 boutons Prix promo jusqu'au 01/11 inclus 74€ 95 59€ 95 10/10 Promotion Logitech Lift - Graphite Bureautique, Capteur optique, Sans-fil, ",
+        "ique, Sans-fil, Pour droitier, 4 000 dpi, 6 boutons Prix promo jusqu'au 01/11 inclus 69€ 95 59€ 95 Promotion Logitech MX Master 3S Bluetooth Edition - Graphite Bureautique",
+        "Sans-fil, Pour droitier, 4 000 dpi, 6 boutons Prix promo jusqu'au 01/11 inclus 69€ 95 59€ 95 Promotion Logitech MX Master 3S Bluetooth Edition - Graphite Bureautique, Capteur",
+        "ique, Sans-fil, Pour droitier, 8 000 dpi, 7 boutons Prix promo jusqu'au 22/11 inclus 89€ 95 10/10 Promotion Logitech G502 X - Noir Souris gamer filaire, Capteur optique 25 0",
+        "e, Capteur optique 25 000 dpi, Droitier, 13 boutons Prix promo jusqu'au 22/11 inclus 69€ 95 59€ 95 Logitech G Pro X3 Superstrike - Éclipse magenta Souris gamer sans-fil, ",
+        "teur optique 25 000 dpi, Droitier, 13 boutons Prix promo jusqu'au 22/11 inclus 69€ 95 59€ 95 Logitech G Pro X3 Superstrike - Éclipse magenta Souris gamer sans-fil, Capteur o",
+        "ns-fil, Capteur optique 48 000 dpi, Droitier, 5 boutons, Lightspeed, Retour haptique 189€ 95 Razer Naga v3 Pro Souris gamer avec ou sans fil, Bluetooth/2.4 GHz, Capteur optiq",
+        "ique, Pour droitier, 50 000 dpi, 23 boutons, Razer HyperSpeed, Rétro-éclairage RGB 199€ 95 10/10 Corsair Scimitar Elite RGB Souris gamer, Capteur optique, Filaire, Pour dro",
+        "te RGB Souris gamer, Capteur optique, Filaire, Pour droitier, 18 000 dpi, 17 boutons 89€ 95 Souris PC Logitech Souris PC Razer Souris PC Logitech G Souris PC ASUS Souris PC "
+      ],
+      "classification": "html_retrieved",
+      "priceVerification": {
+        "evidence": "JSON-LD offer or active price specification and visible product price agree in the same downloaded HTML",
+        "currency": "EUR",
+        "verdict": "corroborated_current_html",
+        "price": 89.95
+      }
+    },
+    {
+      "merchant": "Bose",
+      "url": "https://www.bose.fr/p/headphones/quietcomfort-acoustic-noise-cancelling-headphones/QC-HEADPHONEARN.html?dwvar_QC-HEADPHONEARN_color=WHITE+SMOKE",
+      "observedAt": "2026-10-31T11:26:49.2987649Z",
+      "elapsedMs": 261,
+      "finalUrl": "https://www.bose.fr/p/headphones/quietcomfort-acoustic-noise-cancelling-headphones/QC-HEADPHONEARN.html?dwvar_QC-HEADPHONEARN_color=WHITE+SMOKE",
+      "media": "text/html",
+      "bytes": 596249,
+      "htmlSha256": "b3d8bcb4cdc53e586ee7efcd73eebb6a65463c8696c1293f08403ca6f1e0c526",
+      "privateHtmlFile": "24.html",
+      "metadata": [
+        {
+          "content": "Achetez le casque QuietComfort à réduction de bruit active. Tenez le monde extérieur à l’écart. Commandez dès maintenant et profitez de la livraison gratuite, ainsi que d’une période d’essai gratuite de 90 jours !",
+          "key": "description"
+        },
+        {
+          "content": "Acheter le casque à réduction de bruit QuietComfort",
+          "key": "og:title"
+        },
+        {
+          "content": "Achetez le casque QuietComfort à réduction de bruit active. Tenez le monde extérieur à l’écart. Commandez dès maintenant et profitez de la livraison gratuite, ainsi que d’une période d’essai gratuite de 90 jours !",
+          "key": "og:description"
+        },
+        {
+          "content": "https://www.bose.fr/p/headphones/quietcomfort-acoustic-noise-cancelling-headphones/QC-HEADPHONEARN.html",
+          "key": "og:url"
+        },
+        {
+          "content": "fr_FR",
+          "key": "og:locale"
+        },
+        {
+          "content": "https://assets.bosecreative.com/transform/cafdfbf7-a2ea-41ca-8df6-eee5b2f7752a/QCH_White_400x300_x2?io=width:816,height:667,transform:fit",
+          "key": "og:image"
+        },
+        {
+          "content": "website",
+          "key": "og:type"
+        },
+        {
+          "content": "Bose",
+          "key": "og:site_name"
+        }
+      ],
+      "structured": [
+        {
+          "@id": "https://www.bose.fr/p/headphones/quietcomfort-acoustic-noise-cancelling-headphones/QC-HEADPHONEARN.html",
+          "@type": "ProductGroup",
+          "name": "Casque Bose QuietComfort",
+          "path": "$[0]",
+          "url": "https://www.bose.fr/p/headphones/quietcomfort-acoustic-noise-cancelling-headphones/QC-HEADPHONEARN.html"
+        },
+        {
+          "@type": "Product",
+          "color": "BLACK",
+          "name": "Casque Bose QuietComfort",
+          "path": "$[0].hasVariant[0]",
+          "sku": "884367-0100"
+        },
+        {
+          "@type": "Offer",
+          "availability": "https://schema.org/InStock",
+          "path": "$[0].hasVariant[0].offers",
+          "price": "249.95",
+          "priceCurrency": "EUR",
+          "url": "https://www.bose.fr/p/headphones/quietcomfort-acoustic-noise-cancelling-headphones/QC-HEADPHONEARN.html?dwvar_QC-HEADPHONEARN_color=BLACK"
+        },
+        {
+          "@type": "Product",
+          "color": "WHITE SMOKE",
+          "name": "Casque Bose QuietComfort",
+          "path": "$[0].hasVariant[1]",
+          "sku": "884367-0200"
+        },
+        {
+          "@type": "Offer",
+          "availability": "https://schema.org/InStock",
+          "path": "$[0].hasVariant[1].offers",
+          "price": "249.95",
+          "priceCurrency": "EUR",
+          "url": "https://www.bose.fr/p/headphones/quietcomfort-acoustic-noise-cancelling-headphones/QC-HEADPHONEARN.html?dwvar_QC-HEADPHONEARN_color=WHITE%20SMOKE"
+        },
+        {
+          "@type": "Product",
+          "color": "TWILIGHT BLUE",
+          "name": "Casque Bose QuietComfort",
+          "path": "$[0].hasVariant[2]",
+          "sku": "884367-1600"
+        },
+        {
+          "@type": "Offer",
+          "availability": "https://schema.org/InStock",
+          "path": "$[0].hasVariant[2].offers",
+          "price": "249.95",
+          "priceCurrency": "EUR",
+          "url": "https://www.bose.fr/p/headphones/quietcomfort-acoustic-noise-cancelling-headphones/QC-HEADPHONEARN.html?dwvar_QC-HEADPHONEARN_color=TWILIGHT%20BLUE"
+        },
+        {
+          "@type": "Product",
+          "color": "PETAL PINK",
+          "name": "Casque Bose QuietComfort",
+          "path": "$[0].hasVariant[3]",
+          "sku": "884367-1500"
+        },
+        {
+          "@type": "Offer",
+          "availability": "https://schema.org/InStock",
+          "path": "$[0].hasVariant[3].offers",
+          "price": "249.95",
+          "priceCurrency": "EUR",
+          "url": "https://www.bose.fr/p/headphones/quietcomfort-acoustic-noise-cancelling-headphones/QC-HEADPHONEARN.html?dwvar_QC-HEADPHONEARN_color=PETAL%20PINK"
+        },
+        {
+          "@type": "Product",
+          "color": "CHILLED LILAC",
+          "name": "Casque Bose QuietComfort",
+          "path": "$[0].hasVariant[4]",
+          "sku": "884367-1200"
+        },
+        {
+          "@type": "Offer",
+          "availability": "https://schema.org/OutOfStock",
+          "path": "$[0].hasVariant[4].offers",
+          "price": "249.95",
+          "priceCurrency": "EUR",
+          "url": "https://www.bose.fr/p/headphones/quietcomfort-acoustic-noise-cancelling-headphones/QC-HEADPHONEARN.html?dwvar_QC-HEADPHONEARN_color=CHILLED%20LILAC"
+        },
+        {
+          "@type": "Product",
+          "color": "SANDSTONE",
+          "name": "Casque Bose QuietComfort",
+          "path": "$[0].hasVariant[5]",
+          "sku": "884367-1100"
+        },
+        {
+          "@type": "Offer",
+          "availability": "https://schema.org/InStock",
+          "path": "$[0].hasVariant[5].offers",
+          "price": "249.95",
+          "priceCurrency": "EUR",
+          "url": "https://www.bose.fr/p/headphones/quietcomfort-acoustic-noise-cancelling-headphones/QC-HEADPHONEARN.html?dwvar_QC-HEADPHONEARN_color=SANDSTONE"
+        },
+        {
+          "@type": "Product",
+          "color": "BLUE DUSK",
+          "name": "Casque Bose QuietComfort",
+          "path": "$[0].hasVariant[6]",
+          "sku": "884367-1300"
+        },
+        {
+          "@type": "Offer",
+          "availability": "https://schema.org/OutOfStock",
+          "path": "$[0].hasVariant[6].offers",
+          "price": "249.95",
+          "priceCurrency": "EUR",
+          "url": "https://www.bose.fr/p/headphones/quietcomfort-acoustic-noise-cancelling-headphones/QC-HEADPHONEARN.html?dwvar_QC-HEADPHONEARN_color=BLUE%20DUSK"
+        },
+        {
+          "@type": "Product",
+          "color": "MOONLIGHT GREY",
+          "name": "Casque Bose QuietComfort",
+          "path": "$[0].hasVariant[7]",
+          "sku": "884367-1700"
+        },
+        {
+          "@type": "Offer",
+          "availability": "https://schema.org/InStock",
+          "path": "$[0].hasVariant[7].offers",
+          "price": "249.95",
+          "priceCurrency": "EUR",
+          "url": "https://www.bose.fr/p/headphones/quietcomfort-acoustic-noise-cancelling-headphones/QC-HEADPHONEARN.html?dwvar_QC-HEADPHONEARN_color=MOONLIGHT%20GREY"
+        },
+        {
+          "@type": "Product",
+          "color": "ICE BLUE",
+          "name": "Casque Bose QuietComfort",
+          "path": "$[0].hasVariant[8]",
+          "sku": "884367-1800"
+        },
+        {
+          "@type": "Offer",
+          "availability": "https://schema.org/InStock",
+          "path": "$[0].hasVariant[8].offers",
+          "price": "249.95",
+          "priceCurrency": "EUR",
+          "url": "https://www.bose.fr/p/headphones/quietcomfort-acoustic-noise-cancelling-headphones/QC-HEADPHONEARN.html?dwvar_QC-HEADPHONEARN_color=ICE%20BLUE"
+        },
+        {
+          "@type": "Product",
+          "color": "CYPRESS GREEN",
+          "name": "Casque Bose QuietComfort",
+          "path": "$[0].hasVariant[9]",
+          "sku": "884367-0300"
+        },
+        {
+          "@type": "Offer",
+          "availability": "https://schema.org/OutOfStock",
+          "path": "$[0].hasVariant[9].offers",
+          "price": "249.95",
+          "priceCurrency": "EUR",
+          "url": "https://www.bose.fr/p/headphones/quietcomfort-acoustic-noise-cancelling-headphones/QC-HEADPHONEARN.html?dwvar_QC-HEADPHONEARN_color=CYPRESS%20GREEN"
+        },
+        {
+          "@type": "Product",
+          "color": "MOONSTONE BLUE",
+          "name": "Casque Bose QuietComfort",
+          "path": "$[0].hasVariant[10]",
+          "sku": "884367-0500"
+        },
+        {
+          "@type": "Offer",
+          "availability": "https://schema.org/OutOfStock",
+          "path": "$[0].hasVariant[10].offers",
+          "price": "249.95",
+          "priceCurrency": "EUR",
+          "url": "https://www.bose.fr/p/headphones/quietcomfort-acoustic-noise-cancelling-headphones/QC-HEADPHONEARN.html?dwvar_QC-HEADPHONEARN_color=MOONSTONE%20BLUE"
+        },
+        {
+          "@id": "#shipping_policy",
+          "@type": "OfferShippingDetails",
+          "path": "$[2]"
+        }
+      ],
+      "visiblePriceContexts": [
+        "né Blanc Nuage sélectionné Blanc Nuage sélectionné Blanc Nuage Le prix est de : 249,95 € (Éco-participation de 0,86 € comprise) Quantité 1 2 3 4 5 6 7 8 9 10 Coffret cad",
+        "c Nuage sélectionné Blanc Nuage Le prix est de : 249,95 € (Éco-participation de 0,86 € comprise) Quantité 1 2 3 4 5 6 7 8 9 10 Coffret cadeau Bose [0,00 €] No gift box ",
+        "ticipation de 0,86 € comprise) Quantité 1 2 3 4 5 6 7 8 9 10 Coffret cadeau Bose [0,00 €] No gift box [8,95 €] Coffret cadeau Bose POURQUOI ACHETER DIRECTEMENT AUPRÈS DE ",
+        "comprise) Quantité 1 2 3 4 5 6 7 8 9 10 Coffret cadeau Bose [0,00 €] No gift box [8,95 €] Coffret cadeau Bose POURQUOI ACHETER DIRECTEMENT AUPRÈS DE BOSE Garantie de 2 ans ",
+        "panier Accessoires Étui de transport pour casque Bose QuietComfort Le prix est de : 23,95 € Kit de coussinets de rechange pour casque Bose QuietComfort Le prix est de : 34,95 ",
+        ",95 € Kit de coussinets de rechange pour casque Bose QuietComfort Le prix est de : 34,95 € Câble de chargement USB-C Bose Le prix est de : 13,95 € Prise AUX/Câble micro po",
+        "tComfort Le prix est de : 34,95 € Câble de chargement USB-C Bose Le prix est de : 13,95 € Prise AUX/Câble micro pour casque Bose QuietComfort Le prix est de : 18,95 € ACHE",
+        "de : 13,95 € Prise AUX/Câble micro pour casque Bose QuietComfort Le prix est de : 18,95 € ACHETEZ MAINTENANT. PAYEZ PLUS TARD Payez en 4 fois sans frais Ajouter le(s) produit",
+        "né Blanc Nuage sélectionné Blanc Nuage sélectionné Blanc Nuage Le prix est de : 249,95 € Ajouter au panier Product Added to cart Extended warranty modal Protégez votre Bose",
+        " le plus bas. En savoir plus Livraison offerte Pour toutes les commandes en stock de 49 € ou plus. En savoir plus Les avantages Mon Bose Les membres Mon Bose bénéficient d",
+        "2e génération) Sélectionner une couleur Casque Bose QuietComfort Le prix est de : 249,95 € Acheter maintenant Technologie audio Plusieurs modes d’écoute Silencieux, Conscie",
+        "ionner une couleur Casque Bose QuietComfort Ultra (2e génération) Le prix est de : 449,95 € Acheter maintenant Technologie audio Plusieurs modes d’écoute Silencieux, Conscie",
+        " (au premier achat). Le coupon ne peut être utilisé pour une réduction de plus de 100 €. Les produits d’aviation, les produits remis à neuf et les produits Bose en parte"
+      ],
+      "classification": "html_retrieved",
+      "priceVerification": {
+        "evidence": "JSON-LD offer or active price specification and visible product price agree in the same downloaded HTML",
+        "currency": "EUR",
+        "verdict": "corroborated_current_html",
+        "price": 249.95
+      }
+    },
+    {
+      "merchant": "LDLC",
+      "url": "https://www.ldlc.com/fiche/PB00500370.html",
+      "observedAt": "2026-10-31T11:26:49.5697884Z",
+      "elapsedMs": 78,
+      "finalUrl": "https://www.ldlc.com/fiche/PB00500370.html",
+      "media": "text/html",
+      "bytes": 192017,
+      "htmlSha256": "6cb129db2a02ed18f5d12749ae67310fc64fcb345230441f4c21a82f0e0ce181",
+      "privateHtmlFile": "25.html",
+      "metadata": [
+        {
+          "content": "Achat Souris PC Logitech MX Master 3S (Graphite) (910-006559) sur LDLC, n°1 du high-tech. Souris sans fil (RF + Bluetooth) - droitier - capteur optique 8000 dpi - 7 boutons - molette exclusive pour le pouce - technologie Logitech Flow.",
+          "key": "description"
+        },
+        {
+          "content": "Achat Souris PC Logitech MX Master 3S (Graphite) (910-006559) sur LDLC, n°1 du high-tech. Souris sans fil (RF + Bluetooth) - droitier - capteur optique 8000 dpi - 7 boutons - molette exclusive pour le pouce - technologie Logitech Flow.",
+          "key": "og:description"
+        },
+        {
+          "content": "Logitech MX Master 3S (Graphite) - Souris PC - LDLC",
+          "key": "og:title"
+        },
+        {
+          "content": "https://media.ldlc.com/r1600/ld/products/00/05/97/06/LD0005970606.jpg",
+          "key": "og:image"
+        },
+        {
+          "content": "https://www.ldlc.com/fiche/PB00500370.html",
+          "key": "og:url"
+        }
+      ],
+      "structured": [
+        {
+          "@type": "Product",
+          "name": "Logitech MX Master 3S (Graphite)",
+          "path": "$",
+          "sku": "AR202205120077"
+        },
+        {
+          "@type": "Offer",
+          "availability": "https://schema.org/OutOfStock",
+          "path": "$.offers",
+          "price": "119.95",
+          "priceCurrency": "EUR",
+          "url": "https://www.ldlc.com/fiche/PB00500370.html"
+        }
+      ],
+      "visiblePriceContexts": [
+        "xclusive pour le pouce - technologie Logitech Flow 32 avis clients question/réponse 119€ 95 Éco-part. : 0€ 07 En 3x En 4x 1 1 2 3 4 5 6 7 8 9 +10 La quantité maximum aut",
+        "- technologie Logitech Flow 32 avis clients question/réponse 119€ 95 Éco-part. : 0€ 07 En 3x En 4x 1 1 2 3 4 5 6 7 8 9 +10 La quantité maximum autorisée est 100 Ajout",
+        " 3 4 5 6 7 8 9 +10 La quantité maximum autorisée est 100 Ajouter au panier Acheter 119€ 95 Ajouter au panier Rupture Alerte disponibilité Retrait en boutique Dispo dans 9 ",
+        " Alerte disponibilité Retrait en boutique Dispo dans 9 boutiques Couleur : Graphite 119€95 Rupture Gris 129€95 Rupture Couleur : Appliquer Couleur : Graphite 119€95 Rupt",
+        " Retrait en boutique Dispo dans 9 boutiques Couleur : Graphite 119€95 Rupture Gris 129€95 Rupture Couleur : Appliquer Couleur : Graphite 119€95 Rupture Gris 129€95 Rupt",
+        "aphite 119€95 Rupture Gris 129€95 Rupture Couleur : Appliquer Couleur : Graphite 119€95 Rupture Gris 129€95 Rupture Recyclez votre ancien produit En savoir plus Éco-co",
+        "e Gris 129€95 Rupture Couleur : Appliquer Couleur : Graphite 119€95 Rupture Gris 129€95 Rupture Recyclez votre ancien produit En savoir plus Éco-contribution des produit",
+        "ries En savoir plus Produits associés : INOVU AW10G (AZERTY, Français) - Gris/Noir 39€ 95 REKT Office-R (Noir/Noir) 499€ 95 Fox Spirit S-Pad 9€ 95 Descriptif Fiche tec",
+        "és : INOVU AW10G (AZERTY, Français) - Gris/Noir 39€ 95 REKT Office-R (Noir/Noir) 499€ 95 Fox Spirit S-Pad 9€ 95 Descriptif Fiche technique Avis clients question/répons",
+        "Français) - Gris/Noir 39€ 95 REKT Office-R (Noir/Noir) 499€ 95 Fox Spirit S-Pad 9€ 95 Descriptif Fiche technique Avis clients question/réponse Descriptif Un feeling i",
+        "ywhere 3S (Gris Pâle) Logitech MX Anywhere 3S (Rose) Meilleures ventes INOVU AT200M 12€ 95 INOVU EG200V 19€ 95 Logitech G Pro X3 Superstrike (Noir) 189€ 95 Logitech B11",
+        " Logitech MX Anywhere 3S (Rose) Meilleures ventes INOVU AT200M 12€ 95 INOVU EG200V 19€ 95 Logitech G Pro X3 Superstrike (Noir) 189€ 95 Logitech B110 Silent (Noir) 11€ ",
+        "tes INOVU AT200M 12€ 95 INOVU EG200V 19€ 95 Logitech G Pro X3 Superstrike (Noir) 189€ 95 Logitech B110 Silent (Noir) 11€ 95 Logitech G G502 Hero (25 600 dpi) 49€ 95 L",
+        " 19€ 95 Logitech G Pro X3 Superstrike (Noir) 189€ 95 Logitech B110 Silent (Noir) 11€ 95 Logitech G G502 Hero (25 600 dpi) 49€ 95 Logitech M240 Silent (Graphite) 23€ ",
+        "ir) 189€ 95 Logitech B110 Silent (Noir) 11€ 95 Logitech G G502 Hero (25 600 dpi) 49€ 95 Logitech M240 Silent (Graphite) 23€ 95 Logitech G Pro X3 Superstrike (Rose) 189",
+        " 11€ 95 Logitech G G502 Hero (25 600 dpi) 49€ 95 Logitech M240 Silent (Graphite) 23€ 95 Logitech G Pro X3 Superstrike (Rose) 189€ 95 Logitech Lift (Graphite) 59€ 95 ",
+        "€ 95 Logitech M240 Silent (Graphite) 23€ 95 Logitech G Pro X3 Superstrike (Rose) 189€ 95 Logitech Lift (Graphite) 59€ 95 INOVU FM 1200 (Noir) 7€ 96 Logitech Marathon ",
+        "te) 23€ 95 Logitech G Pro X3 Superstrike (Rose) 189€ 95 Logitech Lift (Graphite) 59€ 95 INOVU FM 1200 (Noir) 7€ 96 Logitech Marathon Mouse M705 Argent (910-006034) 29",
+        " Superstrike (Rose) 189€ 95 Logitech Lift (Graphite) 59€ 95 INOVU FM 1200 (Noir) 7€ 96 Logitech Marathon Mouse M705 Argent (910-006034) 29€ 95 Razer Viper v4 Pro (Noi",
+        "€ 95 INOVU FM 1200 (Noir) 7€ 96 Logitech Marathon Mouse M705 Argent (910-006034) 29€ 95 Razer Viper v4 Pro (Noir) 164€ 95 Razer Naga v3 Pro 199€ 95 Logitech M171 Wir",
+        " Logitech Marathon Mouse M705 Argent (910-006034) 29€ 95 Razer Viper v4 Pro (Noir) 164€ 95 Razer Naga v3 Pro 199€ 95 Logitech M171 Wireless Mouse (Noir) 12€ 95 INOVU EG",
+        "5 Argent (910-006034) 29€ 95 Razer Viper v4 Pro (Noir) 164€ 95 Razer Naga v3 Pro 199€ 95 Logitech M171 Wireless Mouse (Noir) 12€ 95 INOVU EG200M 19€ 95 Logitech M650 ",
+        "Pro (Noir) 164€ 95 Razer Naga v3 Pro 199€ 95 Logitech M171 Wireless Mouse (Noir) 12€ 95 INOVU EG200M 19€ 95 Logitech M650 (Graphite) 39€ 95 Logitech Mouse M100 (Noir",
+        "azer Naga v3 Pro 199€ 95 Logitech M171 Wireless Mouse (Noir) 12€ 95 INOVU EG200M 19€ 95 Logitech M650 (Graphite) 39€ 95 Logitech Mouse M100 (Noir) 9€ 95 Razer Basili",
+        "h M171 Wireless Mouse (Noir) 12€ 95 INOVU EG200M 19€ 95 Logitech M650 (Graphite) 39€ 95 Logitech Mouse M100 (Noir) 9€ 95 Razer Basilisk v3 57€ 95 Cooler Master Maste",
+        "5 INOVU EG200M 19€ 95 Logitech M650 (Graphite) 39€ 95 Logitech Mouse M100 (Noir) 9€ 95 Razer Basilisk v3 57€ 95 Cooler Master MasterMouse MM720 Noir mat 29€ 95 Logi",
+        "Logitech M650 (Graphite) 39€ 95 Logitech Mouse M100 (Noir) 9€ 95 Razer Basilisk v3 57€ 95 Cooler Master MasterMouse MM720 Noir mat 29€ 95 Logitech G Pro X Superlight 2 S",
+        "0 (Noir) 9€ 95 Razer Basilisk v3 57€ 95 Cooler Master MasterMouse MM720 Noir mat 29€ 95 Logitech G Pro X Superlight 2 SE Lightspeed (Noir) 89€ 95 Logitech MX Master 4 ",
+        "sterMouse MM720 Noir mat 29€ 95 Logitech G Pro X Superlight 2 SE Lightspeed (Noir) 89€ 95 Logitech MX Master 4 (Graphite) 139€ 95 Logitech MX Anywhere 3S (Graphite) 94",
+        "h G Pro X Superlight 2 SE Lightspeed (Noir) 89€ 95 Logitech MX Master 4 (Graphite) 139€ 95 Logitech MX Anywhere 3S (Graphite) 94€ 95 Nos marques Souris PC Logitech Souris",
+        "9€ 95 Logitech MX Master 4 (Graphite) 139€ 95 Logitech MX Anywhere 3S (Graphite) 94€ 95 Nos marques Souris PC Logitech Souris PC Logitech G Souris PC INOVU Souris PC Raz",
+        "de Ipsos bva - Viséo CI - Plus d’infos sur escda.fr Paiement jusqu'en 10/12x Dès 250€ d'achat. Livraison DOM-TOM Nous livrons dans les DOM-TOM en HT ! Livraison ultra-rap"
+      ],
+      "classification": "html_retrieved",
+      "priceVerification": {
+        "evidence": "JSON-LD offer or active price specification and visible product price agree in the same downloaded HTML",
+        "currency": "EUR",
+        "verdict": "corroborated_current_html",
+        "price": 119.95
+      }
+    },
+    {
+      "merchant": "King Jouet",
+      "url": "https://www.king-jouet.com/jeu-jouet/jeux-societes/jeux-ambiance/ref-728250-dobble-classique.htm",
+      "observedAt": "2026-10-31T11:26:49.6625916Z",
+      "elapsedMs": 71,
+      "downloadError": "merchant response is unavailable",
+      "diagnosticHttpStatus": 403,
+      "classification": "http_403_on_second_secure_request"
+    },
+    {
+      "merchant": "JouéClub",
+      "url": "https://www.joueclub.fr/jeux-de-societes/dobble-classique-3558380052845.html",
+      "observedAt": "2026-10-31T11:26:49.8294248Z",
+      "elapsedMs": 337,
+      "finalUrl": "https://www.joueclub.fr/jeux-de-societes/dobble-classique-3558380052845.html",
+      "media": "text/html",
+      "htmlSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "privateHtmlFile": "27.html",
+      "classification": "empty_html_2xx"
+    },
+    {
+      "merchant": "Nature & Découvertes",
+      "url": "https://www.natureetdecouvertes.com/huiles-essentielles-diffuseur/diffuseur-huiles-essentielles/par-chaleur-douce/diffuseur-d-huiles-essentielles-warm-15227440",
+      "observedAt": "2026-10-31T11:26:50.1684535Z",
+      "elapsedMs": 135,
+      "finalUrl": "https://www.natureetdecouvertes.com/huiles-essentielles-diffuseur/diffuseur-huiles-essentielles/par-chaleur-douce/diffuseur-d-huiles-essentielles-warm-15227440",
+      "media": "text/html",
+      "bytes": 163453,
+      "htmlSha256": "e5ac804e4c5016f2a9b36f89a79c798e2529c0889c3000b438976b39306a462a",
+      "privateHtmlFile": "28.html",
+      "metadata": [
+        {
+          "content": "Diffuseur d'huiles essentielles Warm, Un produit de la marque Nature & Découvertes. Livraison offerte dès 49€ d'achats. Retrait gratuit en magasin sous 1h.",
+          "key": "description"
+        },
+        {
+          "content": "https://cache.natureetdecouvertes.com/wwwStaticContent/ned/fb/images/Logo_ND.jpg",
+          "key": "og:image"
+        },
+        {
+          "content": "Diffuseur d'huiles essentielles Warm",
+          "key": "og:title"
+        },
+        {
+          "content": "product",
+          "key": "og:type"
+        },
+        {
+          "content": "34,95",
+          "key": "og:price:amount"
+        },
+        {
+          "content": "EUR",
+          "key": "product:price:currency"
+        },
+        {
+          "content": "",
+          "key": "og:description"
+        },
+        {
+          "content": "https://cache.natureetdecouvertes.com/Medias/Images/Articles/15227440/690",
+          "key": "og:image"
+        }
+      ],
+      "structured": [
+        {
+          "@type": "Product",
+          "name": "Diffuseur d'huiles essentielles Warm",
+          "path": "$",
+          "sku": "15227440",
+          "url": "https://www.natureetdecouvertes.com/huiles-essentielles-diffuseur/diffuseur-huiles-essentielles/par-chaleur-douce/diffuseur-d-huiles-essentielles-warm-15227440"
+        },
+        {
+          "@type": "Offer",
+          "availability": "https://schema.org/InStock",
+          "path": "$.offers[0]",
+          "price": 34.95,
+          "priceCurrency": "EUR",
+          "url": "https://www.natureetdecouvertes.com/huiles-essentielles-diffuseur/diffuseur-huiles-essentielles/par-chaleur-douce/diffuseur-d-huiles-essentielles-warm-15227440"
+        }
+      ],
+      "visiblePriceContexts": [
+        "s, relaxation Anti moustiques Purification Offre carte club Nature & Découvertes à 1€ *L'offre carte club Nature & Découvertes à 1€ est valable le vendredi 30 octobre",
+        "arte club Nature & Découvertes à 1€ *L'offre carte club Nature & Découvertes à 1€ est valable le vendredi 30 octobre 2026 sur le site www.natureetdecouvertes.com & da",
+        "correspond le mieux. Click & Collect Gratuit 1 heure 0,11 kg CO² Livraison Standard 3,99€ 3 jours ouvré* Offert à partir de 0,38 kg CO² 49€ Livraison Express en point re",
+        " kg CO² Livraison Standard 3,99€ 3 jours ouvré* Offert à partir de 0,38 kg CO² 49€ Livraison Express en point relais 5,99€ 1 jour ouvré* Offert à partir de 0,13 kg",
+        "urs ouvré* Offert à partir de 0,38 kg CO² 49€ Livraison Express en point relais 5,99€ 1 jour ouvré* Offert à partir de 0,13 kg CO² 49€ Livraison Express à domicile ",
+        "ison Express en point relais 5,99€ 1 jour ouvré* Offert à partir de 0,13 kg CO² 49€ Livraison Express à domicile 9,99€ 1 jour ouvré* Offert à partir de 0,35 kg CO",
+        " 1 jour ouvré* Offert à partir de 0,13 kg CO² 49€ Livraison Express à domicile 9,99€ 1 jour ouvré* Offert à partir de 0,35 kg CO² 69€ Livraison Hors Gabarit devant ",
+        "ivraison Express à domicile 9,99€ 1 jour ouvré* Offert à partir de 0,35 kg CO² 69€ Livraison Hors Gabarit devant votre domicile En fonction du poids > 4 jours ouvrés*",
+        "5 Diffuseur d'huiles essentielles Warm Vendu par Nature & Découvertes Prix actuel : 34 ,95 € Exclusivité 4.7/5 Coffret 4 huiles essentielles maison Vendu par Nature & Découver",
+        "5 Coffret 4 huiles essentielles maison Vendu par Nature & Découvertes Prix actuel : 14 ,95 € Prix Total : 49,90 € Acheter l'ensemble Reprise possible de votre ancien produit C",
+        "tielles maison Vendu par Nature & Découvertes Prix actuel : 14 ,95 € Prix Total : 49,90 € Acheter l'ensemble Reprise possible de votre ancien produit Conformément à la loi ",
+        "act et élégant, il se fait discret pour parfumer l'atmosphère En savoir plus Ref. 15227440 34,95 € Dont 0,10 € ecopart Ajouter au panier Retirer en magasin Votre panier contient dé",
+        "fait discret pour parfumer l'atmosphère En savoir plus Ref. 15227440 34,95 € Dont 0,10 € ecopart Ajouter au panier Retirer en magasin Votre panier contient déjà une carte ",
+        "correspond le mieux. Click & Collect Gratuit 1 heure 0,11 kg CO² Livraison Standard 3,99€ 3 jours ouvré* Offert à partir de 0,38 kg CO² 49€ Livraison Express en point re",
+        " kg CO² Livraison Standard 3,99€ 3 jours ouvré* Offert à partir de 0,38 kg CO² 49€ Livraison Express en point relais 5,99€ 1 jour ouvré* Offert à partir de 0,13 kg",
+        "urs ouvré* Offert à partir de 0,38 kg CO² 49€ Livraison Express en point relais 5,99€ 1 jour ouvré* Offert à partir de 0,13 kg CO² 49€ Livraison Express à domicile ",
+        "ison Express en point relais 5,99€ 1 jour ouvré* Offert à partir de 0,13 kg CO² 49€ Livraison Express à domicile 9,99€ 1 jour ouvré* Offert à partir de 0,35 kg CO",
+        " 1 jour ouvré* Offert à partir de 0,13 kg CO² 49€ Livraison Express à domicile 9,99€ 1 jour ouvré* Offert à partir de 0,35 kg CO² 69€ Livraison Hors Gabarit devant ",
+        "ivraison Express à domicile 9,99€ 1 jour ouvré* Offert à partir de 0,35 kg CO² 69€ Livraison Hors Gabarit devant votre domicile En fonction du poids > 4 jours ouvrés*",
+        "En stock dans 80 magasins Choisir un magasin Retours gratuits Livraison offerte dès 49€ d'achat Click & Collect Offert Top 10 du rayon Diffuseurs d'huiles essentielles Diff",
+        "elles Diffuseur par chaleur douce Click & collect Prêt en 1h Livraison offerte Dès 49€ d'achat Retours gratuits 30 jours pour changer d'avis, pour les articles éligibles ",
+        " jours pour changer d'avis, pour les articles éligibles Paiement 3X sans frais Dès 70€ d'achat avec Alma Rejoignez-nous Certifiée sans spam, riche en idées cadeaux uniqu"
+      ],
+      "classification": "html_retrieved",
+      "priceVerification": {
+        "evidence": "JSON-LD offer or active price specification and visible product price agree in the same downloaded HTML",
+        "currency": "EUR",
+        "verdict": "corroborated_current_html",
+        "price": 34.95
+      }
+    },
+    {
+      "merchant": "Leroy Merlin",
+      "url": "https://www.leroymerlin.fr/produits/lampe-led-koze-verre-blanc-h-16-5cm-inspire-89736652.html",
+      "observedAt": "2026-10-31T11:26:50.3068206Z",
+      "elapsedMs": 47,
+      "downloadError": "merchant response is unavailable",
+      "diagnosticHttpStatus": 403,
+      "classification": "http_403_on_second_secure_request"
+    },
+    {
+      "merchant": "Lacoste",
+      "url": "https://www.lacoste.com/fr/lacoste/homme/vetements/polos/manches-courtes/L1212-00.html?color=001",
+      "observedAt": "2026-10-31T11:26:50.3942003Z",
+      "elapsedMs": 55,
+      "downloadError": "merchant response is unavailable",
+      "diagnosticHttpStatus": 403,
+      "classification": "http_403_on_second_secure_request"
+    }
+  ]
+}

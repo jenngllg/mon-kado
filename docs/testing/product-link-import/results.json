@@ -1,0 +1,669 @@
+{
+  "mode": "direct-default-providers-disabled",
+  "results": [
+    {
+      "merchant": "Amazon",
+      "url": "https://www.amazon.fr/dp/B0DHSDNPHC",
+      "status": "partial",
+      "observedAt": "2026-10-31T11:28:55.9040174Z",
+      "elapsedMs": 1896,
+      "preview": {
+        "name": "LEGO Super Mario : Mario Kart – Yoshimoto 72031 | Jeu de construction pour enfant dès 7 ans,",
+        "note": "LEGO Super Mario : Mario Kart – Yoshimoto 72031 | Jeu de construction pour enfant dès 7 ans, maquette collector, figurine de Yoshi, cadeau pour fan de jeux vidéo, 133 pièces : Amazon.fr: Jeux et Jouets",
+        "color": null,
+        "size": null,
+        "url": "https://www.amazon.fr/dp/B0DHSDNPHC",
+        "price": null,
+        "quantity": 1,
+        "image": null,
+        "warnings": [
+          "WISH_IMPORT_PRICE_UNAVAILABLE"
+        ]
+      },
+      "imageFile": "01.webp",
+      "imageSha256": "a4c1ee660b854988fe446a8293a7a04b229c41cfa73be6748af561ca03e0d45c"
+    },
+    {
+      "merchant": "Maisons du Monde",
+      "url": "https://www.maisonsdumonde.com/FR/fr/p/vase-en-verre-teinte-vert-h18-241834.htm",
+      "status": "unavailable",
+      "observedAt": "2026-10-31T11:28:57.8024224Z",
+      "elapsedMs": 168,
+      "preview": {
+        "name": null,
+        "note": null,
+        "color": null,
+        "size": null,
+        "url": "https://www.maisonsdumonde.com/FR/fr/p/vase-en-verre-teinte-vert-h18-241834.htm",
+        "price": null,
+        "quantity": 1,
+        "image": null,
+        "warnings": [
+          "WISH_IMPORT_PAGE_UNAVAILABLE",
+          "WISH_IMPORT_IMAGE_UNAVAILABLE",
+          "WISH_IMPORT_NAME_UNAVAILABLE",
+          "WISH_IMPORT_PRICE_UNAVAILABLE"
+        ]
+      }
+    },
+    {
+      "merchant": "Decathlon",
+      "url": "https://www.decathlon.fr/p/gourde-900-isotherme-inox-0-8l-bouchon-a-ouverture-rapide-pour-la-randonnee/301275/c328m8971230",
+      "status": "unavailable",
+      "observedAt": "2026-10-31T11:28:57.9722825Z",
+      "elapsedMs": 40,
+      "preview": {
+        "name": null,
+        "note": null,
+        "color": null,
+        "size": null,
+        "url": "https://www.decathlon.fr/p/gourde-900-isotherme-inox-0-8l-bouchon-a-ouverture-rapide-pour-la-randonnee/301275/c328m8971230",
+        "price": null,
+        "quantity": 1,
+        "image": null,
+        "warnings": [
+          "WISH_IMPORT_PAGE_UNAVAILABLE",
+          "WISH_IMPORT_IMAGE_UNAVAILABLE",
+          "WISH_IMPORT_NAME_UNAVAILABLE",
+          "WISH_IMPORT_PRICE_UNAVAILABLE"
+        ]
+      }
+    },
+    {
+      "merchant": "Cdiscount",
+      "url": "https://www.cdiscount.com/juniors/jeux-de-construction/lego-city-60454-le-camping-car-d-aventures-jeu-d/f-12083-lego60454.html",
+      "status": "unavailable",
+      "observedAt": "2026-10-31T11:28:58.0136045Z",
+      "elapsedMs": 45,
+      "preview": {
+        "name": null,
+        "note": null,
+        "color": null,
+        "size": null,
+        "url": "https://www.cdiscount.com/juniors/jeux-de-construction/lego-city-60454-le-camping-car-d-aventures-jeu-d/f-12083-lego60454.html",
+        "price": null,
+        "quantity": 1,
+        "image": null,
+        "warnings": [
+          "WISH_IMPORT_PAGE_UNAVAILABLE",
+          "WISH_IMPORT_IMAGE_UNAVAILABLE",
+          "WISH_IMPORT_NAME_UNAVAILABLE",
+          "WISH_IMPORT_PRICE_UNAVAILABLE"
+        ]
+      }
+    },
+    {
+      "merchant": "Fnac",
+      "url": "https://www.fnac.com/LEGO-Icons-10281-Bonsai/a15233617/w-4",
+      "status": "unavailable",
+      "observedAt": "2026-10-31T11:28:58.0603117Z",
+      "elapsedMs": 81,
+      "preview": {
+        "name": null,
+        "note": null,
+        "color": null,
+        "size": null,
+        "url": "https://www.fnac.com/LEGO-Icons-10281-Bonsai/a15233617/w-4",
+        "price": null,
+        "quantity": 1,
+        "image": null,
+        "warnings": [
+          "WISH_IMPORT_PAGE_UNAVAILABLE",
+          "WISH_IMPORT_IMAGE_UNAVAILABLE",
+          "WISH_IMPORT_NAME_UNAVAILABLE",
+          "WISH_IMPORT_PRICE_UNAVAILABLE"
+        ]
+      }
+    },
+    {
+      "merchant": "Darty",
+      "url": "https://www.darty.com/nav/achat/accessoires/casque_ecouteurs/casque_arceau/marshall_major_v_black.html",
+      "status": "unavailable",
+      "observedAt": "2026-10-31T11:28:58.1430241Z",
+      "elapsedMs": 81,
+      "preview": {
+        "name": null,
+        "note": null,
+        "color": null,
+        "size": null,
+        "url": "https://www.darty.com/nav/achat/accessoires/casque_ecouteurs/casque_arceau/marshall_major_v_black.html",
+        "price": null,
+        "quantity": 1,
+        "image": null,
+        "warnings": [
+          "WISH_IMPORT_PAGE_UNAVAILABLE",
+          "WISH_IMPORT_IMAGE_UNAVAILABLE",
+          "WISH_IMPORT_NAME_UNAVAILABLE",
+          "WISH_IMPORT_PRICE_UNAVAILABLE"
+        ]
+      }
+    },
+    {
+      "merchant": "IKEA",
+      "url": "https://www.ikea.com/fr/fr/p/kallax-etagere-blanc-20275814/",
+      "status": "name-price-image",
+      "observedAt": "2026-10-31T11:28:58.2269201Z",
+      "elapsedMs": 841,
+      "preview": {
+        "name": "KALLAX Étagère - blanc 77x77 cm",
+        "note": "KALLAX Étagère - blanc 77x77 cm. Le design simple et les lignes épurées de la KALLAX permettent de lui trouver facilement une place n'importe où dans la maison. Vous avez le choix entre le fixer au mur ou le placer au sol. La charge max. pour une structure murale dépend du matériau du mur.",
+        "color": "blanc",
+        "size": null,
+        "url": "https://www.ikea.com/fr/fr/p/kallax-etagere-blanc-20275814/",
+        "price": 34.99,
+        "quantity": 1,
+        "image": null,
+        "warnings": []
+      },
+      "imageFile": "07.webp",
+      "imageSha256": "a952eef92d9cdb22c0d0d543210debe0c1d59c3af6e5c64b37299cc0a2ce4c07"
+    },
+    {
+      "merchant": "LEGO",
+      "url": "https://www.lego.com/fr-fr/product/bonsai-tree-10281",
+      "status": "unavailable",
+      "observedAt": "2026-10-31T11:28:59.0696345Z",
+      "elapsedMs": 41,
+      "preview": {
+        "name": null,
+        "note": null,
+        "color": null,
+        "size": null,
+        "url": "https://www.lego.com/fr-fr/product/bonsai-tree-10281",
+        "price": null,
+        "quantity": 1,
+        "image": null,
+        "warnings": [
+          "WISH_IMPORT_PAGE_UNAVAILABLE",
+          "WISH_IMPORT_IMAGE_UNAVAILABLE",
+          "WISH_IMPORT_NAME_UNAVAILABLE",
+          "WISH_IMPORT_PRICE_UNAVAILABLE"
+        ]
+      }
+    },
+    {
+      "merchant": "Boulanger",
+      "url": "https://www.boulanger.com/ref/1204873",
+      "status": "name-price-image",
+      "observedAt": "2026-10-31T11:28:59.1111394Z",
+      "elapsedMs": 164,
+      "preview": {
+        "name": "Casque MARSHALL Major V Noir - Bluetooth, autonomie 100h, pliable",
+        "note": "Casque MARSHALL Major V Noir - Bluetooth, autonomie 100h, pliable au meilleur rapport qualité/prix ! Livraison Offerte* - Retrait 30min en Magasin* - Retrait Drive* - Garantie 2 ans* - SAV 7j/7",
+        "color": null,
+        "size": null,
+        "url": "https://www.boulanger.com/ref/1204873",
+        "price": 149.99,
+        "quantity": 1,
+        "image": null,
+        "warnings": []
+      },
+      "imageFile": "09.webp",
+      "imageSha256": "6d0a3727cf5042873d1bfa6cd4bbc1be8687344a9dfc5e276e2e0a4f07ee2be5"
+    },
+    {
+      "merchant": "Cultura",
+      "url": "https://www.cultura.com/p-azul-3504871.html",
+      "status": "unavailable",
+      "observedAt": "2026-10-31T11:28:59.2769656Z",
+      "elapsedMs": 45,
+      "preview": {
+        "name": null,
+        "note": null,
+        "color": null,
+        "size": null,
+        "url": "https://www.cultura.com/p-azul-3504871.html",
+        "price": null,
+        "quantity": 1,
+        "image": null,
+        "warnings": [
+          "WISH_IMPORT_PAGE_UNAVAILABLE",
+          "WISH_IMPORT_IMAGE_UNAVAILABLE",
+          "WISH_IMPORT_NAME_UNAVAILABLE",
+          "WISH_IMPORT_PRICE_UNAVAILABLE"
+        ]
+      }
+    },
+    {
+      "merchant": "Sephora",
+      "url": "https://www.sephora.fr/p/335957.html",
+      "status": "unavailable",
+      "observedAt": "2026-10-31T11:28:59.3231293Z",
+      "elapsedMs": 105,
+      "preview": {
+        "name": null,
+        "note": null,
+        "color": null,
+        "size": null,
+        "url": "https://www.sephora.fr/p/335957.html",
+        "price": null,
+        "quantity": 1,
+        "image": null,
+        "warnings": [
+          "WISH_IMPORT_PAGE_UNAVAILABLE",
+          "WISH_IMPORT_IMAGE_UNAVAILABLE",
+          "WISH_IMPORT_NAME_UNAVAILABLE",
+          "WISH_IMPORT_PRICE_UNAVAILABLE"
+        ]
+      }
+    },
+    {
+      "merchant": "Nocibé",
+      "url": "https://www.nocibe.fr/fr/p/3000056790?variant=606251",
+      "status": "unavailable",
+      "observedAt": "2026-10-31T11:28:59.4287487Z",
+      "elapsedMs": 61,
+      "preview": {
+        "name": null,
+        "note": null,
+        "color": null,
+        "size": null,
+        "url": "https://www.nocibe.fr/fr/p/3000056790?variant=606251",
+        "price": null,
+        "quantity": 1,
+        "image": null,
+        "warnings": [
+          "WISH_IMPORT_PAGE_UNAVAILABLE",
+          "WISH_IMPORT_IMAGE_UNAVAILABLE",
+          "WISH_IMPORT_NAME_UNAVAILABLE",
+          "WISH_IMPORT_PRICE_UNAVAILABLE"
+        ]
+      }
+    },
+    {
+      "merchant": "La Redoute",
+      "url": "https://www.laredoute.fr/ppdp/prod-602685461.aspx",
+      "status": "unavailable",
+      "observedAt": "2026-10-31T11:28:59.4902684Z",
+      "elapsedMs": 71,
+      "preview": {
+        "name": null,
+        "note": null,
+        "color": null,
+        "size": null,
+        "url": "https://www.laredoute.fr/ppdp/prod-602685461.aspx",
+        "price": null,
+        "quantity": 1,
+        "image": null,
+        "warnings": [
+          "WISH_IMPORT_PAGE_UNAVAILABLE",
+          "WISH_IMPORT_IMAGE_UNAVAILABLE",
+          "WISH_IMPORT_NAME_UNAVAILABLE",
+          "WISH_IMPORT_PRICE_UNAVAILABLE"
+        ]
+      }
+    },
+    {
+      "merchant": "L'Occitane",
+      "url": "https://fr.loccitane.com/creme-mains-karite-01MA150K26.html",
+      "status": "unavailable",
+      "observedAt": "2026-10-31T11:28:59.5626304Z",
+      "elapsedMs": 674,
+      "preview": {
+        "name": null,
+        "note": null,
+        "color": null,
+        "size": null,
+        "url": "https://fr.loccitane.com/creme-mains-karite-01MA150K26.html",
+        "price": null,
+        "quantity": 1,
+        "image": null,
+        "warnings": [
+          "WISH_IMPORT_PAGE_UNAVAILABLE",
+          "WISH_IMPORT_IMAGE_UNAVAILABLE",
+          "WISH_IMPORT_NAME_UNAVAILABLE",
+          "WISH_IMPORT_PRICE_UNAVAILABLE"
+        ]
+      }
+    },
+    {
+      "merchant": "Rituals",
+      "url": "https://www.rituals.com/fr-fr/the-ritual-of-sakura---large-gift-set-2024-1118461.html",
+      "status": "partial",
+      "observedAt": "2026-10-31T11:29:00.2381955Z",
+      "elapsedMs": 778,
+      "preview": {
+        "name": "The Ritual of Sakura Gift Set L",
+        "note": "Ce très beau coffret cadeau est parfait pour offrir à un ami, à un membre de la famille ou pour se faire plaisir ! Il contient une mousse de douche, une bougie parfumée, une crème pour le corps et des mini bâtonnets parfumés. Célébrez chaque jour comme un nouveau départ avec ces essentiels bien-être formulés à partir des ingrédients raffinés que sont les fleurs de cerisier et le lait de riz. Donnez une seconde vie à votre coffret cadeau offert réutilisable en y rangeant des photos, des lettres",
+        "color": null,
+        "size": null,
+        "url": "https://www.rituals.com/fr-fr/the-ritual-of-sakura---large-gift-set-2024-1118461.html",
+        "price": null,
+        "quantity": 1,
+        "image": null,
+        "warnings": [
+          "WISH_IMPORT_PRICE_UNAVAILABLE"
+        ]
+      },
+      "imageFile": "15.webp",
+      "imageSha256": "c63c5c261bba3a171c8ae60362cc1da0ba6649b3159b087eea49a414f3a2cb94"
+    },
+    {
+      "merchant": "Lush",
+      "url": "https://www.lush.com/fr/fr/p/sleepy-body-lotion",
+      "status": "unavailable",
+      "observedAt": "2026-10-31T11:29:01.0206712Z",
+      "elapsedMs": 57,
+      "preview": {
+        "name": null,
+        "note": null,
+        "color": null,
+        "size": null,
+        "url": "https://www.lush.com/fr/fr/p/sleepy-body-lotion",
+        "price": null,
+        "quantity": 1,
+        "image": null,
+        "warnings": [
+          "WISH_IMPORT_PAGE_UNAVAILABLE",
+          "WISH_IMPORT_IMAGE_UNAVAILABLE",
+          "WISH_IMPORT_NAME_UNAVAILABLE",
+          "WISH_IMPORT_PRICE_UNAVAILABLE"
+        ]
+      }
+    },
+    {
+      "merchant": "Nike",
+      "url": "https://www.nike.com/fr/t/chaussure-nike-air-force-1-07-pour-homme-n8juM1H2/CW2288-111",
+      "status": "name-price-image",
+      "observedAt": "2026-10-31T11:29:01.0794443Z",
+      "elapsedMs": 325,
+      "preview": {
+        "name": "Chaussure Nike Air Force 1 '07 pour homme",
+        "note": "Confortable, résistante et intemporelle : elle n'est pas classée numéro 1 pour rien. Le design des années 80 associé à des couleurs classiques. Un plaisir sur le terrain comme au quotidien.",
+        "color": "Blanc/Blanc",
+        "size": null,
+        "url": "https://www.nike.com/fr/t/chaussure-nike-air-force-1-07-pour-homme-n8juM1H2/CW2288-111",
+        "price": 119.99,
+        "quantity": 1,
+        "image": null,
+        "warnings": []
+      },
+      "imageFile": "17.webp",
+      "imageSha256": "6a0ff8413b9f13c0fa0c791c3b74bde5ef0fe0b2ef7d127e8541597c81496175"
+    },
+    {
+      "merchant": "Adidas",
+      "url": "https://www.adidas.fr/chaussure-y-3-stan-smith/KI3464.html",
+      "status": "unavailable",
+      "observedAt": "2026-10-31T11:29:01.4066165Z",
+      "elapsedMs": 108,
+      "preview": {
+        "name": null,
+        "note": null,
+        "color": null,
+        "size": null,
+        "url": "https://www.adidas.fr/chaussure-y-3-stan-smith/KI3464.html",
+        "price": null,
+        "quantity": 1,
+        "image": null,
+        "warnings": [
+          "WISH_IMPORT_PAGE_UNAVAILABLE",
+          "WISH_IMPORT_IMAGE_UNAVAILABLE",
+          "WISH_IMPORT_NAME_UNAVAILABLE",
+          "WISH_IMPORT_PRICE_UNAVAILABLE"
+        ]
+      }
+    },
+    {
+      "merchant": "Zalando",
+      "url": "https://www.zalando.fr/adidas-originals-stan-smith-unisex-baskets-basses-core-black-ad115o0w8-q11.html",
+      "status": "unavailable",
+      "observedAt": "2026-10-31T11:29:01.5157557Z",
+      "elapsedMs": 8000,
+      "preview": {
+        "name": null,
+        "note": null,
+        "color": null,
+        "size": null,
+        "url": "https://www.zalando.fr/adidas-originals-stan-smith-unisex-baskets-basses-core-black-ad115o0w8-q11.html",
+        "price": null,
+        "quantity": 1,
+        "image": null,
+        "warnings": [
+          "WISH_IMPORT_PAGE_UNAVAILABLE",
+          "WISH_IMPORT_IMAGE_UNAVAILABLE",
+          "WISH_IMPORT_NAME_UNAVAILABLE",
+          "WISH_IMPORT_PRICE_UNAVAILABLE"
+        ]
+      }
+    },
+    {
+      "merchant": "E.Leclerc",
+      "url": "https://www.e.leclerc/fp/nike-air-force-1-triple-white-blanc-0194500874862",
+      "status": "name-price-image",
+      "observedAt": "2026-10-31T11:29:09.5167397Z",
+      "elapsedMs": 575,
+      "preview": {
+        "name": "Nike Air Force 1 Triple White Blanc",
+        "note": "Le modèle Nike Air Force 1 Triple White taille légèrement grand, notre équipe vous recommande de prendre une demi-taille en dessous de votre pointure habituelle. Date de sortie : 09/12/2020 Produit certifié 100% authentique et neuf.",
+        "color": null,
+        "size": null,
+        "url": "https://www.e.leclerc/fp/nike-air-force-1-triple-white-blanc-0194500874862",
+        "price": 102.95,
+        "quantity": 1,
+        "image": null,
+        "warnings": []
+      },
+      "imageFile": "20.webp",
+      "imageSha256": "59e25c688e96f91f9b27836f4983609b350d4d01a9da28e8f2c66fc63088f180"
+    },
+    {
+      "merchant": "Starcow Paris",
+      "url": "https://www.starcowparis.com/products/nike-air-force-1-07-white",
+      "status": "unavailable",
+      "observedAt": "2026-10-31T11:29:10.0933584Z",
+      "elapsedMs": 74,
+      "preview": {
+        "name": null,
+        "note": null,
+        "color": null,
+        "size": null,
+        "url": "https://www.starcowparis.com/products/nike-air-force-1-07-white",
+        "price": null,
+        "quantity": 1,
+        "image": null,
+        "warnings": [
+          "WISH_IMPORT_PAGE_UNAVAILABLE",
+          "WISH_IMPORT_IMAGE_UNAVAILABLE",
+          "WISH_IMPORT_NAME_UNAVAILABLE",
+          "WISH_IMPORT_PRICE_UNAVAILABLE"
+        ]
+      }
+    },
+    {
+      "merchant": "Sony",
+      "url": "https://www.sony.fr/store/product/wh1000xm6b.ce7/1000X-SERIES-Casque-sans-fil-%25C3%25A0-r%25C3%25A9duction-de-bruit-WH-1000XM6",
+      "status": "unavailable",
+      "observedAt": "2026-10-31T11:29:10.1686586Z",
+      "elapsedMs": 69,
+      "preview": {
+        "name": null,
+        "note": null,
+        "color": null,
+        "size": null,
+        "url": "https://www.sony.fr/store/product/wh1000xm6b.ce7/1000X-SERIES-Casque-sans-fil-%25C3%25A0-r%25C3%25A9duction-de-bruit-WH-1000XM6",
+        "price": null,
+        "quantity": 1,
+        "image": null,
+        "warnings": [
+          "WISH_IMPORT_PAGE_UNAVAILABLE",
+          "WISH_IMPORT_IMAGE_UNAVAILABLE",
+          "WISH_IMPORT_NAME_UNAVAILABLE",
+          "WISH_IMPORT_PRICE_UNAVAILABLE"
+        ]
+      }
+    },
+    {
+      "merchant": "Materiel.net",
+      "url": "https://www.materiel.net/produit/202508270041.html",
+      "status": "name-price-image",
+      "observedAt": "2026-10-31T11:29:10.2383916Z",
+      "elapsedMs": 398,
+      "preview": {
+        "name": "Logitech MX Master 3S Bluetooth Edition - Graphite",
+        "note": "Achetez votre Souris PC Logitech MX Master 3S Bluetooth Edition - Graphite (910-007501) sur Materiel.net ! Paiement en 3X dès 50€, livraison rapide ou retrait en magasin | Bureautique, Capteur optique, Sans-fil, Pour droitier, 8 000 dpi, 7 boutons.",
+        "color": null,
+        "size": null,
+        "url": "https://www.materiel.net/produit/202508270041.html",
+        "price": 89.95,
+        "quantity": 1,
+        "image": null,
+        "warnings": []
+      },
+      "imageFile": "23.webp",
+      "imageSha256": "611fcbd14341f66537e7bef072d5d3074fda8ddd6e80ecf97f1f99f0b076b2bc"
+    },
+    {
+      "merchant": "Bose",
+      "url": "https://www.bose.fr/p/headphones/quietcomfort-acoustic-noise-cancelling-headphones/QC-HEADPHONEARN.html?dwvar_QC-HEADPHONEARN_color=WHITE+SMOKE",
+      "status": "name-price-image",
+      "observedAt": "2026-10-31T11:29:10.6382102Z",
+      "elapsedMs": 443,
+      "preview": {
+        "name": "Casque Bose QuietComfort",
+        "note": "Le casque QuietComfort assure une réduction du bruit légendaire et un son haute-fidélité dans un design intemporel et confortable, avec jusqu’à 24 heures d’autonomie pour s’adapter à votre style de vie. En plus des options Silencieux et Conscient, ce casque emblématique comporte des modes d’écoute personnalisables et est équipé d’un câble audio avec microphone intégré pour les moments où le Bluetooth n’est pas disponible.",
+        "color": null,
+        "size": null,
+        "url": "https://www.bose.fr/p/headphones/quietcomfort-acoustic-noise-cancelling-headphones/QC-HEADPHONEARN.html?dwvar_QC-HEADPHONEARN_color=WHITE+SMOKE",
+        "price": 249.95,
+        "quantity": 1,
+        "image": null,
+        "warnings": []
+      },
+      "imageFile": "24.webp",
+      "imageSha256": "45425ad82009c2b48bf330a9394998a7b6bf419ba78815d236e88567069a1456"
+    },
+    {
+      "merchant": "LDLC",
+      "url": "https://www.ldlc.com/fiche/PB00500370.html",
+      "status": "name-price-image",
+      "observedAt": "2026-10-31T11:29:11.0812103Z",
+      "elapsedMs": 901,
+      "preview": {
+        "name": "Logitech MX Master 3S (Graphite)",
+        "note": "Achat Souris PC Logitech MX Master 3S (Graphite) (910-006559) sur LDLC, n°1 du high-tech. Souris sans fil (RF + Bluetooth) - droitier - capteur optique 8000 dpi - 7 boutons - molette exclusive pour le pouce - technologie Logitech Flow.",
+        "color": null,
+        "size": null,
+        "url": "https://www.ldlc.com/fiche/PB00500370.html",
+        "price": 119.95,
+        "quantity": 1,
+        "image": null,
+        "warnings": []
+      },
+      "imageFile": "25.webp",
+      "imageSha256": "e0e70c26aa14e03d97964220106ff589f3af69a99a774bf5152e4137ba73bb34"
+    },
+    {
+      "merchant": "King Jouet",
+      "url": "https://www.king-jouet.com/jeu-jouet/jeux-societes/jeux-ambiance/ref-728250-dobble-classique.htm",
+      "status": "unavailable",
+      "observedAt": "2026-10-31T11:29:11.9848682Z",
+      "elapsedMs": 84,
+      "preview": {
+        "name": null,
+        "note": null,
+        "color": null,
+        "size": null,
+        "url": "https://www.king-jouet.com/jeu-jouet/jeux-societes/jeux-ambiance/ref-728250-dobble-classique.htm",
+        "price": null,
+        "quantity": 1,
+        "image": null,
+        "warnings": [
+          "WISH_IMPORT_PAGE_UNAVAILABLE",
+          "WISH_IMPORT_IMAGE_UNAVAILABLE",
+          "WISH_IMPORT_NAME_UNAVAILABLE",
+          "WISH_IMPORT_PRICE_UNAVAILABLE"
+        ]
+      }
+    },
+    {
+      "merchant": "JouéClub",
+      "url": "https://www.joueclub.fr/jeux-de-societes/dobble-classique-3558380052845.html",
+      "status": "unavailable",
+      "observedAt": "2026-10-31T11:29:12.0694433Z",
+      "elapsedMs": 285,
+      "preview": {
+        "name": null,
+        "note": null,
+        "color": null,
+        "size": null,
+        "url": "https://www.joueclub.fr/jeux-de-societes/dobble-classique-3558380052845.html",
+        "price": null,
+        "quantity": 1,
+        "image": null,
+        "warnings": [
+          "WISH_IMPORT_PAGE_UNAVAILABLE",
+          "WISH_IMPORT_IMAGE_UNAVAILABLE",
+          "WISH_IMPORT_NAME_UNAVAILABLE",
+          "WISH_IMPORT_PRICE_UNAVAILABLE"
+        ]
+      }
+    },
+    {
+      "merchant": "Nature \u0026 Découvertes",
+      "url": "https://www.natureetdecouvertes.com/huiles-essentielles-diffuseur/diffuseur-huiles-essentielles/par-chaleur-douce/diffuseur-d-huiles-essentielles-warm-15227440",
+      "status": "name-price-image",
+      "observedAt": "2026-10-31T11:29:12.3559378Z",
+      "elapsedMs": 315,
+      "preview": {
+        "name": "Diffuseur d'huiles essentielles Warm",
+        "note": "Compact et élégant, il se fait discret pour parfumer l'atmosphère",
+        "color": null,
+        "size": null,
+        "url": "https://www.natureetdecouvertes.com/huiles-essentielles-diffuseur/diffuseur-huiles-essentielles/par-chaleur-douce/diffuseur-d-huiles-essentielles-warm-15227440",
+        "price": 34.95,
+        "quantity": 1,
+        "image": null,
+        "warnings": []
+      },
+      "imageFile": "28.webp",
+      "imageSha256": "cbd1216316db500df2876a08801874e2d2f2b2cfe5b9354fd0625e5e899e4a1b"
+    },
+    {
+      "merchant": "Leroy Merlin",
+      "url": "https://www.leroymerlin.fr/produits/lampe-led-koze-verre-blanc-h-16-5cm-inspire-89736652.html",
+      "status": "unavailable",
+      "observedAt": "2026-10-31T11:29:12.6734766Z",
+      "elapsedMs": 50,
+      "preview": {
+        "name": null,
+        "note": null,
+        "color": null,
+        "size": null,
+        "url": "https://www.leroymerlin.fr/produits/lampe-led-koze-verre-blanc-h-16-5cm-inspire-89736652.html",
+        "price": null,
+        "quantity": 1,
+        "image": null,
+        "warnings": [
+          "WISH_IMPORT_PAGE_UNAVAILABLE",
+          "WISH_IMPORT_IMAGE_UNAVAILABLE",
+          "WISH_IMPORT_NAME_UNAVAILABLE",
+          "WISH_IMPORT_PRICE_UNAVAILABLE"
+        ]
+      }
+    },
+    {
+      "merchant": "Lacoste",
+      "url": "https://www.lacoste.com/fr/lacoste/homme/vetements/polos/manches-courtes/L1212-00.html?color=001",
+      "status": "unavailable",
+      "observedAt": "2026-10-31T11:29:12.7249241Z",
+      "elapsedMs": 61,
+      "preview": {
+        "name": null,
+        "note": null,
+        "color": null,
+        "size": null,
+        "url": "https://www.lacoste.com/fr/lacoste/homme/vetements/polos/manches-courtes/L1212-00.html?color=001",
+        "price": null,
+        "quantity": 1,
+        "image": null,
+        "warnings": [
+          "WISH_IMPORT_PAGE_UNAVAILABLE",
+          "WISH_IMPORT_IMAGE_UNAVAILABLE",
+          "WISH_IMPORT_NAME_UNAVAILABLE",
+          "WISH_IMPORT_PRICE_UNAVAILABLE"
+        ]
+      }
+    }
+  ]
+}

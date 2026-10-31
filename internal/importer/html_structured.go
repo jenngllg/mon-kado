@@ -100,7 +100,7 @@ func markupObject(root, scope *html.Node, rdfa bool, depth int) map[string]any {
 		}
 	}
 	nodes := markupNodes(root, scope, rdfa)
-	for _, key := range []string{"name", "url", "image", "sku", "price", "priceCurrency", "lowPrice", "highPrice", "offerCount", "contentUrl", "thumbnailUrl", "priceType"} {
+	for _, key := range []string{"name", "description", "color", "size", "url", "image", "sku", "price", "priceCurrency", "lowPrice", "highPrice", "offerCount", "contentUrl", "thumbnailUrl", "priceType"} {
 		var values []string
 		for _, n := range nodes {
 			if markupScope(n, rdfa) != scope && markupScope(n, rdfa) != nil || !markupProperty(n, key, rdfa) {

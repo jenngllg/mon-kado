@@ -21125,6 +21125,15 @@
               }
             ]
           },
+          "note": {
+            "anyOf": [{ "type": "string", "maxLength": 500 }, { "type": "null" }]
+          },
+          "color": {
+            "anyOf": [{ "type": "string", "maxLength": 100 }, { "type": "null" }]
+          },
+          "size": {
+            "anyOf": [{ "type": "string", "maxLength": 100 }, { "type": "null" }]
+          },
           "url": {
             "anyOf": [
               {
@@ -21169,6 +21178,9 @@
         },
         "required": [
           "name",
+          "note",
+          "color",
+          "size",
           "url",
           "price",
           "quantity",
