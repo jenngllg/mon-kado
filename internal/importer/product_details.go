@@ -2,6 +2,7 @@ package importer
 
 import (
 	"net/url"
+	"regexp"
 	"strings"
 	"unicode/utf8"
 
@@ -35,8 +36,28 @@ func productDetails(root *html.Node, product map[string]any, base, canonical *ur
 	}
 	result.Color = attribute("color", &result.colorAmbiguous)
 	result.Size = attribute("size", &result.sizeAmbiguous)
+	if result.Size == nil && product["size"] == nil {
+		variantSize := false
+		for _, variant := range variants {
+			variantSize = variantSize || variant["size"] != nil
+		}
+		if !variantSize {
+			var dimensions []string
+			for _, axis := range []struct{ key, label string }{{"width", "L"}, {"height", "H"}, {"depth", "P"}} {
+				ambiguous := false
+				if value := attribute(axis.key, &ambiguous); value != nil && dimensionValue.MatchString(*value) {
+					dimensions = append(dimensions, axis.label+" "+*value)
+				}
+			}
+			if len(dimensions) > 0 {
+				result.Size = cleanProductDetail(strings.Join(dimensions, " × "), 100, false)
+			}
+		}
+	}
 	return result
 }
+
+var dimensionValue = regexp.MustCompile(`(?i)^[0-9]{1,8}(?:[.,][0-9]{1,4})?\s*(?:mm|cm|m|in|inch|inches|ft)$`)
 
 func detailValue(value any) string {
 	switch v := value.(type) {
@@ -44,7 +65,16 @@ func detailValue(value any) string {
 		return normalizeText(html.UnescapeString(v))
 	case map[string]any:
 		// Schema.org size also permits SizeSpecification/QuantitativeValue.
-		return scalar(v, "name")
+		if name := scalar(v, "name"); name != "" {
+			return name
+		}
+		if schemaKind(v["@type"], "QuantitativeValue") {
+			value := scalar(v, "value") + " " + scalar(v, "unitText")
+			if dimensionValue.MatchString(value) {
+				return value
+			}
+		}
+		return ""
 	case []any:
 		var values []string
 		for _, item := range v {

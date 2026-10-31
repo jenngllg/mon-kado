@@ -94,13 +94,13 @@ func markupObject(root, scope *html.Node, rdfa bool, depth int) map[string]any {
 	if depth > 16 {
 		return result
 	}
-	for _, kind := range []string{"Product", "ProductGroup", "Offer", "AggregateOffer", "ImageObject", "UnitPriceSpecification"} {
+	for _, kind := range []string{"Product", "ProductGroup", "Offer", "AggregateOffer", "ImageObject", "UnitPriceSpecification", "QuantitativeValue", "SizeSpecification"} {
 		if markupType(scope, kind, rdfa) {
 			result["@type"] = kind
 		}
 	}
 	nodes := markupNodes(root, scope, rdfa)
-	for _, key := range []string{"name", "description", "color", "size", "url", "image", "sku", "price", "priceCurrency", "lowPrice", "highPrice", "offerCount", "contentUrl", "thumbnailUrl", "priceType"} {
+	for _, key := range []string{"name", "description", "color", "size", "width", "height", "depth", "value", "unitText", "url", "image", "sku", "price", "priceCurrency", "lowPrice", "highPrice", "offerCount", "contentUrl", "thumbnailUrl", "priceType"} {
 		var values []string
 		for _, n := range nodes {
 			if markupScope(n, rdfa) != scope && markupScope(n, rdfa) != nil || !markupProperty(n, key, rdfa) {
@@ -119,7 +119,7 @@ func markupObject(root, scope *html.Node, rdfa bool, depth int) map[string]any {
 			result[key] = unique(values)
 		}
 	}
-	for _, key := range []string{"offers", "image", "hasVariant", "priceSpecification", "itemOffered"} {
+	for _, key := range []string{"offers", "image", "hasVariant", "priceSpecification", "itemOffered", "size", "width", "height", "depth"} {
 		var children []any
 		for _, n := range nodes {
 			if markupScope(n, rdfa) == n && markupProperty(n, key, rdfa) {

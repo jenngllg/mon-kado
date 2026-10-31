@@ -19,6 +19,11 @@ win; unselected attributes must agree across every relevant variant. A page's
 default size control does not select a size for the user, and a fallback cannot
 resolve a known ambiguous attribute by guessing one variant.
 
+When no explicit size is declared, standard width, height and depth with explicit
+units can fill the same dimensions field. Plain strings and QuantitativeValue
+with `value`/`unitText` are supported; unitless numbers are ignored. Axis labels
+retain the source precision instead of deriving measurements from a rounded title.
+
 Missing optional details do not trigger additional provider requests. Quantity,
 favourite, surprise mode and second-hand preferences remain personal choices.
 Surprise mode does not analyze a product link. Suggestions and image bytes remain

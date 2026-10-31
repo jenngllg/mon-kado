@@ -29,3 +29,7 @@ The JSON keeps public product URLs, UTC observation times, safe error text, fina
 A temporary diagnostic test called the existing secure private request method to observe upstream status without changing the production API or transport. It was removed from `internal/importer` after execution. A local helper source copy remains ignored in `.local/merchant-diagnostic-helper.go.txt`.
 
 This diagnostic explains limitations observed on the test date. It does not establish permanent merchant support or recovery through a provider that was not configured.
+
+## Exact physical dimensions
+
+The final live pass imports IKEA KALLAX's explicit structured dimensions into the existing size field as `L 76.5 cm × H 76.5 cm × P 39 cm`. The retained current HTML declares `width: "76.5 cm"`, `height: "76.5 cm"` and `depth: "39 cm"`. Its product name uses the rounded marketing dimensions `77x77 cm`; the importer preserves the exact structured measurements instead of deriving measurements from that rounded name. This is physical product dimension data, not an inferred clothing size or selected shoe variant. The other 29 size fields stayed empty.
