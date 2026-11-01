@@ -18,13 +18,14 @@ class BootstrapTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory)
             archive = base / "bundle.tar.gz"
-            name, content = "src/Operations.Deployment/example.py", b"reviewed"
+            names, content = ["src/Operations.Deployment/example.py", "deployments/caddy/Caddyfile"], b"reviewed"
             with tarfile.open(archive, "w:gz") as bundle:
-                entry = tarfile.TarInfo(name)
-                entry.size = len(content)
-                bundle.addfile(entry, io.BytesIO(content))
+                for name in names:
+                    entry = tarfile.TarInfo(name)
+                    entry.size = len(content)
+                    bundle.addfile(entry, io.BytesIO(content))
             manifest = {"archiveSha256": hashlib.sha256(archive.read_bytes()).hexdigest(),
-                        "files": {name: hashlib.sha256(content).hexdigest()}}
+                        "files": {name: hashlib.sha256(content).hexdigest() for name in names}}
             encoded = json.dumps(manifest).encode()
             manifest_file = base / "manifest.json"
             manifest_file.write_bytes(encoded)
@@ -32,7 +33,8 @@ class BootstrapTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "manifest digest mismatch"):
                 stage(archive, manifest_file, "0" * 64, target)
             stage(archive, manifest_file, hashlib.sha256(encoded).hexdigest(), target)
-            self.assertEqual((target / name).read_bytes(), content)
+            for name in names:
+                self.assertEqual((target / name).read_bytes(), content)
             self.assertEqual((target / "approved-manifest.json").read_bytes(), encoded)
             self.assertEqual((target / "approved-manifest.json").stat().st_mode & 0o777, 0o600)
 
