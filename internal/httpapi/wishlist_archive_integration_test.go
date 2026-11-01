@@ -78,10 +78,7 @@ func TestWishlistArchive_WhenArchivedAndRestored_PreservesContentAndReenablesThe
 		t.Fatal("archive removed the wish")
 	}
 	var retained domain.GiftReservationResponse
-	requireStatus(t, f.send(t, "GET", reservationPath, "", nil), 200, &retained)
-	if retained.Id != reservation.Id || retained.Quantity != 1 {
-		t.Fatal("archive altered the reservation")
-	}
+	requireStatus(t, f.send(t, "GET", reservationPath, "", nil), 409, nil)
 	for _, operation := range []struct{ method, path, body string }{
 		{"POST", base + "/wishes", `{"name":"Rejected"}`},
 		{"PUT", base, `{"name":"Rejected","occasion":"other"}`},
@@ -111,6 +108,10 @@ func TestWishlistArchive_WhenArchivedAndRestored_PreservesContentAndReenablesThe
 	requireStatus(t, restored, 200, &saved)
 	if saved.IsArchived {
 		t.Fatal("restoration did not clear the archive flag")
+	}
+	requireStatus(t, f.send(t, "GET", reservationPath, "", nil), 200, &retained)
+	if retained.Id != reservation.Id || retained.Quantity != 1 {
+		t.Fatal("archive or restore altered the reservation")
 	}
 	var retainedShare domain.WishlistShareLinkResponse
 	requireStatus(t, f.send(t, "GET", base+"/share-link", "", nil), 200, &retainedShare)

@@ -80,6 +80,6 @@ func (a *API) recordActionActivity(r *request, pattern, level, trace string) {
 		payload = json.RawMessage(`{"_omitted":"privateGroupSuggestion"}`)
 	}
 	if err := a.Service.RecordActivity(r.Context(), r.Principal.MemberID, "action", activityLabel(pattern), level, payload, r.Principal.ActorMemberID); err != nil {
-		a.Logger.ErrorContext(r.Context(), "Activity recording failed", "EventId", logging.ActivityRecordingFailed, "CorrelationId", r.Header.Get("X-Correlation-ID"), "TraceId", trace)
+		a.Logger.ErrorContext(r.Context(), "Activity recording failed", "EventId", logging.ActivityRecordingFailed, "CorrelationId", logging.Correlation(r.Header.Get("X-Correlation-ID")), "TraceId", logging.Trace(trace))
 	}
 }

@@ -3,14 +3,14 @@ const fs = require("node:fs");
 const path = require("node:path");
 const repo = path.resolve(__dirname, "../../..");
 const [campaignFile, imagesFile, outputFile] = process.argv.slice(2).map((value) => value && path.resolve(value));
-if (!campaignFile || !imagesFile || !outputFile || !outputFile.startsWith(path.resolve(repo, ".local") + path.sep) || fs.existsSync(outputFile)) throw new Error("Provide campaign, image results and a new output file under .local.");
+if (!campaignFile || !imagesFile || !outputFile || !outputFile.startsWith(path.resolve(repo, ".local") + path.sep)) throw new Error("Provide campaign, image results and a new output file under .local.");
 const read = (file) => fs.readFileSync(file, "utf8").trim().split(/\r?\n/).map(JSON.parse);
 const campaign = read(campaignFile).sort((a, b) => a.id - b.id);
 const images = new Map(read(imagesFile).map((row) => [row.id, row]));
 if (campaign.length !== 100 || new Set(campaign.map((row) => row.id)).size !== 100 || images.size !== 100 || campaign.some((row) => !images.has(row.id))) throw new Error("The campaign or image evidence is incomplete.");
 const complete = (row) => !row.blocked && !row.nameFromURL && row.name && row.price && images.get(row.id).decoded;
 const someReal = (row) => !row.blocked && !row.nameFromURL && (row.name || row.price || images.get(row.id).decoded);
-const esc = (value) => String(value || "—").replace(/\s+/g, " ").replace(/\|/g, "\\|").replace(/[\[\]]/g, "").trim();
+const esc = (value) => String(value || "—").replace(/\s+/g, " ").replace(/[&<>"'\\|\[\]`*_~]/g, character => `&#${character.codePointAt(0)};`).trim();
 const imageLabel = (row) => ({ decoded: "Décodée", no_candidate: "Aucune", download_unavailable: "Indisponible en accès direct", decode_or_budget: "Non décodée dans le délai" })[images.get(row.id).category] || "Non vérifiée";
 const summary = { total: campaign.length, complete: campaign.filter(complete).length, partial: campaign.filter((row) => someReal(row) && !complete(row)).length,
   blocked: campaign.filter((row) => row.blocked).length, errors: campaign.filter((row) => row.error).length,
