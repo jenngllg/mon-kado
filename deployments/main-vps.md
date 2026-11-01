@@ -45,6 +45,17 @@ stop-the-site deployment path.
 
 ## Avoid repeated work
 
+Backend CI runs Go verification/release builds and native deployment/recovery
+verification on two independent standard Ubuntu runners. The required `quality`
+gate waits for both and rejects failed, cancelled or skipped jobs. Each runner
+has its own native PostgreSQL fixture; deployment tests compile the same revision
+locally, without adding an intermediate artifact or weakening namespace isolation.
+The existing release and qualified Caddy artifacts retain their names and retention.
+CodeQL, security scans, race/coverage checks, native HTTPS/continuity journeys and
+encrypted restore tests remain required before publication. Production backup and
+the online switch are unchanged; additional parallel compute remains free for this
+public repository. Queue, full-test and offsite-provider latency still vary.
+
 Publication uses binaries/build files from the successful CI run for the exact
 commit, rather than rebuilding them. Native Go race/coverage verification can be
 reused for up to six hours only if every tracked Go module, executable/test source,
