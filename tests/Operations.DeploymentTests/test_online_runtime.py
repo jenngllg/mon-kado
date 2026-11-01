@@ -44,6 +44,7 @@ class OnlineRuntimeTests(unittest.TestCase):
             runtime.wait_port = lambda port: events.append(["ready", port])
             runtime.route = lambda port: events.append(["route", port])
             runtime.candidate = lambda _: events.append(["candidateReady", 7001])
+            runtime.drain = lambda port: events.append(["drained", port])
             with patch("deploy_runtime.native_artifacts.verify_directory"), patch.object(Runtime, "start", side_effect=lambda *_: events.append(["stableStarted"])):
                 runtime.start(wanted)
             self.assertLess(events.index(["candidateReady", 7001]), events.index(["route", 7001]))
@@ -59,6 +60,7 @@ class OnlineRuntimeTests(unittest.TestCase):
         runtime.wait_port = Mock()
         runtime.route = Mock()
         runtime.candidate = Mock(side_effect=DeploymentError("ONLINE_API_NOT_READY"))
+        runtime.drain = Mock()
         with patch("deploy_runtime.native_artifacts.verify_directory"), self.assertRaises(DeploymentError):
             runtime.start(release("b"))
         runtime.route.assert_called_once_with(7000)

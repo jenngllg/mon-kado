@@ -358,7 +358,24 @@ class OnlineRuntime(Runtime):
         """Ignore a never-created temporary unit, without hiding a failed stop."""
         loaded = self.run(["systemctl", "show", "mon-kado-api-candidate.service", "--property=LoadState", "--value"])
         if loaded.strip() != b"not-found":
+            self.drain(7001)
             self.run(["systemctl", "stop", "mon-kado-api-candidate.service"], timeout=30)
+
+    def drain(self, port):
+        """Wait for accepted upstream requests before stopping an old API process."""
+        ensure(port in (7000, 7001), "INVALID_API_PORT")
+        deadline, quiet = self.clock() + 180, 0
+        while quiet < 2:
+            raw = self.run(["curl", "--disable", "--fail", "--silent", "--show-error", "--noproxy", "*",
+                            "--max-time", "3", "http://127.0.0.1:2019/reverse_proxy/upstreams"], timeout=4, maximum=32768)
+            upstreams = json.loads(raw)
+            ensure(isinstance(upstreams, list), "ONLINE_PROXY_SETUP_REQUIRED")
+            matches = [item.get("num_requests") for item in upstreams if isinstance(item, dict) and item.get("address") == f"127.0.0.1:{port}"]
+            ensure(len(matches) == 1 and type(matches[0]) is int and matches[0] >= 0, "ONLINE_PROXY_SETUP_REQUIRED")
+            quiet = quiet + 1 if matches[0] == 0 else 0
+            ensure(self.clock() < deadline, "ONLINE_REQUESTS_STILL_RUNNING")
+            if quiet < 2:
+                self.pause(0.05)
 
     def start(self, release):
         """Switch to the ready candidate before draining and replacing the stable API."""
@@ -378,6 +395,7 @@ class OnlineRuntime(Runtime):
                 # A durable interrupted restart may already be served by port 7001.
                 self.wait_port(7001)
             self.route(7001)
+            self.drain(7000)
             self.run(["systemctl", "stop", "mon-kado-api.service"], timeout=30)
             super().start(release)
             self.wait_port(7000)
