@@ -157,6 +157,10 @@ jobs:
               --title 'Approved native backend production release' --notes-file "$RUNNER_TEMP/native-release/backend-manifest.json" --latest=false
           fi
           echo 'Native binaries published. This job does not confirm a successful VPS rollout.' >> "$GITHUB_STEP_SUMMARY"
+      - name: Wait for both checked main publications
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/wait_paired_publication.py backend "$RELEASE_REVISION"
       - name: Deploy the approved main revision to the VPS
         env:
           VPS_DEPLOY_KEY: ${{ secrets.VPS_DEPLOY_SSH_KEY }}

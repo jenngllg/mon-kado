@@ -17,8 +17,10 @@ branches and all artifact, revision, backup and online compatibility checks rema
    Publishing assets alone is not reported as a successful VPS deployment.
 3. The root-owned VPS entrypoint verifies the protected channel, installed tool
    inventory, current main revision, immutable artifacts and compatibility. It
-   captures and verifies a fresh encrypted offsite backup before each changed
-   component. A failed capture, transfer or integrity check blocks the switch.
+   pins the complete approved pair, then captures and verifies one fresh encrypted
+   offsite backup before either component switches. Both changed components share
+   that operation's snapshot. A failed capture, transfer or integrity check blocks
+   both switches.
 4. Backend replacement starts and probes a candidate on loopback port 7001. A
    root-owned file selector moves new requests to it. The old API drains before
    its replacement starts on port 7000. Requests then return to the stable port.
@@ -27,10 +29,19 @@ branches and all artifact, revision, backup and online compatibility checks rema
    reachable assets from the last three published frontends remain available to
    already-open tabs.
 
-When both repositories are merged together, frontend publication waits up to ten
-minutes for the checked backend main publication rather than requiring manual
-sequencing. It fails safely if that deadline expires or backend main changes;
-the exact native backend contract proof must still match before any publication.
+Each workflow publishes its immutable assets and protected pointer before waiting
+up to ten minutes for both pinned main publications. This wait uses the existing
+GitHub workflow token, outside the VPS lock. Frontend packaging still requires the
+exact native backend contract proof. Any changed main revision, missing proof or
+unpublished/failed peer blocks the group before backup or switch. Merge backend
+then frontend immediately afterward so the frontend CI tests the intended backend.
+
+The first VPS request deploys the complete pair under the shared lock. The second
+request finds it already installed and takes no further backup. Backend-only and
+frontend-only changes still deploy automatically with one new backup. A revision
+arriving after the pair was pinned belongs to a later operation with a new backup;
+no time-based reuse of previous snapshots is allowed. Both revisions, checks and
+the shared snapshot are recorded in the durable receipt. Unchanged SQL is required.
 
 The two selector routes use connection-failure fallback and disable upstream
 keepalive. They retain Caddy's safe default of not retrying a transmitted unsafe
@@ -141,8 +152,11 @@ sudo /opt/monkado/deployments/production/monkado-coordinate online-recover
 
 An unchanged-schema failed backend can roll back its binaries through the same
 online API handoff. No database rollback or reset is available. A failed frontend
-backup leaves the running backend and old compatible frontend available and retains
-the exact candidate for recovery. The routing selector is reconstructible; a
+activation leaves the running backend and old compatible frontend available and
+retains the exact candidate for recovery. Recovery revalidates the original shared
+snapshot and refuses expired or uncertain evidence before switching the frontend;
+it never substitutes a different capture. Legacy version-1 intents retain their
+original two-capture recovery procedure. The routing selector is reconstructible; a
 missing selector falls back to the stable API on port 7000.
 
 For the one-time reviewed operational-tool transition, use the protected tool
