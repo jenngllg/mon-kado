@@ -252,15 +252,14 @@ type CsrfTokenResponse struct {
 
 // CurrentSessionResponse preserves the versioned JSON contract.
 type CurrentSessionResponse struct {
-	DisplayNameTag          string   `json:"displayNameTag"`
-	Id                      string   `json:"id"`
-	Email                   string   `json:"email"`
-	DisplayName             string   `json:"displayName"`
-	ProfileImageUrl         *string  `json:"profileImageUrl"`
-	Roles                   []string `json:"roles"`
-	IsAdmin                 bool     `json:"isAdmin"`
-	IsGoogleLinked          bool     `json:"isGoogleLinked"`
-	IsVisibleInMemberSearch bool     `json:"isVisibleInMemberSearch"`
+	DisplayNameTag          string  `json:"displayNameTag"`
+	Id                      string  `json:"id"`
+	Email                   string  `json:"email"`
+	DisplayName             string  `json:"displayName"`
+	ProfileImageUrl         *string `json:"profileImageUrl"`
+	IsAdmin                 bool    `json:"isAdmin"`
+	IsGoogleLinked          bool    `json:"isGoogleLinked"`
+	IsVisibleInMemberSearch bool    `json:"isVisibleInMemberSearch"`
 }
 
 // GiftReservationHistoryResponse preserves the versioned JSON contract.

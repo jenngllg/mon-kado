@@ -29,9 +29,6 @@ func (s *Service) Register(ctx context.Context, request domain.RegisterAccountRe
 		if err != nil {
 			return err
 		}
-		if _, err = tx.Exec(ctx, `INSERT INTO user_roles(user_id,role_id) SELECT $1,id FROM roles WHERE normalized_name='MEMBER'`, id); err != nil {
-			return err
-		}
 		return s.queueEmail(ctx, tx, id, "EMAIL_CONFIRMATION", nil, nil)
 	})
 	if duplicate(err, "ux_users_normalized_email") || duplicate(err, "ux_users_normalized_user_name") {
@@ -96,7 +93,7 @@ func (s *Service) Login(ctx context.Context, request domain.LoginRequest, curren
 			return err
 		}
 		var requiresTwoFactor bool
-		if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM user_roles ur JOIN roles r ON r.id=ur.role_id WHERE ur.user_id=$1 AND r.normalized_name='ADMINISTRATOR') OR EXISTS(SELECT 1 FROM member_two_factors WHERE member_id=$1 AND credential_id IS NOT NULL)`, id).Scan(&requiresTwoFactor); err != nil {
+		if err = tx.QueryRow(ctx, `SELECT (SELECT is_admin FROM users WHERE id=$1) OR EXISTS(SELECT 1 FROM member_two_factors WHERE member_id=$1 AND credential_id IS NOT NULL)`, id).Scan(&requiresTwoFactor); err != nil {
 			return err
 		}
 		if requiresTwoFactor {
@@ -206,7 +203,7 @@ func (s *Service) Logout(ctx context.Context, token string) error {
 
 // CurrentSession returns the server-side identity and profile version.
 func (s *Service) CurrentSession(ctx context.Context, principal Principal) (domain.CurrentSessionResponse, uint32, error) {
-	r := domain.CurrentSessionResponse{Roles: principal.Roles, IsAdmin: principal.IsAdministrator()}
+	r := domain.CurrentSessionResponse{IsAdmin: principal.IsAdmin}
 	var version uint32
 	var image *string
 	err := s.Store.Pool.QueryRow(ctx, `SELECT id::text,email,display_name,display_name_tag,profile_image_id::text,xmin::text::bigint,EXISTS(SELECT 1 FROM user_logins WHERE user_id=users.id AND login_provider='Google'),is_visible_in_member_search FROM users WHERE id=$1`, principal.MemberID).Scan(&r.Id, &r.Email, &r.DisplayName, &r.DisplayNameTag, &image, &version, &r.IsGoogleLinked, &r.IsVisibleInMemberSearch)

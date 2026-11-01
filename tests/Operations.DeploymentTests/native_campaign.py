@@ -48,7 +48,7 @@ def configure(bench):
     bench.namespace(str(PG/'psql'),'-X','-qAt','-h','127.0.0.1','-U','postgres','-d','postgres',
                     '-v','ON_ERROR_STOP=1',data=f"CREATE ROLE mon_kado LOGIN PASSWORD '{password}'; ALTER DATABASE {original} RENAME TO mon_kado; ALTER DATABASE mon_kado OWNER TO mon_kado;")
     bench.namespace(str(PG/'psql'),'-X','-qAt','-h','127.0.0.1','-U','postgres','-d','mon_kado',
-                    '-v','ON_ERROR_STOP=1',data="GRANT ALL ON SCHEMA public TO mon_kado; GRANT ALL ON ALL TABLES IN SCHEMA public TO mon_kado; GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO mon_kado; INSERT INTO user_roles(user_id,role_id) SELECT u.id,r.id FROM users u CROSS JOIN roles r WHERE r.normalized_name='MEMBER';")
+                    '-v','ON_ERROR_STOP=1',data="GRANT ALL ON SCHEMA public TO mon_kado; GRANT ALL ON ALL TABLES IN SCHEMA public TO mon_kado; GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO mon_kado;")
     installation, settings, state = [bench.directory/name for name in ('installation','settings','deployment')]
     for path in (installation, settings, state):
         path.mkdir(mode=0o755 if path == installation else 0o700)

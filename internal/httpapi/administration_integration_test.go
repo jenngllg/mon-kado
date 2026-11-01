@@ -25,7 +25,7 @@ func (f *fixture) administratorWithAuthenticator(t *testing.T, email string) (st
 	f.access = ""
 	f.csrfToken(t)
 	id := f.member(t, email)
-	if _, err := f.store.Pool.Exec(t.Context(), `INSERT INTO user_roles(user_id,role_id) SELECT $1,id FROM roles WHERE normalized_name='ADMINISTRATOR'`, id); err != nil {
+	if _, err := f.store.Pool.Exec(t.Context(), `UPDATE users SET is_admin=true WHERE id=$1`, id); err != nil {
 		t.Fatal(err)
 	}
 	f.access = ""

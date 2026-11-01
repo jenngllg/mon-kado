@@ -176,9 +176,6 @@ func (s *Service) CompleteGoogle(ctx context.Context, proof, binding string, pas
 			if err != nil {
 				return err
 			}
-			if _, err = tx.Exec(ctx, `INSERT INTO user_roles(user_id,role_id) SELECT $1,id FROM roles WHERE normalized_name='MEMBER'`, user); err != nil {
-				return err
-			}
 		} else {
 			var linked, other bool
 			err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM user_logins WHERE login_provider='Google' AND provider_key=$1 AND user_id=$2),EXISTS(SELECT 1 FROM user_logins WHERE login_provider='Google' AND (provider_key=$1 AND user_id<>$2 OR user_id=$2 AND provider_key<>$1))`, identity.Subject, user).Scan(&linked, &other)
@@ -225,7 +222,7 @@ func (s *Service) CompleteGoogle(ctx context.Context, proof, binding string, pas
 				flow.ReplaceName = true
 			}
 			var mfa bool
-			if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM user_roles ur JOIN roles r ON r.id=ur.role_id WHERE ur.user_id=$1 AND r.normalized_name='ADMINISTRATOR') OR EXISTS(SELECT 1 FROM member_two_factors WHERE member_id=$1 AND credential_id IS NOT NULL)`, user).Scan(&mfa); err != nil {
+			if err = tx.QueryRow(ctx, `SELECT (SELECT is_admin FROM users WHERE id=$1) OR EXISTS(SELECT 1 FROM member_two_factors WHERE member_id=$1 AND credential_id IS NOT NULL)`, user).Scan(&mfa); err != nil {
 				return err
 			}
 			if mfa {

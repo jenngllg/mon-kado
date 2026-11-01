@@ -19008,7 +19008,7 @@
           },
           "isAdmin": {
             "type": "boolean",
-            "description": "Whether the current account has the live administrator role. Administrative requests also require a session verified with the current two-factor credential."
+            "description": "Whether the current account has administrator access enabled in the database. Administrative requests also require a session verified with the current two-factor credential."
           },
           "isGoogleLinked": {
             "type": "boolean",
@@ -19016,12 +19016,6 @@
           },
           "isVisibleInMemberSearch": {
             "type": "boolean"
-          },
-          "roles": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
           },
           "displayNameTag": {
             "type": "string",
@@ -19034,7 +19028,6 @@
           "email",
           "displayName",
           "profileImageUrl",
-          "roles",
           "isAdmin",
           "isGoogleLinked",
           "isVisibleInMemberSearch",
