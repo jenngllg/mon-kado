@@ -8,7 +8,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from fixtures import capture
-from monkado_backup.capture import IMAGE_NAME, KEY_NAME, atomic_json, copy_files, copy_deployment_private, create_manifest, entries, regular, validate_shape, verify_manifest
+from monkado_backup.capture import IMAGE_NAME, KEY_NAME, atomic_json, copy_files, copy_deployment_private, create_manifest, entries, regular, retain_snapshot_images, validate_shape, verify_manifest
 from monkado_backup.policy import BackupError, FILES, LEGACY_CURRENT_FILES, LEGACY_FILES, PREVIOUS_FILES, DEPLOYMENT_FILES, LEGACY_NATIVE_FILES
 
 
@@ -175,6 +175,28 @@ class CaptureTests(unittest.TestCase):
             verify_manifest(self.root)
         with self.assertRaises(BackupError):
             regular(self.root)
+
+    def test_snapshot_image_survives_live_unlink_without_copying_unreferenced_bytes(self):
+        source = self.root / "native-images"
+        source.mkdir()
+        identifier = "019a3cf0-1423-7001-8000-0123456789ab"
+        image = source / (identifier + ".webp")
+        image.write_bytes(b"immutable-image")
+        image.chmod(0o600)
+        (source / "uncommitted.pending").write_bytes(b"uncommitted")
+        target = self.root / "retained"
+        retain_snapshot_images(source, target, [identifier])
+        self.assertEqual(image.stat().st_ino, (target / image.name).stat().st_ino)
+        image.unlink()
+        self.assertEqual(b"immutable-image", (target / image.name).read_bytes())
+        self.assertEqual([image.name], [path.name for path in target.iterdir()])
+
+    def test_snapshot_rejects_paths_and_symlinked_images(self):
+        for index, identifier in enumerate(("../image", None, "019a3cf0-1423-7001-8000-0123456789ab")):
+            if isinstance(identifier, str) and not identifier.startswith("../"):
+                (self.root / (identifier + ".webp")).symlink_to(self.root / "postgres.dump")
+            with self.subTest(identifier=identifier), self.assertRaises(BackupError):
+                retain_snapshot_images(self.root, self.root / ("retained-" + str(index)), [identifier])
 
     def test_atomic_write_preserves_old_status_when_replace_fails(self):
         # Arrange

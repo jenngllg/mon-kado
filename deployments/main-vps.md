@@ -66,13 +66,14 @@ requests using the VPS coordination lock.
 
 ## Live backup and recovery
 
-The native backup pauses only the worker that physically deletes images. The API
-and Caddy keep serving. PostgreSQL's custom dump provides an MVCC snapshot; image
-bytes are fsynced before their references commit and are never overwritten. While
-the deletion worker is paused, all committed referenced images remain available
-for the capture. Failed concurrent uploads may disappear and newer staged files
-may be included without being referenced by the snapshot. Integrity verification
-and encrypted offsite transfer are unchanged. The worker resumes before upload.
+The native backup pauses the deletion worker while the API and Caddy keep serving.
+An exported PostgreSQL MVCC snapshot supplies both the dump and its exact image
+references. A bounded shared table lock fences reference-changing writes briefly;
+reads continue. Referenced immutable images are hard-linked into the private
+capture before releasing that fence, so a later deletion cannot remove captured
+bytes. Uncommitted uploads are excluded. A failed or timed-out fence aborts the
+deployment. Integrity verification and encrypted offsite transfer are unchanged;
+the worker resumes and database locks are released before offsite transfer.
 
 Receipts are private files named `online-receipt-*.json` under
 `/var/lib/monkado-deployment`, including both source revisions and snapshot IDs.

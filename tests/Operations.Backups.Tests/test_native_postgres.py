@@ -15,7 +15,7 @@ import exercise_drive
 
 from fixtures import native_capture
 from monkado_backup.capture import create_native_manifest, digest
-from monkado_backup.operations import Operations, command
+from monkado_backup.operations import NativeSnapshot, Operations, command
 from monkado_backup.restore import Restore, PG_BIN, SOCKET_PORT
 
 
@@ -92,9 +92,12 @@ class NativePostgresTests(unittest.TestCase):
                 command([*prefix, str(binary)], extra_env=runtime)
                 psql = [*prefix, str(PG_BIN / "psql"), *connection, "--dbname=mon_kado_fixture", "-X", "-At", "-v", "ON_ERROR_STOP=1", "-c"]
                 command([*psql, "CREATE TABLE backup_probe(id integer PRIMARY KEY, payload text NOT NULL); INSERT INTO backup_probe VALUES(1,'native-roundtrip-fixture');"])
-                with (captured / "postgres.dump").open("wb") as output:
-                    command([*prefix, str(PG_BIN / "pg_dump"), *connection, "--dbname=mon_kado_fixture",
-                             "--format=custom", "--compress=0", "--no-owner", "--no-acl"], output=output)
+                with NativeSnapshot(psql=[*prefix, str(PG_BIN / "psql"), *connection, "--dbname=mon_kado_fixture"]) as snapshot:
+                    self.assertEqual([], snapshot.images)
+                    command([*psql, "UPDATE backup_probe SET payload='newer-live-value' WHERE id=1;"])
+                    with (captured / "postgres.dump").open("wb") as output:
+                        command([*prefix, str(PG_BIN / "pg_dump"), *connection, "--dbname=mon_kado_fixture",
+                                 "--format=custom", "--compress=0", "--no-owner", "--no-acl", "--snapshot=" + snapshot.identifier], output=output)
                 manifest = create_native_manifest(captured, fixture["createdAt"], fixture["postgresSHA256"], "18.6", fixture["caddySHA256"])
             finally:
                 command([*control, "stop", "--mode=fast"])

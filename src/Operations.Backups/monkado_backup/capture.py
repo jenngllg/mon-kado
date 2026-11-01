@@ -80,28 +80,15 @@ def entries(root):
     return result
 
 
-def copy_live_images(source, target):
-    """Retain immutable committed images while the deletion worker is paused.
-
-    The API writes and fsyncs each new UUID before committing its reference and
-    never overwrites a committed image. Only an unreferenced, failed upload may
-    disappear during this copy. Extra staged bytes remain marked for cleanup.
-    """
+def retain_snapshot_images(source, target, identifiers):
+    """Retain only the immutable images referenced by the exported database snapshot."""
     target.mkdir(mode=0o700)
-    paths = sorted(source.iterdir(), key=lambda path: (path.suffix != ".pending", path.name))
-    for path in paths:
-        if not NATIVE_IMAGE_NAME.fullmatch(path.name):
-            continue
-        try:
-            regular(path)
-            with path.open("rb") as incoming:
-                destination = target / path.name
-                with destination.open("xb") as output:
-                    shutil.copyfileobj(incoming, output, 65536)
-                destination.chmod(0o600)
-        except FileNotFoundError:
-            # A committed image cannot disappear while physical deletion is paused.
-            continue
+    for identifier in identifiers:
+        if not isinstance(identifier, str) or not NATIVE_IMAGE_NAME.fullmatch(identifier + ".webp"):
+            raise BackupError("INVALID_SNAPSHOT_IMAGE")
+        path = source / (identifier + ".webp")
+        regular(path)
+        os.link(path, target / path.name, follow_symlinks=False)
 
 
 def validate_shape(paths, schema_version=4):
