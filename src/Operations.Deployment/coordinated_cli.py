@@ -213,6 +213,10 @@ def main_deploy(component, revision):
     previous, candidate = approved_forward_pairs(publisher, backend_store)
     repository = "mon-kado" if component == "backend" else "mon-kado-front"
     ensure(candidate[component]["revision"] == revision == main_head(repository), "MAIN_REVISION_CHANGED")
+    # CI waits outside the VPS lock. Refuse a late merge before taking any backup;
+    # the request for that newer checked publication will select the complete pair.
+    ensure(candidate["backend"]["revision"] == main_head("mon-kado") and
+           candidate["frontend"]["revision"] == main_head("mon-kado-front"), "PAIRED_PUBLICATION_REQUIRED")
     for name, repo in (("backend", "mon-kado"), ("frontend", "mon-kado-front")):
         if candidate[name] != previous[name]:
             ensure(candidate[name]["revision"] == main_head(repo), "MAIN_REVISION_CHANGED")
@@ -256,8 +260,9 @@ def online_deploy(previous, candidate):
     started = now()
     snapshot = capture(clock=now)
     backend_changes = candidate["backend"] != previous["backend"]
-    intent = {"version": 1, "phase": "prepared", "startedAt": started.isoformat(), "previous": previous, "candidate": candidate,
-              "backendSnapshot": snapshot if backend_changes else None, "frontendSnapshot": None if backend_changes else snapshot}
+    intent = {"version": 2, "phase": "prepared", "startedAt": started.isoformat(), "previous": previous, "candidate": candidate,
+              "backendSnapshot": snapshot if backend_changes else None,
+              "frontendSnapshot": snapshot if candidate["frontend"] != previous["frontend"] else None}
     with locks(STATE):
         ensure(not path.exists(), "ONLINE_RECOVERY_REQUIRED")
         atomic_write(path, json.dumps(intent, sort_keys=True).encode())
@@ -270,12 +275,18 @@ def complete_online(intent):
     from coordinated_policy import validate_backup
     path = STATE / "online-transition.json"
     ensure(isinstance(intent, dict) and set(intent) == {"version", "phase", "startedAt", "previous", "candidate", "backendSnapshot", "frontendSnapshot"}
-           and intent["version"] == 1 and intent["phase"] in {"prepared", "backendInstalled", "frontendInstalled", "committed"}, "ONLINE_INTENT_INVALID")
+           and type(intent["version"]) is int and intent["version"] in (1, 2) and
+           intent["phase"] in {"prepared", "backendInstalled", "frontendInstalled", "committed"}, "ONLINE_INTENT_INVALID")
     previous, candidate = intent["previous"], intent["candidate"]
     validate(candidate["backend"], configuration_hash(ROOT))
     hosting.contract.validate(candidate["frontend"], candidate["frontend"]["configurationHash"], candidate["frontend"]["backendRevision"])
     ensure(all(value is None or isinstance(value, str) and re.fullmatch(r"[0-9a-f]{64}", value)
                for value in (intent["backendSnapshot"], intent["frontendSnapshot"])), "BACKUP_REFERENCE_REQUIRED")
+    if intent["version"] == 2:
+        references = {value for value in (intent["backendSnapshot"], intent["frontendSnapshot"]) if value is not None}
+        ensure(len(references) == 1 and
+               (intent["backendSnapshot"] is not None) == (candidate["backend"] != previous["backend"]) and
+               (intent["frontendSnapshot"] is not None) == (candidate["frontend"] != previous["frontend"]), "BACKUP_REFERENCE_REQUIRED")
     ensure(previous["backend"]["migrationCatalog"] == candidate["backend"]["migrationCatalog"], "ONLINE_SCHEMA_REVIEW_REQUIRED")
     runtime = OnlineRuntime()
     gate = OnlineGate()
@@ -308,6 +319,11 @@ def complete_online(intent):
         intent["phase"] = "backendInstalled"
         atomic_write(path, json.dumps(intent, sort_keys=True).encode())
     if candidate["frontend"] != previous["frontend"] and intent["phase"] == "backendInstalled":
+        if intent["version"] == 2:
+            # Both unchanged-schema switches belong to the same pinned operation.
+            # Recovery must revalidate that operation's backup rather than reuse
+            # an unrelated capture or silently take another after the API switch.
+            validate_backup(json.loads(backup_command("status")), intent["frontendSnapshot"], now(), datetime.fromisoformat(intent["startedAt"]))
         if intent["frontendSnapshot"] is None:
             intent["frontendSnapshot"] = capture(clock=now, inherited=True)
             atomic_write(path, json.dumps(intent, sort_keys=True).encode())
