@@ -70,7 +70,7 @@ func (s *Service) AdministrativeMemberAction(ctx context.Context, p Principal, t
 
 func (s *Service) authorizeAdministratorTx(ctx context.Context, tx pgx.Tx, p Principal) error {
 	var allowed bool
-	err := tx.QueryRow(ctx, `SELECT true FROM authentication_sessions session JOIN users u ON u.id=session.user_id JOIN member_two_factors f ON f.member_id=u.id JOIN user_roles ur ON ur.user_id=u.id JOIN roles r ON r.id=ur.role_id WHERE session.id=$1 AND u.id=$2 AND session.revoked_at IS NULL AND session.expires_at>$3 AND u.email_confirmed AND session.two_factor_verified_at IS NOT NULL AND session.two_factor_credential_id=f.credential_id AND r.normalized_name='ADMINISTRATOR' FOR SHARE OF session,u,f,ur`, p.SessionID, p.MemberID, s.Now().UTC()).Scan(&allowed)
+	err := tx.QueryRow(ctx, `SELECT true FROM authentication_sessions session JOIN users u ON u.id=session.user_id JOIN member_two_factors f ON f.member_id=u.id WHERE session.id=$1 AND u.id=$2 AND session.revoked_at IS NULL AND session.expires_at>$3 AND u.email_confirmed AND session.two_factor_verified_at IS NOT NULL AND session.two_factor_credential_id=f.credential_id AND u.is_admin FOR SHARE OF session,u,f`, p.SessionID, p.MemberID, s.Now().UTC()).Scan(&allowed)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.Failure(403, domain.SecurityForbidden, "Administrator authorization is no longer valid.")
 	}

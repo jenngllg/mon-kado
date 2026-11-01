@@ -38,8 +38,8 @@ class GoSmokeTests(unittest.TestCase):
                    security_stamp,concurrency_stamp,phone_number_confirmed,two_factor_enabled,lockout_enabled,
                    access_failed_count,display_name,created_at)
                    VALUES ('%s','%s','%s','%s','%s',true,'%s','%s','%s',false,false,true,0,'Native smoke',now());
-                   INSERT INTO user_roles(user_id,role_id) SELECT '%s',id FROM roles WHERE normalized_name='MEMBER';""" % (
-                       user,email,email.upper(),email,email.upper(),hashed,user,user,user)
+""" % (
+                       user,email,email.upper(),email,email.upper(),hashed,user,user)
         result = journeys.subprocess.run([*fixture.identity,str(journeys.PG/'psql'),'-X','-h',str(fixture.root/'socket'),
                                           '-p','55439','-d','mon_kado_process_test','-v','ON_ERROR_STOP=1'],
                                          input=query,text=True,capture_output=True,timeout=10,check=False)

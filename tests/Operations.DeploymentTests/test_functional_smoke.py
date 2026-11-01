@@ -29,7 +29,7 @@ class Api:
         self.calls = []
         self.fault = None
         self.lost = None
-        self.identity = {"id": MEMBER, "roles": ["Member"]}
+        self.identity = {"id": MEMBER, "isAdmin": False}
 
     def clear(self):
         self.token = None
@@ -122,7 +122,7 @@ class FunctionalTests(unittest.TestCase):
 
     def test_wrong_identity_or_admin_cannot_cleanup(self):
         self.seed_journal()
-        for identity in ({"id": WISH, "roles": ["Member"]}, {"id": MEMBER, "roles": ["Member", "Administrator"]}):
+        for identity in ({"id": WISH, "isAdmin": False}, {"id": MEMBER, "isAdmin": True}):
             self.api.identity = identity
             with self.subTest(identity=identity), self.assertRaisesRegex(DeploymentError, "SMOKE_IDENTITY_REFUSED"):
                 self.smoke.run()

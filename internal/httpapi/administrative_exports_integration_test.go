@@ -68,7 +68,7 @@ func TestAdministrativeExports_WhenRequestedAndDownloaded_AuditsBothActionsAndCh
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = f.store.Pool.Exec(t.Context(), `DELETE FROM user_roles WHERE user_id=$1 AND role_id=(SELECT id FROM roles WHERE normalized_name='ADMINISTRATOR')`, admin); err != nil {
+	if _, err = f.store.Pool.Exec(t.Context(), `UPDATE users SET is_admin=false WHERE id=$1`, admin); err != nil {
 		t.Fatal(err)
 	}
 	requireStatus(t, f.send(t, "GET", base+"/"+result.Id+"/archive", "", nil), 403, nil)

@@ -90,11 +90,11 @@ func duplicate(err error, constraint string) bool {
 	return errors.As(err, &e) && e.Code == "23505" && e.ConstraintName == constraint
 }
 
-// Principal contains server-verified member and session identities, never client roles.
+// Principal contains server-verified member and session identities, never client privileges.
 type Principal struct {
 	MemberID            string
 	SessionID           string
-	Roles               []string
+	IsAdmin             bool
 	TwoFactorVerifiedAt *time.Time
 }
 
@@ -104,42 +104,20 @@ func (s *Service) Authenticate(ctx context.Context, token string) (Principal, er
 	if err != nil {
 		return Principal{}, unauthorized()
 	}
-	p := Principal{MemberID: claims.Subject, Roles: []string{}}
-	err = s.Store.Pool.QueryRow(ctx, `SELECT session.id::text,CASE WHEN session.two_factor_credential_id=f.credential_id THEN session.two_factor_verified_at END FROM authentication_access_tokens token JOIN authentication_sessions session ON session.id=token.session_id JOIN users u ON u.id=session.user_id LEFT JOIN member_two_factors f ON f.member_id=u.id WHERE token.id=$1 AND session.user_id=$2 AND session.revoked_at IS NULL AND session.expires_at>$3 AND token.expires_at>$3 AND u.email_confirmed AND (session.two_factor_credential_id IS NULL OR session.two_factor_credential_id=f.credential_id)`, claims.ID, claims.Subject, s.Now().UTC()).Scan(&p.SessionID, &p.TwoFactorVerifiedAt)
+	p := Principal{MemberID: claims.Subject}
+	err = s.Store.Pool.QueryRow(ctx, `SELECT session.id::text,u.is_admin,CASE WHEN session.two_factor_credential_id=f.credential_id THEN session.two_factor_verified_at END FROM authentication_access_tokens token JOIN authentication_sessions session ON session.id=token.session_id JOIN users u ON u.id=session.user_id LEFT JOIN member_two_factors f ON f.member_id=u.id WHERE token.id=$1 AND session.user_id=$2 AND session.revoked_at IS NULL AND session.expires_at>$3 AND token.expires_at>$3 AND u.email_confirmed AND (session.two_factor_credential_id IS NULL OR session.two_factor_credential_id=f.credential_id)`, claims.ID, claims.Subject, s.Now().UTC()).Scan(&p.SessionID, &p.IsAdmin, &p.TwoFactorVerifiedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return p, unauthorized()
 	}
 	if err != nil {
 		return p, err
 	}
-	rows, err := s.Store.Pool.Query(ctx, `SELECT r.name FROM roles r JOIN user_roles ur ON ur.role_id=r.id WHERE ur.user_id=$1 ORDER BY r.name`, p.MemberID)
-	if err != nil {
-		return p, err
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var role string
-		if err = rows.Scan(&role); err != nil {
-			return p, err
-		}
-		p.Roles = append(p.Roles, role)
-	}
-	return p, rows.Err()
-}
-
-// IsAdministrator reports the current role without implying two-factor verification.
-func (p Principal) IsAdministrator() bool {
-	for _, role := range p.Roles {
-		if role == "Administrator" {
-			return true
-		}
-	}
-	return false
+	return p, nil
 }
 
 // AuthorizeAdministrator centralizes access to disclosed administrative resources.
 func AuthorizeAdministrator(p Principal) error {
-	if !p.IsAdministrator() {
+	if !p.IsAdmin {
 		return domain.Failure(403, domain.SecurityForbidden, "The caller cannot access this resource.")
 	}
 	if p.TwoFactorVerifiedAt == nil {

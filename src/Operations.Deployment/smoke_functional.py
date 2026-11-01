@@ -54,7 +54,7 @@ class FunctionalSmoke:
         ensure(result.get("tokenType") == "Bearer" and isinstance(result.get("accessToken"), str), "SMOKE_LOGIN_FAILED")
         self.client.token = result["accessToken"]
         current, _ = self.client.json("GET", SESSIONS + "/current")
-        ensure(current.get("id") == self.account["memberId"] and current.get("roles") == ["Member"], "SMOKE_IDENTITY_REFUSED")
+        ensure(current.get("id") == self.account["memberId"] and current.get("isAdmin") is False, "SMOKE_IDENTITY_REFUSED")
         self.identified = True
         csrf, _ = self.client.json("GET", "/security/csrf-token")
         self.client.csrf = csrf["token"]

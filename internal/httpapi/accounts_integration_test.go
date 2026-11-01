@@ -13,7 +13,7 @@ import (
 	"github.com/JennGllg/mon-kado/internal/domain"
 )
 
-func TestCurrentSession_WhenAdministratorRoleChanges_ReportsBooleanWithoutBypassingTwoFactor(t *testing.T) {
+func TestCurrentSession_WhenAdministratorFlagChanges_ReportsBooleanWithoutBypassingTwoFactor(t *testing.T) {
 	// Arrange
 	f := newFixture(t)
 	member := f.member(t, "role-visibility@example.test")
@@ -25,13 +25,16 @@ func TestCurrentSession_WhenAdministratorRoleChanges_ReportsBooleanWithoutBypass
 		if !ok {
 			t.Fatal("session isAdmin must be a boolean")
 		}
+		if _, exists := body["roles"]; exists {
+			t.Fatal("session must not expose textual roles")
+		}
 		return value
 	}
 	if readAdmin() {
 		t.Fatal("a member must not be an administrator")
 	}
 	// Act
-	if _, err := f.store.Pool.Exec(t.Context(), `INSERT INTO user_roles(user_id,role_id) SELECT $1,id FROM roles WHERE normalized_name='ADMINISTRATOR'`, member); err != nil {
+	if _, err := f.store.Pool.Exec(t.Context(), `UPDATE users SET is_admin=true WHERE id=$1`, member); err != nil {
 		t.Fatal(err)
 	}
 	// Assert
@@ -39,7 +42,7 @@ func TestCurrentSession_WhenAdministratorRoleChanges_ReportsBooleanWithoutBypass
 		t.Fatal("session did not reflect the live administrator role")
 	}
 	requireStatus(t, f.send(t, "GET", "/api/v1/admin/reported-wishlists", "", nil), 403, nil)
-	if _, err := f.store.Pool.Exec(t.Context(), `DELETE FROM user_roles WHERE user_id=$1 AND role_id=(SELECT id FROM roles WHERE normalized_name='ADMINISTRATOR')`, member); err != nil {
+	if _, err := f.store.Pool.Exec(t.Context(), `UPDATE users SET is_admin=false WHERE id=$1`, member); err != nil {
 		t.Fatal(err)
 	}
 	if readAdmin() {

@@ -26,7 +26,7 @@ func TestTwoFactor_WhenAdministratorEnrollsAndRecovers_RequiresReplacementBefore
 	now := time.Now().UTC()
 	f.service.Now = func() time.Time { return now }
 	f.service.Crypto.Now = f.service.Now
-	if _, err := f.store.Pool.Exec(t.Context(), `INSERT INTO user_roles(user_id,role_id) SELECT $1,id FROM roles WHERE normalized_name='ADMINISTRATOR'`, user); err != nil {
+	if _, err := f.store.Pool.Exec(t.Context(), `UPDATE users SET is_admin=true WHERE id=$1`, user); err != nil {
 		t.Fatal(err)
 	}
 	f.access = ""

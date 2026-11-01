@@ -1,6 +1,6 @@
 # Administrator two-factor authentication
 
-Administration requires the live Administrator role and a session verified against the member's current TOTP credential. Assign the role through a controlled database operation; never accept a role supplied by a client. The next password or Google sign-in requires enrollment if no active factor exists.
+Administration requires the live `users.is_admin` boolean and a session verified against the member's current TOTP credential. Set the boolean through a controlled database operation; never accept administrator status supplied by a client. The next password or Google sign-in requires enrollment if no active factor exists.
 
 Enrollment returns a secret and ten recovery codes. Store recovery codes privately; server persistence holds hashes only. TOTP has a 30-second step and a bounded clock window. Accepted counters cannot be replayed. Failed verification attempts are rate-limited and eventually lock the factor temporarily.
 
