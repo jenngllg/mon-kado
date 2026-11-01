@@ -6,6 +6,11 @@ import os
 from pathlib import Path
 import sys
 
+# The trusted installed manifest prepends its accompanying deployment modules.
+# Load it first, then keep this reviewed installer bundle ahead of those modules.
+import release_manifest
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
 from coordinated_backup import capture, run as backup_command
 from coordinated_cli import HistoricalSmoke, require_protected_tool
 from coordinated_gate import Gate
