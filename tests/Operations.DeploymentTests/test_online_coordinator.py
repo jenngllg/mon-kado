@@ -1,6 +1,7 @@
 """Verify backup ordering and pinned recovery independently of native service effects."""
 
 from contextlib import nullcontext
+from datetime import timedelta
 import copy
 import json
 from pathlib import Path
@@ -88,6 +89,17 @@ class OnlineCoordinatorTests(unittest.TestCase):
         self.assertEqual("2" * 64, result["frontendSnapshot"])
         self.engine.deploy.assert_called_once()
         self.assertEqual(2, self.capture.call_count)
+
+    def test_expired_shared_capture_blocks_recovery_without_substituting_another_backup(self):
+        self.frontend.activate_forward.side_effect = DeploymentError("FRONTEND_ACTIVATION_FAILED")
+        with self.assertRaises(DeploymentError):
+            cli.online_deploy(self.previous, self.candidate)
+        with patch.object(cli, "now", return_value=NOW + timedelta(hours=2)):
+            with self.assertRaisesRegex(DeploymentError, "BACKUP_NOT_FRESH"):
+                cli.online_recover()
+        self.capture.assert_called_once()
+        self.engine.deploy.assert_called_once()
+        self.assertEqual(1, self.frontend.activate_forward.call_count)
 
     def test_unverified_shared_backup_blocks_both_serving_switches(self):
         with patch.object(cli, "backup_command", return_value=json.dumps({"snapshotId": "1" * 64, "error": "failed"})):
