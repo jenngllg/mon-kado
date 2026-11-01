@@ -1,7 +1,12 @@
 #!/usr/bin/env bash
 # Invoke only the root-owned reviewed coordinator; do not inherit process proxies.
 set -Eeuo pipefail
+umask 022
 [[ $EUID -eq 0 ]] || { echo 'Run with sudo.' >&2; exit 1; }
+if [[ ${1:-} == main-deploy ]]; then
+    exec 7>/var/lib/monkado-deployment/main-ci.lock
+    flock -w 1800 7 || { echo 'Production deployment is busy.' >&2; exit 1; }
+fi
 exec env -i PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin LANG=C.UTF-8 TZ=UTC \
     PYTHONPATH=/opt/monkado/src/Operations.Native:/opt/monkado/src/Operations.Deployment:/opt/monkado/src/Operations.Frontend:/opt/monkado/deployments/production \
     /usr/bin/python3 /opt/monkado/src/Operations.Deployment/coordinated_cli.py "$@"

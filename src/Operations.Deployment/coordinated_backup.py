@@ -3,6 +3,8 @@
 from datetime import datetime, timezone
 import json
 import subprocess
+from pathlib import Path
+import sys
 
 from coordinated_policy import validate_backup
 from deploy_policy import DeploymentError, ensure
@@ -27,7 +29,7 @@ def run(action, inherited=False):
     return result.stdout
 
 
-def capture(run_operation=run, clock=lambda: datetime.now(timezone.utc), gate=None, inherited=False):
+def capture(run_operation=run, clock=lambda: datetime.now(timezone.utc), gate=None, inherited=False, reviewed_source=None):
     """Return only a freshly captured, remotely copied and fully checked snapshot ID.
 
     When the gate is closed, the caller holds the coordination and deployment
@@ -36,7 +38,16 @@ def capture(run_operation=run, clock=lambda: datetime.now(timezone.utc), gate=No
     started = clock()
     if gate is not None:
         gate.verify()
-    run_operation("backup", inherited=inherited)
+    if reviewed_source is None:
+        run_operation("backup", inherited=inherited)
+    else:
+        source = Path(reviewed_source)
+        ensure(source.is_absolute() and source.resolve() == source, "TOOL_SOURCE_INVALID")
+        environment = {"PATH": "/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin", "HOME": "/root", "LANG": "C.UTF-8", "TZ": "UTC",
+                       "PYTHONPATH": str(source / "src/Operations.Backups")}
+        result = subprocess.run([sys.executable, "-m", "monkado_backup.cli", "backup"], env=environment,
+                                capture_output=True, timeout=3600, check=False)
+        ensure(result.returncode == 0, "COORDINATED_BACKUP_FAILED")
     run_operation("check", inherited=False)
     try:
         state = json.loads(run_operation("status", inherited=False))

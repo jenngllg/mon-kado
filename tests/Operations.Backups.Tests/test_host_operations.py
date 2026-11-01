@@ -114,6 +114,19 @@ class HostOperationsTests(unittest.TestCase):
         # Assert
         self.assertTrue((self.state / "pending/manifest.json").is_file())
 
+    def test_online_capture_keeps_api_and_proxy_running_while_preserving_images(self):
+        original_observe = self.observe
+        self.observer.side_effect = lambda service, runner: original_observe(service, runner) | {
+            "running": not self.stopped if service == "worker" else True}
+        self.operations.capture(online=True)
+        self.assertTrue((self.state / "pending/manifest.json").is_file())
+        self.assertIn(["systemctl", "stop", "mon-kado-worker.service"], self.commands)
+        for args in self.commands:
+            if args[:2] == ["systemctl", "stop"]:
+                self.assertNotIn("mon-kado-api.service", args)
+                self.assertNotIn("caddy.service", args)
+        self.assertFalse((self.state / "maintenance.json").exists())
+
     def test_capture_preserves_completed_candidate_before_another_maintenance(self):
         # Arrange
         candidate = self.state / "capture.new"

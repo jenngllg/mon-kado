@@ -266,3 +266,23 @@ class UpgradeRuntime(InstallationRuntime):
         self.native.restore_baseline(state["baseline"])
         ensure(self.native.smoke(current) == {"technical": True, "functional": True, "frontend": True}, "BACKEND_VERIFICATION_FAILED")
         self.gate.verify()
+
+
+class OnlineUpgradeRuntime(UpgradeRuntime):
+    """Upgrade reviewed operational files without stopping the serving API or proxy."""
+
+    def close_gate(self):
+        """Keep service available; retain durable installation intent on any failure."""
+        self.gate.verify()
+
+    def open_gate(self):
+        self.gate.verify()
+
+    def install_backup_code(self, intent):
+        """Prepare the serving selector before the one-time proxy configuration upgrade."""
+        from deploy_runtime import OnlineRuntime
+        OnlineRuntime(root=self.root, state=self.state, settings=self.settings).route(7000)
+        super().install_backup_code(intent)
+        self.native.run(["systemd-run", "--quiet", "--wait", "--pipe", "--collect",
+                         "--unit=mon-kado-online-proxy-setup", "--property=EnvironmentFile=" + str(self.settings / "caddy.env"),
+                         "--", "/usr/bin/caddy", "reload", "--config", str(self.root / "deployments/caddy/Caddyfile"), "--adapter", "caddyfile"], timeout=30)

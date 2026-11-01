@@ -80,6 +80,30 @@ def entries(root):
     return result
 
 
+def copy_live_images(source, target):
+    """Retain immutable committed images while the deletion worker is paused.
+
+    The API writes and fsyncs each new UUID before committing its reference and
+    never overwrites a committed image. Only an unreferenced, failed upload may
+    disappear during this copy. Extra staged bytes remain marked for cleanup.
+    """
+    target.mkdir(mode=0o700)
+    paths = sorted(source.iterdir(), key=lambda path: (path.suffix != ".pending", path.name))
+    for path in paths:
+        if not NATIVE_IMAGE_NAME.fullmatch(path.name):
+            continue
+        try:
+            regular(path)
+            with path.open("rb") as incoming:
+                destination = target / path.name
+                with destination.open("xb") as output:
+                    shutil.copyfileobj(incoming, output, 65536)
+                destination.chmod(0o600)
+        except FileNotFoundError:
+            # A committed image cannot disappear while physical deletion is paused.
+            continue
+
+
 def validate_shape(paths, schema_version=4):
     """Prevent a restored archive from injecting extra configuration or secrets."""
     required = {"postgres.dump", "configuration/production.env", RELEASE_PATH}

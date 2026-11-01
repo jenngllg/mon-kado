@@ -26,7 +26,7 @@ def execute(action, operations):
         return
     with lock(STATE / "backup.lock"):
         if action == "backup":
-            operations.capture()
+            operations.capture(online=True)
             operations.transfer()
         elif action == "transfer":
             operations.transfer()

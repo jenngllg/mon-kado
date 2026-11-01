@@ -19,6 +19,9 @@ Ces règles s'appliquent à `mon-kado` et `mon-kado-front`, en complément des p
 
 ## Mises en production et données réelles
 
+- Depuis le 1er novembre 2026, `main` est la branche de production dans les deux dépôts : sa publication déclenche le déploiement sur le VPS existant après contrôles et approbation de l'environnement production. `develop` reste une branche d'intégration et ne publie pas en production. Utiliser les runners Linux standard gratuits des dépôts publics et les outils natifs déjà disponibles ; aucun service payant supplémentaire.
+- Les déploiements doivent être rapides et maintenir le service disponible : réutiliser les résultats validés pour les mêmes sources, sauvegarder sans arrêter l'API ni Caddy, préparer et vérifier l'API candidate avant de changer atomiquement le serveur choisi, sans recharger le proxy lors des MEP courantes. Ne jamais lancer implicitement une migration ou une mise à jour incompatible qui nécessiterait une coupure ; bloquer cette publication jusqu'à une procédure compatible revue. Conserver les sauvegardes cohérentes, vérifiées et chiffrées hors du VPS.
+
 - La production contient plusieurs utilisateurs réels. Pour chaque MEP, y compris frontend ou configuration, la sauvegarde préalable doit couvrir PostgreSQL et les fichiers persistants nécessaires à la restauration. Réaliser un nouveau snapshot, vérifier son intégrité et sa copie chiffrée hors du VPS, puis conserver sa référence dans le compte rendu de déploiement.
 - Une sauvegarde quotidienne antérieure ou réalisée seulement après la MEP ne remplace pas cette sauvegarde préalable. Un échec ou une incertitude de transfert distant bloque aussi la MEP avant toute bascule ou migration.
 - L'autorisation de remise à zéro donnée pour la première bascule est caduque ; toute nouvelle remise à zéro ou purge destructive des données réelles exige une nouvelle demande explicite et ciblée de Jenn.

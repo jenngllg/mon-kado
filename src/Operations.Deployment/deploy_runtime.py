@@ -28,6 +28,16 @@ STATE = Path("/var/lib/monkado-deployment")
 SETTINGS = Path("/etc/monkado")
 
 
+def online_compatible(previous, candidate):
+    """Keep every existing HTTP operation and schema unchanged during overlap."""
+    for section in ("paths",):
+        ensure(all(candidate.get(section, {}).get(key) == value for key, value in previous.get(section, {}).items()),
+               "ONLINE_API_COMPATIBILITY_REQUIRED")
+    old = previous.get("components", {}).get("schemas", {})
+    new = candidate.get("components", {}).get("schemas", {})
+    ensure(all(new.get(key) == value for key, value in old.items()), "ONLINE_API_COMPATIBILITY_REQUIRED")
+
+
 def timestamp(value):
     """Parse native process and application UTC timestamps without accepting naive dates."""
     parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
@@ -269,3 +279,110 @@ class Runtime:
         except (OSError, ValueError, KeyError, TypeError, AttributeError):
             raise DeploymentError("SMOKE_CONTRACT_FAILED") from None
         return {"technical": True, "functional": True, "frontend": self.frontend_marker is not None}
+
+
+class OnlineRuntime(Runtime):
+    """Roll native binaries behind a healthy temporary API without stopping Caddy."""
+
+    def __init__(self, *args, routing=Path("/var/lib/monkado-routing"), **kwargs):
+        super().__init__(*args, **kwargs)
+        self.routing = routing
+
+    def stop(self):
+        """The native engine's stop boundary deliberately keeps public traffic serving."""
+        ensure(self.container("caddy")["running"], "PROXY_NOT_RUNNING")
+
+    def preflight(self, candidate, current):
+        """Block SQL changes before any effect; automatic online updates are reversible."""
+        ensure(current is not None and candidate["migrationCatalog"] == current["migrationCatalog"] and
+               candidate["rollbackAllowed"] is True, "ONLINE_SCHEMA_REVIEW_REQUIRED")
+        return super().preflight(candidate, current)
+
+    def migrate(self, release):
+        """Never invoke a migration as an implicit part of an online deployment."""
+        raise DeploymentError("ONLINE_SCHEMA_REVIEW_REQUIRED")
+
+    def ready_port(self, port):
+        """Probe a fixed loopback API without placing credentials on the command line."""
+        ensure(port in (7000, 7001), "INVALID_API_PORT")
+        body = self.run(["curl", "--disable", "--fail", "--silent", "--show-error", "--noproxy", "*",
+                  "--max-time", "3", "--header", "Host: api.monkado.fr",
+                  f"http://127.0.0.1:{port}/readiness"], timeout=4)
+        ensure(body == b"Healthy", "ONLINE_API_NOT_READY")
+
+    def wait_port(self, port):
+        """Bound startup readiness by the injected monotonic clock."""
+        deadline = self.clock() + 30
+        while True:
+            try:
+                self.ready_port(port)
+                return
+            except DeploymentError:
+                ensure(self.clock() < deadline, "ONLINE_API_NOT_READY")
+                self.pause(0.2)
+
+    def route(self, port):
+        """Atomically select a ready upstream without reloading or restarting Caddy."""
+        ensure(port in (7000, 7001), "INVALID_API_PORT")
+        directory = self.routing
+        directory.mkdir(mode=0o755, exist_ok=True)
+        info = directory.lstat()
+        ensure(directory.resolve() == directory and stat.S_ISDIR(info.st_mode) and info.st_uid == 0
+               and info.st_gid == 0 and stat.S_IMODE(info.st_mode) == 0o755, "UNSAFE_ROUTING_DIRECTORY")
+        selector = directory / "blue"
+        ensure(not selector.is_symlink(), "UNSAFE_ROUTING_SELECTOR")
+        if port == 7000:
+            atomic_write(selector, b"blue\n")
+            selector.chmod(0o644)
+        else:
+            selector.unlink(missing_ok=True)
+        native_artifacts.sync_directory(directory)
+
+    def candidate(self, release):
+        """Start an isolated API process with the same sandbox and a separate port."""
+        directory = self.prepare(release)
+        unit = (self.root / "deployments/systemd/mon-kado-api.service").read_text()
+        ensure(unit.count("ExecStart=/opt/monkado/current/api") == 1, "API_UNIT_CHANGED")
+        unit = unit.replace("ExecStart=/opt/monkado/current/api", "ExecStart=" + str(directory / "api"))
+        override = self.state / "online-api.env"
+        atomic_write(override, ("HTTP_ADDRESS=127.0.0.1:7001\nOBSERVABILITY_ENABLED=false\nAPP_VERSION=" + release["revision"] + "\n").encode())
+        anchor = "EnvironmentFile=/var/lib/monkado-deployment/active.env"
+        ensure(anchor in unit, "API_UNIT_CHANGED")
+        unit = unit.replace(anchor, anchor + "\nEnvironmentFile=" + str(override))
+        atomic_write(Path("/run/systemd/system/mon-kado-api-candidate.service"), unit.encode())
+        self.run(["systemctl", "daemon-reload"])
+        self.run(["systemctl", "start", "mon-kado-api-candidate.service"], timeout=30)
+        self.wait_port(7001)
+
+    def stop_candidate(self):
+        """Ignore a never-created temporary unit, without hiding a failed stop."""
+        loaded = self.run(["systemctl", "show", "mon-kado-api-candidate.service", "--property=LoadState", "--value"])
+        if loaded.strip() != b"not-found":
+            self.run(["systemctl", "stop", "mon-kado-api-candidate.service"], timeout=30)
+
+    def start(self, release):
+        """Switch to the ready candidate before draining and replacing the stable API."""
+        directory = self.prepare(release)
+        native_artifacts.verify_directory(directory, release)
+        stable = self.container("api")
+        if stable["running"] and stable["image"] == release["binaries"]["api"]["sha256"]:
+            super().start(release)
+            self.wait_port(7000)
+        else:
+            if stable["running"]:
+                self.wait_port(7000)
+                self.route(7000)
+                self.stop_candidate()
+                self.candidate(release)
+            else:
+                # A durable interrupted restart may already be served by port 7001.
+                self.wait_port(7001)
+            self.route(7001)
+            self.run(["systemctl", "stop", "mon-kado-api.service"], timeout=30)
+            super().start(release)
+            self.wait_port(7000)
+        self.route(7000)
+        worker = self.container("worker")
+        if not worker["running"] or worker["image"] != release["binaries"]["worker"]["sha256"]:
+            self.run(["systemctl", "restart", "mon-kado-worker.service"], timeout=60)
+        self.stop_candidate()
