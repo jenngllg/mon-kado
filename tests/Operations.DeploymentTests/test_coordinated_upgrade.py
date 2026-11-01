@@ -127,6 +127,22 @@ class UpgradeTests(unittest.TestCase):
             UpgradeEngine(self.store, self.runtime).install(self.manifest, SNAPSHOT)
         self.gate.open.assert_not_called()
 
+    def test_already_active_boot_guard_is_closed_before_verification_without_requiring_recovery(self):
+        closed = False
+        def close():
+            nonlocal closed
+            closed = True
+        def verify():
+            if not closed:
+                raise DeploymentError("TRAFFIC_GATE_UNAVAILABLE")
+        self.gate.close.side_effect = close
+        self.gate.verify.side_effect = verify
+        # systemctl start intentionally has no side effect for an active oneshot.
+        UpgradeEngine(self.store, self.runtime).install(self.manifest, SNAPSHOT)
+        self.assertIsNone(self.store.load())
+        self.gate.open.assert_called_once()
+        self.native.run.assert_any_call(["systemctl", "start", "monkado-transition-guard.service"], timeout=30)
+
     def test_interrupted_upgrade_reuses_exact_intent_and_rechecks_before_opening(self):
         self.capture.side_effect = SystemExit("lost backup acknowledgement")
         with self.assertRaises(SystemExit):
