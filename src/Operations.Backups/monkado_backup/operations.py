@@ -7,6 +7,7 @@ import os
 import shutil
 import stat
 import subprocess
+import selectors
 import sys
 import time
 from datetime import datetime, timezone
@@ -38,6 +39,73 @@ RCLONE_CONFIG_NAME = "rclone.conf"
 MAINTENANCE_NAME = "maintenance.json"
 CANDIDATE_NAME = "capture.new"
 PREVIOUS_NAME = "pending.previous"
+
+
+class NativeSnapshot:
+    """Fence image references briefly and export the exact PostgreSQL MVCC snapshot.
+
+    Reads remain available. Reference-changing writes may wait for this bounded
+    transaction while referenced images are hard-linked and the dump imports the
+    snapshot. The session timeout releases the fence even if the capture dies.
+    """
+
+    def __init__(self, psql=None):
+        self.psql = psql or ["runuser", "-u", "postgres", "--", "psql", "-X", "--no-password", "-d", "mon_kado"]
+        self.process = None
+
+    def __enter__(self):
+        self.process = subprocess.Popen([*self.psql, "-qAt", "-v", "ON_ERROR_STOP=1"], stdin=subprocess.PIPE,
+                                        stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, bufsize=0, start_new_session=True)
+        query = """BEGIN ISOLATION LEVEL REPEATABLE READ;
+SET LOCAL lock_timeout='500ms';
+SET LOCAL idle_in_transaction_session_timeout='5s';
+LOCK TABLE public.wishes,public.users,public.private_groups IN SHARE MODE;
+SELECT json_build_object('identifier',pg_export_snapshot(),'images',
+ (SELECT COALESCE(json_agg(image),'[]'::json) FROM
+  (SELECT image_id::text AS image FROM public.wishes WHERE image_id IS NOT NULL
+   UNION SELECT profile_image_id::text FROM public.users WHERE profile_image_id IS NOT NULL
+   UNION SELECT profile_image_id::text FROM public.private_groups WHERE profile_image_id IS NOT NULL) ids));
+"""
+        try:
+            self.process.stdin.write(query.encode())
+            self.process.stdin.flush()
+            raw = b""
+            deadline = time.monotonic() + 3
+            with selectors.DefaultSelector() as selector:
+                selector.register(self.process.stdout, selectors.EVENT_READ)
+                while b"\n" not in raw:
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0 or not selector.select(remaining):
+                        raise BackupError("SNAPSHOT_FENCE_TIMEOUT")
+                    chunk = os.read(self.process.stdout.fileno(), 65536)
+                    if not chunk or len(raw) + len(chunk) > 16 * 1024 * 1024:
+                        raise BackupError("SNAPSHOT_FENCE_FAILED")
+                    raw += chunk
+            value = json.loads(raw.split(b"\n", 1)[0])
+            import re
+            if (set(value) != {"identifier", "images"} or not isinstance(value["identifier"], str)
+                    or not re.fullmatch(r"[0-9A-Fa-f]{8}-[0-9A-Fa-f]{8}-[0-9]+", value["identifier"])
+                    or not isinstance(value["images"], list)):
+                raise BackupError("SNAPSHOT_FENCE_FAILED")
+            self.identifier, self.images = value["identifier"], value["images"]
+            return self
+        except Exception:
+            self.__exit__(*sys.exc_info())
+            raise
+
+    def __exit__(self, error_type, _error, _trace):
+        if self.process is None:
+            return
+        try:
+            command = b"ROLLBACK;\n\\q\n" if error_type else b"COMMIT;\n\\q\n"
+            self.process.communicate(input=command, timeout=2)
+            if self.process.returncode and error_type is None:
+                raise BackupError("SNAPSHOT_FENCE_FAILED")
+        except subprocess.TimeoutExpired:
+            self.process.kill()
+            self.process.communicate()
+            if error_type is None:
+                raise BackupError("SNAPSHOT_FENCE_TIMEOUT") from None
 
 
 def utcnow():
@@ -107,12 +175,13 @@ class Operations:
     """Coordinate immutable capture, offsite transfer and safe crash recovery."""
 
     def __init__(self, run=command, now=utcnow, wait=time.sleep, observer=native_services.observe,
-                 storage=Path("/var/lib/monkado")):
+                 storage=Path("/var/lib/monkado"), snapshot_factory=NativeSnapshot):
         self.run = run
         self.now = now
         self.wait = wait
         self.observer = observer
         self.storage = storage
+        self.snapshot_factory = snapshot_factory
 
     def state(self):
         """Read bounded operational metadata, never secret-bearing captures."""
@@ -252,18 +321,19 @@ class Operations:
                     if self.service(service)["running"]:
                         raise BackupError("WRITERS_STILL_RUNNING")
                 created = self.now().isoformat()
-                with (candidate / "postgres.dump").open("xb") as output:
-                    self.run(["runuser", "-u", "postgres", "--", "pg_dump", "--no-password", "--dbname=mon_kado",
-                              "--format=custom", "--compress=0", "--no-owner", "--no-acl"], output=output)
                 if online:
-                    # Committed image bytes are immutable and only the paused worker
-                    # deletes them. pg_dump owns a coherent MVCC snapshot; uploads
-                    # after its start may add harmless unreferenced staged files.
-                    from .capture import copy_live_images
-                    copy_live_images(images, candidate / "images")
+                    from .capture import retain_snapshot_images
+                    with self.snapshot_factory() as snapshot:
+                        retain_snapshot_images(images, candidate / "images", snapshot.images)
+                        with (candidate / "postgres.dump").open("xb") as output:
+                            self.run(["runuser", "-u", "postgres", "--", "pg_dump", "--no-password", "--dbname=mon_kado",
+                                      "--format=custom", "--compress=0", "--no-owner", "--no-acl", "--snapshot=" + snapshot.identifier], output=output)
                     self.running("api")
                     self.running("caddy")
                 else:
+                    with (candidate / "postgres.dump").open("xb") as output:
+                        self.run(["runuser", "-u", "postgres", "--", "pg_dump", "--no-password", "--dbname=mon_kado",
+                                  "--format=custom", "--compress=0", "--no-owner", "--no-acl"], output=output)
                     copy_files(images, candidate / "images", NATIVE_IMAGE_NAME)
                 for name in FILES:
                     destination = candidate / "configuration" / name

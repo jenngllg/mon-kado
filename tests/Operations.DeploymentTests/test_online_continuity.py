@@ -42,13 +42,20 @@ class OnlineContinuityTests(unittest.TestCase):
                               "}\n }\n handle {\n reverse_proxy 127.0.0.1:7001 127.0.0.1:7000 {\n" + proxy_options + "}\n }\n}\n")
             tls_context = ssl.create_default_context(cafile=str(certificate))
             servers = {}
+            slow_started, finish_slow, slow_finished = threading.Event(), threading.Event(), threading.Event()
             self.addCleanup(lambda: [server.shutdown() or server.server_close() for server in list(servers.values())])
 
             def start_api(port, identity):
                 class Handler(http.server.BaseHTTPRequestHandler):
                     def do_GET(self):
+                        if self.path == "/slow" and identity == "old":
+                            slow_started.set()
+                            if not finish_slow.wait(10):
+                                raise TimeoutError("old request was not allowed to finish")
                         body = b"Healthy" if self.path == "/readiness" else identity.encode()
                         self.send_response(200); self.end_headers(); self.wfile.write(body)
+                        if self.path == "/slow":
+                            slow_finished.set()
                     def log_message(self, *_):
                         pass
                 server = http.server.ThreadingHTTPServer(("127.0.0.1", port), Handler)
@@ -97,10 +104,12 @@ class OnlineContinuityTests(unittest.TestCase):
 
             def runner(args, **_kwargs):
                 if args[0] == "curl":
+                    args = [arg.replace("127.0.0.1:2019", "127.0.0.1:7081") for arg in args]
                     result = subprocess.run(args, capture_output=True, check=True, timeout=4)
                     return result.stdout
                 if args == ["systemctl", "stop", "mon-kado-api.service"]:
                     wait_for(lambda: observed.count("new") >= 20)
+                    self.assertTrue(slow_finished.is_set(), "the old accepted request was interrupted")
                     server = servers.pop(7000); server.shutdown(); server.server_close()
                     return b""
                 raise AssertionError("Unexpected process boundary")
@@ -115,9 +124,23 @@ class OnlineContinuityTests(unittest.TestCase):
             previous_count = len(observed)
             wait_for(lambda: len(observed) >= previous_count + 100)
             self.assertEqual({"old"}, set(observed))
+            slow_result = []
+            def slow_request():
+                with urllib.request.urlopen("https://localhost:7080/slow", context=tls_context, timeout=15) as response:
+                    slow_result.append(response.read())
+            slow_client = threading.Thread(target=slow_request)
+            slow_client.start()
+            self.assertTrue(slow_started.wait(5))
+            def release_old_request():
+                wait_for(lambda: observed.count("new") >= 20)
+                finish_slow.set()
+            releaser = threading.Thread(target=release_old_request)
+            releaser.start()
             runtime.candidate = lambda _: start_api(7001, "new")
             with patch("deploy_runtime.native_artifacts.verify_directory"), patch.object(Runtime, "start", side_effect=lambda *_: start_api(7000, "new")):
                 runtime.start(release("b"))
+            slow_client.join(timeout=5); releaser.join(timeout=5)
+            self.assertEqual([b"old"], slow_result)
             # Repeat real serving switches; any proxy reload is an unexpected effect.
             for _ in range(10):
                 runtime.route(7001)

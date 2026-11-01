@@ -3,6 +3,7 @@
 from datetime import datetime, timedelta, timezone
 import json
 import hashlib
+import base64
 import os
 from pathlib import Path
 import re
@@ -42,6 +43,16 @@ def record():
     Path("go-verification.json").write_text(json.dumps(value, sort_keys=True))
 
 
+def trusted_pr_profile(repository, revision):
+    """Accept same-repository PR evidence only from the identical CI and proof code."""
+    for name in (".github/workflows/ci.yml", "scripts/reuse_go_verification.py"):
+        value = json.loads(run(["gh", "api", f"repos/{repository}/contents/{name}?ref={revision}"]))
+        previous = base64.b64decode(value["content"]).decode().replace("\r\n", "\n")
+        if previous != Path(name).read_text():
+            return False
+    return True
+
+
 def main():
     """A missing proof always falls back to running the full test suite."""
     accepted = False
@@ -52,7 +63,10 @@ def main():
         runs = json.loads(run(["gh", "api", f"repos/{repository}/actions/workflows/ci.yml/runs?status=success&per_page=20"]))["workflow_runs"]
         current = Path(".github/workflows/ci.yml").read_text()
         for entry in runs:
-            if entry["event"] not in ("push", "workflow_dispatch") or entry["conclusion"] != "success":
+            is_pr = entry["event"] == "pull_request"
+            if entry["event"] not in ("push", "workflow_dispatch", "pull_request") or entry["conclusion"] != "success":
+                continue
+            if is_pr and entry.get("head_repository", {}).get("full_name") != repository:
                 continue
             created = datetime.fromisoformat(entry["created_at"].replace("Z", "+00:00"))
             if not timedelta(0) <= datetime.now(timezone.utc) - created <= timedelta(hours=6):
@@ -60,11 +74,16 @@ def main():
             revision = entry["head_sha"]
             if not re.fullmatch(r"[0-9a-f]{40}", revision):
                 continue
-            previous = run(["git", "show", revision + ":.github/workflows/ci.yml"]).decode()
-            if not reusable(current, previous):
-                continue
-            if run(["git", "diff", "--name-only", revision, "HEAD", "--", *INPUTS]).strip():
-                continue
+            previous = ""
+            if is_pr:
+                if not trusted_pr_profile(repository, revision):
+                    continue
+            else:
+                previous = run(["git", "show", revision + ":.github/workflows/ci.yml"]).decode()
+                if not reusable(current, previous):
+                    continue
+                if run(["git", "diff", "--name-only", revision, "HEAD", "--", *INPUTS]).strip():
+                    continue
             with tempfile.TemporaryDirectory(prefix="qualified-go-") as directory:
                 run(["gh", "run", "download", str(entry["id"]), "--repo", repository, "--name", "native-go-build", "--dir", directory])
                 paths = [Path("coverage.out"), Path("src/Tools.GmailOAuthBootstrap/coverage.out")]
@@ -76,7 +95,7 @@ def main():
                         continue
                 else:
                     # Bootstrap from the previous, unconditional native CI only.
-                    if "reuse_go_verification.py" in previous:
+                    if is_pr or "reuse_go_verification.py" in previous:
                         continue
                     evidence = {"verifiedAt": created.isoformat(), "runId": str(entry["id"]), "sourceFingerprint": fingerprint()}
                 for path in paths:

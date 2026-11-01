@@ -7,6 +7,7 @@ import shutil
 import sys
 import tempfile
 import unittest
+from contextlib import nullcontext
 from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import Mock, patch
@@ -118,6 +119,8 @@ class HostOperationsTests(unittest.TestCase):
         original_observe = self.observe
         self.observer.side_effect = lambda service, runner: original_observe(service, runner) | {
             "running": not self.stopped if service == "worker" else True}
+        snapshot = Mock(identifier="00000001-00000002-1", images=[path.stem for path in (self.source / "images").glob("*.webp")])
+        self.operations.snapshot_factory = lambda: nullcontext(snapshot)
         self.operations.capture(online=True)
         self.assertTrue((self.state / "pending/manifest.json").is_file())
         self.assertIn(["systemctl", "stop", "mon-kado-worker.service"], self.commands)
@@ -126,6 +129,7 @@ class HostOperationsTests(unittest.TestCase):
                 self.assertNotIn("mon-kado-api.service", args)
                 self.assertNotIn("caddy.service", args)
         self.assertFalse((self.state / "maintenance.json").exists())
+        self.assertTrue(any("--snapshot=" + snapshot.identifier in args for args in self.commands))
 
     def test_capture_preserves_completed_candidate_before_another_maintenance(self):
         # Arrange
