@@ -143,7 +143,9 @@ func (f *fixture) member(t *testing.T, email string) string {
 	if err := f.store.Pool.QueryRow(t.Context(), `SELECT o.id::text,u.id::text,u.password_hash FROM authentication_email_outbox o JOIN users u ON u.id=o.user_id WHERE u.email=$1`, email).Scan(&outbox, &id, &hash); err != nil {
 		t.Fatal(err)
 	}
-	if hash == password || !security.VerifyPassword(password, hash) {
+	// Inspect the stored work factor here; the real login below verifies the
+	// password. Rehashing it a third time in every business fixture adds no coverage.
+	if hash == password || security.PasswordNeedsRehash(hash) {
 		t.Fatal("password persistence invariant violated")
 	}
 	message, err := f.service.PrepareAuthenticationEmail(t.Context(), outbox)
