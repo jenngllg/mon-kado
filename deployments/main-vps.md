@@ -37,6 +37,8 @@ GitHub workflow token, outside the VPS lock. Frontend packaging still requires t
 exact native backend contract proof. Any changed main revision, missing proof or
 unpublished/failed peer blocks the group before backup or switch. Merge backend
 then frontend immediately afterward so the frontend CI tests the intended backend.
+Polling backs off after two minutes so a full wait leaves room in the standard
+workflow token's free API budget; no additional credential or paid capacity is used.
 
 The first VPS request deploys the complete pair under the shared lock. The second
 request finds it already installed and takes no further backup. Backend-only and
