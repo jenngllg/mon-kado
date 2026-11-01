@@ -1,0 +1,8 @@
+[project]
+name = "monkado-security-probe"
+version = "0.1.0"
+requires-python = ">=3.12"
+description = "Read-only, secret-free MonKado production HTTP verification"
+
+[project.scripts]
+monkado-security-probe = "security_probe:main"

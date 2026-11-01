@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# Hold an outer coordination lock across the unchanged production deployment.
+set -Eeuo pipefail
+umask 077
+[[ $EUID -eq 0 ]] || exit 1
+exec 8>/var/lib/monkado-deployment/backup-coordination.lock
+flock -n 8 || { echo 'Backup or deployment coordination is busy.' >&2; exit 1; }
+[[ ! -e /var/lib/monkado-backup/maintenance.json ]] || {
+    echo 'Backup recovery is required before deployment.' >&2
+    exit 1
+}
+exec /bin/bash /opt/monkado/deployments/production/deploy.sh

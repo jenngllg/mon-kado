@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+set -euo pipefail
+export PYTHONPATH=/opt/monkado-backup
+exec /usr/bin/python3 -m monkado_backup.cli "$@"

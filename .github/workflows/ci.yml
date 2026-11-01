@@ -1,0 +1,171 @@
+name: CI
+on:
+  pull_request:
+    branches: [develop, main]
+  push:
+    branches: [develop, main]
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  quality:
+    name: quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: |
+            go.sum
+            deployments/caddy/build/go.sum
+      - name: Install native PostgreSQL 18
+        run: bash scripts/Initialize-CIPostgres.sh
+      - name: Build and scan pinned Caddy for isolated native HTTP tests
+        run: bash scripts/Initialize-CICaddy.sh
+      - name: Verify edge scan policy
+        run: python3 -m unittest discover -s tests/Native.OperationsTests -p test_caddy_security_scan.py
+      - name: Scan Git history for secrets with native Gitleaks
+        run: go run github.com/zricethezav/gitleaks/v8@v8.30.1 git --redact --config .gitleaks.toml
+      - name: Verify formatting and modules
+        run: |
+          test -z "$(gofmt -l cmd internal src/Tools.GmailOAuthBootstrap)"
+          go mod tidy
+          git diff --exit-code -- go.mod go.sum
+          go mod verify
+          go -C src/Tools.GmailOAuthBootstrap mod tidy
+          git diff --exit-code -- src/Tools.GmailOAuthBootstrap/go.mod src/Tools.GmailOAuthBootstrap/go.sum
+      - name: Analyze code
+        run: |
+          go vet ./...
+          go -C src/Tools.GmailOAuthBootstrap vet ./...
+      - name: Test native release and service observation contracts
+        run: |
+          sudo env PYTHONPATH="$GITHUB_WORKSPACE/src/Operations.Native:$GITHUB_WORKSPACE/src/Operations.Deployment:$GITHUB_WORKSPACE/deployments/production:$GITHUB_WORKSPACE/tests/Operations.NativeTests" \
+            python3 -m unittest discover -s tests/Operations.NativeTests
+      - name: Test native deployment, supervision and frontend recovery
+        run: |
+          for suite in Operations.DeploymentTests Operations.MonitoringTests Deployment.FrontendTests Operations.Backups.Tests; do
+            sudo env PYTHONPATH="$GITHUB_WORKSPACE/src/Operations.Native:$GITHUB_WORKSPACE/src/Operations.Deployment:$GITHUB_WORKSPACE/src/Operations.Monitoring:$GITHUB_WORKSPACE/src/Operations.Frontend:$GITHUB_WORKSPACE/src/Operations.Backups:$GITHUB_WORKSPACE/deployments/production:$GITHUB_WORKSPACE/tests/Native.OperationsTests:$GITHUB_WORKSPACE/tests/$suite" \
+              python3 -m unittest discover -s "tests/$suite"
+          done
+      - name: Test coordinated traffic isolation in private Linux namespaces
+        run: |
+          sudo env MONKADO_TEST_NFT=/usr/sbin/nft \
+            unshare -m -n --propagation private bash tests/Operations.DeploymentTests/native_coordinated_gate.sh
+      - name: Test native performance orchestration and request accounting
+        # The serving proxy is exercised with continuous requests in a private namespace.
+        run: |
+          PYTHONPATH="$GITHUB_WORKSPACE/src/Operations.Performance" python3 -m unittest discover -s tests/Operations.PerformanceTests
+          node --experimental-vm-modules --test tests/Operations.PerformanceTests/test_scenarios.mjs
+      - name: Verify uninterrupted native HTTP during rolling API replacement
+        run: |
+          sudo env MONKADO_ONLINE_HTTP_TESTS=1 MONKADO_TEST_CADDY="$(command -v caddy)" \
+            PYTHONPATH="$GITHUB_WORKSPACE/src/Operations.Native:$GITHUB_WORKSPACE/src/Operations.Deployment:$GITHUB_WORKSPACE/src/Operations.Frontend:$GITHUB_WORKSPACE/deployments/production:$GITHUB_WORKSPACE/tests/Operations.DeploymentTests" \
+            unshare -n python3 tests/Operations.DeploymentTests/test_online_continuity.py
+      - name: Test guarded Cloudflare fetch and local browser relay contracts
+        run: |
+          node --test src/Tools.CloudflareWishImport/*.test.mjs
+          node --test prototypes/wish-import-direct/campaign/report.test.cjs
+      - name: Test backup installer in a private native mount namespace
+        run: |
+          sudo env MONKADO_NATIVE_BACKUP_INSTALL_TESTS=1 \
+            PYTHONPATH="$GITHUB_WORKSPACE/src/Operations.Backups:$GITHUB_WORKSPACE/src/Operations.Native:$GITHUB_WORKSPACE/src/Operations.Deployment:$GITHUB_WORKSPACE/deployments/production" \
+            python3 -m unittest discover -s tests/Operations.Backups.Tests -p test_install_sandbox.py
+      - name: Reuse recent verification for identical Go sources
+        id: go-proof
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/reuse_go_verification.py
+      - name: Test native PostgreSQL and concurrency
+        if: steps.go-proof.outputs.reused != 'true'
+        run: |
+          go test -race -timeout=25m -tags=integration -covermode=atomic -coverpkg=github.com/JennGllg/mon-kado/... -coverprofile=coverage.out ./...
+          go -C src/Tools.GmailOAuthBootstrap test -race -coverprofile=coverage.out ./...
+      - name: Record successful Go verification without extending an earlier proof
+        if: steps.go-proof.outputs.reused != 'true'
+        run: python3 scripts/reuse_go_verification.py --record
+      - name: Check known reachable vulnerabilities
+        run: |
+          go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
+          cd src/Tools.GmailOAuthBootstrap
+          go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
+      - name: Verify native API and worker browser journeys and graceful shutdown
+        run: sudo env "PATH=$PATH" bash tests/Native.ProcessTests/run.sh coverage.native.out
+      - name: Merge coverage paths for SonarQube Cloud
+        shell: pwsh
+        run: ./scripts/Merge-GoCoverage.ps1 -Paths @('coverage.out', 'src/Tools.GmailOAuthBootstrap/coverage.out', 'coverage.native.out')
+      - name: Build native binaries without CGO
+        env:
+          CGO_ENABLED: '0'
+        run: |
+          mkdir -p artifacts
+          for app in api worker migrate; do
+            go build -trimpath -ldflags="-s -w -X github.com/JennGllg/mon-kado/internal/buildinfo.Revision=$GITHUB_SHA" -o artifacts/$app ./cmd/$app
+          done
+          go -C src/Tools.GmailOAuthBootstrap build -trimpath -ldflags='-s -w' -o ../../artifacts/gmail-oauth-bootstrap .
+      - name: Verify real native HTTPS, frontend activation, installers and bounded monitoring
+        run: sudo env "PATH=$PATH" MONKADO_NATIVE_BINARIES="$GITHUB_WORKSPACE/artifacts" bash scripts/Test-NativeOperations.sh
+      - name: Restore the complete Go schema with isolated native PostgreSQL
+        run: |
+          sudo env MONKADO_NATIVE_BACKUP_TESTS=1 MONKADO_NATIVE_MIGRATOR="$GITHUB_WORKSPACE/artifacts/migrate" \
+            PYTHONPATH="$GITHUB_WORKSPACE/src/Operations.Backups:$GITHUB_WORKSPACE/src/Operations.Native:$GITHUB_WORKSPACE/src/Operations.Deployment:$GITHUB_WORKSPACE/deployments/production" \
+            python3 -m unittest discover -s tests/Operations.Backups.Tests -p test_native_postgres.py
+      - name: Enforce coverage target
+        shell: pwsh
+        run: |
+          ./scripts/Test-GoCoverage.ps1 -Path coverage.out
+          ./scripts/Test-GoCoverage.ps1 -Path src/Tools.GmailOAuthBootstrap/coverage.out
+      - name: Analyze Go with SonarQube Cloud
+        if: >-
+          (github.event_name == 'push' && github.ref == 'refs/heads/develop') ||
+          (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)
+        uses: SonarSource/sonarqube-scan-action@a31c9398be7ace6bbfaf30c0bd5d415f843d45e9 # v7.0.0, native action
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        with:
+          args: >-
+            -Dsonar.projectKey=${{ vars.SONAR_PROJECT_KEY }}
+            -Dsonar.organization=${{ vars.SONAR_ORGANIZATION }}
+            -Dsonar.host.url=https://sonarcloud.io
+            -Dsonar.sources=cmd,internal,src/Tools.GmailOAuthBootstrap
+            -Dsonar.tests=cmd,internal,src/Tools.GmailOAuthBootstrap
+            -Dsonar.test.inclusions=**/*_test.go
+            -Dsonar.exclusions=**/*_test.go,internal/persistence/migrations/**
+            -Dsonar.go.coverage.reportPaths=coverage.sonar.out
+            -Dsonar.qualitygate.wait=true
+            -Dsonar.qualitygate.timeout=300
+      - name: Upload qualified edge executable and scan evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: qualified-caddy-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/monkado-native-tools/caddy
+            ${{ runner.temp }}/monkado-native-tools/caddy.sha256
+            ${{ runner.temp }}/monkado-native-tools/caddy-vulnerabilities.json
+            ${{ runner.temp }}/monkado-native-tools/caddy-dependencies.txt
+          if-no-files-found: error
+      - name: Upload native binaries and coverage
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: native-go-build
+          path: |
+            artifacts/
+            coverage.out
+            coverage.sonar.out
+            coverage.native.out
+            go-verification.json
+            src/Tools.GmailOAuthBootstrap/coverage.out
+          if-no-files-found: error
+          retention-days: 7

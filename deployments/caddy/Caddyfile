@@ -1,0 +1,62 @@
+{
+	servers {
+		strict_sni_host
+	}
+}
+
+# The installer leaves this directory empty until the frontend is configured.
+import /opt/monkado/deployments/caddy/frontend/*.caddy
+
+:80 {
+	header -Server
+	header Cache-Control "no-store"
+	respond "Unknown host." 404
+}
+
+(api-security-headers) {
+	header {
+		-Server
+		>Strict-Transport-Security "max-age=31536000"
+		>Content-Security-Policy "default-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+		>X-Content-Type-Options "nosniff"
+		>X-Frame-Options "DENY"
+		>Referrer-Policy "no-referrer"
+		>Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		>Cross-Origin-Resource-Policy "same-site"
+	}
+}
+
+{$API_HOST} {
+	import api-security-headers
+	@blue file {
+		root /var/lib/monkado-routing
+		try_files blue
+	}
+	handle @blue {
+		reverse_proxy 127.0.0.1:7000 127.0.0.1:7001 {
+			lb_policy first
+			lb_try_duration 5s
+			lb_try_interval 50ms
+			fail_duration 1s
+			transport http {
+				keepalive off
+			}
+		}
+	}
+	handle {
+		reverse_proxy 127.0.0.1:7001 127.0.0.1:7000 {
+			lb_policy first
+			lb_try_duration 5s
+			lb_try_interval 50ms
+			fail_duration 1s
+			transport http {
+				keepalive off
+			}
+		}
+	}
+	handle_errors {
+		import api-security-headers
+		header Cache-Control "no-store"
+		respond "Upstream service unavailable." {err.status_code}
+	}
+}

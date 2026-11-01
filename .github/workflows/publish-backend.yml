@@ -1,0 +1,164 @@
+name: Deploy backend main to VPS
+
+on:
+  workflow_run:
+    workflows: [CI, CodeQL]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      rollback_allowed:
+        description: 'Previous application remains compatible with files and data written by this release (unchanged schema only)'
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backend-production-publication
+  cancel-in-progress: false
+
+jobs:
+  ready:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' || github.event_name == 'workflow_run' && github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.head_repository.full_name == github.repository && github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      publish: ${{ steps.check.outputs.publish }}
+      revision: ${{ steps.check.outputs.revision }}
+      ci_run: ${{ steps.check.outputs.ci_run }}
+    steps:
+      - id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REVISION: ${{ github.event.workflow_run.head_sha || github.sha }}
+          MANUAL: ${{ github.event_name == 'workflow_dispatch' }}
+        run: |
+          set -euo pipefail
+          echo 'publish=false' >> "$GITHUB_OUTPUT"
+          test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq .object.sha)" = "$REVISION" || exit 0
+          for workflow in ci.yml codeql.yml; do
+            result=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/$workflow/runs?head_sha=$REVISION&branch=main&per_page=100" --jq '[.workflow_runs[] | select(.event == "push" or .event == "workflow_dispatch")] | sort_by(.run_number) | last | .conclusion')
+            test "$result" = success || exit 0
+          done
+          if [ "$MANUAL" != true ]; then
+            published=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/backend-production" --jq '.body | fromjson | .revision')
+            test "$published" != "$REVISION" || exit 0
+          fi
+          echo "revision=$REVISION" >> "$GITHUB_OUTPUT"
+          ci_run=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$REVISION&branch=main&per_page=100" --jq '[.workflow_runs[] | select(.event == "push" or .event == "workflow_dispatch")] | sort_by(.run_number) | last | .id')
+          echo "ci_run=$ci_run" >> "$GITHUB_OUTPUT"
+          echo 'publish=true' >> "$GITHUB_OUTPUT"
+  publish:
+    needs: ready
+    if: needs.ready.outputs.publish == 'true'
+    env:
+      RELEASE_REVISION: ${{ needs.ready.outputs.revision }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production
+    permissions:
+      actions: read
+      contents: write
+    steps:
+      - name: Check out approved revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.ready.outputs.revision }}
+          persist-credentials: false
+      - name: Require production protection and green checks for this exact revision
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'jenngllg/mon-kado'
+          test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq .object.sha)" = "$RELEASE_REVISION"
+          gh api "repos/$GITHUB_REPOSITORY/environments/production" \
+            --jq '.protection_rules | any(.type == "required_reviewers" and (.reviewers | length > 0))' | grep -x true
+          for workflow in ci.yml codeql.yml; do
+            gh api "repos/$GITHUB_REPOSITORY/actions/workflows/$workflow/runs?head_sha=$RELEASE_REVISION&branch=main&per_page=100" \
+              --jq '[.workflow_runs[] | select(.event == "push" or .event == "workflow_dispatch")] | sort_by(.run_number) | last | .conclusion' \
+              | grep -x success
+          done
+          # Bind every matrix analysis to the successful CodeQL run for this revision.
+          codeql_run=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/codeql.yml/runs?head_sha=$RELEASE_REVISION&branch=main&per_page=100" \
+            --jq '[.workflow_runs[] | select(.event == "push" or .event == "workflow_dispatch")] | sort_by(.run_number) | last | .id')
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$codeql_run/jobs?filter=latest&per_page=100" \
+            --jq '[.jobs[] | select(.name | startswith("Analyze ("))] | sort_by(.name) | (map(.name) == ["Analyze (actions)", "Analyze (go)", "Analyze (javascript-typescript)", "Analyze (python)"]) and all(.conclusion == "success")' | grep -x true
+      - name: Reuse the binaries from this exact successful CI run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CI_RUN: ${{ needs.ready.outputs.ci_run }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh run download "$CI_RUN" --repo "$GITHUB_REPOSITORY" --name native-go-build --dir "$RUNNER_TEMP/qualified-ci"
+          mkdir -p "$RUNNER_TEMP/native-release"
+          for component in api worker migrate; do
+            install -m 0755 "$RUNNER_TEMP/qualified-ci/artifacts/$component" "$RUNNER_TEMP/native-release/monkado-$component-linux-amd64"
+            "$RUNNER_TEMP/native-release/monkado-$component-linux-amd64" --version \
+              | jq -e --arg revision "$RELEASE_REVISION" '.schemaVersion == 1 and .revision == $revision and .os == "linux" and .architecture == "amd64"'
+          done
+          "$RUNNER_TEMP/native-release/monkado-migrate-linux-amd64" --catalog > "$RUNNER_TEMP/native-release/migration-catalog.json"
+          python3 src/Operations.Deployment/release_catalog.py internal/persistence/migrations > "$RUNNER_TEMP/source-catalog.json"
+          jq -S . "$RUNNER_TEMP/source-catalog.json" > "$RUNNER_TEMP/source-catalog.sorted.json"
+          jq -S . "$RUNNER_TEMP/native-release/migration-catalog.json" > "$RUNNER_TEMP/binary-catalog.sorted.json"
+          cmp "$RUNNER_TEMP/source-catalog.sorted.json" "$RUNNER_TEMP/binary-catalog.sorted.json"
+          (cd "$RUNNER_TEMP/native-release" && sha256sum monkado-*-linux-amd64 migration-catalog.json > SHA256SUMS)
+      - name: Publish approved immutable artifacts and promotion pointer
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ROLLBACK_ALLOWED: ${{ github.event_name == 'workflow_run' || inputs.rollback_allowed }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          configuration_hash=$(python3 deployments/production/release_manifest.py hash)
+          export CONFIGURATION_HASH="$configuration_hash"
+          export PUBLICATION_ID="$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          export RELEASE_TAG="backend-$RELEASE_REVISION-$PUBLICATION_ID"
+          python3 - <<'PY'
+          import hashlib, json, os, pathlib, sys
+          sys.path[:0] = ['src/Operations.Deployment', 'deployments/production']
+          from release_catalog import fingerprint
+          from release_manifest import validate
+          root = pathlib.Path(os.environ['RUNNER_TEMP']) / 'native-release'
+          catalog = json.loads((root / 'migration-catalog.json').read_bytes())
+          binaries = {}
+          for component in ('api', 'worker', 'migrate'):
+              name = f'monkado-{component}-linux-amd64'
+              body = (root / name).read_bytes()
+              binaries[component] = {
+                  'url': f'https://github.com/jenngllg/mon-kado/releases/download/{os.environ["RELEASE_TAG"]}/{name}',
+                  'sha256': hashlib.sha256(body).hexdigest(), 'size': len(body)}
+          manifest = {'schemaVersion': 3, 'revision': os.environ['RELEASE_REVISION'],
+              'configurationHash': os.environ['CONFIGURATION_HASH'], 'publicationId': os.environ['PUBLICATION_ID'],
+              'migrationCatalog': catalog, 'migrationHash': fingerprint(catalog),
+              'rollbackAllowed': os.environ['ROLLBACK_ALLOWED'] == 'true', 'binaries': binaries}
+          validate(manifest, os.environ['CONFIGURATION_HASH'])
+          (root / 'backend-manifest.json').write_text(json.dumps(manifest, sort_keys=True), encoding='utf-8')
+          PY
+          # Never overwrite assets on an immutable publication tag.
+          gh release create "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --target "$RELEASE_REVISION" \
+            --title "Native backend $PUBLICATION_ID" --notes-file "$RUNNER_TEMP/native-release/backend-manifest.json" \
+            --latest=false "$RUNNER_TEMP/native-release/"*
+          # Move the approved channel only after all immutable artifacts were published.
+          if gh release view backend-production --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release edit backend-production --repo "$GITHUB_REPOSITORY" \
+              --notes-file "$RUNNER_TEMP/native-release/backend-manifest.json" --latest=false
+          else
+            gh release create backend-production --repo "$GITHUB_REPOSITORY" --target "$RELEASE_REVISION" \
+              --title 'Approved native backend production release' --notes-file "$RUNNER_TEMP/native-release/backend-manifest.json" --latest=false
+          fi
+          echo 'Native binaries published. This job does not confirm a successful VPS rollout.' >> "$GITHUB_STEP_SUMMARY"
+      - name: Deploy the approved main revision to the VPS
+        env:
+          VPS_DEPLOY_KEY: ${{ secrets.VPS_DEPLOY_SSH_KEY }}
+          VPS_HOST: ${{ vars.VPS_HOST }}
+          VPS_USER: ${{ vars.VPS_USER }}
+          VPS_KNOWN_HOSTS: ${{ vars.VPS_SSH_KNOWN_HOSTS }}
+        run: bash scripts/Deploy-MainVPS.sh "$RELEASE_REVISION"

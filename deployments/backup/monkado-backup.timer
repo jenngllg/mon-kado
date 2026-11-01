@@ -1,0 +1,11 @@
+[Unit]
+Description=Capture MonKado nightly at 03:00 Paris time
+
+[Timer]
+OnCalendar=*-*-* 03:00:00 Europe/Paris
+Persistent=false
+AccuracySec=1min
+Unit=monkado-backup.service
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# Root-only administration, with no inherited Python module or Docker overrides.
+set -Eeuo pipefail
+umask 077
+[[ $EUID -eq 0 ]] || { echo 'Run with sudo.' >&2; exit 1; }
+exec env -i PATH=/usr/bin:/bin:/usr/sbin:/sbin LANG=C.UTF-8 \
+    /usr/bin/python3 /opt/monkado/src/Operations.Deployment/deploy_cli.py "$@"

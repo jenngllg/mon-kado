@@ -1,0 +1,8 @@
+[run]
+branch = True
+relative_files = True
+source = src/Operations.Deployment
+
+[report]
+fail_under = 100
+show_missing = True

@@ -1,0 +1,41 @@
+# Local secrets, runtime data and portable development toolchains
+.local/
+.env
+.env.*
+!.env.example
+*-implementation-plan.md
+# Native build and test outputs
+artifacts/
+coverage*.out
+coverage*.html
+*.exe
+*.test
+*.log
+*.tmp
+# Existing local tools and editor/build caches
+bin/
+obj/
+.vs/
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+.idea/
+.codex-temp/
+*.user
+*.suo
+*.code-workspace
+node_modules/
+__pycache__/
+*.pyc
+[Tt]est[Rr]esult*/
+[Bb]in/
+[Oo]bj/
+# Private certificates and credential files
+*.pfx
+*.p12
+*.key
+credentials*.json
+# A short-lived CI proof is uploaded as an artifact, never committed.
+/go-verification.json

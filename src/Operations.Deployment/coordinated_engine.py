@@ -1,0 +1,187 @@
+"""Durable sequencing for a verified backend/frontend pair.
+
+The runtime owns all effect-specific validation, including the backup proof,
+immutable manifests, exclusive locks and maintenance gate. This module never
+interprets a revision as proof of compatibility and does not run migrations.
+"""
+
+import copy
+
+
+class ForwardEngine:
+    """Complete a schema-changing pair without ever rolling back its database.
+
+    The existing boot guard closes traffic for this journal, including malformed
+    intent. Recovery uses the pinned candidate and verifies it before reopening.
+    """
+
+    def __init__(self, store, runtime):
+        self.store = store
+        self.runtime = runtime
+
+    def deploy(self, previous, candidate, backup):
+        """Record a fully checked candidate before closing public traffic."""
+        if self.store.load() is not None:
+            raise TransitionError("RECOVERY_REQUIRED")
+        self.runtime.preflight(previous, candidate, backup)
+        intent = {"version": 2, "phase": "prepared", "previous": copy.deepcopy(previous),
+                  "candidate": copy.deepcopy(candidate), "backup": backup,
+                  "frontendBackup": None, "toolDigest": self.runtime.tool_digest()}
+        self.runtime.validate_intent(intent)
+        self.store.save(intent)
+        return self._complete(intent)
+
+    def recover(self):
+        """Resume explicit recovery of this exact candidate; never resolve a new pointer."""
+        intent = self.store.load()
+        if intent is None:
+            return "nothingToRecover"
+        self.runtime.validate_intent(intent)
+        return self._complete(intent)
+
+    def _phase(self, intent, phase):
+        intent["phase"] = phase
+        self.runtime.validate_intent(intent)
+        self.store.save(intent)
+
+    def _complete(self, intent):
+        # Every effect can have completed before an acknowledgement was lost.
+        # Repeated stages must reconcile actual artifacts, SQL history and bytes.
+        self.runtime.close_gate()
+        try:
+            if intent["phase"] != "committed":
+                self._phase(intent, "installingBackend")
+                self.runtime.install_backend(intent["candidate"])
+                if intent["frontendBackup"] is None:
+                    self._phase(intent, "capturingFrontendBackup")
+                    intent["frontendBackup"] = self.runtime.capture_frontend_backup(intent["candidate"])
+                    self.runtime.validate_intent(intent)
+                    self.store.save(intent)
+                self._phase(intent, "installingFrontend")
+                self.runtime.install_frontend(intent["candidate"])
+                self._phase(intent, "verifyingCandidate")
+                self.runtime.verify_pair(intent["candidate"])
+                self._phase(intent, "committed")
+            else:
+                self.runtime.verify_pair(intent["candidate"])
+            self.runtime.open_gate()
+            self.store.complete(intent)
+            self.store.clear()
+            return "installed"
+        except Exception:
+            # No rollback can safely run after a schema change. Preserve both
+            # the journal and the gate for an explicit forward recovery.
+            self.runtime.close_gate()
+            raise TransitionError("FORWARD_RECOVERY_REQUIRED") from None
+
+
+class TransitionError(Exception):
+    """Report an incomplete transition without exposing provider data."""
+
+
+class CoordinatedEngine:
+    """Coordinate a pair under an already-held exclusive deployment lock.
+
+    Runtime methods are idempotent: after a process interruption, an operation
+    may have taken effect even when its return value was never observed. The
+    store persists and fsyncs intent before each external effect.
+    """
+
+    def __init__(self, store, runtime):
+        self.store = store
+        self.runtime = runtime
+
+    def deploy(self, previous, candidate, backup):
+        """Install a previously approved pair or leave recoverable intent."""
+        if self.store.load() is not None:
+            raise TransitionError("RECOVERY_REQUIRED")
+        previous, candidate = copy.deepcopy(previous), copy.deepcopy(candidate)
+        # No persistent intent or maintenance until every preflight succeeds.
+        self.runtime.preflight(previous, candidate, backup)
+        intent = {"version": 1, "phase": "prepared", "previous": previous,
+                  "candidate": candidate, "backup": backup, "frontendBackup": None,
+                  "toolDigest": self.runtime.tool_digest()}
+        self.runtime.validate_intent(intent)
+        self.store.save(intent)
+        try:
+            self._install(intent)
+            return {"backendSnapshot": intent["backup"], "frontendSnapshot": intent["frontendBackup"]}
+        except Exception as error:
+            if intent["phase"] == "committed":
+                # The candidate may already be live or its receipt durable. Do
+                # not silently reverse a committed pair after an uncertain
+                # acknowledgement; retain intent for explicit reconciliation.
+                try:
+                    self.runtime.close_gate()
+                except Exception:
+                    pass
+                raise TransitionError("RECOVERY_REQUIRED") from error
+            try:
+                self._restore(intent)
+            except Exception:
+                raise TransitionError("RECOVERY_REQUIRED") from None
+            raise TransitionError("TRANSITION_ROLLED_BACK") from error
+
+    def recover(self):
+        """Reconcile interrupted effects before permitting any new transition."""
+        intent = self.store.load()
+        if intent is None:
+            return "nothingToRecover"
+        self.runtime.validate_intent(intent)
+        if intent["phase"] == "committed":
+            try:
+                self.runtime.close_gate()
+                self.runtime.verify_pair(intent["candidate"])
+                self.runtime.open_gate()
+            except Exception:
+                # A committed candidate is not trusted after a failed recheck.
+                self._restore(intent)
+                return "rolledBack"
+            try:
+                self.store.complete(intent)
+                self.store.clear()
+            except Exception:
+                try:
+                    self.runtime.close_gate()
+                except Exception:
+                    pass
+                raise TransitionError("RECOVERY_REQUIRED") from None
+            return "completed"
+        self._restore(intent)
+        return "rolledBack"
+
+    def _save_phase(self, intent, phase):
+        intent["phase"] = phase
+        self.runtime.validate_intent(intent)
+        self.store.save(intent)
+
+    def _install(self, intent):
+        self._save_phase(intent, "closingGate")
+        self.runtime.close_gate()
+        self._save_phase(intent, "installingBackend")
+        self.runtime.install_backend(intent["candidate"])
+        # The frontend is a separate production change and needs its own new
+        # coherent, verified offsite snapshot after the backend rollout.
+        self._save_phase(intent, "capturingFrontendBackup")
+        intent["frontendBackup"] = self.runtime.capture_frontend_backup(intent["candidate"])
+        self.runtime.validate_intent(intent)
+        self._save_phase(intent, "installingFrontend")
+        self.runtime.install_frontend(intent["candidate"])
+        self._save_phase(intent, "verifyingCandidate")
+        self.runtime.verify_pair(intent["candidate"])
+        # A crash before this durable commit must restore the old pair.
+        self._save_phase(intent, "committed")
+        self.runtime.open_gate()
+        self.store.complete(intent)
+        self.store.clear()
+
+    def _restore(self, intent):
+        # Close first even if the recorded phase predates closing: an operation
+        # may have succeeded before the process lost its acknowledgement.
+        self._save_phase(intent, "recovering")
+        self.runtime.close_gate()
+        self.runtime.restore_backend(intent["previous"])
+        self.runtime.restore_frontend(intent["previous"])
+        self.runtime.verify_pair(intent["previous"])
+        self.runtime.open_gate()
+        self.store.clear()
