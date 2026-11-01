@@ -30,7 +30,7 @@ func TestExports_WhenImagesAndPrivateReservationsExist_IncludesOwnedImagesWithou
 	var list domain.WishlistResponse
 	requireStatus(t, f.send(t, "POST", "/api/v1/wishlists", `{"name":"Illustrated list","occasion":"other"}`, nil), 201, &list)
 	var wish domain.WishResponse
-	created := f.send(t, "POST", "/api/v1/wishlists/"+list.Id+"/wishes", `{"name":"Illustrated gift"}`, nil)
+	created := f.send(t, "POST", "/api/v1/wishlists/"+list.Id+"/wishes", `{"name":"Illustrated gift","isFavorite":true}`, nil)
 	etag = created.Header.Get("ETag")
 	requireStatus(t, created, 201, &wish)
 	requireStatus(t, f.upload(t, "/api/v1/wishlists/"+list.Id+"/wishes/"+wish.Id+"/image", etag, 99), 200, nil)
@@ -97,6 +97,14 @@ func TestExports_WhenImagesAndPrivateReservationsExist_IncludesOwnedImagesWithou
 	profile, ok := account["profile"].(map[string]any)
 	if !ok || profile["isVisibleInMemberSearch"] != false {
 		t.Fatal("export omitted the saved member search preference")
+	}
+	wishes, ok := document["wishes"].([]any)
+	if !ok || len(wishes) != 1 {
+		t.Fatal("owned wish export missing")
+	}
+	exportedWish, ok := wishes[0].(map[string]any)
+	if !ok || exportedWish["isFavorite"] != true {
+		t.Fatal("export omitted the saved favorite preference")
 	}
 	for _, key := range []string{"participations", "reservations", "reservationHistory"} {
 		items, valid := document[key].([]any)

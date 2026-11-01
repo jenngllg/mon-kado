@@ -23,7 +23,7 @@ func (s *Service) groupProfileImageURL(member, group, image string) (string, err
 	return "/api/v1/groups/" + group + "/image?token=" + url.QueryEscape(token), err
 }
 
-// GroupProfileImage replaces or removes a group photo using the owner's current group version.
+// GroupProfileImage replaces or removes a group photo using the current group version.
 func (s *Service) GroupProfileImage(ctx context.Context, member, group string, source []byte, expected uint32, remove bool) (domain.GroupResponse, uint32, error) {
 	var normalized images.Result
 	var image *string
@@ -42,7 +42,7 @@ func (s *Service) GroupProfileImage(ctx context.Context, member, group string, s
 		}
 	}
 	err = s.Store.Transaction(ctx, func(tx pgx.Tx) error {
-		_, current, err := s.lockGroup(ctx, tx, member, group, true)
+		_, current, err := s.lockGroup(ctx, tx, member, group)
 		if err != nil {
 			return err
 		}

@@ -22,8 +22,10 @@ if ($Race) {
     $toolArguments += '-race'
 }
 if ($Coverage) {
-    $arguments += @('-covermode=atomic', '-coverpkg=github.com/JennGllg/mon-kado/...', '-coverprofile=coverage.out')
-    $toolArguments += '-coverprofile=coverage.out'
+    # Execute every instrumented package so cached test summaries cannot omit
+    # its counters from the combined cross-package coverage profile.
+    $arguments += @('-count=1', '-covermode=atomic', '-coverpkg=github.com/JennGllg/mon-kado/...', '-coverprofile=coverage.out')
+    $toolArguments += @('-count=1', '-coverprofile=coverage.out')
 }
 Invoke-NativeGo ($arguments + './...')
 Invoke-NativeGo ($toolArguments + './...')

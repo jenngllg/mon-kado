@@ -200,6 +200,8 @@ func (w *Worker) cleanupAuthentication(ctx context.Context) error {
 	}
 	w.Telemetry.RecordTerminalFailures(telemetry.AuthenticationEmailDelivery, command.RowsAffected())
 	for _, item := range []struct{ Table, Predicate string }{
+		{"administrator_impersonations", `ended_at<=$1::timestamptz-interval '90 days'`},
+		{"member_activity_events", `occurred_at<=$1::timestamptz-interval '90 days'`},
 		{"authentication_access_tokens", `expires_at<=$1`},
 		{"authentication_sessions", `expires_at<=$1 OR revoked_at<=$1::timestamptz-interval '30 days'`},
 		{"guest_sessions", `expires_at<=$1`},

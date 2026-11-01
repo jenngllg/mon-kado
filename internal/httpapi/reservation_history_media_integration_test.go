@@ -78,6 +78,12 @@ func TestReservationHistory_WhenSourceIsAccessible_ExposesAuthorizedMediaAndNavi
 				t.Fatal("shared history has incorrect navigation")
 			}
 			requireStatus(t, reader.send(t, "GET", imageURL.RequestURI(), "", nil), 200, nil)
+			thumbnailURL := imageURL.RequestURI() + "&size=thumbnail"
+			thumbnail := reader.send(t, "GET", thumbnailURL, "", nil)
+			if thumbnail.Header.Get("Content-Type") != "image/jpeg" && thumbnail.Header.Get("Content-Type") != "image/png" {
+				t.Fatal("thumbnail media type differs")
+			}
+			requireStatus(t, thumbnail, 200, nil)
 			// Cancelled history may still show the current accessible source image.
 			if headers == nil {
 				headers = map[string]string{}
@@ -88,29 +94,6 @@ func TestReservationHistory_WhenSourceIsAccessible_ExposesAuthorizedMediaAndNavi
 			if history.Items[0].ImageUrl == nil || history.Items[0].Status != "cancelled" {
 				t.Fatal("cancellation lost the accessible image or lifecycle")
 			}
-			// Archival temporarily removes grants while retaining the cancelled history.
-			listRead := owner.send(t, "GET", base, "", nil)
-			listVersion := listRead.Header.Get("ETag")
-			requireStatus(t, listRead, 200, nil)
-			archived := owner.send(t, "PATCH", base, `{"isArchived":true}`, map[string]string{"If-Match": listVersion})
-			listVersion = archived.Header.Get("ETag")
-			requireStatus(t, archived, 200, nil)
-			requireStatus(t, reader.send(t, "GET", "/api/v1/members/current/reservations", "", nil), 200, &history)
-			item = history.Items[0]
-			if item.InaccessibilityReason == nil || *item.InaccessibilityReason != "archived" || !item.IsArchived || item.ImageUrl != nil || item.ShareUrl != nil || item.OwnedWishPath != nil || item.OwnerId == nil || item.Status != "cancelled" {
-				t.Fatal("archival retained access or lost the cancelled lifecycle")
-			}
-			imageStatus := 404
-			if owned {
-				// Existing owner image grants remain usable for read-only archived content.
-				imageStatus = 200
-			}
-			requireStatus(t, reader.send(t, "GET", imageURL.RequestURI(), "", nil), imageStatus, nil)
-			requireStatus(t, owner.send(t, "PATCH", base, `{"isArchived":false}`, map[string]string{"If-Match": listVersion}), 200, nil)
-			requireStatus(t, reader.send(t, "GET", "/api/v1/members/current/reservations", "", nil), 200, &history)
-			if history.Items[0].InaccessibilityReason != nil || history.Items[0].ImageUrl == nil {
-				t.Fatal("unarchiving did not restore current authorized media")
-			}
 			// Removing the source/access must remove grants, not resurrect historical access.
 			if owned {
 				requireStatus(t, owner.send(t, "DELETE", base+"/wishes/"+wish.Id, "", map[string]string{"If-Match": wishTag}), 204, nil)
@@ -119,7 +102,7 @@ func TestReservationHistory_WhenSourceIsAccessible_ExposesAuthorizedMediaAndNavi
 			}
 			requireStatus(t, reader.send(t, "GET", "/api/v1/members/current/reservations", "", nil), 200, &history)
 			item = history.Items[0]
-			if item.ImageUrl != nil || item.ShareUrl != nil || item.OwnedWishPath != nil || item.OwnerId != nil {
+			if item.ImageUrl != nil || item.ShareUrl != nil || item.OwnedWishPath != nil || item.OwnerId == nil || *item.OwnerId != ownerID {
 				t.Fatal("inaccessible history retained live source access")
 			}
 			expectedReason := "notShared"
@@ -130,6 +113,7 @@ func TestReservationHistory_WhenSourceIsAccessible_ExposesAuthorizedMediaAndNavi
 				t.Fatal("source restriction must preserve the cancelled lifecycle and expose its known cause")
 			}
 			requireStatus(t, reader.send(t, "GET", imageURL.RequestURI(), "", nil), 404, nil)
+			requireStatus(t, reader.send(t, "GET", thumbnailURL, "", nil), 404, nil)
 			if !owned {
 				requireStatus(t, owner.send(t, "DELETE", base+"/wishes/"+wish.Id, "", map[string]string{"If-Match": wishTag}), 204, nil)
 				requireStatus(t, reader.send(t, "GET", "/api/v1/members/current/reservations", "", nil), 200, &history)

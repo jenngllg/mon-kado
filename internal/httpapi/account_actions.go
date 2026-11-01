@@ -9,9 +9,9 @@ import (
 )
 
 func (a *API) accountRoutes() {
-	a.route("GET /api/v1/members/{memberId}/profile", options{Rate: 60}, func(r *request) (response, error) {
+	a.route("GET /api/v1/members/{memberId}/profile", options{Rate: 60, EmptyIDIsBadRequest: true}, func(r *request) (response, error) {
 		result, err := a.Service.PublicMemberProfile(r.Context(), r.PathValue("memberId"))
-		return response{Body: result}, err
+		return response{Body: &result}, err
 	})
 	a.route("GET /api/v1/members", options{Rate: 60}, func(r *request) (response, error) {
 		page, size, err := pagination(r)
@@ -19,7 +19,8 @@ func (a *API) accountRoutes() {
 			return response{}, err
 		}
 		name := strings.TrimSpace(r.URL.Query().Get("displayName"))
-		if utf8.RuneCountInString(name) < 2 || !validation.Text(name, 80, false) {
+		base, tag := domain.SplitMemberHandle(name)
+		if (tag == "" && utf8.RuneCountInString(base) < 2) || !validation.Text(base, 80, false) {
 			return response{}, &domain.Error{Status: 400, Code: domain.RequestValidationError, Message: "The search term is invalid.", Validation: []domain.ValidationError{{PropertyName: "displayName", ErrorMessage: "The display name search must contain between 2 and 80 characters."}}}
 		}
 		result, err := a.Service.SearchMembers(r.Context(), name, page, size)

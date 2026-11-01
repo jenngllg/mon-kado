@@ -1,11 +1,9 @@
-# Instructions du dépôt MonKado
+# Instructions du backend MonKado
+
+Lire et appliquer [AGENTS.shared.md](AGENTS.shared.md), qui regroupe les règles communes à MonKado et complète les préférences globales de Jenn dans `~/.codex/AGENTS.md`. Ce fichier contient les règles propres au backend.
 
 ## Technologie et organisation
 
-- Le frontend principal est le dépôt voisin `../mon-kado-front`. Appliquer les changements frontend et démarrer son serveur depuis ce dépôt, jamais depuis une copie sous les résultats de tests du backend.
-
-- Le backend est en Go. Exécuter PostgreSQL, API, worker, outils et tests nativement ; utiliser Docker uniquement si un besoin concret le rend nécessaire et expliquer ce besoin.
-- Conserver les contrats HTTP/JSON, règles d'accès et invariants métier lors d'un changement technique.
 - Garder `GmailOAuthBootstrap` dans `src/Tools.GmailOAuthBootstrap` comme module autonome, sans déplacement sans demande explicite de Jenn. Les outils autonomes appelant un provider externe restent sous `src/`.
 - Préserver les audits historiques et les prototypes ; ils ne sont pas nécessaires au backend Go.
 - Ne pas réintroduire les anciens outils .NET de gestion de disque ni leurs garde-fous MSBuild, supprimés à la demande de Jenn.
@@ -25,15 +23,14 @@
 - Création : 201, Location et DTO complet. Modification : 200 et DTO complet. Suppression/commande sans résultat utile : 204 sans corps.
 - Ressource absente, y compris DELETE : 404. Conflit métier : 409. Non authentifié : 401. Authentifié sans droit sur une ressource divulguable : 403.
 - Une ressource privée étrangère retourne 404 ; centraliser l'autorisation et ne jamais considérer un UUID comme une autorisation.
-- Administration : booléen `users.is_admin` vivant en base, exposé comme `isAdmin`, et session vérifiée avec la double authentification courante. Aucun rôle textuel ni secours par nom de rôle dans l'application ou le frontend ; conserver les migrations et preuves historiques. Révocation/suppression des comptes auditées atomiquement.
+- Administration : booléen `users.is_admin` vivant en base, exposé comme `isAdmin`, et session vérifiée avec la double authentification courante. Aucun rôle textuel ni secours par nom de rôle dans l’application ou le frontend ; conserver les migrations et preuves historiques. Révocation/suppression des comptes auditées atomiquement.
 - `ErrorResponse` contient exactement `statusCode`, `title`, `message`, `errorCode`, `validationErrors`. Chaque ValidationError contient exactement `propertyName` et `errorMessage`.
 - Title/Message en anglais ; chaque erreur métier prévisible possède un code stable en UPPER_SNAKE_CASE préfixé par domaine. Le front traduit à partir de ce code.
 - JSON camelCase ; propriétés nullables incluses même à null. Enums en chaînes camelCase ; rejeter nombres et valeurs inconnues avant validation métier.
 - Identifiants membres : pseudo libre avec tag de quatre chiffres attribué automatiquement côté serveur, immuable pendant toute la vie du compte, jamais choisi ni généré dans le front. Afficher le tag pour information dans le profil ; le changement de pseudo ne transmet pas le tag. Garantir l'unicité de l'ensemble pseudo normalisé/tag ; refuser un renommage en conflit plutôt que changer le tag. Ne pas changer les UUID d'autorisation ni les pseudonymes invités.
 - Timestamps UTC sans suffixe Utc ; dates calendaires yyyy-MM-dd. Ne pas convertir les décimales monétaires en flottants binaires.
-- Centraliser les exceptions à la frontière HTTP et documenter statuts, schémas et autorisations dans OpenAPI. Vérifier les contrats avec des assertions ciblées sans snapshots globaux.
+- Centraliser les exceptions à la frontière HTTP et documenter statuts, schémas et autorisations dans OpenAPI.
 - Conserver CSRF, allowlists d'hôtes/origines et cookies de production __Host-, Secure, HttpOnly, SameSite. Faire confiance aux headers de proxy uniquement pour les pairs déclarés dans TRUSTED_PROXIES.
-- Secrets de partage dans les fragments frontend, transmis dans l'en-tête dédié, jamais dans les URLs serveur ou logs.
 
 ## Persistance et fichiers
 
@@ -55,14 +52,10 @@
 - Gmail users.messages.send est un POST sans clé d'idempotence : aucun retry transparent. L'outbox pilote chaque tentative, compteur, échéance, plafond et délai exponentiel.
 - Leases avec FOR UPDATE SKIP LOCKED, renouvellement des exports, identité de lease vérifiée à la finalisation et cycles bornés. Limites/délais configurables et validés au démarrage.
 - Purger les données protégées expirées même si le provider est désactivé ; garder des états terminaux traçables sans exposer de secrets.
-- Imports : refuser les IP privées/spéciales, DNS mixtes et ports interdits, vérifier chaque redirection, épingler l'IP validée et ignorer les proxies de processus.
-- Exception explicitement autorisée par Jenn le 27 octobre 2026 pour le test local Cloudflare, puis étendue à sa demande « cloudflare doit être le principal à chaque fois » : le relais peut accéder en HTTPS à tout domaine marchand public admissible, sans liste fermée de six hôtes. Les anciens liens HTTP utilisent leur équivalent HTTPS pour le relais. Workers choisit son IP finale : le contrôle DNS ne constitue pas un épinglage. Conserver les contrôles de DNS publics complets côté Go et Worker à chaque import, le refus des IP littérales, noms locaux/spéciaux, ports non standards et redirections du relais, son authentification, les limites de taille/délai et l'absence de cookies ou secrets marchands. Cloudflare est prioritaire dès le premier import ; à la demande de Jenn, supprimer le secours direct pour les pages dans ce parcours local, après au plus deux tentatives Cloudflare en cas d'incident temporaire. Le téléchargement direct épinglé des images reste nécessaire. L'épinglage reste obligatoire pour les connexions directes ; le relais de développement est désactivé par défaut et son activation en production doit être refusée. Cette exception reste locale et ne vaut pas autorisation de MEP.
-- Extension explicitement autorisée par Jenn le 27 octobre 2026 pour le secours Firecrawl dans le formulaire local : après Cloudflare (au plus deux tentatives en cas d'incident temporaire), un import encore incomplet ou indisponible peut appeler une seule fois Firecrawl. Le rendu distant choisit ses IP et suit ses redirections en interne ; il ne garantit pas l'épinglage ni le contrôle préalable de chaque saut par MonKado. Contrôler les DNS publics complets de l'URL envoyée et des URLs finales déclarées, conserver l'autorité API fixe avec transport épinglé sans proxy ni redirection, la clé uniquement côté serveur, les limites de taille/délai/concurrence et le respect des quotas. Ne transmettre ni fragment, ni cookies, ni credentials marchands. Activation locale explicite uniquement, refusée en production ; ne pas rétablir le secours direct des pages. Cette extension ne vaut pas autorisation de MEP.
-- Extension explicitement demandée par Jenn le 27 octobre 2026 (« go teste le mode product de Firecrawl et le relais pour les images »), uniquement pour les tests locaux : le secours des images peut utiliser le relais Cloudflare authentifié après un échec du téléchargement direct épinglé, puis le mode binaire rawBase64 de Firecrawl après le secours de page. Workers choisit son IP finale ; conserver HTTPS, validation des DNS publics avant/après côté Go et Worker, refus des redirections Cloudflare, absence de cookies/credentials marchands, limites de taille/délai/concurrence et normalisation locale des octets. Pour Firecrawl, l'exception déjà autorisée sur ses IP/redirections internes s'applique aussi à ce relais d'octets ; valider les DNS publics initiaux et finaux déclarés, le vrai statut et le type marchand, les octets décodés et la même normalisation locale, sans capture d'écran ni retry transparent du POST. Partager admission/quota entre pages et images ; borner les tentatives dans le délai total existant. Les options sont désactivées par défaut et exclues de la production. Le mode product Firecrawl est testé sur le même compte gratuit, avec les contrôles d'identité/variantes/montants, sans sélecteur propre à un marchand, abonnement ni MEP.
-- Extension explicitement autorisée par Jenn le 27 octobre 2026 pour la mise en production demandée avec la copie des souhaits : « Oui, étendre l’exception à la production ». Les fournisseurs permanents Cloudflare et Firecrawl peuvent utiliser leurs connexions marchandes gérées, sans épinglage de ces IP ni contrôle individuel des redirections internes Firecrawl. Cette exception est limitée aux imports de produits publics et aux octets d’image de leur secours. Conserver les contrôles DNS publics complets avant/après, le refus des IP privées/spéciales et DNS mixtes, une origine Cloudflare HTTPS dédiée et authentifiée, les autorités providers épinglées côté Go sans proxy ni redirection, les clés côté serveur, les bornes taille/pixels/concurrence/quota et les dix secondes maximum côté formulaire. Aucun cookie ou credential marchand n’est fourni. Les options permanentes doivent être explicitement activées ; les anciens drapeaux WISH_IMPORT_LOCAL_* restent refusés en production. Les sauvegardes, gates et approbations de MEP restent obligatoires.
+- Imports directs : refuser les IP privées/spéciales, DNS mixtes et ports interdits, vérifier chaque redirection, épingler l'IP validée et ignorer les proxies de processus. Browserless, explicitement activé, peut servir de repli après validation publique du lien initial ; ses propres redirections, résolutions DNS et sous-requêtes ne sont pas contrôlées ni épinglées par MonKado. Documenter cette limite et ne jamais prétendre que ces appels ont les mêmes garanties que le transport direct. Les images restent téléchargées par le transport direct sécurisé.
 - Borner corps HTTP, octets/pixels des images, concurrence, tailles des ZIP ; corriger l'orientation et supprimer les métadonnées d'images.
 - Exports : snapshot cohérent, stockage privé, téléchargement autorisé, expiration/nettoyage. Exclure credentials, jetons, codes de récupération, secrets de partage et réservations privées d'autres participants.
-- Aucun secret versionné : environnement, gestionnaire de secrets ou `.local/environment.json` ignoré en local.
+- Pour les secrets locaux, le projet accepte également `.local/environment.json`, qui doit rester ignoré par Git.
 
 ## Journalisation
 
@@ -70,6 +63,7 @@
 - Inclure CorrelationId et TraceId W3C dans les logs de requêtes/jobs ; retourner X-Correlation-ID et conserver une valeur client valide, sinon en générer une.
 - Opérations métier réussies, y compris GET, au niveau Information. Erreurs HTTP métier au niveau Error sans stack trace. Exceptions inattendues une seule fois à la frontière avec stack trace.
 - Liste blanche : identifiants techniques nécessaires ; jamais mots de passe, jetons, secrets, emails, corps de requête ni contenu des souhaits. Les erreurs CLI ne dévoilent ni URL de connexion ni réponse brute provider.
+- Exception demandée par Jenn le 1er novembre 2026 : le journal d’activité administrateur peut conserver les payloads JSON métier filtrés et leur niveau de log. Cette exception ne s’applique pas aux logs opérationnels. Masquer par défaut les champs non approuvés, les credentials et les emails ; retirer credentials, query et fragments des URLs. Omettre les payloads des idées surprises privées, les corps invalides et les fichiers. Garder les contrôles administrateur avec double authentification, la rétention de 90 jours et la suppression avec le compte.
 
 ## Tests et qualité
 
@@ -79,7 +73,7 @@
 - Vrai PostgreSQL natif en intégration, fixture centralisée migrations/reset, tests séquentiels quand la base est partagée ; aucune dépendance Testcontainers.
 - Vérifier la persistance par contrats publics ; accès direct à la base seulement pour un invariant technique non observable (hash, outbox, lease, contrainte).
 - Providers remplacés par des fakes mémoire, aucun réseau réel dans la quality gate ; appels réels uniquement explicitement activés via configuration privée/workflow manuel sécurisé.
-- Tester les transports avec réponses simulées. Vérifier statuts et schémas JSON/OpenAPI explicitement, sans snapshot global.
+- Tester les transports avec réponses simulées. Vérifier les contrats, statuts et schémas JSON/OpenAPI avec des assertions ciblées, sans snapshot global.
 - Méthodes privées testées via contrats publics, sans réflexion ni modification de visibilité pour tester.
 - Conserver l'objectif initial de couverture 100% lignes/branches ; seuls code généré et types descriptifs sans logique sont exclus. Toute autre exclusion/réduction nécessite un cas concret documenté.
 - Exception documentée pour la migration Go dans README.md, « Coverage exception for the Go migration » : minimum automatisé de 80% des statements dans chacun des deux modules, sans exclusion de code exécutable. Les retours défensifs sur fichiers embarqués immuables, sérialisation de types JSON connus et paramètres cryptographiques fixes ne justifient pas de modifier les invariants de production pour les rendre atteignables ; les autres lacunes restent également mesurées. Conserver l'objectif de 100% pour les comportements atteignables et les scénarios explicites pour les branches critiques.
@@ -94,9 +88,4 @@
 
 ## Git et conventions
 
-- Jenn autorise Codex à prendre en charge les déploiements de production demandés, sans redemander une autorisation générale à chaque déploiement. Conserver les contrôles qualité, approbations d'environnement, sauvegardes et vérifications après déploiement ; cette délégation ne vaut pas validation juridique ni autorisation de contourner un garde-fou.
-- Commits, titres et descriptions de PR en anglais. Ne pas versionner de plans d'implémentation ; garder *-implementation-plan.md parmi les fichiers locaux ignorés.
-- Préserver le travail utilisateur et ne pas reformater de fichiers sans rapport.
-- Pour une règle de Jenn, vérifier d'abord une option standard .editorconfig ; sinon documenter ici sans conflit avec une règle existante.
-- Ne pas interrompre le travail pour des détails sans conséquence. Si une préférence récurrente exige son choix, une question courte avec deux exemples suffit ; conserver sa réponse ici.
-- Un signalement de bug par Jenn vaut demande de correction : diagnostiquer, corriger et vérifier dans le périmètre concerné sans redemander si elle souhaite le correctif. Demander uniquement une information ou une autorisation réellement manquante.
+- Ne pas versionner de plans d'implémentation ; garder *-implementation-plan.md parmi les fichiers locaux ignorés.

@@ -29,7 +29,7 @@ func (a *API) subscriptionRoutes() {
 		result, err := a.Service.Subscription(r.Context(), r.Principal.MemberID, r.PathValue("id"))
 		return response{Body: result}, err
 	})
-	a.route("DELETE /api/v1/wishlist-subscriptions/{id}", options{Auth: true}, func(r *request) (response, error) {
+	a.route("DELETE /api/v1/wishlist-subscriptions/{id}", options{Auth: true, CSRF: true}, func(r *request) (response, error) {
 		return response{Status: 204}, a.Service.DeleteSubscription(r.Context(), r.Principal.MemberID, r.PathValue("id"))
 	})
 }

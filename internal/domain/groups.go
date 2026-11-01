@@ -53,6 +53,14 @@ type GroupJoinLinkResponse struct {
 	CreatedAt time.Time `json:"createdAt"`
 }
 
+// GroupJoinPreviewResponse exposes only the identity advertised by an active invitation.
+type GroupJoinPreviewResponse struct {
+	Id              string  `json:"id"`
+	Name            string  `json:"name"`
+	MemberCount     int     `json:"memberCount"`
+	ProfileImageUrl *string `json:"profileImageUrl"`
+}
+
 // GroupWishlistResponse describes an explicitly shared list without a public capability.
 type GroupWishlistResponse struct {
 	Id               string    `json:"id"`
@@ -62,14 +70,6 @@ type GroupWishlistResponse struct {
 	Occasion         string    `json:"occasion"`
 	EventDate        *string   `json:"eventDate"`
 	CreatedAt        time.Time `json:"createdAt"`
-}
-
-// GroupJoinPreviewResponse exposes only the identity advertised by an active invitation.
-type GroupJoinPreviewResponse struct {
-	Id              string  `json:"id"`
-	Name            string  `json:"name"`
-	MemberCount     int     `json:"memberCount"`
-	ProfileImageUrl *string `json:"profileImageUrl"`
 }
 
 // WishlistGroupVisibilityResponse describes the owner's current group audience.

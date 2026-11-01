@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Import direct MonKado</title>
+  <link rel="stylesheet" href="popup.css">
+  <script src="capture-limits.js" defer></script>
+  <script src="popup.js" defer></script>
+</head>
+<body>
+  <h1>Ajouter depuis cette page</h1>
+  <p>Vérifie les informations, puis copie-les dans ton souhait MonKado.</p>
+  <p id="status" role="status">Lecture de la page…</p>
+  <form id="result" hidden>
+    <label for="name">Nom</label><div class="row"><input id="name" maxlength="100"><button type="button" data-copy="name">Copier</button></div>
+    <label for="price">Prix en euros</label><div class="row"><input id="price" inputmode="decimal"><button type="button" data-copy="price">Copier</button></div>
+    <label for="url">Lien du produit</label><div class="row"><input id="url" type="url"><button type="button" data-copy="url">Copier</button></div>
+    <label for="image">Adresse de l’image</label><div class="row"><input id="image" type="url"><button type="button" data-copy="image">Copier</button></div>
+    <div class="actions">
+      <button id="save" type="button" hidden>Garder pour MonKado</button>
+      <button id="choose-image" type="button" hidden>Choisir une image sur la page</button>
+      <button id="copy-visible-image" type="button" title="Capture et recadre l’image ; la page peut défiler" hidden>Copier l’image visible</button>
+      <button id="keep-visible-image" type="button" title="Capture et recadre l’image en mémoire de session ; la page peut défiler" hidden>Garder l’image visible</button>
+      <button id="apply" type="button" hidden>Remplir les champs vides</button>
+      <button id="use-saved-image" type="button" hidden>Utiliser l’image gardée</button>
+      <button id="paste-image" type="button" hidden>Coller l’image copiée</button>
+      <button id="clear" type="button" hidden>Effacer les suggestions</button>
+    </div>
+    <p id="notice">Les informations sont des suggestions. Le prix et la variante peuvent varier.</p>
+  </form>
+</body>
+</html>

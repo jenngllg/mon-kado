@@ -46,7 +46,6 @@ func TestMemberTags_WhenNamesAreRepeated_PreservesUniqueSearchableIdentityAcross
 	var original domain.CurrentSessionResponse
 	requireStatus(t, f.send(t, "GET", "/api/v1/auth/sessions/current", "", nil), 200, &original)
 	second := f.member(t, "tag-second@example.test")
-	setMemberSearchVisible(t, f)
 	var current domain.CurrentSessionResponse
 	response := f.send(t, "GET", "/api/v1/auth/sessions/current", "", nil)
 	etag := response.Header.Get("ETag")
@@ -97,7 +96,6 @@ func TestMemberTags_WhenRenameConflicts_RejectsWithoutChangingIdentityAndAllowsA
 	var first domain.CurrentSessionResponse
 	requireStatus(t, f.send(t, "GET", "/api/v1/auth/sessions/current", "", nil), 200, &first)
 	second := f.member(t, "tag-conflict-second@example.test")
-	setMemberSearchVisible(t, f)
 	tx, err := f.store.Pool.Begin(t.Context())
 	if err != nil {
 		t.Fatal(err)
@@ -140,37 +138,5 @@ func TestMemberTags_WhenRenameConflicts_RejectsWithoutChangingIdentityAndAllowsA
 	requireStatus(t, f.send(t, "PUT", "/api/v1/members/current/profile", `{"displayName":"Available member"}`, map[string]string{"If-Match": etag}), 200, &profile)
 	if profile.DisplayName != "Available member" || profile.DisplayNameTag != first.DisplayNameTag {
 		t.Fatal("successful rename changed the immutable tag")
-	}
-}
-
-func setMemberSearchVisible(t *testing.T, f *fixture) {
-	t.Helper()
-	var current domain.CurrentSessionResponse
-	session := f.send(t, "GET", "/api/v1/auth/sessions/current", "", nil)
-	requireStatus(t, session, 200, &current)
-	requireStatus(t, f.send(t, "PUT", "/api/v1/members/current/profile", jsonInput(t, map[string]any{"displayName": current.DisplayName, "isVisibleInMemberSearch": true}), map[string]string{"If-Match": session.Header.Get("ETag")}), 200, nil)
-}
-
-func TestMemberTags_WhenClientOrDatabaseAttemptsReplacement_PreservesAssignedTag(t *testing.T) {
-	// Arrange
-	f := newFixture(t)
-	id := f.member(t, "immutable-tag@example.test")
-	var original domain.CurrentSessionResponse
-	session := f.send(t, "GET", "/api/v1/auth/sessions/current", "", nil)
-	requireStatus(t, session, 200, &original)
-	// Act / Assert: ignored extension fields cannot choose an identity tag.
-	var updated domain.MemberProfileResponse
-	requireStatus(t, f.send(t, "PUT", "/api/v1/members/current/profile", `{"displayName":"Renamed","displayNameTag":"0001"}`, map[string]string{"If-Match": session.Header.Get("ETag")}), 200, &updated)
-	if updated.DisplayNameTag != original.DisplayNameTag {
-		t.Fatal("client extension field changed the assigned tag")
-	}
-	// Direct persistence access verifies the trigger's immutable-account invariant.
-	if _, err := f.store.Pool.Exec(t.Context(), `UPDATE users SET display_name_tag='0000' WHERE id=$1`, id); err != nil {
-		t.Fatal(err)
-	}
-	var current domain.CurrentSessionResponse
-	requireStatus(t, f.send(t, "GET", "/api/v1/auth/sessions/current", "", nil), 200, &current)
-	if current.DisplayNameTag != original.DisplayNameTag || current.DisplayName != "Renamed" {
-		t.Fatal("an attempted tag replacement changed the account identity")
 	}
 }

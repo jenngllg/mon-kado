@@ -45,8 +45,9 @@ type API struct {
 
 type request struct {
 	*http.Request
-	Principal application.Principal
-	Now       time.Time
+	Principal       application.Principal
+	Now             time.Time
+	activityPayload json.RawMessage
 }
 type response struct {
 	Status        int
@@ -65,15 +66,16 @@ type response struct {
 }
 type endpoint func(*request) (response, error)
 type options struct {
-	RatePolicy     string
-	RateWindow     time.Duration
-	RateByShare    bool
-	ImageAdmission bool
-	Auth           bool
-	Admin          bool
-	CSRF           bool
-	Rate           int
-	RateByMember   bool
+	RatePolicy          string
+	RateWindow          time.Duration
+	RateByShare         bool
+	ImageAdmission      bool
+	Auth                bool
+	Admin               bool
+	CSRF                bool
+	Rate                int
+	RateByMember        bool
+	EmptyIDIsBadRequest bool
 }
 
 // New registers all endpoints before accepting requests.
@@ -86,7 +88,6 @@ func New(service *application.Service, logger *slog.Logger) *API {
 	imports := service.Config.Imports()
 	a.ImageImporter = &selectedImageClient{client: importer, permits: make(chan struct{}, imports.PermitLimit), timeout: imports.Timeout}
 	a.routes()
-	a.groupRoutes()
 	a.registerOpenAPI()
 	a.validateSpecification()
 	return a
@@ -131,9 +132,14 @@ func (a *API) route(pattern string, opt options, handler endpoint) {
 				return
 			}
 		}
-		for _, key := range []string{"wishlistId", "wishId", "shareLinkId", "memberId", "reportId", "exportId", "groupId", "invitationId", "id"} {
+		emptyIDPath := ""
+		for _, key := range []string{"impersonationId", "wishlistId", "wishId", "suggestionId", "shareLinkId", "memberId", "reportId", "exportId", "subscriptionId", "groupId", "invitationId", "id"} {
 			if value := r.PathValue(key); value != "" {
 				id, err := uuid.Parse(value)
+				if err == nil && id == uuid.Nil && opt.EmptyIDIsBadRequest {
+					emptyIDPath = key
+					continue
+				}
 				if err != nil || id == uuid.Nil {
 					a.writeError(w, r, domain.Failure(404, domain.RequestNotFound, "The requested resource was not found."))
 					return
@@ -163,15 +169,33 @@ func (a *API) route(pattern string, opt options, handler endpoint) {
 				return
 			}
 		}
+		if emptyIDPath != "" {
+			// Existing public-profile validation runs after its anonymous quota.
+			a.writeError(w, r, &domain.Error{Status: 400, Code: domain.RequestValidationError, Message: "The request is invalid.", Validation: []domain.ValidationError{{PropertyName: emptyIDPath, ErrorMessage: "The identifier must not be empty."}}})
+			return
+		}
 		if opt.CSRF && !a.validCSRF(r, p.MemberID) {
 			a.writeError(w, r, domain.Failure(400, domain.SecurityCSRFValidationFailed, "The CSRF token is invalid."))
 			return
 		}
-		result, err := handler(&request{Request: r, Principal: p, Now: a.Service.Now()})
-		if err != nil {
+		input := &request{Request: r, Principal: p, Now: a.Service.Now()}
+		if err := a.applyImpersonation(input, pattern); err != nil {
+			a.recordActionActivity(input, pattern, "error", w.Header().Get("X-Trace-ID"))
 			a.writeError(w, r, err)
 			return
 		}
+		if err := a.recordImpersonatedWriteAttempt(input, pattern); err != nil {
+			a.writeError(w, r, err)
+			return
+		}
+		result, err := handler(input)
+		if err != nil {
+			a.recordActionActivity(input, pattern, "error", w.Header().Get("X-Trace-ID"))
+			a.writeError(w, r, err)
+			return
+		}
+		// Activity telemetry never changes the outcome of the completed operation.
+		a.recordActionActivity(input, pattern, "info", w.Header().Get("X-Trace-ID"))
 		if result.Session != nil {
 			a.sessionCookie(w, r, result.Session)
 		}
@@ -212,7 +236,7 @@ func (a *API) route(pattern string, opt options, handler endpoint) {
 			a.absoluteImageURLs(r, result.Body)
 			writeJSON(w, result.Status, result.Body)
 		}
-		a.Logger.InfoContext(r.Context(), "Business operation succeeded", "EventId", logging.BusinessOperationSucceeded, "Operation", pattern, "StatusCode", result.Status, "UserId", p.MemberID, "CorrelationId", logging.Correlation(w.Header().Get("X-Correlation-ID")), "TraceId", logging.Trace(w.Header().Get("X-Trace-ID")))
+		a.Logger.InfoContext(r.Context(), "Business operation succeeded", "EventId", logging.BusinessOperationSucceeded, "Operation", pattern, "StatusCode", result.Status, "UserId", input.Principal.MemberID, "ActorUserId", p.MemberID, "IsImpersonated", input.Principal.ActorMemberID != "", "CorrelationId", logging.Correlation(w.Header().Get("X-Correlation-ID")), "TraceId", logging.Trace(w.Header().Get("X-Trace-ID")))
 	})
 }
 
@@ -282,7 +306,7 @@ func (a *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if r.Method == http.MethodOptions {
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-CSRF-TOKEN, X-Correlation-ID, X-MonKado-Share-Token, If-Match")
+		w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-CSRF-TOKEN, X-Correlation-ID, X-MonKado-Share-Token, If-Match, X-MonKado-Impersonation")
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
@@ -393,6 +417,7 @@ func body[T any](r *request) (T, error) {
 	if decoder.Decode(new(any)) != io.EOF {
 		return value, domain.Failure(400, domain.RequestBadRequest, "The request must contain exactly one JSON object.")
 	}
+	r.activityPayload = activityPayload(value)
 	return value, validateInput(r, value)
 }
 

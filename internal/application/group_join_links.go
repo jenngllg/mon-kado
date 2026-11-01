@@ -11,12 +11,12 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// GroupJoinLink reads or creates a group's shared admission code; only its owner may revoke it.
+// GroupJoinLink lets accepted members read, create or revoke a group's shared admission code.
 func (s *Service) GroupJoinLink(ctx context.Context, member, group, method string, expected *uint32) (domain.GroupJoinLinkResponse, uint32, error) {
 	var result domain.GroupJoinLinkResponse
 	var version uint32
 	err := s.Store.Transaction(ctx, func(tx pgx.Tx) error {
-		if _, _, err := s.lockGroup(ctx, tx, member, group, method == "DELETE"); err != nil {
+		if _, _, err := s.lockGroup(ctx, tx, member, group); err != nil {
 			return err
 		}
 		var protected string

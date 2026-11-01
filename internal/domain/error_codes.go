@@ -2,6 +2,10 @@ package domain
 
 // Stable error codes shared with API consumers.
 const (
+	AccountImpersonationRestricted         = "ACCOUNT_IMPERSONATION_RESTRICTED"
+	AccountImpersonationDenied             = "ACCOUNT_IMPERSONATION_DENIED"
+	AccountImpersonationExpired            = "ACCOUNT_IMPERSONATION_EXPIRED"
+	AccountImpersonationReadOnly           = "ACCOUNT_IMPERSONATION_READ_ONLY"
 	GroupNotFound                          = "GROUP_NOT_FOUND"
 	GroupImageNotFound                     = "GROUP_IMAGE_NOT_FOUND"
 	GroupAccessDenied                      = "GROUP_ACCESS_DENIED"
@@ -17,6 +21,11 @@ const (
 	GroupLimitReached                      = "GROUP_LIMIT_REACHED"
 	GroupWishlistAlreadyExists             = "GROUP_WISHLIST_ALREADY_EXISTS"
 	GroupWishlistNotFound                  = "GROUP_WISHLIST_NOT_FOUND"
+	GroupSuggestionNotFound                = "GROUP_SUGGESTION_NOT_FOUND"
+	GroupSuggestionVersionConflict         = "GROUP_SUGGESTION_VERSION_CONFLICT"
+	GroupSuggestionReserved                = "GROUP_SUGGESTION_RESERVED"
+	GroupSuggestionLimitReached            = "GROUP_SUGGESTION_LIMIT_REACHED"
+	WishlistGroupVisibilityVersionConflict = "WISHLIST_GROUP_VISIBILITY_VERSION_CONFLICT"
 	GroupOwnerWishlist                     = "GROUP_OWNER_WISHLIST"
 	MemberDataExportNotFound               = "MEMBER_DATA_EXPORT_NOT_FOUND"
 	MemberDataExportNotReady               = "MEMBER_DATA_EXPORT_NOT_READY"
@@ -60,17 +69,14 @@ const (
 	SecurityUnauthorized                   = "SECURITY_UNAUTHORIZED"
 	SecurityForbidden                      = "SECURITY_FORBIDDEN"
 	SecurityCSRFValidationFailed           = "SECURITY_CSRF_VALIDATION_FAILED"
+	MemberProfileVersionConflict           = "MEMBER_PROFILE_VERSION_CONFLICT"
 	MemberDisplayNameTagUnavailable        = "MEMBER_DISPLAY_NAME_TAG_UNAVAILABLE"
 	MemberHandleAlreadyUsed                = "MEMBER_HANDLE_ALREADY_USED"
-	MemberProfileVersionConflict           = "MEMBER_PROFILE_VERSION_CONFLICT"
 	MemberCurrentPasswordInvalid           = "MEMBER_CURRENT_PASSWORD_INVALID"
 	MemberEmailAlreadyUsed                 = "MEMBER_EMAIL_ALREADY_USED"
 	MemberEmailChangeInvalid               = "MEMBER_EMAIL_CHANGE_INVALID"
 	WishlistSuspended                      = "WISHLIST_SUSPENDED"
 	WishlistArchived                       = "WISHLIST_ARCHIVED"
-	WishlistSubscriptionNotFound           = "WISHLIST_SUBSCRIPTION_NOT_FOUND"
-	WishlistSubscriptionAlreadyExists      = "WISHLIST_SUBSCRIPTION_ALREADY_EXISTS"
-	WishlistSubscriptionSelf               = "WISHLIST_SUBSCRIPTION_SELF"
 	WishlistModerationForbidden            = "WISHLIST_MODERATION_FORBIDDEN"
 	WishlistReportNotFound                 = "WISHLIST_REPORT_NOT_FOUND"
 	WishlistReportVersionConflict          = "WISHLIST_REPORT_VERSION_CONFLICT"
@@ -92,6 +98,9 @@ const (
 	SharedWishlistNotFound                 = "SHARED_WISHLIST_NOT_FOUND"
 	SharedWishNotFound                     = "SHARED_WISH_NOT_FOUND"
 	WishlistParticipantNotFound            = "WISHLIST_PARTICIPANT_NOT_FOUND"
+	WishlistSubscriptionNotFound           = "WISHLIST_SUBSCRIPTION_NOT_FOUND"
+	WishlistSubscriptionAlreadyExists      = "WISHLIST_SUBSCRIPTION_ALREADY_EXISTS"
+	WishlistSubscriptionSelf               = "WISHLIST_SUBSCRIPTION_SELF"
 	WishlistOwnerCannotJoin                = "WISHLIST_OWNER_CANNOT_JOIN"
 	WishlistParticipantLimitReached        = "WISHLIST_PARTICIPANT_LIMIT_REACHED"
 	GuestSessionInvalid                    = "GUEST_SESSION_INVALID"
@@ -191,9 +200,6 @@ func KnownErrorCode(code string) bool {
 		return false
 	}
 }
-
-// WishlistGroupVisibilityVersionConflict identifies a stale owner audience version.
-const WishlistGroupVisibilityVersionConflict = "WISHLIST_GROUP_VISIBILITY_VERSION_CONFLICT"
 
 // WishImportPriceMayBeStale identifies a cached provider price that may have changed.
 const WishImportPriceMayBeStale = "WISH_IMPORT_PRICE_MAY_BE_STALE"

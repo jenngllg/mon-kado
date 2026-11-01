@@ -62,7 +62,7 @@ func ValidateAt(input any, now time.Time) error {
 		"RegisterAccountRequest": {"Email", "Password", "DisplayName"}, "LoginRequest": {"Email", "Password"},
 		"JoinSharedWishlistRequest": {"DisplayName"},
 		"CreateWishlistRequest":     {"Name", "Occasion"}, "UpdateWishlistRequest": {"Name", "Occasion"},
-		"CreateWishRequest": {"Name"}, "UpdateWishRequest": {"Name"},
+		"CreateWishRequest": {"Name"}, "UpdateWishRequest": {"Name"}, "SaveGroupSuggestionRequest": {"Name"},
 		"CopyOwnedWishRequest": {"DestinationWishlistId"}, "CopyWishRequest": {"SourceShareLinkId", "SourceWishId"},
 		"SetWishlistArchivedRequest": {"IsArchived"}, "SetWishFavoriteRequest": {"IsFavorite"},
 		"UpsertGiftReservationRequest": {"Quantity"}, "UpdateMemberProfileRequest": {"DisplayName"},
@@ -259,6 +259,9 @@ func oneOf(value string, values ...string) bool {
 
 // Decode rejects multiple documents and preserves decimal precision.
 func Decode(decoder *json.Decoder, target any) error {
+	if _, archive := target.(*domain.SetWishlistArchivedRequest); archive {
+		decoder.DisallowUnknownFields()
+	}
 	decoder.UseNumber()
 	if err := decoder.Decode(target); err != nil {
 		return err

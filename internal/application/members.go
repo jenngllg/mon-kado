@@ -225,7 +225,7 @@ func (s *Service) removeMember(ctx context.Context, tx pgx.Tx, user string) erro
 		return err
 	}
 	for _, group := range groups {
-		if err = s.queueGroupImage(ctx, tx, group); err != nil {
+		if _, err = s.replaceDepartingGroupOwner(ctx, tx, group, user); err != nil {
 			return err
 		}
 	}

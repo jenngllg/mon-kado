@@ -36,6 +36,7 @@ func text(value *string) string {
 	}
 	return *value
 }
+
 func memberTagError(err error) error {
 	var databaseError *pgconn.PgError
 	if errors.As(err, &databaseError) {
@@ -93,6 +94,7 @@ func duplicate(err error, constraint string) bool {
 // Principal contains server-verified member and session identities, never client privileges.
 type Principal struct {
 	MemberID            string
+	ActorMemberID       string
 	SessionID           string
 	IsAdmin             bool
 	TwoFactorVerifiedAt *time.Time
@@ -126,10 +128,10 @@ func AuthorizeAdministrator(p Principal) error {
 	return nil
 }
 
-// AuthorizeWishlist conceals foreign private resources and blocks mutations of suspended lists.
+// AuthorizeWishlist conceals foreign private resources and blocks mutations of suspended or archived lists.
 func (s *Service) AuthorizeWishlist(ctx context.Context, owner, wishlist string, mutation bool) error {
-	var suspended bool
-	err := s.Store.Pool.QueryRow(ctx, "SELECT is_suspended FROM wishlists WHERE id=$1 AND owner_id=$2", wishlist, owner).Scan(&suspended)
+	var suspended, archived bool
+	err := s.Store.Pool.QueryRow(ctx, "SELECT is_suspended,is_archived FROM wishlists WHERE id=$1 AND owner_id=$2", wishlist, owner).Scan(&suspended, &archived)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return missing(domain.WishlistNotFound)
 	}
@@ -138,6 +140,9 @@ func (s *Service) AuthorizeWishlist(ctx context.Context, owner, wishlist string,
 	}
 	if mutation && suspended {
 		return domain.Failure(409, domain.WishlistSuspended, "The wishlist is suspended.")
+	}
+	if mutation && archived {
+		return domain.Failure(409, domain.WishlistArchived, "The wishlist is archived.")
 	}
 	return nil
 }

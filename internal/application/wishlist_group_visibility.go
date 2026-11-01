@@ -73,7 +73,7 @@ func (s *Service) SetWishlistGroupVisibility(ctx context.Context, owner, wishlis
 		}
 		sort.Slice(choices, func(i, j int) bool { return *choices[i].GroupId < *choices[j].GroupId })
 		for _, choice := range choices {
-			if _, _, err = s.lockGroup(ctx, tx, owner, *choice.GroupId, false); err != nil {
+			if _, _, err = s.lockGroup(ctx, tx, owner, *choice.GroupId); err != nil {
 				return err
 			}
 			if *choice.IsVisible {

@@ -50,10 +50,18 @@ func (s *Service) scanGroup(member string, row pgx.Row) (domain.GroupResponse, u
 
 // lockGroup centralizes membership checks and serializes grants with revocation.
 // UUID knowledge and pending invitations never confer membership.
-func (s *Service) lockGroup(ctx context.Context, tx pgx.Tx, member, id string, ownerOnly bool) (domain.GroupResponse, uint32, error) {
+func (s *Service) lockGroup(ctx context.Context, tx pgx.Tx, member, id string) (domain.GroupResponse, uint32, error) {
 	group, version, err := s.scanGroup(member, tx.QueryRow(ctx, groupSummary+` WHERE g.id=$1 AND EXISTS(SELECT 1 FROM group_members m WHERE m.group_id=g.id AND m.member_id=$2) FOR UPDATE OF g`, id, member))
-	if err == nil && ownerOnly && group.OwnerId != member {
-		err = domain.Failure(403, domain.GroupAccessDenied, "Only the group owner can perform this action.")
+	if err != nil {
+		return group, version, err
+	}
+	// A concurrent departure may have committed while this transaction waited for the group lock.
+	var stillMember bool
+	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM group_members WHERE group_id=$1 AND member_id=$2)`, id, member).Scan(&stillMember); err != nil {
+		return group, version, err
+	}
+	if !stillMember {
+		return group, version, missing(domain.GroupNotFound)
 	}
 	return group, version, err
 }
@@ -140,7 +148,7 @@ func (s *Service) Group(ctx context.Context, member, id, method string, input do
 	var version uint32
 	err := s.Store.Transaction(ctx, func(tx pgx.Tx) error {
 		var err error
-		result, version, err = s.lockGroup(ctx, tx, member, id, method != "GET")
+		result, version, err = s.lockGroup(ctx, tx, member, id)
 		if err != nil {
 			return err
 		}
@@ -168,7 +176,7 @@ func (s *Service) Group(ctx context.Context, member, id, method string, input do
 func (s *Service) GroupMembers(ctx context.Context, member, id string, page, size int) (domain.PaginatedResponse[domain.GroupMemberResponse], error) {
 	var result domain.PaginatedResponse[domain.GroupMemberResponse]
 	err := s.groupReadTransaction(ctx, func(tx pgx.Tx) error {
-		if _, _, err := s.lockGroup(ctx, tx, member, id, false); err != nil {
+		if _, _, err := s.lockGroup(ctx, tx, member, id); err != nil {
 			return err
 		}
 		var err error
@@ -189,12 +197,15 @@ func (s *Service) GroupMembers(ctx context.Context, member, id string, page, siz
 // RemoveGroupMember removes group-only grants immediately, preserving independent sharing and reservations.
 func (s *Service) RemoveGroupMember(ctx context.Context, member, id, target string) error {
 	return s.Store.Transaction(ctx, func(tx pgx.Tx) error {
-		g, _, err := s.lockGroup(ctx, tx, member, id, target != member)
+		g, _, err := s.lockGroup(ctx, tx, member, id)
 		if err != nil {
 			return err
 		}
 		if target == g.OwnerId {
-			return domain.Failure(409, domain.GroupOwnerCannotLeave, "The owner must delete the group before leaving.")
+			deleted, err := s.replaceDepartingGroupOwner(ctx, tx, id, target)
+			if err != nil || deleted {
+				return err
+			}
 		}
 		command, err := tx.Exec(ctx, `DELETE FROM group_members WHERE group_id=$1 AND member_id=$2`, id, target)
 		if err == nil && command.RowsAffected() == 0 {
@@ -202,6 +213,25 @@ func (s *Service) RemoveGroupMember(ctx context.Context, member, id, target stri
 		}
 		return err
 	})
+}
+
+// replaceDepartingGroupOwner keeps the legacy owner reference valid without assigning special rights.
+// The caller holds the group row lock; the last member's departure deletes the group and queues its image.
+func (s *Service) replaceDepartingGroupOwner(ctx context.Context, tx pgx.Tx, group, departing string) (bool, error) {
+	var successor string
+	err := tx.QueryRow(ctx, `SELECT member_id::text FROM group_members WHERE group_id=$1 AND member_id<>$2 ORDER BY joined_at,member_id LIMIT 1`, group, departing).Scan(&successor)
+	if errors.Is(err, pgx.ErrNoRows) {
+		if err := s.queueGroupImage(ctx, tx, group); err != nil {
+			return false, err
+		}
+		_, err = tx.Exec(ctx, `DELETE FROM private_groups WHERE id=$1`, group)
+		return true, err
+	}
+	if err != nil {
+		return false, err
+	}
+	_, err = tx.Exec(ctx, `UPDATE private_groups SET owner_id=$2 WHERE id=$1`, group, successor)
+	return false, err
 }
 
 func scanGroupInvitation(row pgx.Row) (domain.GroupInvitationResponse, error) {
@@ -220,7 +250,7 @@ func (s *Service) GroupInvitation(ctx context.Context, member, group, id string)
 	}
 	var result domain.GroupInvitationResponse
 	err := s.Store.Transaction(ctx, func(tx pgx.Tx) error {
-		if _, _, err := s.lockGroup(ctx, tx, member, group, false); err != nil {
+		if _, _, err := s.lockGroup(ctx, tx, member, group); err != nil {
 			return err
 		}
 		var err error
@@ -236,7 +266,7 @@ func (s *Service) GroupInvitations(ctx context.Context, member, group string, pa
 	err := s.groupReadTransaction(ctx, func(tx pgx.Tx) error {
 		column, value := "i.member_id", member
 		if group != "" {
-			if _, _, err := s.lockGroup(ctx, tx, member, group, false); err != nil {
+			if _, _, err := s.lockGroup(ctx, tx, member, group); err != nil {
 				return err
 			}
 			column, value = "i.group_id", group
@@ -252,7 +282,7 @@ func (s *Service) GroupInvitations(ctx context.Context, member, group string, pa
 func (s *Service) InviteGroupMember(ctx context.Context, member, group string, input domain.InviteGroupMemberRequest) (domain.GroupInvitationResponse, error) {
 	var result domain.GroupInvitationResponse
 	err := s.Store.Transaction(ctx, func(tx pgx.Tx) error {
-		if _, _, err := s.lockGroup(ctx, tx, member, group, false); err != nil {
+		if _, _, err := s.lockGroup(ctx, tx, member, group); err != nil {
 			return err
 		}
 		target, now := text(input.MemberId), s.Now().UTC()
@@ -338,7 +368,7 @@ func (s *Service) AnswerGroupInvitation(ctx context.Context, member, id string, 
 // RevokeGroupInvitation cancels a pending invitation without changing accepted memberships.
 func (s *Service) RevokeGroupInvitation(ctx context.Context, member, group, id string) error {
 	return s.Store.Transaction(ctx, func(tx pgx.Tx) error {
-		if _, _, err := s.lockGroup(ctx, tx, member, group, true); err != nil {
+		if _, _, err := s.lockGroup(ctx, tx, member, group); err != nil {
 			return err
 		}
 		command, err := tx.Exec(ctx, `DELETE FROM group_invitations WHERE group_id=$1 AND id=$2 AND expires_at>$3`, group, id, s.Now().UTC())

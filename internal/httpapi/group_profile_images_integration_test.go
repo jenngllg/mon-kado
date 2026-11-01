@@ -43,9 +43,8 @@ func TestGroupProfileImages_WhenReplacedAndDeleted_UsesGroupVersionAndRemovesObs
 	if err != nil || size.Width != 4 || size.Height != 3 {
 		t.Fatal("photo was not normalized to the member avatar format")
 	}
-	// Assert: outsiders and accepted non-owners cannot mutate, stale versions do not overwrite.
+	// Assert: outsiders cannot mutate, stale versions do not overwrite, and members can replace the photo.
 	requireStatus(t, s.foreign.upload(t, path, etag, 43, map[string]string{"X-CSRF-TOKEN": s.foreign.csrf}), 404, nil)
-	requireStatus(t, s.member.upload(t, path, etag, 43, map[string]string{"X-CSRF-TOKEN": s.member.csrf}), 403, nil)
 	requireStatus(t, s.owner.upload(t, path, s.etag, 43, map[string]string{"X-CSRF-TOKEN": s.owner.csrf}), 412, nil)
 	for _, entry := range []struct {
 		tag    string
@@ -59,7 +58,7 @@ func TestGroupProfileImages_WhenReplacedAndDeleted_UsesGroupVersionAndRemovesObs
 	if len(page.Items) != 1 || page.Items[0].ProfileImageUrl == nil {
 		t.Fatal("accepted member did not receive a group photo")
 	}
-	replaced := s.owner.upload(t, path, etag, 99, map[string]string{"X-CSRF-TOKEN": s.owner.csrf})
+	replaced := s.member.upload(t, path, etag, 99, map[string]string{"X-CSRF-TOKEN": s.member.csrf})
 	etag = replaced.Header.Get("ETag")
 	requireStatus(t, replaced, 200, &group)
 	requireStatus(t, s.owner.send(t, "GET", old.RequestURI(), "", nil), 404, nil)

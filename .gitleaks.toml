@@ -43,3 +43,10 @@ condition = "AND"
 paths = ['''^\.github/review_local_transports\.py$''']
 regexTarget = "secret"
 regexes = ['''^514d3ca53803cdea79e68bd0f12a799d96ce9725$''']
+
+[[rules.allowlists]]
+description = "Public prose describing self/duplicate conflicts after secret verification in local validation evidence"
+condition = "AND"
+paths = ['''^docs/local-subscription-validation-20261024\.md$''']
+regexTarget = "secret"
+regexes = ['''^self/duplicate$''']
