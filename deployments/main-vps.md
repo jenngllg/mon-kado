@@ -43,6 +43,13 @@ arriving after the pair was pinned belongs to a later operation with a new backu
 no time-based reuse of previous snapshots is allowed. Both revisions, checks and
 the shared snapshot are recorded in the durable receipt. Unchanged SQL is required.
 
+Version-2 receipts use the same non-null `backendSnapshot` and `frontendSnapshot`
+when both components change. Recovery refuses a shared capture older than the
+existing one-hour freshness limit; it leaves the compatible running services in
+place and retains the pinned intent for explicit recovery. A new unrelated backup
+must never be substituted into that operation. Version-1 receipts keep their
+historical meaning.
+
 The two selector routes use connection-failure fallback and disable upstream
 keepalive. They retain Caddy's safe default of not retrying a transmitted unsafe
 request. No database mutation is replayed to hide an uncertain response.
