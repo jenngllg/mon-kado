@@ -64,6 +64,44 @@ coordinator's `main-deploy` operation; it cannot execute arbitrary shell command
 forward ports or choose a backup/database operation. Both repositories serialize
 requests using the VPS coordination lock.
 
+### Network access and administrator isolation
+
+GitHub-hosted runners have changing source addresses. The DigitalOcean cloud
+firewall must let their IPv4 TCP connections reach port 22. A cloud rule limited
+to the administrator's home address silently times out before SSH authentication.
+Do not solve this by giving CI an administrator key or by placing a general
+GitHub Actions runner on the public application's production host.
+
+The server retains the administrator source restriction in a private root-owned
+`/etc/ssh/sshd_config.d/60-monkado-ci-access.conf` (mode 0600):
+
+```text
+AllowUsers *@<administrator-ip>/32 monkado-ci
+```
+
+Use the actual administrator source allowlist from the former cloud rule; keep
+these private addresses out of Git. This preserves existing user access from
+that address and accepts only `monkado-ci` elsewhere. Root login, password
+authentication and keyboard-interactive authentication remain disabled. The CI
+account still requires one of its forced-command keys; arbitrary commands,
+interactive shells and forwarding remain unavailable.
+
+Before changing production configuration, take and verify a fresh encrypted
+offsite backup. Check the proposed configuration with `sshd -t`, install it,
+check the effective `sshd -T` settings, and reload `ssh.service` without restarting
+it. Keep an existing administrator session open until a new connection succeeds.
+Before broadening the cloud rule, verify that a connection whose source is outside
+the administrator allowlist rejects the administrator's valid key, accepts each
+CI key, and rejects an arbitrary CI command. An SSH tunnel through the existing
+administrator connection to `127.0.0.1:22` tests this policy without copying any
+private key to the VPS. Then verify actual GitHub-to-VPS delivery for both repos.
+
+If the administrator address changes, update this private source pattern through
+an existing authorized session or the provider console, validate and reload SSH.
+For rollback, restrict the cloud rule back to the administrator allowlist first;
+only then remove the private SSH drop-in and validate/reload the service. No API
+or Caddy restart is needed for these SSH changes.
+
 ## Live backup and recovery
 
 The native backup pauses the deletion worker while the API and Caddy keep serving.
