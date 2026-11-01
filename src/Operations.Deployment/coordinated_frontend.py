@@ -8,6 +8,7 @@ import tempfile
 import frontend_contract as contract
 import frontend_runtime as hosting
 from deploy_policy import ensure
+from deploy_storage import private_read
 
 
 class CoordinatedFrontend:
@@ -37,6 +38,78 @@ class CoordinatedFrontend:
             ensure(hosting.fingerprints(self.publisher.releases / revision) == hosting.fingerprints(extracted),
                    "FRONTEND_FILES_CHANGED")
         return manifest
+
+    def historical_pair(self, backend):
+        """Authenticate the installed frontend against its immutable original approval."""
+        revision = hosting.current_revision(self.publisher.releases)
+        ensure(revision is not None, "FRONTEND_NOT_HEALTHY")
+        manifest = json.loads(private_read(self.publisher.root / "manifests" / (revision + ".json"), 4096))
+        contract.validate(manifest, manifest["configurationHash"], manifest["backendRevision"])
+        ensure(manifest["revision"] == revision, "FRONTEND_MANIFEST_CHANGED")
+        with tempfile.TemporaryDirectory(prefix="historical-approval-", dir=self.publisher.root) as temporary:
+            staging = Path(temporary)
+            base = f'https://github.com/{contract.REPOSITORY}/releases/download/frontend-{revision}/'
+            original, proof = staging / "manifest.json", staging / "proof.json"
+            self.publisher.transport(base + "manifest.json", original, 4096)
+            self.publisher.transport(base + "coordinated-proof.json", proof, 4096)
+            ensure(json.loads(original.read_text(encoding="utf-8")) == manifest, "FRONTEND_MANIFEST_CHANGED")
+            pair = {"backend": backend, "frontend": manifest, "proof": json.loads(proof.read_text(encoding="utf-8"))}
+        self.verify_original(pair)
+        self.publisher.health(revision, self.publisher.releases / revision, manifest.get("googleEnabled", False))
+        return pair
+
+    def verify_original(self, pair):
+        """Verify retained bytes with their original binding, without changing a manifest."""
+        manifest = pair["frontend"]
+        contract.validate(manifest, manifest["configurationHash"], manifest["backendRevision"])
+        path = self.publisher.root / "manifests" / (manifest["revision"] + ".json")
+        ensure(json.loads(private_read(path, 4096)) == manifest, "FRONTEND_MANIFEST_CHANGED")
+        with tempfile.TemporaryDirectory(prefix="original-bytes-", dir=self.publisher.root) as temporary:
+            extracted = self.publisher.materialize(manifest, Path(temporary))
+            ensure(hosting.fingerprints(self.publisher.releases / manifest["revision"]) == hosting.fingerprints(extracted),
+                   "FRONTEND_FILES_CHANGED")
+        return manifest
+
+    def prepare_forward(self, previous, candidate):
+        """Stage a paired candidate while the original frontend is still serving."""
+        self._current(previous)
+        ensure(not self.publisher.journal.exists() and not self.publisher.journal.is_symlink(), "FRONTEND_RECOVERY_REQUIRED")
+        state = self.publisher.load()
+        ensure(state["phase"] == "healthy" and state["error"] is None, "FRONTEND_NOT_HEALTHY")
+        self.verify_original(previous)
+        with tempfile.TemporaryDirectory(prefix="forward-stage-", dir=self.publisher.root) as temporary:
+            staging = Path(temporary)
+            manifest = self._approved(candidate, staging)
+            ensure(shutil.disk_usage(self.publisher.root).free >= contract.MAX_COMPRESSED + contract.MAX_EXTRACTED + hosting.DISK_RESERVE,
+                   "INSUFFICIENT_DISK")
+            extracted = self.publisher.materialize(manifest, staging)
+            target = self.publisher.releases / manifest["revision"]
+            if target.exists() or target.is_symlink():
+                ensure(hosting.fingerprints(target) == hosting.fingerprints(extracted), "FRONTEND_FILES_CHANGED")
+            else:
+                extracted.replace(target)
+                hosting.sync_directory(self.publisher.releases)
+            path = self.publisher.root / "manifests" / (manifest["revision"] + ".json")
+            if path.exists() or path.is_symlink():
+                ensure(self.publisher.manifest(manifest["revision"], candidate["backend"]["revision"]) == manifest,
+                       "FRONTEND_MANIFEST_CHANGED")
+            else:
+                hosting.atomic_json(path, manifest)
+
+    def activate_forward(self, previous, candidate):
+        """Reconcile a forward switch under the durable outer journal and closed gate."""
+        self.gate.verify()
+        ensure(hosting.backend_revision(self.publisher.backend_state) == candidate["backend"]["revision"], "BACKEND_CHANGED")
+        active = hosting.current_revision(self.publisher.releases)
+        ensure(active in {previous["frontend"]["revision"], candidate["frontend"]["revision"]}, "FRONTEND_CHANGED")
+        self.verify_original(previous)
+        self.verify_retained(candidate)
+        state = self.publisher.load()
+        self.publisher.save(state, phase="activating", candidateRevision=candidate["frontend"]["revision"], checks={})
+        hosting.switch(self.publisher.releases, candidate["frontend"]["revision"])
+        ensure(self.publisher.verify(candidate["frontend"]["revision"], candidate["backend"]["revision"]) == candidate["frontend"],
+               "FRONTEND_MANIFEST_CHANGED")
+        self.publisher.finish(state, candidate["frontend"], candidate["backend"]["revision"], previous["frontend"]["revision"], paused=True)
 
     def _approved(self, pair, staging):
         manifest = self.publisher.approved(staging, pair["backend"]["revision"])

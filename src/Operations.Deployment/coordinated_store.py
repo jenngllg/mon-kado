@@ -78,6 +78,11 @@ class InstallationStore(CoordinatedStore):
         ensure(isinstance(revision, str) and re.fullmatch(r"[0-9a-f]{40}", revision), "TOOL_INSTALL_INTENT_INVALID")
         receipt = {"schemaVersion": 1, "revision": revision, "preInstallSnapshot": intent["backup"],
                    "postInstallSnapshot": intent["postInstallBackup"]}
+        if intent.get("version") == 2:
+            receipt.update(schemaVersion=2, previousConfiguration=intent["previousManifest"]["configurationHash"],
+                           configurationHash=intent["manifest"]["configurationHash"],
+                           backend=intent["previousPair"]["backend"]["revision"],
+                           frontend=intent["previousPair"]["frontend"]["revision"])
         data = json.dumps(receipt, sort_keys=True, separators=(",", ":")).encode("utf-8")
         target = self.directory / ("coordinated-install-receipt-" + revision + ".json")
         ensure(not target.is_symlink(), "UNSAFE_TRANSITION_RECEIPT")

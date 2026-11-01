@@ -22,6 +22,7 @@ Enable `OBSERVABILITY_ENABLED=true` for private monitoring evidence. API and wor
 
 ## Operational notes
 
+- [Forward-only schema transitions](forward-transitions.md)
 - [Administrator two-factor authentication](administrator-two-factor.md)
 - [Account erasure](administrative-account-erasure.md)
 - [Session revocation](administrative-session-revocation.md)

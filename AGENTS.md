@@ -25,7 +25,7 @@
 - Création : 201, Location et DTO complet. Modification : 200 et DTO complet. Suppression/commande sans résultat utile : 204 sans corps.
 - Ressource absente, y compris DELETE : 404. Conflit métier : 409. Non authentifié : 401. Authentifié sans droit sur une ressource divulguable : 403.
 - Une ressource privée étrangère retourne 404 ; centraliser l'autorisation et ne jamais considérer un UUID comme une autorisation.
-- Administration : rôle vivant en base et session vérifiée avec la double authentification courante. Révocation/suppression des comptes auditées atomiquement.
+- Administration : booléen `users.is_admin` vivant en base, exposé comme `isAdmin`, et session vérifiée avec la double authentification courante. Aucun rôle textuel ni secours par nom de rôle dans l'application ou le frontend ; conserver les migrations et preuves historiques. Révocation/suppression des comptes auditées atomiquement.
 - `ErrorResponse` contient exactement `statusCode`, `title`, `message`, `errorCode`, `validationErrors`. Chaque ValidationError contient exactement `propertyName` et `errorMessage`.
 - Title/Message en anglais ; chaque erreur métier prévisible possède un code stable en UPPER_SNAKE_CASE préfixé par domaine. Le front traduit à partir de ce code.
 - JSON camelCase ; propriétés nullables incluses même à null. Enums en chaînes camelCase ; rejeter nombres et valeurs inconnues avant validation métier.

@@ -48,6 +48,7 @@ class CoordinatedFrontendTests(unittest.TestCase):
         output = self.state / ("package-" + frontend)
         manifest = contract.package_build(self.dist, output, frontend * 40, backend * 40, "c" * 64)
         self.archives[contract.archive_url(manifest)] = output / "frontend.tar.gz"
+        self.archives[f'https://github.com/{contract.REPOSITORY}/releases/download/frontend-{frontend * 40}/manifest.json'] = output / "manifest.json"
         return {"frontend": manifest, "backend": {"revision": backend * 40}}
 
     def transport(self, url, destination, limit):
@@ -62,6 +63,44 @@ class CoordinatedFrontendTests(unittest.TestCase):
 
     def set_backend(self, revision):
         (self.backend / "current.env").write_text("RELEASE_REVISION=" + revision * 40 + "\n")
+
+    def test_forward_switch_retains_original_approval_without_relaxing_normal_rollback(self):
+        self.remote_proof = {"schemaVersion": 1, "frontendRevision": "a" * 40, "backendRevision": "b" * 40,
+                             "configurationHash": "c" * 64, "openapiSha256": "9" * 64}
+        self.set_backend("8")
+        previous = self.paired.historical_pair({"revision": "8" * 40})
+        self.assertEqual(self.old["frontend"], previous["frontend"])
+        self.remote_proof = self.new["proof"].copy()
+        self.paired.prepare_forward(previous, self.new)
+        self.set_backend("e")
+        self.paired.activate_forward(previous, self.new)
+        self.paired.activate_forward(previous, self.new)
+        self.assertEqual("d" * 40, hosting.current_revision(self.publisher.releases))
+        self.assertTrue(self.publisher.load()["paused"])
+        self.assertEqual(self.old["frontend"], self.publisher.manifest("a" * 40, "b" * 40))
+        with self.assertRaises(ValueError):
+            self.publisher.manifest("a" * 40, "e" * 40)
+
+    def test_forward_switch_reconciles_lost_health_acknowledgement(self):
+        self.paired.prepare_forward(self.old, self.new)
+        self.set_backend("e")
+        self.health.side_effect = ValueError("health failed")
+        with self.assertRaises(ValueError):
+            self.paired.activate_forward(self.old, self.new)
+        self.assertEqual("d" * 40, hosting.current_revision(self.publisher.releases))
+        self.health.side_effect = None
+        self.paired.activate_forward(self.old, self.new)
+        self.assertEqual("healthy", self.publisher.load()["phase"])
+
+    def test_forward_stage_and_historical_approval_reject_changed_bytes(self):
+        (self.publisher.releases / ("a" * 40) / "index.html").write_text("altered")
+        with self.assertRaises(DeploymentError):
+            self.paired.prepare_forward(self.old, self.new)
+        self.assertEqual("a" * 40, hosting.current_revision(self.publisher.releases))
+        manifest = self.old["frontend"] | {"archiveSha256": "0" * 64}
+        hosting.atomic_json(self.publisher.root / "manifests" / ("a" * 40 + ".json"), manifest)
+        with self.assertRaises(DeploymentError):
+            self.paired.historical_pair(self.old["backend"])
 
     def test_prepare_activate_and_restore_preserve_each_manifest_binding(self):
         self.paired.prepare(self.old, self.new)

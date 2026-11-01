@@ -1,18 +1,26 @@
 """Native effects for first installation of the reviewed coordination tools."""
 
 import copy
+import hashlib
+import json
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
 import frontend_runtime as hosting
 import frontend_contract
 from coordinated_backup import capture, run as backup_command
-from coordinated_install_files import activate_backup, backup_hashes, stage_guard, stage_tool
-from coordinated_install_policy import validate_install_intent
-from coordinated_integrity import BACKUP_FILES, FILES, content_digest, validate, verify_installed
+from coordinated_install_files import activate_backup, backup_hashes, replace_reviewed, stage_guard, stage_tool
+from coordinated_install_policy import validate_install_intent, validate_upgrade_intent
+from coordinated_integrity import BACKUP_FILES, CONFIG_UPGRADE_FILES, COORDINATOR_FILES, FILES, content_digest, validate, verify_installed, read_manifest
 from coordinated_policy import validate_backup
 from deploy_policy import DeploymentError, ensure
 from monkado_backup.operations import lock as backup_lock
+from deploy_cli import rebaseline
+from deploy_storage import private_read
+from release_catalog import identifiers
+import release_manifest
+from coordinated_frontend import CoordinatedFrontend
 
 
 class InstallationRuntime:
@@ -145,3 +153,110 @@ class InstallationRuntime:
 
     def open_gate(self):
         self.gate.open()
+
+class UpgradeRuntime(InstallationRuntime):
+    """Upgrade authenticated tool bytes and two reviewed configuration modules.
+
+    This is a forward installation: the previous application keeps running,
+    and the original frontend approval is never rewritten or re-bound.
+    """
+
+    def _source(self, manifest):
+        validate(manifest, manifest["configurationHash"])
+        ensure(set(manifest["files"]) == set(FILES), "TOOL_SOURCE_INVALID")
+        for name in FILES:
+            ensure(content_digest(self.source / name) == manifest["files"][name], "TOOL_FILE_CHANGED")
+        # Hash the proposed configuration with the standard hash function.
+        # Only the two explicitly inventoried deployment modules may change.
+        with tempfile.TemporaryDirectory(prefix="reviewed-configuration-") as temporary:
+            shadow = Path(temporary)
+            for name in release_manifest.FILES:
+                source = self.source if name in CONFIG_UPGRADE_FILES else self.root
+                content_digest(source / name)
+                target = shadow / name
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes((source / name).read_bytes())
+            ensure(release_manifest.configuration_hash(shadow) == manifest["configurationHash"], "CONFIGURATION_CHANGED")
+
+    def _verify_pair(self, pair, configurations):
+        state = self.backend_store.load()
+        ensure(state["phase"] in {"succeeded", "acknowledged"} and state["current"] is not None, "BACKEND_CHANGED")
+        expected = pair["backend"]
+        actual = state["current"]
+        ensure(actual["configurationHash"] in configurations and
+               actual | {"configurationHash": expected["configurationHash"]} == expected, "BACKEND_CHANGED")
+        ensure(hosting.backend_revision(self.state) == expected["revision"] and
+               hosting.current_revision(self.publisher.releases) == pair["frontend"]["revision"], "PAIR_CHANGED")
+        ensure(self.native.history() == identifiers(expected["migrationCatalog"]), "DATABASE_HISTORY_DIVERGED")
+        self.native.verify_active(expected)
+        CoordinatedFrontend(self.publisher, self.gate).verify_original(pair)
+        self.publisher.health(pair["frontend"]["revision"], self.publisher.releases / pair["frontend"]["revision"],
+                              pair["frontend"].get("googleEnabled", False))
+        status, _, body = self.native.clients().request("GET", "/openapi/v1.json")
+        ensure(status == 200 and hashlib.sha256(body).hexdigest() == pair["proof"]["openapiSha256"], "BACKEND_CONTRACT_CHANGED")
+        return actual
+
+    def preflight(self, manifest, backup):
+        self._source(manifest)
+        self.approval(manifest)
+        self._timers()
+        ensure(not (self.state / "coordinated-transition.json").exists() and not self.gate.exists(), "RECOVERY_REQUIRED")
+        validate_backup(self.backup_state(), backup, self.clock(), self.backup_started)
+        previous = read_manifest(self.settings / "coordinated-manifest.json")
+        verify_installed(previous, self.configuration(), self.root, self.backup_parent / "monkado_backup",
+                         self.systemd / "monkado-transition-guard.service",
+                         self.systemd / "caddy.service.requires/monkado-transition-guard.service")
+        backend = self.backend_store.load()["current"]
+        pair = CoordinatedFrontend(self.publisher, self.gate).historical_pair(backend)
+        self._verify_pair(pair, {previous["configurationHash"]})
+        return {"manifest": previous, "pair": pair, "backupFiles": backup_hashes(self.backup_parent / "monkado_backup"),
+                "files": {name: content_digest(self.root / name) for name in CONFIG_UPGRADE_FILES},
+                "backupStarted": self.backup_started.isoformat()}
+
+    def validate_intent(self, intent):
+        validate_upgrade_intent(intent)
+        self._source(intent["manifest"])
+
+    def revalidate_recovery(self, intent):
+        self._timers()
+        marker = self.backup_state_directory / "maintenance.json"
+        ensure(not marker.is_symlink(), "BACKUP_RECOVERY_REQUIRED")
+        if marker.exists():
+            backup_command("recover", inherited=True)
+        # A recorded installation can be resumed without trusting a new remote
+        # approval or a newer deployment. Its original backup remains retained.
+        self.validate_intent(intent)
+        self._verify_pair(intent["previousPair"], {intent["previousManifest"]["configurationHash"], intent["manifest"]["configurationHash"]})
+
+    def stage(self, intent):
+        self._timers()
+        self.validate_intent(intent)
+        self._verify_pair(intent["previousPair"], {intent["previousManifest"]["configurationHash"], intent["manifest"]["configurationHash"]})
+
+    def install_backup_code(self, intent):
+        self.gate.verify()
+        source, previous = intent["manifest"], intent["previousManifest"]
+        with backup_lock(self.backup_state_directory / "backup.lock"):
+            for name in COORDINATOR_FILES + CONFIG_UPGRADE_FILES + BACKUP_FILES:
+                target = self.root / name
+                if name in BACKUP_FILES:
+                    target = self.root / "src/Operations.Coordinator/backup" / Path(name).name
+                old = intent["previousFiles"][name] if name in CONFIG_UPGRADE_FILES else previous["files"][name]
+                mode = 0o755 if name == "deployments/production/monkado-coordinate" else 0o644
+                replace_reviewed(target, (self.source / name).read_bytes(), old, source["files"][name], mode)
+            activate_backup(self.source, source, self.backup_parent, intent["previousBackupFiles"])
+            ensure(self.configuration() == source["configurationHash"], "CONFIGURATION_CHANGED")
+            path = self.settings / "coordinated-manifest.json"
+            raw = private_read(path, 65536)
+            ensure(json.loads(raw) in (previous, source), "TOOL_APPROVAL_CHANGED")
+            content = json.dumps(source, sort_keys=True, separators=(",", ":")).encode()
+            replace_reviewed(path, content, hashlib.sha256(raw).hexdigest(), hashlib.sha256(content).hexdigest(), 0o600)
+            rebaseline(self.backend_store, self.native, source["configurationHash"])
+
+    def verify_active_pair(self, intent):
+        self.gate.verify()
+        current = self._verify_pair(intent["previousPair"], {intent["manifest"]["configurationHash"]})
+        state = self.backend_store.load()
+        self.native.restore_baseline(state["baseline"])
+        ensure(self.native.smoke(current) == {"technical": True, "functional": True, "frontend": True}, "BACKEND_VERIFICATION_FAILED")
+        self.gate.verify()

@@ -32,7 +32,7 @@ class CoordinatedBackendTests(unittest.TestCase):
                                        "baseline": {"infrastructure": {}, "frontend": {"revision": "e" * 40}}}
         self.store = Mock(spec=["load", "save", "begin", "finish", "reconcile"])
         self.store.load.return_value = self.state
-        self.runtime = Mock(spec=["verify_active", "preflight", "history", "stop", "start", "migrate", "smoke", "restore_baseline", "clients"])
+        self.runtime = Mock(spec=["verify_active", "preflight", "prepare", "history", "stop", "start", "migrate", "smoke", "restore_baseline", "clients"])
         self.runtime.history.return_value = identifiers(self.previous["backend"]["migrationCatalog"])
         self.runtime.preflight.return_value = {"infrastructure": {}, "frontend": {"revision": "e" * 40}}
         self.runtime.smoke.return_value = {"technical": True, "functional": True, "frontend": True}
@@ -84,6 +84,36 @@ class CoordinatedBackendTests(unittest.TestCase):
         self.runtime.clients.return_value.request.return_value = (200, {}, b"changed")
         with self.assertRaisesRegex(DeploymentError, "BACKEND_CONTRACT_CHANGED"):
             self.coordinator.verify_contract(candidate)
+
+    def test_forward_transition_applies_migration_once_and_reconciles_completed_backend(self):
+        self.candidate["backend"] = release("b", True) | {"rollbackAllowed": False}
+        self.approved.return_value = self.candidate["backend"]
+        self.coordinator.prepare_forward(self.previous, self.candidate)
+        old = identifiers(self.previous["backend"]["migrationCatalog"])
+        new = identifiers(self.candidate["backend"]["migrationCatalog"])
+        self.runtime.history.side_effect = [old, new]
+        self.coordinator.install_forward(self.previous, self.candidate)
+        self.assertEqual("succeeded", self.state["phase"])
+        self.runtime.migrate.assert_called_once_with(self.candidate["backend"])
+        self.runtime.history.side_effect = None
+        self.runtime.history.return_value = new
+        self.coordinator.install_forward(self.previous, self.candidate)
+        self.runtime.migrate.assert_called_once()
+
+    def test_forward_recovery_reconciles_applied_sql_and_refuses_unrelated_history(self):
+        self.candidate["backend"] = release("b", True) | {"rollbackAllowed": False}
+        self.state.update(phase="recoveryRequired", candidate=self.candidate["backend"], previous=self.previous["backend"])
+        new = identifiers(self.candidate["backend"]["migrationCatalog"])
+        self.runtime.history.return_value = new
+        self.coordinator.install_forward(self.previous, self.candidate)
+        self.runtime.migrate.assert_not_called()
+        self.runtime.start.assert_called_once_with(self.candidate["backend"])
+        self.state.update(phase="recoveryRequired", candidate=self.candidate["backend"], previous=self.previous["backend"])
+        self.runtime.stop.reset_mock()
+        self.runtime.history.return_value = [*new, "003_foreign.sql"]
+        with self.assertRaisesRegex(DeploymentError, "DATABASE_HISTORY_DIVERGED"):
+            self.coordinator.install_forward(self.previous, self.candidate)
+        self.runtime.stop.assert_not_called()
 
 
 if __name__ == "__main__":

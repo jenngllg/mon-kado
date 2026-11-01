@@ -50,7 +50,7 @@ def extract(archive, destination, manifest, configuration):
         seen = set()
         destination.mkdir(mode=0o700)
         for entry in package_file:
-            ensure(entry.name in FILES and entry.name not in seen and entry.isfile() and
+            ensure(entry.name in manifest["files"] and entry.name not in seen and entry.isfile() and
                    0 <= entry.size <= MAXIMUM_FILE_BYTES, "TOOL_ARCHIVE_INVALID")
             seen.add(entry.name)
             target = destination / entry.name
@@ -64,4 +64,4 @@ def extract(archive, destination, manifest, configuration):
                     output.write(chunk)
             target.chmod(0o644)
             ensure(checksum.hexdigest() == manifest["files"][entry.name], "TOOL_FILE_CHANGED")
-        ensure(seen == set(FILES), "TOOL_ARCHIVE_INVALID")
+        ensure(seen == set(manifest["files"]), "TOOL_ARCHIVE_INVALID")

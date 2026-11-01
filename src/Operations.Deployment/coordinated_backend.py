@@ -44,6 +44,41 @@ class CoordinatedBackend:
                installed["checks"] == {"technical": True, "functional": True, "frontend": True},
                "BACKEND_VERIFICATION_FAILED")
 
+    def prepare_forward(self, previous, candidate):
+        """Require an append-only SQL transition and its explicit no-rollback approval."""
+        state = self.store.load()
+        ensure(state["phase"] in {"succeeded", "acknowledged"} and state["current"] == previous["backend"], "BACKEND_CHANGED")
+        ensure(self.approved() == candidate["backend"], "BACKEND_APPROVAL_CHANGED")
+        self.runtime.verify_active(previous["backend"])
+        ensure(self.runtime.history() == identifiers(previous["backend"]["migrationCatalog"]), "DATABASE_HISTORY_DIVERGED")
+        policy = decision(previous["backend"], candidate["backend"], self.runtime.history())
+        ensure(policy["migrate"] and not policy["rollback"], "FORWARD_MIGRATION_REQUIRED")
+        self.runtime.preflight(candidate["backend"], previous["backend"])
+
+    def install_forward(self, previous, candidate):
+        """Resume only this candidate, applying each transactional migration at most once."""
+        self.gate.verify()
+        state = self.store.load()
+        release = candidate["backend"]
+        if state["phase"] in {"succeeded", "acknowledged"} and state["current"] == release:
+            self.runtime.verify_active(release)
+            ensure(self.runtime.history() == identifiers(release["migrationCatalog"]), "DATABASE_HISTORY_DIVERGED")
+            return
+        if state["phase"] in {"succeeded", "acknowledged"} and state["current"] == previous["backend"]:
+            ensure(self.approved() == release, "BACKEND_APPROVAL_CHANGED")
+            Engine(self.store, self.runtime, self.clock).deploy(release)
+            return
+        ensure(state["candidate"] == release and state["previous"] == previous["backend"] and
+               state["phase"] in {"prepared", "stopping", "migrating", "starting", "verifying", "recoveryRequired"},
+               "BACKEND_RECOVERY_MISMATCH")
+        expected = identifiers(release["migrationCatalog"])
+        history = self.runtime.history()
+        minimum = identifiers(previous["backend"]["migrationCatalog"])
+        ensure(len(history) >= len(minimum) and history == expected[:len(history)], "DATABASE_HISTORY_DIVERGED")
+        self.runtime.prepare(release)
+        self.runtime.restore_baseline(state["baseline"])
+        Engine(self.store, self.runtime, self.clock).rollout(state, {"migrate": history != expected, "rollback": False})
+
     def _baseline_for_frontend(self, state, previous, candidate):
         """Bind backend smokes to the exact currently installed, retained frontend."""
         active = hosting.current_revision(self.frontend.publisher.releases)
@@ -92,6 +127,10 @@ class CoordinatedBackend:
     def verify_contract(self, candidate):
         """Match the actual local HTTPS API schema to the protected frontend proof."""
         self.gate.verify()
+        self.verify_schema(candidate)
+
+    def verify_schema(self, pair):
+        """Compare the actual local API to the retained immutable schema proof."""
         status, _, body = self.runtime.clients().request("GET", "/openapi/v1.json")
-        ensure(status == 200 and hashlib.sha256(body).hexdigest() == candidate["proof"]["openapiSha256"],
+        ensure(status == 200 and hashlib.sha256(body).hexdigest() == pair["proof"]["openapiSha256"],
                "BACKEND_CONTRACT_CHANGED")

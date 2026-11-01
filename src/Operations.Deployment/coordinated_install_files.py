@@ -50,6 +50,31 @@ def install_new(path, data, mode):
         Path(temporary).unlink(missing_ok=True)
 
 
+def replace_reviewed(path, data, previous_digest, expected_digest, mode):
+    """Replace only known old or already-installed new root-owned regular bytes."""
+    path = Path(path)
+    safe_parents(path.parent, path.parent)
+    info = path.lstat()
+    ensure(stat.S_ISREG(info.st_mode) and info.st_uid == 0 and info.st_gid == 0 and
+           stat.S_IMODE(info.st_mode) == mode and content_digest(path) in {previous_digest, expected_digest},
+           "TOOL_UPGRADE_FILE_CHANGED")
+    import hashlib
+    ensure(hashlib.sha256(data).hexdigest() == expected_digest, "TOOL_FILE_CHANGED")
+    if content_digest(path) == expected_digest:
+        return
+    descriptor, temporary = tempfile.mkstemp(prefix=".reviewed-upgrade-", dir=path.parent)
+    try:
+        with os.fdopen(descriptor, "wb") as stream:
+            os.fchmod(stream.fileno(), mode)
+            stream.write(data)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, path)
+        sync_directory(path.parent)
+    finally:
+        Path(temporary).unlink(missing_ok=True)
+
+
 def stage_tool(source, manifest, root, settings):
     """Install only new reviewed paths and retain all previous backup sources."""
     source, root, settings = map(Path, (source, root, settings))
@@ -124,8 +149,10 @@ def stage_backup(source, manifest, parent, previous):
 
 def activate_backup(source, manifest, parent, previous):
     """Exchange complete packages once; identify an already completed exchange."""
-    current, staging = stage_backup(source, manifest, parent, previous)
     wanted = {Path(name).name: manifest["files"][name] for name in BACKUP_FILES}
+    if previous == wanted and backup_hashes(Path(parent) / "monkado_backup") == wanted:
+        return
+    current, staging = stage_backup(source, manifest, parent, previous)
     if backup_hashes(current) != wanted:
         exchange(current, staging)
     ensure(backup_hashes(current) == wanted and backup_hashes(staging) == previous, "BACKUP_CODE_INVALID")
