@@ -17,11 +17,14 @@ func (a *API) routes() {
 	a.copyRoutes()
 	a.previewRoutes()
 	a.sharingRoutes()
+	a.groupRoutes()
 	a.imageRoutes()
 	a.twoFactorRoutes()
 	a.moderationRoutes()
 	a.exportRoutes()
 	a.administrationRoutes()
+	a.activityRoutes()
+	a.impersonationRoutes()
 	a.googleRoutes()
 	a.route("POST /api/v1/wishlists/{wishlistId}/wish-import-previews", options{Auth: true, Rate: a.Service.Config.Imports().PermitLimit, RateByMember: true, ImageAdmission: true}, a.importPreview)
 	a.route("GET /liveness", options{}, func(r *request) (response, error) {
@@ -170,7 +173,7 @@ func (a *API) wish(r *request) (response, error) {
 		return response{Status: 204}, a.Service.DeleteWish(r.Context(), owner, list, id, *v)
 	}
 	if r.Method == http.MethodPatch {
-		input, err := body[domain.SetWishFavoriteRequest](r)
+		input, err := body[domain.UpdateWishFavoriteRequest](r)
 		if err != nil {
 			return response{}, err
 		}

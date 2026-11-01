@@ -264,6 +264,7 @@ type CurrentSessionResponse struct {
 
 // GiftReservationHistoryResponse preserves the versioned JSON contract.
 type GiftReservationHistoryResponse struct {
+	GroupSuggestionPath   *string    `json:"groupSuggestionPath"`
 	GroupId               *string    `json:"groupId"`
 	GroupWishPath         *string    `json:"groupWishPath"`
 	InaccessibilityReason *string    `json:"inaccessibilityReason"`
@@ -605,3 +606,6 @@ type CopyWishRequest struct {
 	SourceShareLinkId *string `json:"sourceShareLinkId"`
 	SourceWishId      *string `json:"sourceWishId"`
 }
+
+// UpdateWishFavoriteRequest retains the favorite-only update contract.
+type UpdateWishFavoriteRequest = SetWishFavoriteRequest

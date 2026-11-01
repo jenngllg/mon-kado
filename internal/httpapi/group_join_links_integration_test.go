@@ -39,7 +39,7 @@ func TestGroupJoinLink_WhenUserHasConcurrentForeignKeyReference_DoesNotBlockEnro
 	requireStatus(t, s.foreign.send(t, "GET", s.base, "", nil), 200, nil)
 }
 
-func TestGroupInvitations_WhenSentByAcceptedMember_RequireRecipientConsentAndPreserveOwnerControls(t *testing.T) {
+func TestGroupInvitations_WhenSentByAcceptedMember_RequireRecipientConsentAndAllowMemberRevocation(t *testing.T) {
 	// Arrange
 	s := newGroupScenario(t)
 	s.accept(t, s.member, s.memberID)
@@ -51,7 +51,8 @@ func TestGroupInvitations_WhenSentByAcceptedMember_RequireRecipientConsentAndPre
 	// Assert
 	requireStatus(t, s.member.send(t, "GET", location, "", nil), 200, nil)
 	requireStatus(t, s.member.send(t, "GET", s.base+"/invitations", "", nil), 200, nil)
-	requireStatus(t, s.member.send(t, "DELETE", location, "", nil), 403, nil)
+	requireStatus(t, s.member.send(t, "DELETE", location, "", nil), 204, nil)
+	requireStatus(t, s.member.send(t, "POST", s.base+"/invitations", fmt.Sprintf(`{"memberId":%q}`, s.foreignID), nil), 201, &invitation)
 	requireStatus(t, s.foreign.send(t, "GET", s.base, "", nil), 404, nil)
 	requireStatus(t, s.foreign.send(t, "POST", s.base+"/invitations", fmt.Sprintf(`{"memberId":%q}`, s.ownerID), nil), 404, nil)
 	requireStatus(t, s.foreign.send(t, "POST", "/api/v1/group-invitations/"+invitation.Id+"/accept", "", nil), 200, nil)
@@ -165,10 +166,9 @@ func TestGroupJoinLink_WhenRevoked_InvalidatesOldCodesAndPreservesAcceptedMember
 	oldVersion := created.Header.Get("ETag")
 	requireStatus(t, created, 201, &first)
 	// Act / Assert
-	requireStatus(t, s.member.send(t, "DELETE", path, "", map[string]string{"If-Match": oldVersion}), 403, nil)
 	requireStatus(t, s.owner.send(t, "DELETE", path, "", nil), 428, nil)
 	requireStatus(t, s.owner.send(t, "DELETE", path, "", map[string]string{"If-Match": "bad"}), 400, nil)
-	requireStatus(t, s.owner.send(t, "DELETE", path, "", map[string]string{"If-Match": oldVersion}), 204, nil)
+	requireStatus(t, s.member.send(t, "DELETE", path, "", map[string]string{"If-Match": oldVersion}), 204, nil)
 	requireStatus(t, s.foreign.send(t, "POST", "/api/v1/groups/join", "", map[string]string{"X-MonKado-Share-Token": first.Code}), 404, nil)
 	requireStatus(t, s.member.send(t, "GET", s.base, "", nil), 200, nil)
 	requireStatus(t, s.member.send(t, "POST", path, "", nil), 201, &second)

@@ -25,7 +25,7 @@ func scanGroupWishlist(row pgx.Row) (domain.GroupWishlistResponse, error) {
 func (s *Service) GroupWishlists(ctx context.Context, member, group string, page, size int) (domain.PaginatedResponse[domain.GroupWishlistResponse], error) {
 	var result domain.PaginatedResponse[domain.GroupWishlistResponse]
 	err := s.groupReadTransaction(ctx, func(tx pgx.Tx) error {
-		if _, _, err := s.lockGroup(ctx, tx, member, group, false); err != nil {
+		if _, _, err := s.lockGroup(ctx, tx, member, group); err != nil {
 			return err
 		}
 		var err error
@@ -43,7 +43,7 @@ func (s *Service) ShareGroupWishlist(ctx context.Context, member, group, wishlis
 			return err
 		}
 		// Match account erasure's wishlist-before-group order to avoid lock cycles.
-		if _, _, err := s.lockGroup(ctx, tx, member, group, false); err != nil {
+		if _, _, err := s.lockGroup(ctx, tx, member, group); err != nil {
 			return err
 		}
 		var visible bool
@@ -95,7 +95,7 @@ func (s *Service) verifyGroupWishlist(ctx context.Context, tx pgx.Tx, member, gr
 	if err != nil {
 		return share, err
 	}
-	if _, _, err = s.lockGroup(ctx, tx, member, group, false); err != nil {
+	if _, _, err = s.lockGroup(ctx, tx, member, group); err != nil {
 		return share, err
 	}
 	// A withdrawal may have committed while the wishlist lock was awaited.
@@ -119,7 +119,6 @@ func (s *Service) GroupWishlist(ctx context.Context, member, group, wishlist str
 			return err
 		}
 		r.CanReserve = share.Owner != member
-		r.CanSubscribe = share.Owner != member
 		if err = tx.QueryRow(ctx, `SELECT w.id::text,w.owner_id::text,u.display_name,w.name,w.occasion,w.event_date::text,w.message FROM wishlists w JOIN users u ON u.id=w.owner_id WHERE w.id=$1`, wishlist).Scan(&r.Id, &r.OwnerId, &r.OwnerDisplayName, &r.Name, &r.Occasion, &r.EventDate, &r.Message); err != nil {
 			return err
 		}
@@ -143,7 +142,7 @@ func (s *Service) GroupWishlist(ctx context.Context, member, group, wishlist str
 			if err != nil {
 				return err
 			}
-			if availableOnly && wish.AvailableQuantity != nil && *wish.AvailableQuantity == 0 && (wish.CurrentParticipantReservedQuantity == nil || *wish.CurrentParticipantReservedQuantity == 0) {
+			if availableOnly && wish.AvailableQuantity != nil && *wish.AvailableQuantity == 0 {
 				continue
 			}
 			r.Wishes = append(r.Wishes, domain.SharedWishResponse{Id: wish.Id, Name: wish.Name, Note: wish.Note, Url: wish.Url, Price: wish.Price, Quantity: wish.Quantity, ReservedQuantity: wish.ReservedQuantity, AvailableQuantity: wish.AvailableQuantity, CurrentParticipantReservedQuantity: wish.CurrentParticipantReservedQuantity, ImageUrl: wish.ImageUrl, IsFavorite: wish.IsFavorite, Color: wish.Color, Size: wish.Size, IsSurprise: wish.IsSurprise, AcceptsSecondHand: wish.AcceptsSecondHand})
@@ -206,7 +205,7 @@ func (s *Service) GroupReservation(ctx context.Context, member, group, wishlist,
 				return err
 			}
 		}
-		return s.mutateReservation(ctx, tx, share, wish, member, p.Id, method, quantity, expected, &result)
+		return s.reservationInTransaction(ctx, tx, share, wish, p.Id, member, method, quantity, expected, domain.SharedWishNotFound, &result)
 	})
 	return result, err
 }

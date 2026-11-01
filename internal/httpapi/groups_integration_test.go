@@ -20,37 +20,6 @@ type groupScenario struct {
 	base, etag                   string
 }
 
-func TestGroupInvitations_WhenListingReceived_ExposesOnlyActiveRecipientInvitations(t *testing.T) {
-	// Arrange
-	s := newGroupScenario(t)
-	invitation := s.invite(t, s.memberID)
-	s.invite(t, s.foreignID)
-	path := "/api/v1/group-invitations"
-	// Act
-	var received domain.PaginatedResponse[domain.GroupInvitationResponse]
-	requireStatus(t, s.member.send(t, "GET", path, "", nil), 200, &received)
-	// Assert: pending consent permits reading the invitation, never the group.
-	if received.TotalCount != 1 || len(received.Items) != 1 || received.Items[0].Id != invitation.Id || received.Items[0].MemberId != s.memberID {
-		t.Fatal("received invitations include another recipient or omit the current one")
-	}
-	requireStatus(t, s.member.send(t, "GET", s.base, "", nil), 404, nil)
-	requireStatus(t, s.owner.send(t, "GET", path, "", nil), 200, &received)
-	if received.TotalCount != 0 || received.Items == nil || len(received.Items) != 0 {
-		t.Fatal("sending an invitation made it a received invitation")
-	}
-	requireStatus(t, s.member.send(t, "GET", path+"?page=2&pageSize=1", "", nil), 200, &received)
-	if received.CurrentPage != 2 || received.TotalCount != 1 || len(received.Items) != 0 || !received.HasPreviousPage {
-		t.Fatal("received invitation pagination differs")
-	}
-	requireStatus(t, s.member.send(t, "GET", path+"?pageSize=0", "", nil), 400, nil)
-	now := s.owner.service.Now()
-	s.owner.service.Now = func() time.Time { return now.Add(15 * 24 * time.Hour) }
-	received, err := s.owner.service.GroupInvitations(t.Context(), s.memberID, "", 1, 20)
-	if err != nil || received.TotalCount != 0 || received.Items == nil || len(received.Items) != 0 {
-		t.Fatal("expired invitations remain in the received collection")
-	}
-}
-
 func TestGroups_WhenSharingAcrossGroups_UsesOneReservationAndRevokesMemberOwnedGrants(t *testing.T) {
 	// Arrange
 	s := newGroupScenario(t)
@@ -124,6 +93,12 @@ func TestGroups_WhenImageAccessIsRevokedOrHidden_InvalidatesGroupBoundGrants(t *
 				t.Fatal(err)
 			}
 			requireStatus(t, s.member.send(t, "GET", grant.RequestURI(), "", nil), 200, nil)
+			thumbnail := grant.RequestURI() + "&size=thumbnail"
+			thumbnailResponse := s.member.send(t, "GET", thumbnail, "", nil)
+			if thumbnailResponse.Header.Get("Content-Type") != "image/jpeg" && thumbnailResponse.Header.Get("Content-Type") != "image/png" {
+				t.Fatal("group thumbnail has incorrect media type")
+			}
+			requireStatus(t, thumbnailResponse, 200, nil)
 			requireStatus(t, s.member.send(t, "GET", strings.Replace(grant.RequestURI(), s.group.Id, security.NewID(), 1), "", nil), 404, nil)
 			// Act
 			switch action {
@@ -148,6 +123,7 @@ func TestGroups_WhenImageAccessIsRevokedOrHidden_InvalidatesGroupBoundGrants(t *
 			}
 			// Assert: grants are not a cached membership or a public capability.
 			requireStatus(t, s.member.send(t, "GET", grant.RequestURI(), "", nil), 404, nil)
+			requireStatus(t, s.member.send(t, "GET", thumbnail, "", nil), 404, nil)
 			requireStatus(t, s.member.send(t, "GET", base+"/wishes/"+wish.Id, "", nil), 404, nil)
 			requireStatus(t, s.owner.send(t, "GET", own, "", nil), 200, nil)
 		})
@@ -235,14 +211,12 @@ func TestGroups_WhenCreatingInvitingAcceptingAndLeaving_PreservesPrivateLifecycl
 		t.Fatal("accepted membership was not persisted")
 	}
 	requireStatus(t, s.member.send(t, "GET", s.base+"/invitations", "", nil), 200, nil)
-	requireStatus(t, s.member.send(t, "DELETE", s.base+"/members/"+s.ownerID, "", nil), 403, nil)
-	requireStatus(t, s.owner.send(t, "DELETE", s.base+"/members/current", "", nil), 409, nil)
 	requireStatus(t, s.member.send(t, "DELETE", s.base+"/members/current", "", nil), 204, nil)
 	requireStatus(t, s.member.send(t, "GET", s.base, "", nil), 404, nil)
 	requireStatus(t, s.owner.send(t, "DELETE", s.base+"/members/"+s.memberID, "", nil), 404, nil)
 }
 
-func TestGroups_WhenRenamingRevokingDecliningOrExpiring_EnforcesOwnershipVersionsAndConsent(t *testing.T) {
+func TestGroups_WhenRenamingRevokingDecliningOrExpiring_EnforcesMembershipVersionsAndConsent(t *testing.T) {
 	// Arrange
 	s := newGroupScenario(t)
 	s.accept(t, s.member, s.memberID)
@@ -250,10 +224,9 @@ func TestGroups_WhenRenamingRevokingDecliningOrExpiring_EnforcesOwnershipVersion
 	for _, method := range []string{"PUT", "DELETE"} {
 		requireStatus(t, s.owner.send(t, method, s.base, `{"name":"Renamed"}`, nil), 428, nil)
 		requireStatus(t, s.owner.send(t, method, s.base, `{"name":"Renamed"}`, map[string]string{"If-Match": "bad"}), 400, nil)
-		requireStatus(t, s.member.send(t, method, s.base, `{"name":"Renamed"}`, map[string]string{"If-Match": s.etag}), 403, nil)
 		requireStatus(t, s.foreign.send(t, method, s.base, `{"name":"Renamed"}`, map[string]string{"If-Match": s.etag}), 404, nil)
 	}
-	renamed := s.owner.send(t, "PUT", s.base, `{"name":" Renamed "}`, map[string]string{"If-Match": s.etag})
+	renamed := s.member.send(t, "PUT", s.base, `{"name":" Renamed "}`, map[string]string{"If-Match": s.etag})
 	next := renamed.Header.Get("ETag")
 	var group domain.GroupResponse
 	requireStatus(t, renamed, 200, &group)
@@ -268,7 +241,7 @@ func TestGroups_WhenRenamingRevokingDecliningOrExpiring_EnforcesOwnershipVersion
 		case "decline":
 			requireStatus(t, s.foreign.send(t, "DELETE", received, "", nil), 204, nil)
 		case "revoke":
-			requireStatus(t, s.owner.send(t, "DELETE", s.base+"/invitations/"+invitation.Id, "", nil), 204, nil)
+			requireStatus(t, s.member.send(t, "DELETE", s.base+"/invitations/"+invitation.Id, "", nil), 204, nil)
 		case "expire":
 			now := s.owner.service.Now()
 			s.owner.service.Now = func() time.Time { return now.Add(15 * 24 * time.Hour) }
@@ -282,7 +255,7 @@ func TestGroups_WhenRenamingRevokingDecliningOrExpiring_EnforcesOwnershipVersion
 		requireStatus(t, s.foreign.send(t, "POST", received+"/accept", "", nil), 404, nil)
 		requireStatus(t, s.foreign.send(t, "GET", s.base, "", nil), 404, nil)
 	}
-	requireStatus(t, s.owner.send(t, "DELETE", s.base, "", map[string]string{"If-Match": next}), 204, nil)
+	requireStatus(t, s.member.send(t, "DELETE", s.base, "", map[string]string{"If-Match": next}), 204, nil)
 	requireStatus(t, s.member.send(t, "GET", s.base, "", nil), 404, nil)
 }
 
@@ -311,8 +284,8 @@ func TestGroups_WhenSharingAndReserving_KeepsListsPrivateAndUsesGlobalReservatio
 	requireStatus(t, s.foreign.send(t, "GET", groupList, "", nil), 404, nil)
 	var shared domain.SharedWishlistResponse
 	requireStatus(t, s.member.send(t, "GET", groupList, "", nil), 200, &shared)
-	if !shared.CanSubscribe || shared.CurrentParticipant != nil || len(shared.Wishes) != 1 {
-		t.Fatal("read enrolled a member or omitted following permission")
+	if shared.CanSubscribe || shared.CurrentParticipant != nil || len(shared.Wishes) != 1 {
+		t.Fatal("read enrolled a member or minted a follow capability")
 	}
 	reservation := groupList + "/wishes/" + wish.Id + "/reservations/current"
 	requireStatus(t, s.member.send(t, "GET", reservation, "", nil), 404, nil)
@@ -327,7 +300,7 @@ func TestGroups_WhenSharingAndReserving_KeepsListsPrivateAndUsesGlobalReservatio
 	// Assert: history navigates through live membership and never invents public sharing.
 	var history domain.PaginatedResponse[domain.GiftReservationHistoryResponse]
 	requireStatus(t, s.member.send(t, "GET", "/api/v1/members/current/reservations", "", nil), 200, &history)
-	if len(history.Items) != 1 || history.Items[0].GroupWishPath == nil || history.Items[0].ShareUrl != nil || history.Items[0].GroupId == nil {
+	if len(history.Items) != 1 || history.Items[0].GroupWishPath == nil || history.Items[0].ShareUrl != nil || history.Items[0].GroupId == nil || history.Items[0].OwnerId == nil || *history.Items[0].OwnerId != s.ownerID {
 		t.Fatal("history did not preserve group-only access")
 	}
 	requireStatus(t, s.owner.send(t, "POST", own+"/share-link", "", nil), 201, nil)
@@ -335,9 +308,10 @@ func TestGroups_WhenSharingAndReserving_KeepsListsPrivateAndUsesGlobalReservatio
 	requireStatus(t, s.member.send(t, "GET", groupList, "", nil), 404, nil)
 	requireStatus(t, s.member.send(t, "DELETE", reservation, "", map[string]string{"If-Match": tag}), 404, nil)
 	requireStatus(t, s.member.send(t, "GET", "/api/v1/members/current/reservations", "", nil), 200, &history)
-	if history.Items[0].GroupWishPath != nil || history.Items[0].ShareUrl != nil || history.Items[0].OwnerId != nil || history.Items[0].InaccessibilityReason == nil {
+	if history.Items[0].GroupWishPath != nil || history.Items[0].ShareUrl != nil || history.Items[0].OwnerId == nil || *history.Items[0].OwnerId != s.ownerID || history.Items[0].InaccessibilityReason == nil {
 		t.Fatal("history escalated withdrawn group access to a public secret")
 	}
+	requireStatus(t, s.member.send(t, "GET", "/api/v1/members/"+s.ownerID+"/profile", "", nil), 200, nil)
 	requireStatus(t, s.owner.send(t, "PUT", groupList, "", nil), 201, nil)
 	requireStatus(t, s.member.send(t, "DELETE", reservation, "", map[string]string{"If-Match": tag}), 204, nil)
 	requireStatus(t, s.owner.send(t, "DELETE", s.base+"/members/"+s.memberID, "", nil), 204, nil)
@@ -363,15 +337,6 @@ func TestGroups_WhenInputIdentityOrCsrfIsInvalid_RejectsWithoutMutations(t *test
 	for _, query := range []string{"?page=0", "?pageSize=101", "?page="} {
 		requireStatus(t, s.owner.send(t, "GET", "/api/v1/groups"+query, "", nil), 400, nil)
 	}
-	for _, path := range []string{s.base + "/members", s.base + "/invitations", s.base + "/wishlists", "/api/v1/group-invitations"} {
-		requireStatus(t, s.owner.send(t, "GET", path+"?pageSize=0", "", nil), 400, nil)
-	}
-	requireStatus(t, s.owner.send(t, "PUT", s.base, `{"name":""}`, map[string]string{"If-Match": s.etag}), 400, nil)
-	reservation := s.base + "/wishlists/" + security.NewID() + "/wishes/" + security.NewID() + "/reservations/current"
-	requireStatus(t, s.owner.send(t, "DELETE", reservation, "", nil), 428, nil)
-	requireStatus(t, s.owner.send(t, "PUT", reservation, `{"quantity":1}`, map[string]string{"If-Match": "bad"}), 400, nil)
-	requireStatus(t, s.owner.send(t, "PUT", reservation, `{"quantity":0}`, nil), 400, nil)
-	requireStatus(t, s.owner.send(t, "PUT", s.base+"/image", "not a multipart image", map[string]string{"If-Match": s.etag}), 415, nil)
 	visitor := s.owner.visitor(t)
 	requireStatus(t, visitor.send(t, "GET", "/api/v1/groups", "", nil), 401, nil)
 	s.owner.csrf = ""

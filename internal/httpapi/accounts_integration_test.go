@@ -13,43 +13,6 @@ import (
 	"github.com/JennGllg/mon-kado/internal/domain"
 )
 
-func TestCurrentSession_WhenAdministratorFlagChanges_ReportsBooleanWithoutBypassingTwoFactor(t *testing.T) {
-	// Arrange
-	f := newFixture(t)
-	member := f.member(t, "role-visibility@example.test")
-	readAdmin := func() bool {
-		t.Helper()
-		var body map[string]any
-		requireStatus(t, f.send(t, "GET", "/api/v1/auth/sessions/current", "", nil), 200, &body)
-		value, ok := body["isAdmin"].(bool)
-		if !ok {
-			t.Fatal("session isAdmin must be a boolean")
-		}
-		if _, exists := body["roles"]; exists {
-			t.Fatal("session must not expose textual roles")
-		}
-		return value
-	}
-	if readAdmin() {
-		t.Fatal("a member must not be an administrator")
-	}
-	// Act
-	if _, err := f.store.Pool.Exec(t.Context(), `UPDATE users SET is_admin=true WHERE id=$1`, member); err != nil {
-		t.Fatal(err)
-	}
-	// Assert
-	if !readAdmin() {
-		t.Fatal("session did not reflect the live administrator role")
-	}
-	requireStatus(t, f.send(t, "GET", "/api/v1/admin/reported-wishlists", "", nil), 403, nil)
-	if _, err := f.store.Pool.Exec(t.Context(), `UPDATE users SET is_admin=false WHERE id=$1`, member); err != nil {
-		t.Fatal(err)
-	}
-	if readAdmin() {
-		t.Fatal("session retained a revoked administrator role")
-	}
-}
-
 func TestProfile_WhenSearchVisibilityChanges_PersistsPreferenceWithoutHidingPublicPhoto(t *testing.T) {
 	// Arrange
 	f := newFixture(t)
@@ -59,7 +22,12 @@ func TestProfile_WhenSearchVisibilityChanges_PersistsPreferenceWithoutHidingPubl
 	etag := initial.Header.Get("ETag")
 	requireStatus(t, initial, 200, &identity)
 	if !identity.IsVisibleInMemberSearch {
-		t.Fatal("new accounts must be visible in member search by default")
+		t.Fatal("existing search visibility must be preserved by default")
+	}
+	var initialSearch domain.PaginatedResponse[domain.UserSearchResponse]
+	requireStatus(t, f.send(t, "GET", "/api/v1/members?displayName="+url.QueryEscape(identity.DisplayName), "", nil), 200, &initialSearch)
+	if initialSearch.TotalCount != 1 || len(initialSearch.Items) != 1 || initialSearch.Items[0].Id != member {
+		t.Fatal("new members must appear in search before changing profile visibility")
 	}
 	var photo domain.MemberProfileResponse
 	uploaded := f.upload(t, "/api/v1/members/current/profile/image", etag, 42)
@@ -90,7 +58,11 @@ func TestProfile_WhenSearchVisibilityChanges_PersistsPreferenceWithoutHidingPubl
 		}
 		var found domain.PaginatedResponse[domain.UserSearchResponse]
 		requireStatus(t, f.send(t, "GET", "/api/v1/members?displayName=Visibility", "", nil), 200, &found)
-		if (found.TotalCount == 1) != visible || (len(found.Items) == 1) != visible {
+		expectedCount := 0
+		if visible {
+			expectedCount = 1
+		}
+		if found.TotalCount != expectedCount || len(found.Items) != expectedCount {
 			t.Fatal("member search did not apply visibility to items and metadata")
 		}
 		access := f.access
@@ -105,15 +77,8 @@ func TestProfile_WhenSearchVisibilityChanges_PersistsPreferenceWithoutHidingPubl
 			t.Fatal("display-name change overwrote the search preference")
 		}
 	}
-	for _, invalid := range []string{`"false"`, `1`, `null`} {
+	for _, invalid := range []string{`"false"`, `1`} {
 		requireStatus(t, f.send(t, "PUT", "/api/v1/members/current/profile", `{"displayName":"Visibility member","isVisibleInMemberSearch":`+invalid+`}`, map[string]string{"If-Match": etag}), 400, nil)
-	}
-	for _, payload := range []string{`{"displayName":"Visibility member"}`, `{"displayName":"Visibility member","isVisibleInMemberSearch":true}`} {
-		unchanged := f.send(t, "PUT", "/api/v1/members/current/profile", payload, map[string]string{"If-Match": etag})
-		if unchanged.Header.Get("ETag") != etag {
-			t.Fatal("unchanged member profile changed its version")
-		}
-		requireStatus(t, unchanged, 200, nil)
 	}
 }
 

@@ -1,0 +1,12 @@
+{
+  "manifest_version": 3,
+  "name": "MonKado — import direct (POC)",
+  "version": "0.1.0",
+  "description": "Suggest wish details from the product page currently open in the browser.",
+  "permissions": ["activeTab", "scripting", "clipboardRead", "clipboardWrite", "storage"],
+  "background": { "service_worker": "background.js" },
+  "action": {
+    "default_title": "Lire cette fiche pour MonKado",
+    "default_popup": "popup.html"
+  }
+}

@@ -4,6 +4,7 @@ package logging
 // HTTP and application boundary event identifiers occupy the 0–999 range.
 const (
 	BusinessOperationSucceeded  = 100
+	ActivityRecordingFailed     = 102
 	HTTPRequestCompleted        = 101
 	BusinessOperationFailed     = 400
 	UnhandledRequestPanic       = 500

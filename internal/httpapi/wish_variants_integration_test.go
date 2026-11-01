@@ -18,7 +18,7 @@ func TestWishVariants_WhenCreatingAndEditing_PersistsAndSharesOptionalValues(t *
 	base := "/api/v1/wishlists/" + list.Id + "/wishes"
 	var wish domain.WishResponse
 	// Act
-	created := f.send(t, "POST", base, `{"name":"Product","color":" vert sauge ","size":" 140 × 200 cm ","quantity":1}`, nil)
+	created := f.send(t, "POST", base, `{"name":"Product","note":"A public description","color":" vert sauge ","size":" 140 × 200 cm ","quantity":1}`, nil)
 	etag := created.Header.Get("ETag")
 	requireStatus(t, created, 201, &wish)
 	path := base + "/" + wish.Id
@@ -55,6 +55,9 @@ func TestWishVariants_WhenCreatingAndEditing_PersistsAndSharesOptionalValues(t *
 		t.Fatal("shared collection differs")
 	}
 	assertVariants(shared.Wishes[0].Color, shared.Wishes[0].Size)
+	if shared.Wishes[0].Note == nil || *shared.Wishes[0].Note != "A public description" || detail.Note == nil || *detail.Note != *shared.Wishes[0].Note {
+		t.Fatal("shared cards and details must expose the same public description")
+	}
 	updated := f.send(t, "PUT", path, `{"name":"Product","quantity":1,"color":"corail","size":"M"}`, map[string]string{"If-Match": etag})
 	next := updated.Header.Get("ETag")
 	requireStatus(t, updated, 200, &wish)
