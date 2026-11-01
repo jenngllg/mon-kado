@@ -35,7 +35,9 @@ COORDINATOR_FILES = (
 )
 BACKUP_MODULES = ("__init__.py", "policy.py", "capture.py", "operations.py", "cli.py", "restore.py", "credentials.py")
 BACKUP_FILES = tuple("src/Operations.Backups/monkado_backup/" + item for item in BACKUP_MODULES)
-FILES = COORDINATOR_FILES + BACKUP_FILES
+LEGACY_FILES = COORDINATOR_FILES + BACKUP_FILES
+CONFIG_UPGRADE_FILES = ("src/Operations.Deployment/deploy_runtime.py", "src/Operations.Deployment/smoke_functional.py")
+FILES = COORDINATOR_FILES + CONFIG_UPGRADE_FILES + BACKUP_FILES
 MAXIMUM_FILE_BYTES = 2 * 1024 * 1024
 
 
@@ -68,7 +70,7 @@ def validate(value, configuration):
            isinstance(value["archiveSha256"], str) and re.fullmatch(r"[0-9a-f]{64}", value["archiveSha256"]) is not None,
            "TOOL_MANIFEST_INVALID")
     files = value["files"]
-    ensure(isinstance(files, dict) and set(files) == set(FILES) and
+    ensure(isinstance(files, dict) and set(files) in (set(FILES), set(LEGACY_FILES)) and
            all(isinstance(digest, str) and re.fullmatch(r"[0-9a-f]{64}", digest) is not None for digest in files.values()),
            "TOOL_MANIFEST_INVALID")
     return value
@@ -97,9 +99,9 @@ def verify_installed(value, configuration, root, backup_root, unit, requires):
     """Verify reviewed bytes, ownership and the Caddy boot-guard dependency."""
     validate(value, configuration)
     root, backup_root, unit, requires = map(Path, (root, backup_root, unit, requires))
-    for name in FILES:
-        path = root / name if name in COORDINATOR_FILES else backup_root / Path(name).name
-        safe_parents(path.parent, root if name in COORDINATOR_FILES else backup_root)
+    for name in value["files"]:
+        path = backup_root / Path(name).name if name in BACKUP_FILES else root / name
+        safe_parents(path.parent, backup_root if name in BACKUP_FILES else root)
         ensure(path.resolve() == path and path.is_file() and not path.is_symlink(), "TOOL_FILE_INVALID")
         info = path.stat()
         expected_mode = 0o755 if name == "deployments/production/monkado-coordinate" else 0o644

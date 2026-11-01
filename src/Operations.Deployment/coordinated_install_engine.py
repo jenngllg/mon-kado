@@ -86,3 +86,18 @@ class InstallationEngine:
             except Exception:
                 pass
             raise DeploymentError("TOOL_INSTALL_RECOVERY_REQUIRED") from error
+
+
+class UpgradeEngine(InstallationEngine):
+    """Upgrade only an authenticated installed inventory under the existing boot guard."""
+
+    def install(self, manifest, backup):
+        ensure(self.store.load() is None, "TOOL_INSTALL_RECOVERY_REQUIRED")
+        previous = self.runtime.preflight(manifest, backup)
+        intent = {"version": 2, "phase": "prepared", "manifest": copy.deepcopy(manifest), "backup": backup,
+                  "previousBackupFiles": previous["backupFiles"], "previousPair": previous["pair"],
+                  "previousManifest": previous["manifest"], "previousFiles": previous["files"],
+                  "backupStarted": previous["backupStarted"], "postInstallBackup": None}
+        self.runtime.validate_intent(intent)
+        self.store.save(intent)
+        return self._run(intent)

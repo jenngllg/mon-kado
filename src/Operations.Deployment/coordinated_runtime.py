@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from coordinated_backup import capture, run as backup_command
-from coordinated_policy import validate_backup, validate_intent, validate_pairs
+from coordinated_policy import validate_backup, validate_intent, validate_pairs, validate_forward_pairs
 from deploy_policy import DeploymentError, ensure
 
 
@@ -93,3 +93,30 @@ class CoordinatedRuntime:
         if pair == self.candidate:
             self.backend.verify_contract(pair)
         self.gate.verify()
+
+
+class ForwardRuntime(CoordinatedRuntime):
+    """Keep a schema-changing pair private until both candidate components verify."""
+
+    def preflight(self, previous, candidate, backup):
+        """Verify original approvals and a fresh snapshot before writing migration intent."""
+        validate_forward_pairs(previous, candidate, self.configuration(), self.backend.runtime.history())
+        validate_backup(self.backup_state(), backup, self.clock(), self.backup_started)
+        ensure(not self.maintenance.exists() and not self.maintenance.is_symlink(), "BACKUP_RECOVERY_REQUIRED")
+        self.backend.verify_schema(previous)
+        self.backend.prepare_forward(previous, candidate)
+        self.frontend.prepare_forward(previous, candidate)
+
+    def install_backend(self, candidate):
+        ensure(candidate == self.candidate and self.previous is not None, "PAIR_INVALID")
+        ensure(not self.maintenance.is_symlink(), "BACKUP_RECOVERY_REQUIRED")
+        if self.maintenance.exists():
+            backup_command("recover", inherited=True)
+            self.gate.verify()
+            ensure(not self.maintenance.exists() and not self.maintenance.is_symlink(), "BACKUP_RECOVERY_REQUIRED")
+        self.backend.install_forward(self.previous, candidate)
+
+    def install_frontend(self, candidate):
+        ensure(candidate == self.candidate and self.previous is not None, "PAIR_INVALID")
+        self.backend.verify_contract(candidate)
+        self.frontend.activate_forward(self.previous, candidate)

@@ -54,10 +54,15 @@ class FunctionalSmoke:
         ensure(result.get("tokenType") == "Bearer" and isinstance(result.get("accessToken"), str), "SMOKE_LOGIN_FAILED")
         self.client.token = result["accessToken"]
         current, _ = self.client.json("GET", SESSIONS + "/current")
-        ensure(current.get("id") == self.account["memberId"] and current.get("isAdmin") is False, "SMOKE_IDENTITY_REFUSED")
+        self.verify_identity(current)
         self.identified = True
         csrf, _ = self.client.json("GET", "/security/csrf-token")
         self.client.csrf = csrf["token"]
+
+    def verify_identity(self, current):
+        """Require the live boolean and the exact separately provisioned identity."""
+        ensure(current.get("id") == self.account["memberId"] and current.get("isAdmin") is False,
+               "SMOKE_IDENTITY_REFUSED")
 
     def run(self):
         """Run once, preserving uncertain mutations for reconciliation rather than retrying them."""

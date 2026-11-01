@@ -50,6 +50,17 @@ class NativeCaptureTests(unittest.TestCase):
         (self.root / "manifest.json").write_text(json.dumps(old))
         self.assertEqual(verify_manifest(self.root), old)
 
+    def test_previous_coordinator_inventory_remains_verifiable_without_rewriting_approval(self):
+        from coordinated_integrity import CONFIG_UPGRADE_FILES
+        path = self.root / "configuration/coordinated-manifest.json"
+        approved = json.loads(path.read_text())
+        for name in CONFIG_UPGRADE_FILES:
+            approved["files"].pop(name)
+        path.write_text(json.dumps(approved))
+        previous = self.manifest | {"files": entries(self.root)}
+        (self.root / "manifest.json").write_text(json.dumps(previous))
+        self.assertEqual(previous, verify_manifest(self.root))
+
     def test_missing_private_pointer_and_staging_artifacts_are_rejected(self):
         (self.root / "configuration/active.env").unlink()
         with self.assertRaisesRegex(BackupError, "INCOMPLETE_CAPTURE"):

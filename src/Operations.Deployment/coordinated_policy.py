@@ -11,6 +11,39 @@ PHASES = {"prepared", "closingGate", "installingBackend", "capturingFrontendBack
           "verifyingCandidate", "committed", "recovering"}
 
 
+def validate_forward_pairs(previous, candidate, configuration_hash, database_history):
+    """Admit a forward-only migration while preserving each original frontend proof."""
+    for pair in (previous, candidate):
+        ensure(isinstance(pair, dict) and set(pair) == {"frontend", "backend", "proof"}, "PAIR_INVALID")
+        backend = pair["backend"]
+        release_manifest.validate(backend, configuration_hash)
+        ensure(backend["schemaVersion"] == 3, "NATIVE_PUBLICATION_REQUIRED")
+        frontend = pair["frontend"]
+        # The installed historical frontend retains its original approval.
+        # Preflight additionally compares its proof with the live API schema.
+        frontend_contract.validate(frontend, frontend["configurationHash"], frontend["backendRevision"])
+        proof = pair["proof"]
+        ensure(isinstance(proof, dict) and set(proof) == {"schemaVersion", "frontendRevision", "backendRevision",
+                                                        "configurationHash", "openapiSha256"}, "PAIR_PROOF_INVALID")
+        ensure(type(proof["schemaVersion"]) is int and proof["schemaVersion"] == 1 and
+               proof["frontendRevision"] == frontend["revision"] and
+               proof["backendRevision"] == frontend["backendRevision"] and
+               proof["configurationHash"] == frontend["configurationHash"] and
+               isinstance(proof["openapiSha256"], str) and re.fullmatch(r"[0-9a-f]{64}", proof["openapiSha256"]),
+               "PAIR_PROOF_INVALID")
+    frontend_contract.validate(candidate["frontend"], configuration_hash, candidate["backend"]["revision"])
+    old, new = previous["backend"]["migrationCatalog"], candidate["backend"]["migrationCatalog"]
+    ensure(new["migrations"][:len(old["migrations"])] == old["migrations"] and
+           len(new["migrations"]) > len(old["migrations"]), "FORWARD_MIGRATION_REQUIRED")
+    ensure(candidate["backend"]["rollbackAllowed"] is False, "FORWARD_ROLLBACK_FORBIDDEN")
+    history = [item["id"] for item in new["migrations"]]
+    minimum = [item["id"] for item in old["migrations"]]
+    ensure(len(minimum) <= len(database_history) <= len(history) and
+           database_history == history[:len(database_history)], "DATABASE_HISTORY_DIVERGED")
+    ensure(previous["backend"]["revision"] != candidate["backend"]["revision"] and
+           previous["frontend"]["revision"] != candidate["frontend"]["revision"], "PAIR_UNCHANGED")
+
+
 def validate_pairs(previous, candidate, configuration_hash, database_history):
     """Validate each immutable frontend against its own exact backend.
 
@@ -44,7 +77,7 @@ def validate_intent(intent, configuration_hash, database_history, tool_digest):
     """Reject malformed recovery state without accepting a new or stale backup."""
     ensure(isinstance(intent, dict) and set(intent) == {"version", "phase", "previous", "candidate", "backup", "frontendBackup", "toolDigest"},
            "TRANSITION_INTENT_INVALID")
-    ensure(type(intent["version"]) is int and intent["version"] == 1 and
+    ensure(type(intent["version"]) is int and intent["version"] in (1, 2) and
            isinstance(intent["phase"], str) and intent["phase"] in PHASES and
            isinstance(intent["backup"], str) and re.fullmatch(r"[0-9a-f]{64}", intent["backup"]) is not None,
            "TRANSITION_INTENT_INVALID")
@@ -55,7 +88,10 @@ def validate_intent(intent, configuration_hash, database_history, tool_digest):
            intent["frontendBackup"] != intent["backup"], "TRANSITION_INTENT_INVALID")
     ensure(intent["phase"] not in {"installingFrontend", "verifyingCandidate", "committed"} or
            intent["frontendBackup"] is not None, "TRANSITION_INTENT_INVALID")
-    validate_pairs(intent["previous"], intent["candidate"], configuration_hash, database_history)
+    if intent["version"] == 2:
+        validate_forward_pairs(intent["previous"], intent["candidate"], configuration_hash, database_history)
+    else:
+        validate_pairs(intent["previous"], intent["candidate"], configuration_hash, database_history)
 
 
 def validate_backup(state, snapshot, now, started):

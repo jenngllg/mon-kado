@@ -40,7 +40,8 @@ class Runtime:
 
     def __init__(self, runner=command, client_factory=Client, clock=monotonic, pause=sleep,
                  root=ROOT, state=STATE, settings=SETTINGS, observability=Path("/var/lib/monkado-observability"),
-                 transport=native_artifacts.download, observer=native_services.observe, service_uid=None):
+                 transport=native_artifacts.download, observer=native_services.observe, service_uid=None,
+                 smoke_factory=None, preflight_smoke_factory=None):
         self.run = runner
         self.clients = client_factory
         self.clock = clock
@@ -52,6 +53,8 @@ class Runtime:
         self.transport = transport
         self.observer = observer
         self.service_uid = service_uid
+        self.smoke_factory = smoke_factory
+        self.preflight_smoke_factory = preflight_smoke_factory
         self.frontend_marker = None
         self.infrastructure = {}
 
@@ -125,7 +128,7 @@ class Runtime:
             native_artifacts.verify_directory(self.directory(current), current)
         ensure(shutil.disk_usage(self.state).free >= 1024 ** 3, "INSUFFICIENT_DISK")
         client = self.clients()
-        probe = FunctionalSmoke(client, account, self.state / "smoke-journal.json")
+        probe = (self.preflight_smoke_factory or self.smoke_factory or FunctionalSmoke)(client, account, self.state / "smoke-journal.json")
         try:
             probe.login()
             if probe.journal.exists():
@@ -260,7 +263,7 @@ class Runtime:
         """Wait for bounded readiness, then run the real authenticated persistence journey once."""
         self.wait_technical(release)
         try:
-            FunctionalSmoke(self.clients(), credentials(self.settings / "deployment-smoke.json"),
+            (self.smoke_factory or FunctionalSmoke)(self.clients(), credentials(self.settings / "deployment-smoke.json"),
                             self.state / "smoke-journal.json").run()
             self.technical_sample(release)
         except (OSError, ValueError, KeyError, TypeError, AttributeError):

@@ -8,7 +8,7 @@ import tempfile
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src/Operations.Deployment"))
-from coordinated_integrity import BACKUP_FILES, COORDINATOR_FILES, create, digest, validate, verify_installed
+from coordinated_integrity import BACKUP_FILES, COORDINATOR_FILES, CONFIG_UPGRADE_FILES, FILES, create, digest, validate, verify_installed
 from deploy_policy import DeploymentError
 
 
@@ -21,10 +21,10 @@ class CoordinatedIntegrityTests(unittest.TestCase):
         self.source = self.root / "source"; self.source.mkdir()
         self.installed = self.root / "installed"; self.installed.mkdir()
         self.backup = self.root / "backup"; self.backup.mkdir()
-        for name in COORDINATOR_FILES + BACKUP_FILES:
+        for name in FILES:
             source = self.source / name; source.parent.mkdir(parents=True, exist_ok=True)
             source.write_text("fixture " + name)
-            target = self.installed / name if name in COORDINATOR_FILES else self.backup / Path(name).name
+            target = self.backup / Path(name).name if name in BACKUP_FILES else self.installed / name
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes(source.read_bytes())
             target.chmod(0o755 if name == "deployments/production/monkado-coordinate" else 0o644)
@@ -40,6 +40,15 @@ class CoordinatedIntegrityTests(unittest.TestCase):
 
     def test_verify_when_all_installed_bytes_match_returns_manifest_digest(self):
         self.assertEqual(self.verify(), digest(self.manifest))
+
+    def test_historical_inventory_remains_valid_and_new_configuration_modules_are_checked(self):
+        historical = copy.deepcopy(self.manifest)
+        for name in CONFIG_UPGRADE_FILES:
+            historical["files"].pop(name)
+        self.assertEqual(digest(historical), self.verify(historical))
+        (self.installed / CONFIG_UPGRADE_FILES[0]).write_text("changed")
+        with self.assertRaises(DeploymentError):
+            self.verify()
 
     def test_verify_when_file_or_unit_changes_fails_closed(self):
         for target in (self.installed / COORDINATOR_FILES[0], self.backup / Path(BACKUP_FILES[0]).name, self.unit):

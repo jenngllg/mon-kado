@@ -9,12 +9,12 @@ import tempfile
 
 from coordinated_backend import CoordinatedBackend
 from coordinated_backup import capture, run as backup_command
-from coordinated_engine import CoordinatedEngine
+from coordinated_engine import CoordinatedEngine, ForwardEngine
 from coordinated_frontend import CoordinatedFrontend
 from coordinated_gate import Gate
 from coordinated_integrity import read_manifest, validate as validate_tool, verify_installed
 from coordinated_locks import locks
-from coordinated_runtime import CoordinatedRuntime
+from coordinated_runtime import CoordinatedRuntime, ForwardRuntime
 from coordinated_store import CoordinatedStore
 from deploy_cli import approved_release
 from deploy_policy import DeploymentError, ensure
@@ -23,6 +23,7 @@ from deploy_runtime import Runtime
 from deploy_storage import Store
 import frontend_runtime as hosting
 from release_manifest import configuration_hash
+from smoke_functional import FunctionalSmoke
 
 ROOT = Path("/opt/monkado")
 STATE = Path("/var/lib/monkado-deployment")
@@ -32,6 +33,20 @@ TOOL_MANIFEST = Path("/etc/monkado/coordinated-manifest.json")
 UNIT = Path("/etc/systemd/system/monkado-transition-guard.service")
 REQUIRES = Path("/etc/systemd/system/caddy.service.requires/monkado-transition-guard.service")
 TOOL_POINTER = "https://api.github.com/repos/jenngllg/mon-kado/releases/tags/coordinator-production"
+
+
+class HistoricalSmoke(FunctionalSmoke):
+    """Inspect a retained pre-boolean API only during a verified forward transition.
+
+    The candidate's real post-migration smoke always uses FunctionalSmoke and
+    requires isAdmin. This reader does not affect application authorization.
+    """
+
+    def verify_identity(self, current):
+        if "isAdmin" in current:
+            return super().verify_identity(current)
+        ensure(current.get("id") == self.account["memberId"] and current.get("roles") == ["Member"],
+               "SMOKE_IDENTITY_REFUSED")
 
 
 def now():
@@ -50,7 +65,7 @@ def installed_tool():
     return manifest, tool_digest
 
 
-def require_protected_tool(manifest):
+def require_protected_tool(manifest, configuration=None):
     """Require the installed manifest to equal the protected public channel."""
     raw = command(["curl", "--disable", "--fail", "--silent", "--show-error", "--location", "--max-redirs", "0",
                    "--proto", "=https", "--proto-redir", "=https", "--noproxy", "*", "--connect-timeout", "10",
@@ -60,7 +75,7 @@ def require_protected_tool(manifest):
     ensure(isinstance(release, dict) and release.get("tag_name") == "coordinator-production" and
            release.get("draft") is False and release.get("prerelease") is False and
            isinstance(release.get("body"), str) and len(release["body"]) <= 65536, "TOOL_APPROVAL_INVALID")
-    value = validate_tool(json.loads(release["body"]), configuration_hash(ROOT))
+    value = validate_tool(json.loads(release["body"]), configuration or configuration_hash(ROOT))
     ensure(value == manifest, "TOOL_APPROVAL_CHANGED")
 
 
@@ -100,6 +115,64 @@ def make_runtime(started):
                               lambda: installed_tool()[1], lambda: json.loads(backup_command("status")), started), publisher, backend_store
 
 
+def make_forward_runtime(started):
+    """Use a historical preflight reader and the strict boolean candidate smoke."""
+    gate = Gate()
+    backend_store = Store(STATE)
+    native = Runtime(preflight_smoke_factory=HistoricalSmoke)
+    publisher = hosting.Deployment(FRONTEND, STATE, configuration_hash(ROOT))
+    frontend = CoordinatedFrontend(publisher, gate)
+    backend = CoordinatedBackend(backend_store, native, frontend, gate,
+                                 lambda: now().isoformat(), lambda: approved_release(configuration_hash(ROOT)))
+    runtime = ForwardRuntime(backend, frontend, gate, lambda: configuration_hash(ROOT),
+                             lambda: installed_tool()[1], lambda: json.loads(backup_command("status")), started)
+    return runtime, publisher, backend_store
+
+
+def approved_forward_pairs(publisher, backend_store):
+    """Retain the original frontend approval and resolve one protected new pair."""
+    state = backend_store.load()
+    ensure(state["phase"] in {"succeeded", "acknowledged"} and state["current"] is not None, "BACKEND_CHANGED")
+    previous = CoordinatedFrontend(publisher, Gate()).historical_pair(state["current"])
+    backend = approved_release(configuration_hash(ROOT))
+    with tempfile.TemporaryDirectory(prefix="forward-pair-", dir=publisher.root) as temporary:
+        staging = Path(temporary)
+        frontend = publisher.approved(staging, backend["revision"])
+        proof = staging / "proof.json"
+        url = f'https://github.com/{hosting.contract.REPOSITORY}/releases/download/frontend-{frontend["revision"]}/coordinated-proof.json'
+        publisher.transport(url, proof, 4096)
+        candidate = {"backend": backend, "frontend": frontend, "proof": json.loads(proof.read_text(encoding="utf-8"))}
+    return previous, candidate
+
+
+def forward_deploy():
+    """Back up, authenticate both pairs, then close traffic for a forward migration."""
+    manifest, _ = installed_tool()
+    require_protected_tool(manifest)
+    store = CoordinatedStore(STATE)
+    ensure(store.load() is None and not Gate().exists(), "RECOVERY_REQUIRED")
+    started = now()
+    snapshot = capture(clock=now)
+    with locks(STATE):
+        ensure(store.load() is None and not Gate().exists(), "RECOVERY_REQUIRED")
+        runtime, publisher, backend_store = make_forward_runtime(started)
+        previous, candidate = approved_forward_pairs(publisher, backend_store)
+        result = ForwardEngine(store, runtime).deploy(previous, candidate, snapshot)
+    return {"state": result, "backendSnapshot": snapshot}
+
+
+def forward_recover():
+    """Reconcile only the durable candidate while the boot guard keeps traffic closed."""
+    installed_tool()
+    store = CoordinatedStore(STATE)
+    with locks(STATE):
+        intent = store.load()
+        ensure(intent is not None and intent.get("version") == 2, "FORWARD_INTENT_REQUIRED")
+        runtime, _, _ = make_forward_runtime(now())
+        result = ForwardEngine(store, runtime).recover()
+    return {"state": result}
+
+
 def deploy():
     """Take a new backend snapshot, then run one protected coordinated transition."""
     manifest, _ = installed_tool()
@@ -121,16 +194,22 @@ def recover():
     installed_tool()
     store = CoordinatedStore(STATE)
     with locks(STATE):
-        runtime, _, _ = make_runtime(now())
-        result = CoordinatedEngine(store, runtime).recover()
+        intent = store.load()
+        if isinstance(intent, dict) and intent.get("version") == 2:
+            runtime, _, _ = make_forward_runtime(now())
+            result = ForwardEngine(store, runtime).recover()
+        else:
+            runtime, _, _ = make_runtime(now())
+            result = CoordinatedEngine(store, runtime).recover()
     return {"state": result}
 
 
 def main():
     """Expose bounded fixed diagnostics and no provider responses or private data."""
     try:
-        ensure(os.geteuid() == 0 and sys.argv[1:] in (["deploy"], ["recover"]), "INVALID_ARGUMENTS")
-        value = deploy() if sys.argv[1] == "deploy" else recover()
+        ensure(os.geteuid() == 0 and sys.argv[1:] in (["deploy"], ["recover"], ["forward-deploy"], ["forward-recover"]), "INVALID_ARGUMENTS")
+        operations = {"deploy": deploy, "recover": recover, "forward-deploy": forward_deploy, "forward-recover": forward_recover}
+        value = operations[sys.argv[1]]()
         print(json.dumps(value, sort_keys=True))
         return 0
     except Exception as error:

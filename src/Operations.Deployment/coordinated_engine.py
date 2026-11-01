@@ -8,6 +8,73 @@ interprets a revision as proof of compatibility and does not run migrations.
 import copy
 
 
+class ForwardEngine:
+    """Complete a schema-changing pair without ever rolling back its database.
+
+    The existing boot guard closes traffic for this journal, including malformed
+    intent. Recovery uses the pinned candidate and verifies it before reopening.
+    """
+
+    def __init__(self, store, runtime):
+        self.store = store
+        self.runtime = runtime
+
+    def deploy(self, previous, candidate, backup):
+        """Record a fully checked candidate before closing public traffic."""
+        if self.store.load() is not None:
+            raise TransitionError("RECOVERY_REQUIRED")
+        self.runtime.preflight(previous, candidate, backup)
+        intent = {"version": 2, "phase": "prepared", "previous": copy.deepcopy(previous),
+                  "candidate": copy.deepcopy(candidate), "backup": backup,
+                  "frontendBackup": None, "toolDigest": self.runtime.tool_digest()}
+        self.runtime.validate_intent(intent)
+        self.store.save(intent)
+        return self._complete(intent)
+
+    def recover(self):
+        """Resume explicit recovery of this exact candidate; never resolve a new pointer."""
+        intent = self.store.load()
+        if intent is None:
+            return "nothingToRecover"
+        self.runtime.validate_intent(intent)
+        return self._complete(intent)
+
+    def _phase(self, intent, phase):
+        intent["phase"] = phase
+        self.runtime.validate_intent(intent)
+        self.store.save(intent)
+
+    def _complete(self, intent):
+        # Every effect can have completed before an acknowledgement was lost.
+        # Repeated stages must reconcile actual artifacts, SQL history and bytes.
+        self.runtime.close_gate()
+        try:
+            if intent["phase"] != "committed":
+                self._phase(intent, "installingBackend")
+                self.runtime.install_backend(intent["candidate"])
+                if intent["frontendBackup"] is None:
+                    self._phase(intent, "capturingFrontendBackup")
+                    intent["frontendBackup"] = self.runtime.capture_frontend_backup(intent["candidate"])
+                    self.runtime.validate_intent(intent)
+                    self.store.save(intent)
+                self._phase(intent, "installingFrontend")
+                self.runtime.install_frontend(intent["candidate"])
+                self._phase(intent, "verifyingCandidate")
+                self.runtime.verify_pair(intent["candidate"])
+                self._phase(intent, "committed")
+            else:
+                self.runtime.verify_pair(intent["candidate"])
+            self.runtime.open_gate()
+            self.store.complete(intent)
+            self.store.clear()
+            return "installed"
+        except Exception:
+            # No rollback can safely run after a schema change. Preserve both
+            # the journal and the gate for an explicit forward recovery.
+            self.runtime.close_gate()
+            raise TransitionError("FORWARD_RECOVERY_REQUIRED") from None
+
+
 class TransitionError(Exception):
     """Report an incomplete transition without exposing provider data."""
 

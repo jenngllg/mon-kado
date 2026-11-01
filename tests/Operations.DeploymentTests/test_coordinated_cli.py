@@ -88,6 +88,15 @@ class CoordinatedCliTests(unittest.TestCase):
         self.engine.recover.assert_called_once()
         approval.assert_not_called(); capture.assert_not_called()
 
+    def test_generic_recovery_dispatches_schema_transition_without_using_rollback_engine(self):
+        self.store.load.return_value = {"version": 2}
+        with patch.object(cli, "installed_tool"), patch.object(cli, "CoordinatedStore", return_value=self.store), \
+             patch.object(cli, "locks", self.locked), patch.object(cli, "make_forward_runtime", return_value=(self.runtime, None, None)), \
+             patch.object(cli, "ForwardEngine", return_value=self.engine), patch.object(cli, "CoordinatedEngine") as rollback:
+            cli.recover()
+        self.engine.recover.assert_called_once()
+        rollback.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()

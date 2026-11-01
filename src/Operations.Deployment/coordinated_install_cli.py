@@ -6,11 +6,16 @@ import os
 from pathlib import Path
 import sys
 
+# The trusted installed manifest prepends its accompanying deployment modules.
+# Load it first, then keep this reviewed installer bundle ahead of those modules.
+import release_manifest
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
 from coordinated_backup import capture, run as backup_command
-from coordinated_cli import require_protected_tool
+from coordinated_cli import HistoricalSmoke, require_protected_tool
 from coordinated_gate import Gate
-from coordinated_install_engine import InstallationEngine
-from coordinated_install_runtime import InstallationRuntime
+from coordinated_install_engine import InstallationEngine, UpgradeEngine
+from coordinated_install_runtime import InstallationRuntime, UpgradeRuntime
 from coordinated_integrity import read_manifest
 from coordinated_locks import locks
 from coordinated_store import InstallationStore
@@ -71,15 +76,54 @@ def recover(source):
     with locks(STATE):
         intent = store.load()
         ensure(intent is not None and intent.get("manifest") == manifest, "TOOL_INSTALL_RECOVERY_REQUIRED")
-        result = InstallationEngine(store, runtime(Path(source), now())).recover()
+        if intent.get("version") == 2:
+            result = UpgradeEngine(store, upgrade_runtime(Path(source), now())).recover()
+        else:
+            result = InstallationEngine(store, runtime(Path(source), now())).recover()
     return {"state": "installed", **result}
+
+
+def upgrade_runtime(source, started):
+    """Inspect the old API explicitly while upgrading to strict boolean tools."""
+    native = Runtime(smoke_factory=HistoricalSmoke)
+    publisher = hosting.Deployment(FRONTEND, STATE, configuration_hash(ROOT))
+    return UpgradeRuntime(source, ROOT, STATE, SETTINGS, BACKUP_ROOT, SYSTEMD, Store(STATE), native, publisher,
+                          Gate(), lambda: configuration_hash(ROOT),
+                          lambda manifest: require_protected_tool(manifest, manifest["configurationHash"]),
+                          lambda: json.loads(backup_command("status")), started, clock=now)
+
+
+def upgrade(source):
+    """Capture the original configuration before a protected, journaled tool upgrade."""
+    manifest = source_manifest(source)
+    require_protected_tool(manifest, manifest["configurationHash"])
+    store = InstallationStore(STATE)
+    ensure(store.load() is None, "TOOL_INSTALL_RECOVERY_REQUIRED")
+    started = now()
+    snapshot = capture(clock=now)
+    with locks(STATE):
+        result = UpgradeEngine(store, upgrade_runtime(Path(source), started)).install(manifest, snapshot)
+    return {"state": "upgraded", **result}
+
+
+def recover_upgrade(source):
+    """Resume only the same authenticated source and original upgrade journal."""
+    manifest = source_manifest(source)
+    store = InstallationStore(STATE)
+    with locks(STATE):
+        intent = store.load()
+        ensure(intent is not None and intent.get("version") == 2 and intent.get("manifest") == manifest,
+               "TOOL_INSTALL_RECOVERY_REQUIRED")
+        result = UpgradeEngine(store, upgrade_runtime(Path(source), now())).recover()
+    return {"state": "upgraded", **result}
 
 
 def main():
     """Emit only bounded technical diagnostics, never provider output."""
     try:
-        ensure(os.geteuid() == 0 and len(sys.argv) == 3 and sys.argv[1] in ("install", "recover"), "INVALID_ARGUMENTS")
-        value = install(sys.argv[2]) if sys.argv[1] == "install" else recover(sys.argv[2])
+        ensure(os.geteuid() == 0 and len(sys.argv) == 3 and sys.argv[1] in ("install", "recover", "upgrade", "recover-upgrade"), "INVALID_ARGUMENTS")
+        operations = {"install": install, "recover": recover, "upgrade": upgrade, "recover-upgrade": recover_upgrade}
+        value = operations[sys.argv[1]](sys.argv[2])
         print(json.dumps(value, sort_keys=True))
         return 0
     except Exception as error:
