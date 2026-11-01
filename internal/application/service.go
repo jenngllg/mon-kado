@@ -127,17 +127,25 @@ func (s *Service) Authenticate(ctx context.Context, token string) (Principal, er
 	return p, rows.Err()
 }
 
-// AuthorizeAdministrator centralizes access to disclosed administrative resources.
-func AuthorizeAdministrator(p Principal) error {
+// IsAdministrator reports the current role without implying two-factor verification.
+func (p Principal) IsAdministrator() bool {
 	for _, role := range p.Roles {
 		if role == "Administrator" {
-			if p.TwoFactorVerifiedAt == nil {
-				return domain.Failure(403, domain.AccountTwoFactorAccessDenied, "Administrator access requires verified two-factor authentication.")
-			}
-			return nil
+			return true
 		}
 	}
-	return domain.Failure(403, domain.SecurityForbidden, "The caller cannot access this resource.")
+	return false
+}
+
+// AuthorizeAdministrator centralizes access to disclosed administrative resources.
+func AuthorizeAdministrator(p Principal) error {
+	if !p.IsAdministrator() {
+		return domain.Failure(403, domain.SecurityForbidden, "The caller cannot access this resource.")
+	}
+	if p.TwoFactorVerifiedAt == nil {
+		return domain.Failure(403, domain.AccountTwoFactorAccessDenied, "Administrator access requires verified two-factor authentication.")
+	}
+	return nil
 }
 
 // AuthorizeWishlist conceals foreign private resources and blocks mutations of suspended lists.

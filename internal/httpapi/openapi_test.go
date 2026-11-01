@@ -71,7 +71,7 @@ func TestOpenAPI_WhenReadingDocument_ContainsVersionedOperationsAndExactErrorEnv
 	if len(document.Components.Schemas["ValidationError"].Properties) != 2 {
 		t.Fatal("validation error contract changed")
 	}
-	for _, field := range []struct{ schema, name string }{{"CurrentSessionResponse", "isGoogleLinked"}, {"CurrentSessionResponse", "isVisibleInMemberSearch"}, {"MemberProfileResponse", "isVisibleInMemberSearch"}} {
+	for _, field := range []struct{ schema, name string }{{"CurrentSessionResponse", "isAdmin"}, {"CurrentSessionResponse", "isGoogleLinked"}, {"CurrentSessionResponse", "isVisibleInMemberSearch"}, {"MemberProfileResponse", "isVisibleInMemberSearch"}} {
 		var property struct {
 			Type string `json:"type"`
 		}
