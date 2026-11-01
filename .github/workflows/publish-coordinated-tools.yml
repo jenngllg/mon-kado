@@ -23,7 +23,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Require production protection and green checks for this exact revision
+      - name: Require main-only automatic production and green checks for this exact revision
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
@@ -31,7 +31,9 @@ jobs:
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = 'jenngllg/mon-kado'
           gh api "repos/$GITHUB_REPOSITORY/environments/production" \
-            --jq '.protection_rules | any(.type == "required_reviewers" and (.reviewers | length > 0))' | grep -x true
+            --jq '.deployment_branch_policy == {"protected_branches":false,"custom_branch_policies":true} and ([.protection_rules[]? | select(.type != "branch_policy")] | length == 0)' | grep -x true
+          gh api "repos/$GITHUB_REPOSITORY/environments/production/deployment-branch-policies" \
+            --jq '[.branch_policies[] | {name,type}] == [{"name":"main","type":"branch"}]' | grep -x true
           for workflow in ci.yml codeql.yml; do
             gh api "repos/$GITHUB_REPOSITORY/actions/workflows/$workflow/runs?head_sha=$GITHUB_SHA&branch=main&per_page=100" \
               --jq '[.workflow_runs[] | select(.event == "push" or .event == "workflow_dispatch")] | sort_by(.run_number) | last | .conclusion' \

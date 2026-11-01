@@ -3,14 +3,16 @@
 `main` is the production branch of both public repositories. `develop` remains
 integration-only. Standard Ubuntu GitHub-hosted runners are free for these public
 repositories; this procedure adds no paid service, runner, registry or subscription.
-Production environment approval and protected branches remain enabled.
+Production is automatic after successful checks, without a manual environment
+approval or wait timer. The environment remains restricted to main; protected
+branches and all artifact, revision, backup and online compatibility checks remain.
 
 ## Release path
 
 1. A push/merge to `main` runs quality checks. Backend publication waits for both
    CI and all four CodeQL analyses for the exact main commit. Frontend publication
    waits for its complete quality gate and exact native backend contract proof.
-2. Approve the existing `production` environment job. The job publishes immutable
+2. The `production` environment job starts automatically. It publishes immutable
    release assets, then requests the actual VPS rollout through native OpenSSH.
    Publishing assets alone is not reported as a successful VPS deployment.
 3. The root-owned VPS entrypoint verifies the protected channel, installed tool
@@ -24,6 +26,11 @@ Production environment approval and protected branches remain enabled.
    functional and persistence checks must pass. The frontend switches atomically;
    reachable assets from the last three published frontends remain available to
    already-open tabs.
+
+When both repositories are merged together, frontend publication waits up to ten
+minutes for the checked backend main publication rather than requiring manual
+sequencing. It fails safely if that deadline expires or backend main changes;
+the exact native backend contract proof must still match before any publication.
 
 The two selector routes use connection-failure fallback and disable upstream
 keepalive. They retain Caddy's safe default of not retrying a transmitted unsafe
@@ -63,6 +70,44 @@ The `monkado-ci` account has root-owned SSH authorization with `restrict` and a 
 coordinator's `main-deploy` operation; it cannot execute arbitrary shell commands,
 forward ports or choose a backup/database operation. Both repositories serialize
 requests using the VPS coordination lock.
+
+### Network access and administrator isolation
+
+GitHub-hosted runners have changing source addresses. The DigitalOcean cloud
+firewall must let their IPv4 TCP connections reach port 22. A cloud rule limited
+to the administrator's home address silently times out before SSH authentication.
+Do not solve this by giving CI an administrator key or by placing a general
+GitHub Actions runner on the public application's production host.
+
+The server retains the administrator source restriction in a private root-owned
+`/etc/ssh/sshd_config.d/60-monkado-ci-access.conf` (mode 0600):
+
+```text
+AllowUsers *@<administrator-ip>/32 monkado-ci
+```
+
+Use the actual administrator source allowlist from the former cloud rule; keep
+these private addresses out of Git. This preserves existing user access from
+that address and accepts only `monkado-ci` elsewhere. Root login, password
+authentication and keyboard-interactive authentication remain disabled. The CI
+account still requires one of its forced-command keys; arbitrary commands,
+interactive shells and forwarding remain unavailable.
+
+Before changing production configuration, take and verify a fresh encrypted
+offsite backup. Check the proposed configuration with `sshd -t`, install it,
+check the effective `sshd -T` settings, and reload `ssh.service` without restarting
+it. Keep an existing administrator session open until a new connection succeeds.
+Before broadening the cloud rule, verify that a connection whose source is outside
+the administrator allowlist rejects the administrator's valid key, accepts each
+CI key, and rejects an arbitrary CI command. An SSH tunnel through the existing
+administrator connection to `127.0.0.1:22` tests this policy without copying any
+private key to the VPS. Then verify actual GitHub-to-VPS delivery for both repos.
+
+If the administrator address changes, update this private source pattern through
+an existing authorized session or the provider console, validate and reload SSH.
+For rollback, restrict the cloud rule back to the administrator allowlist first;
+only then remove the private SSH drop-in and validate/reload the service. No API
+or Caddy restart is needed for these SSH changes.
 
 ## Live backup and recovery
 
