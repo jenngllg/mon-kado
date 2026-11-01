@@ -284,8 +284,8 @@ func TestGroups_WhenSharingAndReserving_KeepsListsPrivateAndUsesGlobalReservatio
 	requireStatus(t, s.foreign.send(t, "GET", groupList, "", nil), 404, nil)
 	var shared domain.SharedWishlistResponse
 	requireStatus(t, s.member.send(t, "GET", groupList, "", nil), 200, &shared)
-	if shared.CanSubscribe || shared.CurrentParticipant != nil || len(shared.Wishes) != 1 {
-		t.Fatal("read enrolled a member or minted a follow capability")
+	if !shared.CanSubscribe || shared.CurrentParticipant != nil || len(shared.Wishes) != 1 {
+		t.Fatal("group eligibility differs or reading enrolled the member")
 	}
 	reservation := groupList + "/wishes/" + wish.Id + "/reservations/current"
 	requireStatus(t, s.member.send(t, "GET", reservation, "", nil), 404, nil)
