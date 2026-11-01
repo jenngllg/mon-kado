@@ -114,6 +114,14 @@ class PairedPublicationTests(unittest.TestCase):
                     self.wait(read=read)
         self.pause.assert_not_called()
 
+    def test_complete_wait_leaves_room_in_the_free_workflow_api_budget(self):
+        self.published["frontend"] = "c" * 40
+        read = Mock(side_effect=self.read)
+        with self.assertRaisesRegex(ValueError, "PAIRED_PUBLICATION_TIMEOUT"):
+            self.wait(read=read, timeout=publication.WAIT_SECONDS)
+        self.assertEqual(publication.WAIT_SECONDS, self.elapsed)
+        self.assertLess(read.call_count, 750)
+
 
 if __name__ == "__main__":
     unittest.main()

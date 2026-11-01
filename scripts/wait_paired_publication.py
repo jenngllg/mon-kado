@@ -65,7 +65,8 @@ def wait(component, revision, read=api, clock=time.monotonic, pause=time.sleep, 
     heads = main_heads(read)
     if heads[component] != revision:
         raise ValueError("MAIN_REVISION_CHANGED")
-    deadline = clock() + timeout
+    started = clock()
+    deadline = started + timeout
     while True:
         if main_heads(read) != heads:
             raise ValueError("MAIN_REVISION_CHANGED")
@@ -81,7 +82,10 @@ def wait(component, revision, read=api, clock=time.monotonic, pause=time.sleep, 
             raise ValueError("PAIRED_PUBLICATION_TIMEOUT")
         require_pending_or_successful_checks(read, heads)
         print("Waiting for the other checked main publication.", flush=True)
-        pause(min(POLL_SECONDS, remaining))
+        # Keep normal paired releases responsive and leave room in the free
+        # GITHUB_TOKEN API budget when a full quality gate takes much longer.
+        interval = POLL_SECONDS if clock() - started < 120 else 30
+        pause(min(interval, remaining))
 
 
 if __name__ == "__main__":
