@@ -37,6 +37,9 @@ tools manifest. The current backend is then rebaselined through its existing
 verified rebaseline boundary, with an explicit reader for its historical session
 contract. Application authorization and the candidate's smoke use only `isAdmin`.
 
+The upgrade closes the gate explicitly before verifying the boot guard: starting
+an already active `RemainAfterExit` service does not execute that guard again.
+
 A separate new verified snapshot follows installation, before traffic reopens.
 The application versions and SQL history do not change during the tool upgrade.
 The receipt retains both snapshot references and the configuration transition.

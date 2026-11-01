@@ -233,6 +233,12 @@ class UpgradeRuntime(InstallationRuntime):
         self.validate_intent(intent)
         self._verify_pair(intent["previousPair"], {intent["previousManifest"]["configurationHash"], intent["manifest"]["configurationHash"]})
 
+    def install_guard(self, intent):
+        # An active RemainAfterExit guard does not execute again on start.
+        # Close explicitly before checking it, including on the first attempt.
+        self.close_gate()
+        super().install_guard(intent)
+
     def install_backup_code(self, intent):
         self.gate.verify()
         source, previous = intent["manifest"], intent["previousManifest"]
