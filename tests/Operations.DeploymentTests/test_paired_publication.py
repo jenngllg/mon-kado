@@ -24,6 +24,8 @@ class PairedPublicationTests(unittest.TestCase):
 
     def read(self, path):
         component = "frontend" if "/mon-kado-front/" in path else "backend"
+        if "/actions/workflows/" in path:
+            return {"workflow_runs": []}
         if "/git/ref/" in path:
             return {"object": {"sha": self.heads[component]}}
         return {"tag_name": component + "-production", "draft": False, "prerelease": False,
@@ -47,7 +49,7 @@ class PairedPublicationTests(unittest.TestCase):
             self.published.update(self.heads)
         self.pause.side_effect = advance
         self.assertEqual(self.heads, self.wait())
-        self.pause.assert_called_once_with(5)
+        self.pause.assert_called_once_with(10)
 
     def test_failed_or_unpublished_peer_times_out_without_requesting_rollout(self):
         for component in self.heads:
@@ -88,6 +90,28 @@ class PairedPublicationTests(unittest.TestCase):
             return value
         with self.assertRaisesRegex(ValueError, "MAIN_REVISION_CHANGED"):
             self.wait(read=read)
+        self.pause.assert_not_called()
+
+    def test_full_backend_gate_can_take_longer_than_the_old_ten_minute_wait(self):
+        self.published["backend"] = "c" * 40
+        def advance(seconds):
+            self.elapsed += seconds
+            if self.elapsed >= 14 * 60:
+                self.published.update(self.heads)
+        self.pause.side_effect = advance
+        self.assertEqual(self.heads, self.wait(timeout=publication.WAIT_SECONDS))
+        self.assertEqual(14 * 60, self.elapsed)
+
+    def test_failed_exact_revision_check_aborts_without_waiting_for_timeout(self):
+        self.published["frontend"] = "c" * 40
+        for conclusion in publication.FAILED_CONCLUSIONS:
+            with self.subTest(conclusion=conclusion):
+                def read(path):
+                    if "/actions/workflows/" in path:
+                        return {"workflow_runs": [{"event": "push", "run_number": 1, "conclusion": conclusion}]}
+                    return self.read(path)
+                with self.assertRaisesRegex(ValueError, "PAIRED_CHECKS_FAILED"):
+                    self.wait(read=read)
         self.pause.assert_not_called()
 
 
