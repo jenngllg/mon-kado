@@ -11,7 +11,7 @@ class CoordinatedWorkflowTests(unittest.TestCase):
         self.assertIn("environment: production", workflow)
         self.assertIn("required_reviewers", workflow)
         self.assertIn('for workflow in ci.yml codeql.yml', workflow)
-        self.assertIn('head_sha=$GITHUB_SHA&branch=develop', workflow)
+        self.assertIn('head_sha=$GITHUB_SHA&branch=main', workflow)
         self.assertIn('all(.conclusion == "success")', workflow)
         self.assertIn('coordinator-production', workflow)
         self.assertIn('cmp "$RUNNER_TEMP/existing-coordinator/coordinator.tar.gz"', workflow)

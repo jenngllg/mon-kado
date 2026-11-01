@@ -195,11 +195,12 @@ class Operations:
         marker = STATE / MAINTENANCE_NAME
         if not marker.exists():
             return
-        if json.loads(marker.read_text()) != {"services": list(SERVICES)}:
+        maintenance = json.loads(marker.read_text())
+        if maintenance not in ({"services": list(SERVICES)}, {"services": ["worker"]}):
             raise BackupError("INVALID_MAINTENANCE_MARKER")
         for service in SERVICES:
             self.service(service)
-        self.run(["systemctl", "start", *[native_services.unit(service) for service in SERVICES]], timeout=120)
+        self.run(["systemctl", "start", *[native_services.unit(service) for service in maintenance["services"]]], timeout=120)
         for _ in range(30):
             try:
                 self.run(["curl", "--fail", "--silent", "--show-error", "--max-time", "5",
@@ -211,7 +212,7 @@ class Operations:
                 self.wait(2)
         raise BackupError("SERVICE_RECOVERY_FAILED")
 
-    def capture(self):
+    def capture(self, online=False):
         """Stop writers only while taking the consistent local copy, never during upload."""
         coordination, deployment = inherited_capture_locks()
         with lock(DEPLOYMENT / "backup-coordination.lock", coordination), lock(DEPLOYMENT / "deploy.lock", deployment):
@@ -242,17 +243,28 @@ class Operations:
             if candidate.exists():
                 self.remove_capture(candidate)
             candidate.mkdir(mode=0o700)
-            atomic_json(STATE / MAINTENANCE_NAME, {"services": list(SERVICES)})
+            paused = ["worker"] if online else list(SERVICES)
+            atomic_json(STATE / MAINTENANCE_NAME, {"services": paused})
             try:
-                self.run(["systemctl", "stop", *[native_services.unit(service) for service in ("caddy", "api", "worker")]], timeout=120)
-                for service in SERVICES:
+                stopped = paused if online else ("caddy", "api", "worker")
+                self.run(["systemctl", "stop", *[native_services.unit(service) for service in stopped]], timeout=120)
+                for service in paused:
                     if self.service(service)["running"]:
                         raise BackupError("WRITERS_STILL_RUNNING")
                 created = self.now().isoformat()
                 with (candidate / "postgres.dump").open("xb") as output:
                     self.run(["runuser", "-u", "postgres", "--", "pg_dump", "--no-password", "--dbname=mon_kado",
                               "--format=custom", "--compress=0", "--no-owner", "--no-acl"], output=output)
-                copy_files(images, candidate / "images", NATIVE_IMAGE_NAME)
+                if online:
+                    # Committed image bytes are immutable and only the paused worker
+                    # deletes them. pg_dump owns a coherent MVCC snapshot; uploads
+                    # after its start may add harmless unreferenced staged files.
+                    from .capture import copy_live_images
+                    copy_live_images(images, candidate / "images")
+                    self.running("api")
+                    self.running("caddy")
+                else:
+                    copy_files(images, candidate / "images", NATIVE_IMAGE_NAME)
                 for name in FILES:
                     destination = candidate / "configuration" / name
                     destination.parent.mkdir(mode=0o700, parents=True, exist_ok=True)

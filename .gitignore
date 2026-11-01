@@ -37,3 +37,5 @@ __pycache__/
 *.p12
 *.key
 credentials*.json
+# A short-lived CI proof is uploaded as an artifact, never committed.
+/go-verification.json

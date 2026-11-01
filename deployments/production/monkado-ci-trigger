@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Root-owned forced command; the SSH client supplies only a commit SHA.
+set -Eeuo pipefail
+[[ $# -eq 1 && $1 =~ ^(backend|frontend)$ ]]
+[[ ${SSH_ORIGINAL_COMMAND:-} =~ ^[0-9a-f]{40}$ ]]
+exec sudo -n /opt/monkado/deployments/production/monkado-coordinate main-deploy "$1" "$SSH_ORIGINAL_COMMAND"

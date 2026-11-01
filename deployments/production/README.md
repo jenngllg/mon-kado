@@ -104,3 +104,8 @@ native load qualification, not a throughput guarantee. The operational job's cap
 non-secret digests/revision. Retained immutable executables permit a verified
 application rollback only when the SQL catalog is unchanged and compatibility was
 explicitly declared. Database rollback is never automatic. See [recovery](rollback-smoke.md).
+# Current production path
+
+Production now follows protected `main` publications and online VPS rollout.
+Use [Production from main](../main-vps.md). The older manual maintenance commands
+below are retained for historical operations and are not the CI/CD default.

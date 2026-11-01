@@ -12,10 +12,10 @@ import release_manifest
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from coordinated_backup import capture, run as backup_command
-from coordinated_cli import HistoricalSmoke, require_protected_tool
+from coordinated_cli import HistoricalSmoke, require_protected_tool, OnlineGate
 from coordinated_gate import Gate
 from coordinated_install_engine import InstallationEngine, UpgradeEngine
-from coordinated_install_runtime import InstallationRuntime, UpgradeRuntime
+from coordinated_install_runtime import InstallationRuntime, UpgradeRuntime, OnlineUpgradeRuntime
 from coordinated_integrity import read_manifest
 from coordinated_locks import locks
 from coordinated_store import InstallationStore
@@ -83,30 +83,35 @@ def recover(source):
     return {"state": "installed", **result}
 
 
-def upgrade_runtime(source, started):
+def upgrade_runtime(source, started, online=False):
     """Inspect the old API explicitly while upgrading to strict boolean tools."""
     native = Runtime(smoke_factory=HistoricalSmoke)
     publisher = hosting.Deployment(FRONTEND, STATE, configuration_hash(ROOT))
-    return UpgradeRuntime(source, ROOT, STATE, SETTINGS, BACKUP_ROOT, SYSTEMD, Store(STATE), native, publisher,
-                          Gate(), lambda: configuration_hash(ROOT),
+    runtime_type = OnlineUpgradeRuntime if online else UpgradeRuntime
+    return runtime_type(source, ROOT, STATE, SETTINGS, BACKUP_ROOT, SYSTEMD, Store(STATE), native, publisher,
+                          OnlineGate() if online else Gate(), lambda: configuration_hash(ROOT),
                           lambda manifest: require_protected_tool(manifest, manifest["configurationHash"]),
                           lambda: json.loads(backup_command("status")), started, clock=now)
 
 
-def upgrade(source):
+def upgrade(source, online=False):
     """Capture the original configuration before a protected, journaled tool upgrade."""
     manifest = source_manifest(source)
     require_protected_tool(manifest, manifest["configurationHash"])
     store = InstallationStore(STATE)
     ensure(store.load() is None, "TOOL_INSTALL_RECOVERY_REQUIRED")
     started = now()
-    snapshot = capture(clock=now)
+    if online:
+        from coordinated_integrity import content_digest
+        for name, expected in manifest["files"].items():
+            ensure(content_digest(Path(source) / name) == expected, "TOOL_FILE_CHANGED")
+    snapshot = capture(clock=now, reviewed_source=source) if online else capture(clock=now)
     with locks(STATE):
-        result = UpgradeEngine(store, upgrade_runtime(Path(source), started)).install(manifest, snapshot)
+        result = UpgradeEngine(store, upgrade_runtime(Path(source), started, online=online)).install(manifest, snapshot)
     return {"state": "upgraded", **result}
 
 
-def recover_upgrade(source):
+def recover_upgrade(source, online=False):
     """Resume only the same authenticated source and original upgrade journal."""
     manifest = source_manifest(source)
     store = InstallationStore(STATE)
@@ -114,15 +119,17 @@ def recover_upgrade(source):
         intent = store.load()
         ensure(intent is not None and intent.get("version") == 2 and intent.get("manifest") == manifest,
                "TOOL_INSTALL_RECOVERY_REQUIRED")
-        result = UpgradeEngine(store, upgrade_runtime(Path(source), now())).recover()
+        result = UpgradeEngine(store, upgrade_runtime(Path(source), now(), online=online)).recover()
     return {"state": "upgraded", **result}
 
 
 def main():
     """Emit only bounded technical diagnostics, never provider output."""
     try:
-        ensure(os.geteuid() == 0 and len(sys.argv) == 3 and sys.argv[1] in ("install", "recover", "upgrade", "recover-upgrade"), "INVALID_ARGUMENTS")
-        operations = {"install": install, "recover": recover, "upgrade": upgrade, "recover-upgrade": recover_upgrade}
+        ensure(os.geteuid() == 0 and len(sys.argv) == 3 and sys.argv[1] in ("install", "recover", "upgrade", "recover-upgrade", "upgrade-online", "recover-upgrade-online"), "INVALID_ARGUMENTS")
+        operations = {"install": install, "recover": recover, "upgrade": upgrade, "recover-upgrade": recover_upgrade,
+                      "upgrade-online": lambda source: upgrade(source, online=True),
+                      "recover-upgrade-online": lambda source: recover_upgrade(source, online=True)}
         value = operations[sys.argv[1]](sys.argv[2])
         print(json.dumps(value, sort_keys=True))
         return 0

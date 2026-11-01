@@ -12,7 +12,7 @@ concurrency:
 
 jobs:
   publish:
-    if: github.ref == 'refs/heads/develop'
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment: production
@@ -33,11 +33,11 @@ jobs:
           gh api "repos/$GITHUB_REPOSITORY/environments/production" \
             --jq '.protection_rules | any(.type == "required_reviewers" and (.reviewers | length > 0))' | grep -x true
           for workflow in ci.yml codeql.yml; do
-            gh api "repos/$GITHUB_REPOSITORY/actions/workflows/$workflow/runs?head_sha=$GITHUB_SHA&branch=develop&per_page=100" \
+            gh api "repos/$GITHUB_REPOSITORY/actions/workflows/$workflow/runs?head_sha=$GITHUB_SHA&branch=main&per_page=100" \
               --jq '[.workflow_runs[] | select(.event == "push" or .event == "workflow_dispatch")] | sort_by(.run_number) | last | .conclusion' \
               | grep -x success
           done
-          codeql_run=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/codeql.yml/runs?head_sha=$GITHUB_SHA&branch=develop&per_page=100" \
+          codeql_run=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/codeql.yml/runs?head_sha=$GITHUB_SHA&branch=main&per_page=100" \
             --jq '[.workflow_runs[] | select(.event == "push" or .event == "workflow_dispatch")] | sort_by(.run_number) | last | .id')
           gh api "repos/$GITHUB_REPOSITORY/actions/runs/$codeql_run/jobs?filter=latest&per_page=100" \
             --jq '[.jobs[] | select(.name | startswith("Analyze ("))] | sort_by(.name) | (map(.name) == ["Analyze (actions)", "Analyze (go)", "Analyze (javascript-typescript)", "Analyze (python)"]) and all(.conclusion == "success")' | grep -x true
