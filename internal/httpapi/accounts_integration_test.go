@@ -13,6 +13,40 @@ import (
 	"github.com/JennGllg/mon-kado/internal/domain"
 )
 
+func TestCurrentSession_WhenAdministratorRoleChanges_ReportsBooleanWithoutBypassingTwoFactor(t *testing.T) {
+	// Arrange
+	f := newFixture(t)
+	member := f.member(t, "role-visibility@example.test")
+	readAdmin := func() bool {
+		t.Helper()
+		var body map[string]any
+		requireStatus(t, f.send(t, "GET", "/api/v1/auth/sessions/current", "", nil), 200, &body)
+		value, ok := body["isAdmin"].(bool)
+		if !ok {
+			t.Fatal("session isAdmin must be a boolean")
+		}
+		return value
+	}
+	if readAdmin() {
+		t.Fatal("a member must not be an administrator")
+	}
+	// Act
+	if _, err := f.store.Pool.Exec(t.Context(), `INSERT INTO user_roles(user_id,role_id) SELECT $1,id FROM roles WHERE normalized_name='ADMINISTRATOR'`, member); err != nil {
+		t.Fatal(err)
+	}
+	// Assert
+	if !readAdmin() {
+		t.Fatal("session did not reflect the live administrator role")
+	}
+	requireStatus(t, f.send(t, "GET", "/api/v1/admin/reported-wishlists", "", nil), 403, nil)
+	if _, err := f.store.Pool.Exec(t.Context(), `DELETE FROM user_roles WHERE user_id=$1 AND role_id=(SELECT id FROM roles WHERE normalized_name='ADMINISTRATOR')`, member); err != nil {
+		t.Fatal(err)
+	}
+	if readAdmin() {
+		t.Fatal("session retained a revoked administrator role")
+	}
+}
+
 func TestProfile_WhenSearchVisibilityChanges_PersistsPreferenceWithoutHidingPublicPhoto(t *testing.T) {
 	// Arrange
 	f := newFixture(t)

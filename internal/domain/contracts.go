@@ -258,6 +258,7 @@ type CurrentSessionResponse struct {
 	DisplayName             string   `json:"displayName"`
 	ProfileImageUrl         *string  `json:"profileImageUrl"`
 	Roles                   []string `json:"roles"`
+	IsAdmin                 bool     `json:"isAdmin"`
 	IsGoogleLinked          bool     `json:"isGoogleLinked"`
 	IsVisibleInMemberSearch bool     `json:"isVisibleInMemberSearch"`
 }

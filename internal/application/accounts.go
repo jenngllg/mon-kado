@@ -206,7 +206,7 @@ func (s *Service) Logout(ctx context.Context, token string) error {
 
 // CurrentSession returns the server-side identity and profile version.
 func (s *Service) CurrentSession(ctx context.Context, principal Principal) (domain.CurrentSessionResponse, uint32, error) {
-	r := domain.CurrentSessionResponse{Roles: principal.Roles}
+	r := domain.CurrentSessionResponse{Roles: principal.Roles, IsAdmin: principal.IsAdministrator()}
 	var version uint32
 	var image *string
 	err := s.Store.Pool.QueryRow(ctx, `SELECT id::text,email,display_name,display_name_tag,profile_image_id::text,xmin::text::bigint,EXISTS(SELECT 1 FROM user_logins WHERE user_id=users.id AND login_provider='Google'),is_visible_in_member_search FROM users WHERE id=$1`, principal.MemberID).Scan(&r.Id, &r.Email, &r.DisplayName, &r.DisplayNameTag, &image, &version, &r.IsGoogleLinked, &r.IsVisibleInMemberSearch)
