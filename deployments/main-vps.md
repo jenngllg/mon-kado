@@ -3,14 +3,16 @@
 `main` is the production branch of both public repositories. `develop` remains
 integration-only. Standard Ubuntu GitHub-hosted runners are free for these public
 repositories; this procedure adds no paid service, runner, registry or subscription.
-Production environment approval and protected branches remain enabled.
+Production is automatic after successful checks, without a manual environment
+approval or wait timer. The environment remains restricted to main; protected
+branches and all artifact, revision, backup and online compatibility checks remain.
 
 ## Release path
 
 1. A push/merge to `main` runs quality checks. Backend publication waits for both
    CI and all four CodeQL analyses for the exact main commit. Frontend publication
    waits for its complete quality gate and exact native backend contract proof.
-2. Approve the existing `production` environment job. The job publishes immutable
+2. The `production` environment job starts automatically. It publishes immutable
    release assets, then requests the actual VPS rollout through native OpenSSH.
    Publishing assets alone is not reported as a successful VPS deployment.
 3. The root-owned VPS entrypoint verifies the protected channel, installed tool
@@ -24,6 +26,11 @@ Production environment approval and protected branches remain enabled.
    functional and persistence checks must pass. The frontend switches atomically;
    reachable assets from the last three published frontends remain available to
    already-open tabs.
+
+When both repositories are merged together, frontend publication waits up to ten
+minutes for the checked backend main publication rather than requiring manual
+sequencing. It fails safely if that deadline expires or backend main changes;
+the exact native backend contract proof must still match before any publication.
 
 The two selector routes use connection-failure fallback and disable upstream
 keepalive. They retain Caddy's safe default of not retrying a transmitted unsafe
