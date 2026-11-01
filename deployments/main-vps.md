@@ -30,7 +30,9 @@ branches and all artifact, revision, backup and online compatibility checks rema
    already-open tabs.
 
 Each workflow publishes its immutable assets and protected pointer before waiting
-up to ten minutes for both pinned main publications. This wait uses the existing
+up to forty minutes for both pinned main publications, with a sixty-minute
+publication job budget. A full Go verification can exceed ten minutes. Failed or
+cancelled exact-revision quality checks abort the wait promptly. This uses the existing
 GitHub workflow token, outside the VPS lock. Frontend packaging still requires the
 exact native backend contract proof. Any changed main revision, missing proof or
 unpublished/failed peer blocks the group before backup or switch. Merge backend

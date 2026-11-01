@@ -8,8 +8,10 @@ import sys
 import time
 
 REPOSITORIES = {"backend": "mon-kado", "frontend": "mon-kado-front"}
-WAIT_SECONDS = 600
-POLL_SECONDS = 5
+WAIT_SECONDS = 2400
+POLL_SECONDS = 10
+CHECK_WORKFLOWS = {"backend": ("ci.yml", "codeql.yml"), "frontend": ("quality.yml",)}
+FAILED_CONCLUSIONS = {"failure", "cancelled", "timed_out", "action_required", "stale", "skipped"}
 
 
 def api(path):
@@ -46,6 +48,16 @@ def published_heads(read):
     return heads
 
 
+def require_pending_or_successful_checks(read, heads):
+    """Stop waiting immediately when the latest exact-revision quality run fails."""
+    for component, workflows in CHECK_WORKFLOWS.items():
+        for workflow in workflows:
+            path = f"repos/jenngllg/{REPOSITORIES[component]}/actions/workflows/{workflow}/runs?head_sha={heads[component]}&branch=main&per_page=10"
+            runs = [run for run in read(path)["workflow_runs"] if run["event"] in ("push", "workflow_dispatch")]
+            if runs and max(runs, key=lambda run: run["run_number"])["conclusion"] in FAILED_CONCLUSIONS:
+                raise ValueError("PAIRED_CHECKS_FAILED")
+
+
 def wait(component, revision, read=api, clock=time.monotonic, pause=time.sleep, timeout=WAIT_SECONDS):
     """Fail before SSH if either checked revision changes or its publication times out."""
     if component not in REPOSITORIES or not isinstance(revision, str) or not re.fullmatch(r"[0-9a-f]{40}", revision):
@@ -60,11 +72,14 @@ def wait(component, revision, read=api, clock=time.monotonic, pause=time.sleep, 
         if published_heads(read) == heads:
             if main_heads(read) != heads:
                 raise ValueError("MAIN_REVISION_CHANGED")
+            if clock() > deadline:
+                raise ValueError("PAIRED_PUBLICATION_TIMEOUT")
             print("Both pinned main publications are ready for one coordinated VPS rollout.")
             return heads
         remaining = deadline - clock()
         if remaining <= 0:
             raise ValueError("PAIRED_PUBLICATION_TIMEOUT")
+        require_pending_or_successful_checks(read, heads)
         print("Waiting for the other checked main publication.", flush=True)
         pause(min(POLL_SECONDS, remaining))
 
