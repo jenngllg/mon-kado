@@ -13,6 +13,14 @@ import (
 
 const groupSuggestionLimit = 1000
 
+// AuthorizeGroupSuggestion verifies current group sharing and excludes the beneficiary.
+func (s *Service) AuthorizeGroupSuggestion(ctx context.Context, member, group, wishlist string) error {
+	return s.Store.Transaction(ctx, func(tx pgx.Tx) error {
+		_, err := s.suggestionAccess(ctx, tx, member, group, wishlist)
+		return err
+	})
+}
+
 // suggestionAccess locks the same parent and membership as group reading, then
 // excludes the beneficiary before any suggestion or image can be read.
 func (s *Service) suggestionAccess(ctx context.Context, tx pgx.Tx, member, group, wishlist string) (verifiedShare, error) {
