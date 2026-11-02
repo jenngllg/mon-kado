@@ -252,7 +252,7 @@ func (a *API) groupReservation(r *request) (response, error) {
 }
 func (a *API) groupWishImage(r *request) (response, error) {
 	content, err := a.Service.ReadGroupWishImage(r.Context(), r.PathValue("groupId"), r.PathValue("wishlistId"), r.PathValue("wishId"), r.URL.Query().Get("token"))
-	return wishImageResponse(r, content, err)
+	return a.wishImageResponse(r, content, err)
 }
 
 func (a *API) groupProfileImage(r *request) (response, error) {
