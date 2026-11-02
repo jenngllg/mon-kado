@@ -150,6 +150,17 @@ func (s *Service) participant(ctx context.Context, tx pgx.Tx, share verifiedShar
 	return &result, err
 }
 
+func (s *Service) publicParticipant(ctx context.Context, tx pgx.Tx, share verifiedShare, member, guest string) (*domain.WishlistParticipantResponse, error) {
+	participant, err := s.participant(ctx, tx, share, member, guest)
+	var failure *domain.Error
+	if errors.As(err, &failure) && failure.Code == domain.GuestSessionInvalid {
+		// An optional expired identity cannot revoke an otherwise valid public link.
+		// Reservation reads and writes still require the original verified participant.
+		return nil, nil
+	}
+	return participant, err
+}
+
 // JoinResult distinguishes a new participant and carries only newly generated guest material.
 type JoinResult struct {
 	Participant  domain.WishlistParticipantResponse
@@ -169,7 +180,7 @@ func (s *Service) JoinWishlist(ctx context.Context, link, secret, member, guest 
 		if share.Owner == member {
 			return domain.Failure(409, domain.WishlistOwnerCannotJoin, "The owner cannot participate in their own wishlist.")
 		}
-		existing, err := s.participant(ctx, tx, share, member, guest)
+		existing, err := s.publicParticipant(ctx, tx, share, member, guest)
 		if err != nil {
 			return err
 		}
@@ -184,38 +195,57 @@ func (s *Service) JoinWishlist(ctx context.Context, link, secret, member, guest 
 		if count >= wishlistParticipantLimit {
 			return domain.Failure(409, domain.WishlistParticipantLimitReached, "The wishlist has reached its participant limit.")
 		}
-		var memberID, guestID *string
-		name := strings.TrimSpace(text(input.DisplayName))
-		now := s.Now().UTC()
-		if member != "" {
-			memberID = &member
-			if err = tx.QueryRow(ctx, `SELECT display_name FROM users WHERE id=$1`, member).Scan(&name); err != nil {
-				return err
-			}
-		} else {
-			id := ""
-			if guest != "" {
-				id, err = s.guestIdentity(ctx, tx, guest)
-				if err != nil {
-					return err
-				}
-			}
-			if id == "" {
-				id = security.NewID()
-				result.GuestToken = security.SessionToken(id)
-				result.GuestExpires = now.Add(180 * 24 * time.Hour)
-				if _, err = tx.Exec(ctx, `INSERT INTO guest_sessions(id,secret_hash,expires_at,created_at) VALUES($1,$2,$3,$4)`, id, security.HashToken(result.GuestToken), result.GuestExpires, now); err != nil {
-					return err
-				}
-			}
-			guestID = &id
-		}
-		result.Participant = domain.WishlistParticipantResponse{Id: security.NewID(), DisplayName: name}
-		_, err = tx.Exec(ctx, `INSERT INTO wishlist_participants(id,wishlist_id,member_id,guest_session_id,guest_display_name,created_at) VALUES($1,$2,$3,$4,$5,$6)`, result.Participant.Id, share.Wishlist, memberID, guestID, name, now)
-		result.Created = true
+		result, err = s.createWishlistParticipant(ctx, tx, share.Wishlist, member, guest, input)
 		return err
 	})
 	return result, err
+}
+
+func (s *Service) createWishlistParticipant(ctx context.Context, tx pgx.Tx, wishlist, member, guest string, input domain.JoinSharedWishlistRequest) (JoinResult, error) {
+	var result JoinResult
+	var memberID, guestID *string
+	name := strings.TrimSpace(text(input.DisplayName))
+	now := s.Now().UTC()
+	if member != "" {
+		memberID = &member
+		if err := tx.QueryRow(ctx, `SELECT display_name FROM users WHERE id=$1`, member).Scan(&name); err != nil {
+			return result, err
+		}
+	} else {
+		identity, err := s.guestForParticipation(ctx, tx, guest, now)
+		if err != nil {
+			return result, err
+		}
+		guestID = &identity.id
+		result.GuestToken, result.GuestExpires = identity.token, identity.expires
+	}
+	result.Participant = domain.WishlistParticipantResponse{Id: security.NewID(), DisplayName: name}
+	_, err := tx.Exec(ctx, `INSERT INTO wishlist_participants(id,wishlist_id,member_id,guest_session_id,guest_display_name,created_at) VALUES($1,$2,$3,$4,$5,$6)`, result.Participant.Id, wishlist, memberID, guestID, name, now)
+	result.Created = true
+	return result, err
+}
+
+type participationGuest struct {
+	id, token string
+	expires   time.Time
+}
+
+func (s *Service) guestForParticipation(ctx context.Context, tx pgx.Tx, guest string, now time.Time) (participationGuest, error) {
+	if guest != "" {
+		id, err := s.guestIdentity(ctx, tx, guest)
+		if err == nil {
+			return participationGuest{id: id}, nil
+		}
+		var failure *domain.Error
+		if !errors.As(err, &failure) || failure.Code != domain.GuestSessionInvalid {
+			return participationGuest{}, err
+		}
+	}
+	// Only explicit participation may issue a new guest identity.
+	identity := participationGuest{id: security.NewID(), expires: now.Add(180 * 24 * time.Hour)}
+	identity.token = security.SessionToken(identity.id)
+	_, err := tx.Exec(ctx, `INSERT INTO guest_sessions(id,secret_hash,expires_at,created_at) VALUES($1,$2,$3,$4)`, identity.id, security.HashToken(identity.token), identity.expires, now)
+	return identity, err
 }
 
 // CurrentParticipant returns the participant proved by the member bearer or guest cookie.
@@ -284,7 +314,7 @@ func (s *Service) SharedWish(ctx context.Context, link, secret, id, member, gues
 			return err
 		}
 		share.Member = member
-		participant, err := s.participant(ctx, tx, share, member, guest)
+		participant, err := s.publicParticipant(ctx, tx, share, member, guest)
 		if err != nil {
 			return err
 		}
@@ -310,7 +340,7 @@ func (s *Service) SharedWishlist(ctx context.Context, link, secret, member, gues
 		}
 		r.Occasion = lowerFirst(r.Occasion)
 		if r.CanReserve {
-			r.CurrentParticipant, err = s.participant(ctx, tx, share, member, guest)
+			r.CurrentParticipant, err = s.publicParticipant(ctx, tx, share, member, guest)
 			if err != nil {
 				return err
 			}

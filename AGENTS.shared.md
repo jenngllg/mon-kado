@@ -8,7 +8,16 @@ Ces règles s'appliquent à `mon-kado` et `mon-kado-front`, en complément des p
 - Avant d'intervenir dans un autre dépôt MonKado, lire et appliquer son AGENTS.md : [backend](AGENTS.md) et [frontend](../mon-kado-front/AGENTS.md).
 - Exécuter PostgreSQL, API, worker, outils et tests nativement ; utiliser Docker uniquement si un besoin concret le rend nécessaire et expliquer ce besoin.
 
+## Livraison et vérification locales
+
+- Après chaque modification, mettre à jour l’environnement local utilisé par Jenn et garder les services nécessaires accessibles. Réutiliser les services existants et partir des dépôts canoniques.
+- Avant de proposer un lien, vérifier le frontend et l’API réels ensemble, leurs dépendances, les droits des parcours concernés et la persistance lorsque cela s’applique. Les tests simulés complètent cette observation sans la remplacer.
+- Pour toute modification d’interface, vérifier aussi la vue équivalente dans les groupes, sur mobile et ordinateur, avec les états de chargement, d’erreur, de liste vide et la navigation au clavier.
+
 ## Contrats, règles métier et confidentialité
+
+- L’administration des comptes affiche les créations les plus récentes en premier, y compris après recherche ; appliquer le tri côté serveur avant pagination.
+- Une liste publique et ses souhaits restent lisibles avec un lien valide lorsqu’une identité invitée facultative est expirée ou invalide. Ne pas créer d’identité ni de réservation à la lecture. Les réservations restent liées à leur participant vérifié ; seule une participation explicitement confirmée peut créer une nouvelle identité invitée, sans lui attribuer les anciennes réservations.
 
 - Conserver les contrats HTTP/JSON, règles d'accès et invariants métier lors d'un changement technique.
 - Administration : utiliser uniquement le booléen vivant `users.is_admin`, exposé comme `isAdmin`. Ne jamais déduire les droits de chaînes `Admin` ou `Administrator`, même comme secours de compatibilité dans le frontend. Les migrations et preuves historiques restent conservées.

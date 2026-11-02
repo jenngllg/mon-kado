@@ -4,12 +4,49 @@ package httpapi_test
 
 import (
 	"net/url"
+	"slices"
 	"testing"
+	"time"
 
 	"github.com/JennGllg/mon-kado/internal/application"
 	"github.com/JennGllg/mon-kado/internal/domain"
 	"github.com/JennGllg/mon-kado/internal/security"
 )
+
+func TestAdministrativeMembers_WhenListingPages_ReturnsNewestAccountsFirst(t *testing.T) {
+	// Arrange
+	f := newFixture(t)
+	now := time.Now().UTC()
+	f.service.Now = func() time.Time { return now }
+	oldest := f.administrator(t, "oldest@example.test")
+	adminAccess := f.access
+	now = now.Add(time.Second)
+	middle := f.member(t, "middle@example.test")
+	now = now.Add(time.Second)
+	latest := []string{f.member(t, "latest-a@example.test"), f.member(t, "latest-b@example.test")}
+	slices.Sort(latest)
+	slices.Reverse(latest)
+	want := append(latest, middle, oldest)
+	f.access = adminAccess
+
+	for _, query := range []string{"", "&q=" + url.QueryEscape("TeST MEmber")} {
+		// Act
+		var first, second domain.PaginatedResponse[application.AdministrativeMemberResponse]
+		requireStatus(t, f.send(t, "GET", "/api/v1/admin/members?pageSize=2"+query, "", nil), 200, &first)
+		requireStatus(t, f.send(t, "GET", "/api/v1/admin/members?pageSize=2&page=2"+query, "", nil), 200, &second)
+		// Assert
+		if first.TotalCount != 4 || first.TotalPages != 2 || !first.HasNextPage || !second.HasPreviousPage {
+			t.Fatalf("unexpected pagination: %+v, %+v", first, second)
+		}
+		var got []string
+		for _, item := range append(first.Items, second.Items...) {
+			got = append(got, item.ID)
+		}
+		if !slices.Equal(got, want) {
+			t.Fatalf("accounts should be newest first across pages: got %v, want %v", got, want)
+		}
+	}
+}
 
 func TestAdministrativeMembers_WhenSearchingHiddenAccounts_PreservesMinimalContractAndPagination(t *testing.T) {
 	// Arrange

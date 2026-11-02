@@ -30,7 +30,7 @@ func (s *Service) AdministrativeMember(ctx context.Context, principal Principal,
 	return item, err
 }
 
-// AdministrativeMembers lists all accounts, including profiles hidden from public search.
+// AdministrativeMembers lists accounts newest first, including profiles hidden from public search.
 func (s *Service) AdministrativeMembers(ctx context.Context, principal Principal, query string, page, size int) (domain.PaginatedResponse[AdministrativeMemberResponse], error) {
 	items := []AdministrativeMemberResponse{}
 	total := 0
@@ -42,7 +42,7 @@ func (s *Service) AdministrativeMembers(ctx context.Context, principal Principal
 		if err := tx.QueryRow(ctx, `SELECT count(*) FROM users WHERE `+filter, query).Scan(&total); err != nil {
 			return err
 		}
-		rows, err := tx.Query(ctx, `SELECT id::text,display_name,display_name_tag FROM users WHERE `+filter+` ORDER BY normalized_display_name,display_name_tag,id LIMIT $2 OFFSET $3`, query, size, (int64(page)-1)*int64(size))
+		rows, err := tx.Query(ctx, `SELECT id::text,display_name,display_name_tag FROM users WHERE `+filter+` ORDER BY created_at DESC,id DESC LIMIT $2 OFFSET $3`, query, size, (int64(page)-1)*int64(size))
 		if err != nil {
 			return err
 		}
