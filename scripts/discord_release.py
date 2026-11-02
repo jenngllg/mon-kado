@@ -86,13 +86,15 @@ def extension_files(root):
         raise PublicationError("The extension must target the public site only.")
     names = ("manifest.json", "popup.html", "popup.css", "popup.js", "suggestionFlow.js",
              "extract.js", "imageSelection.js", "session-bridge.js", "icon.png", "README.md", "INSTALLATION.md")
-    guide = (source / "INSTALLATION.md").read_bytes()
+    guide = (source / "INSTALLATION.md").read_bytes().replace(b"\r\n", b"\n")
     if not re.search(rf"(?<![0-9.]){re.escape(version)}(?![0-9.])", guide.decode("utf-8")):
         raise PublicationError("Installation guide and extension version differ.")
     stream = io.BytesIO()
     with zipfile.ZipFile(stream, "w", compression=zipfile.ZIP_DEFLATED) as archive:
         for name in names:
             content = (source / name).read_bytes()
+            if name != "icon.png":
+                content = content.replace(b"\r\n", b"\n")
             entry = zipfile.ZipInfo(name, (1980, 1, 1, 0, 0, 0))
             entry.compress_type = zipfile.ZIP_DEFLATED
             archive.writestr(entry, content)
@@ -103,11 +105,28 @@ def extension_files(root):
                      (f"MonKado-installation-{version}.md", guide)]
 
 
+def package_fingerprint(files):
+    """Compare source bytes independently of ZIP compression and text EOLs."""
+    entries = []
+    for name, content in files:
+        if name.endswith(".zip"):
+            with zipfile.ZipFile(io.BytesIO(content)) as archive:
+                for entry in sorted(archive.namelist()):
+                    data = archive.read(entry)
+                    if not entry.endswith(".png"):
+                        data = data.replace(b"\r\n", b"\n")
+                    entries.append((name + "/" + entry, hashlib.sha256(data).hexdigest()))
+        else:
+            entries.append((name, hashlib.sha256(content.replace(b"\r\n", b"\n")).hexdigest()))
+    return hashlib.sha256(json.dumps(entries, sort_keys=True).encode()).hexdigest() if files else None
+
+
 def publish(repo, revision, tag, payload, files, webhook):
     # GitHub release creation reserves this publication before the Discord POST.
     # A failed/uncertain attempt stays pending and cannot silently duplicate it.
     releases = api(f"repos/{repo}/releases?per_page=100")
     digest = hashlib.sha256(b"".join(content for _, content in files)).hexdigest() if files else None
+    fingerprint = package_fingerprint(files)
     previous = next((item for item in releases if item["tag_name"] == tag), None)
     if previous is None:
         # Tags older than the first page must also be detected. The CLI returns
@@ -120,13 +139,16 @@ def publish(repo, revision, tag, payload, files, webhook):
             raise PublicationError("Cannot verify an earlier publication.")
     if previous:
         receipt = json.loads(previous["body"])
-        if receipt.get("sha256") != digest:
+        if receipt.get("packageFingerprint", receipt.get("sha256")) != (
+            fingerprint if "packageFingerprint" in receipt else digest
+        ):
             raise PublicationError("This version was already reserved with different files; bump the extension version.")
         if receipt.get("state") != "delivered":
             raise PublicationError("Publication is pending. Verify Discord before any manual recovery.")
         print(f"Already published: {tag}")
         return
-    receipt = {"state": "pending", "revision": revision, "sha256": digest}
+    receipt = {"state": "pending", "revision": revision, "sha256": digest,
+               "packageFingerprint": fingerprint}
     release = api(f"repos/{repo}/releases", {
         "tag_name": tag, "target_commitish": revision, "name": f"Discord receipt: {tag}",
         "body": json.dumps(receipt), "prerelease": True, "make_latest": "false",

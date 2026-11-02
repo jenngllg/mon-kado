@@ -18,10 +18,12 @@ user information, private payloads or security-sensitive implementation details.
 The exact delivered revision is linked in the announcement.
 
 For an extension change, bump `extension/manifest.json` and update the matching
-version in `extension/INSTALLATION.md`. The publisher builds a deterministic ZIP
+version in `extension/INSTALLATION.md`. The publisher normalizes text to LF and builds a deterministic ZIP
 from an explicit file allowlist and attaches that guide separately. Both come
 from the same qualified frontend revision. A changed package with an already
 published version is rejected; unchanged versions are not posted again.
+Receipts keep both the sent attachments' SHA-256 and a source fingerprint,
+independent of ZIP compression and Windows/Linux text line endings.
 
 Secrets: `DISCORD_RELEASES_WEBHOOK` in both repositories and
 `DISCORD_EXTENSION_WEBHOOK` in the frontend repository. Each incoming webhook is

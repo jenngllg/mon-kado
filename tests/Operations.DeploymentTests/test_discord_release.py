@@ -79,6 +79,10 @@ class DiscordPublicationTests(unittest.TestCase):
             with zipfile.ZipFile(io.BytesIO(files[0][1])) as archive:
                 self.assertEqual(archive.read("INSTALLATION.md"), files[1][1])
                 self.assertEqual(json.loads(archive.read("manifest.json"))["version"], version)
+            for path in source.iterdir():
+                if path.name != "icon.png":
+                    path.write_bytes(path.read_bytes().replace(b"\n", b"\r\n"))
+            self.assertEqual(files, publisher.extension_files(root)[1])
             (source / "INSTALLATION.md").write_text("Installation 1.2.01")
             with self.assertRaises(publisher.PublicationError):
                 publisher.extension_files(root)
