@@ -150,6 +150,17 @@ func (s *Service) participant(ctx context.Context, tx pgx.Tx, share verifiedShar
 	return &result, err
 }
 
+func (s *Service) publicParticipant(ctx context.Context, tx pgx.Tx, share verifiedShare, member, guest string) (*domain.WishlistParticipantResponse, error) {
+	participant, err := s.participant(ctx, tx, share, member, guest)
+	var failure *domain.Error
+	if errors.As(err, &failure) && failure.Code == domain.GuestSessionInvalid {
+		// An optional expired identity cannot revoke an otherwise valid public link.
+		// Reservation reads and writes still require the original verified participant.
+		return nil, nil
+	}
+	return participant, err
+}
+
 // JoinResult distinguishes a new participant and carries only newly generated guest material.
 type JoinResult struct {
 	Participant  domain.WishlistParticipantResponse
@@ -170,6 +181,11 @@ func (s *Service) JoinWishlist(ctx context.Context, link, secret, member, guest 
 			return domain.Failure(409, domain.WishlistOwnerCannotJoin, "The owner cannot participate in their own wishlist.")
 		}
 		existing, err := s.participant(ctx, tx, share, member, guest)
+		var failure *domain.Error
+		if errors.As(err, &failure) && failure.Code == domain.GuestSessionInvalid {
+			// Only explicit participation may issue a new guest identity.
+			guest, err = "", nil
+		}
 		if err != nil {
 			return err
 		}
@@ -284,7 +300,7 @@ func (s *Service) SharedWish(ctx context.Context, link, secret, id, member, gues
 			return err
 		}
 		share.Member = member
-		participant, err := s.participant(ctx, tx, share, member, guest)
+		participant, err := s.publicParticipant(ctx, tx, share, member, guest)
 		if err != nil {
 			return err
 		}
@@ -310,7 +326,7 @@ func (s *Service) SharedWishlist(ctx context.Context, link, secret, member, gues
 		}
 		r.Occasion = lowerFirst(r.Occasion)
 		if r.CanReserve {
-			r.CurrentParticipant, err = s.participant(ctx, tx, share, member, guest)
+			r.CurrentParticipant, err = s.publicParticipant(ctx, tx, share, member, guest)
 			if err != nil {
 				return err
 			}
