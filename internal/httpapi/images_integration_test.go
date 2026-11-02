@@ -200,9 +200,18 @@ func TestSharedImages_WhenShareLinkRevoked_InvalidatesResourceBoundGrant(t *test
 	}
 	// Act
 	requireStatus(t, visitor.send(t, "GET", grant.RequestURI(), "", nil), 200, nil)
+	thumbnail := grant.RequestURI() + "&size=thumbnail"
+	for range 2 {
+		cached := visitor.send(t, "GET", thumbnail, "", nil)
+		if cached.Header.Get("Cache-Control") != "no-store" {
+			t.Fatal("private images must retain no-store")
+		}
+		requireStatus(t, cached, 200, nil)
+	}
 	requireStatus(t, f.send(t, "DELETE", "/api/v1/wishlists/"+list.Id+"/share-link", "", map[string]string{"If-Match": etag}), 204, nil)
 	// Assert
 	requireStatus(t, visitor.send(t, "GET", grant.RequestURI(), "", nil), 404, nil)
+	requireStatus(t, visitor.send(t, "GET", thumbnail, "", nil), 404, nil)
 	requireStatus(t, visitor.send(t, "GET", base+"/wishes/"+wish.Id, "", headers), 404, nil)
 	files, err := filepath.Glob(filepath.Join(f.service.Config.ImagePath, "*.webp"))
 	if err != nil || len(files) != 1 {

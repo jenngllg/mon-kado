@@ -77,15 +77,15 @@ func (a *API) wishImage(r *request) (response, error) {
 
 func (a *API) readWishImage(r *request) (response, error) {
 	content, _, err := a.Service.ReadWishImage(r.Context(), r.PathValue("wishlistId"), r.PathValue("shareLinkId"), r.PathValue("wishId"), r.URL.Query().Get("token"))
-	return wishImageResponse(r, content, err)
+	return a.wishImageResponse(r, content, err)
 }
 
-func wishImageResponse(r *request, content []byte, err error) (response, error) {
+func (a *API) wishImageResponse(r *request, content []byte, err error) (response, error) {
 	if err != nil {
 		return response{}, err
 	}
 	if r.URL.Query().Get("size") == "thumbnail" {
-		content, mediaType, thumbnailErr := images.Thumbnail(r.Context(), content)
+		content, mediaType, thumbnailErr := a.thumbnails.Thumbnail(r.Context(), content)
 		return response{Binary: content, MediaType: mediaType}, thumbnailErr
 	}
 	return response{Binary: content, MediaType: "image/webp"}, nil

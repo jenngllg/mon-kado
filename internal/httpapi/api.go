@@ -22,6 +22,7 @@ import (
 	"github.com/JennGllg/mon-kado/internal/admission"
 	"github.com/JennGllg/mon-kado/internal/application"
 	"github.com/JennGllg/mon-kado/internal/domain"
+	"github.com/JennGllg/mon-kado/internal/images"
 	"github.com/JennGllg/mon-kado/internal/security"
 	"github.com/JennGllg/mon-kado/internal/telemetry"
 	"github.com/JennGllg/mon-kado/internal/validation"
@@ -41,6 +42,7 @@ type API struct {
 	ImageAdmission *admission.Limiter
 	Telemetry      *telemetry.Collector
 	operations     map[string]options
+	thumbnails     *images.ThumbnailCache
 }
 
 type request struct {
@@ -82,6 +84,7 @@ type options struct {
 func New(service *application.Service, logger *slog.Logger) *API {
 	a := &API{Service: service, Logger: logger, mux: http.NewServeMux(), limiter: rateLimiter{windows: map[string]rateWindow{}}, operations: map[string]options{}}
 	a.ImageAdmission = admission.New(nil)
+	a.thumbnails = images.NewThumbnailCache()
 	a.Telemetry = telemetry.New("api", func() time.Time { return service.Now() }, time.Now)
 	importer := newWishImporter(service)
 	a.Importer = importer
