@@ -4,6 +4,7 @@ import "github.com/JennGllg/mon-kado/internal/domain"
 
 func (a *API) groupSuggestionRoutes() {
 	base := "/api/v1/groups/{groupId}/wishlists/{wishlistId}/suggestions"
+	a.route("POST /api/v1/groups/{groupId}/wishlists/{wishlistId}/suggestion-images/resolve", options{Auth: true, CSRF: true, Rate: 10, RateByMember: true}, a.resolveGroupSuggestionImage)
 	for _, method := range []string{"GET", "POST"} {
 		a.route(method+" "+base, options{Auth: true, CSRF: method != "GET", Rate: 60, RateByMember: true}, a.groupSuggestions)
 	}

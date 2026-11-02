@@ -61,3 +61,15 @@ func (a *API) resolveWishImage(r *request) (response, error) {
 	result, err := a.ImageImporter.Resolve(r.Context(), *input.Url)
 	return response{Body: result}, err
 }
+
+func (a *API) resolveGroupSuggestionImage(r *request) (response, error) {
+	input, err := body[domain.ResolveWishImageRequest](r)
+	if err != nil {
+		return response{}, err
+	}
+	if err = a.Service.AuthorizeGroupSuggestion(r.Context(), r.Principal.MemberID, r.PathValue("groupId"), r.PathValue("wishlistId")); err != nil {
+		return response{}, err
+	}
+	result, err := a.ImageImporter.Resolve(r.Context(), *input.Url)
+	return response{Body: result}, err
+}
