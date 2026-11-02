@@ -1,0 +1,2 @@
+- Les photos des souhaits et de l’historique des réservations se chargent plus rapidement.
+- Les contrôles d’accès aux listes et aux images restent appliqués à chaque consultation.
