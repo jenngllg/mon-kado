@@ -168,3 +168,8 @@ jobs:
           VPS_USER: ${{ vars.VPS_USER }}
           VPS_KNOWN_HOSTS: ${{ vars.VPS_SSH_KNOWN_HOSTS }}
         run: bash scripts/Deploy-MainVPS.sh "$RELEASE_REVISION"
+      - name: Publish delivered release notes to Discord
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DISCORD_RELEASES_WEBHOOK: ${{ secrets.DISCORD_RELEASES_WEBHOOK }}
+        run: python3 scripts/discord_release.py backend --revision "$RELEASE_REVISION"

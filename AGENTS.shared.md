@@ -39,6 +39,8 @@ Ces règles s'appliquent à `mon-kado` et `mon-kado-front`, en complément des p
 
 ## Git et conventions
 
+- Discord : Jenn demande la publication automatique des notes de version après les livraisons réussies, ainsi que du ZIP et du guide correspondant pour chaque nouvelle version de l’extension. Conserver les salons `releases` et `extension` en lecture seule pour les membres, les webhooks limités à leur salon et leurs URL dans les secrets privés. Mettre à jour `docs/discord-release-notes.md` avant chaque livraison ; ne jamais annoncer une simple création d’artefact comme une mise en ligne réussie. Voir [la procédure](docs/discord-publication.md).
+
 - Commits, titres et descriptions de PR en anglais.
 - Pour une règle de formatage, vérifier d'abord une option standard `.editorconfig` ; sinon documenter la règle dans le fichier AGENTS.md pertinent, sans conflit avec une règle existante.
 - Si une préférence récurrente nécessite le choix de Jenn, poser une question courte avec deux exemples.
