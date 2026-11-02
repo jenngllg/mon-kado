@@ -259,8 +259,9 @@ func (a *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	r.Header.Set("X-Correlation-ID", correlation)
 	r.Header.Set("X-Trace-ID", trace)
 	defer func() {
-		a.Telemetry.RecordHTTP(recorded.Status, time.Since(started), r.Context().Err() != nil)
-		a.Logger.InfoContext(r.Context(), "HTTP request completed", "EventId", logging.HTTPRequestCompleted, "Method", logging.HTTPMethod(r.Method), "Operation", r.Pattern, "StatusCode", recorded.Status, "CorrelationId", logCorrelation, "TraceId", trace)
+		elapsed := time.Since(started)
+		a.Telemetry.RecordHTTP(recorded.Status, elapsed, r.Context().Err() != nil)
+		a.Logger.InfoContext(r.Context(), "HTTP request completed", "EventId", logging.HTTPRequestCompleted, "Method", logging.HTTPMethod(r.Method), "Operation", r.Pattern, "StatusCode", recorded.Status, "DurationMilliseconds", elapsed.Milliseconds(), "Abandoned", r.Context().Err() != nil, "CorrelationId", logCorrelation, "TraceId", trace)
 	}()
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("X-Content-Type-Options", "nosniff")

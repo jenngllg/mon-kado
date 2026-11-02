@@ -37,7 +37,9 @@ BACKUP_MODULES = ("__init__.py", "policy.py", "capture.py", "operations.py", "cl
 BACKUP_FILES = tuple("src/Operations.Backups/monkado_backup/" + item for item in BACKUP_MODULES)
 LEGACY_FILES = COORDINATOR_FILES + BACKUP_FILES
 PREVIOUS_UPGRADE_FILES = ("src/Operations.Deployment/deploy_runtime.py", "src/Operations.Deployment/smoke_functional.py")
-CONFIG_UPGRADE_FILES = PREVIOUS_UPGRADE_FILES + ("deployments/caddy/Caddyfile",)
+ONLINE_UPGRADE_FILES = PREVIOUS_UPGRADE_FILES + ("deployments/caddy/Caddyfile",)
+CONFIG_UPGRADE_FILES = ONLINE_UPGRADE_FILES + (
+    "src/Operations.Monitoring/monitor_deployment.py", "src/Operations.Monitoring/monitor_policy.py")
 FILES = COORDINATOR_FILES + CONFIG_UPGRADE_FILES + BACKUP_FILES
 MAXIMUM_FILE_BYTES = 2 * 1024 * 1024
 
@@ -71,7 +73,9 @@ def validate(value, configuration):
            isinstance(value["archiveSha256"], str) and re.fullmatch(r"[0-9a-f]{64}", value["archiveSha256"]) is not None,
            "TOOL_MANIFEST_INVALID")
     files = value["files"]
-    ensure(isinstance(files, dict) and set(files) in (set(FILES), set(LEGACY_FILES), set(COORDINATOR_FILES + PREVIOUS_UPGRADE_FILES + BACKUP_FILES)) and
+    ensure(isinstance(files, dict) and set(files) in (set(FILES), set(LEGACY_FILES),
+           set(COORDINATOR_FILES + PREVIOUS_UPGRADE_FILES + BACKUP_FILES),
+           set(COORDINATOR_FILES + ONLINE_UPGRADE_FILES + BACKUP_FILES)) and
            all(isinstance(digest, str) and re.fullmatch(r"[0-9a-f]{64}", digest) is not None for digest in files.values()),
            "TOOL_MANIFEST_INVALID")
     return value

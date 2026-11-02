@@ -176,3 +176,13 @@ fresh verified offsite captures before and after installation. Its initial Caddy
 configuration reload is graceful; it never stops the API or proxy. Subsequent
 application deployments only change the file selector. Resume an interrupted tool
 transition with `recover-upgrade-online SOURCE`, using the same authenticated source.
+
+The protected inventory also includes the deployment monitor and its incident
+policy. For an operational update, stop only `monkado-monitor.timer`, wait for its
+current service invocation to finish, then install the exact CI-approved tool
+package with `upgrade-online SOURCE`. Keep its durable incident/history state,
+notification settings and credentials unchanged. Verify the installed hashes and
+read-only monitor status, then restart the timer. The procedure takes and verifies
+fresh encrypted offsite captures before and after the operational update. A proxy
+reload occurs only when the reviewed Caddyfile changes. Publish the matching
+backend binaries through the normal main CI/CD path after this tool transition.

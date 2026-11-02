@@ -167,7 +167,7 @@ class UpgradeRuntime(InstallationRuntime):
         for name in FILES:
             ensure(content_digest(self.source / name) == manifest["files"][name], "TOOL_FILE_CHANGED")
         # Hash the proposed configuration with the standard hash function.
-        # Only the two explicitly inventoried deployment modules may change.
+        # Only the explicitly inventoried operational files may change.
         with tempfile.TemporaryDirectory(prefix="reviewed-configuration-") as temporary:
             shadow = Path(temporary)
             for name in release_manifest.FILES:
@@ -279,10 +279,14 @@ class OnlineUpgradeRuntime(UpgradeRuntime):
         self.gate.verify()
 
     def install_backup_code(self, intent):
-        """Prepare the serving selector before the one-time proxy configuration upgrade."""
-        from deploy_runtime import OnlineRuntime
-        OnlineRuntime(root=self.root, state=self.state, settings=self.settings).route(7000)
+        """Reload the serving proxy only when its reviewed configuration actually changes."""
+        proxy = "deployments/caddy/Caddyfile"
+        proxy_changed = intent["previousFiles"][proxy] != intent["manifest"]["files"][proxy]
+        if proxy_changed:
+            from deploy_runtime import OnlineRuntime
+            OnlineRuntime(root=self.root, state=self.state, settings=self.settings).route(7000)
         super().install_backup_code(intent)
-        self.native.run(["systemd-run", "--quiet", "--wait", "--pipe", "--collect",
-                         "--unit=mon-kado-online-proxy-setup", "--property=EnvironmentFile=" + str(self.settings / "caddy.env"),
-                         "--", "/usr/bin/caddy", "reload", "--config", str(self.root / "deployments/caddy/Caddyfile"), "--adapter", "caddyfile"], timeout=30)
+        if proxy_changed:
+            self.native.run(["systemd-run", "--quiet", "--wait", "--pipe", "--collect",
+                             "--unit=mon-kado-online-proxy-setup", "--property=EnvironmentFile=" + str(self.settings / "caddy.env"),
+                             "--", "/usr/bin/caddy", "reload", "--config", str(self.root / "deployments/caddy/Caddyfile"), "--adapter", "caddyfile"], timeout=30)

@@ -201,6 +201,25 @@ class PolicyTests(unittest.TestCase):
         self.assertTrue(state["api.unavailable"]["open"])
         self.assertEqual(1, state["api.unavailable"]["goodSamples"])
 
+    def test_transient_latency_and_collection_require_confirmed_samples(self):
+        # Arrange / Act / Assert
+        for key in ("http.latency", "monitor.collection"):
+            with self.subTest(signal=key):
+                state = {}
+                for decision in (True, True, None, True, False, True, True):
+                    state = policy.transition(state, {key: decision}, NOW, self.options)
+                    self.assertFalse(state[key]["open"])
+                    self.assertEqual([], policy.notifications(state, [], NOW, self.options)[0])
+                state = policy.transition(state, {key: True}, NOW, self.options)
+                self.assertTrue(state[key]["open"])
+                self.assertEqual([key], policy.notifications(state, [], NOW, self.options)[0])
+                for index in range(3):
+                    state = policy.transition(state, {key: False}, NOW, self.options)
+                    self.assertEqual(index < 2, state[key]["open"])
+        for key in ("host.oom", "backup.failed", "deployment.recoveryRequired", "worker.PersonalDataExport.terminal", "http.errors"):
+            with self.subTest(critical=key):
+                self.assertTrue(policy.transition({}, {key: True}, NOW, self.options)[key]["open"])
+
     def test_optional_job_measurements_are_whitelisted_and_typed(self):
         # Arrange
         value = snapshot("worker")
