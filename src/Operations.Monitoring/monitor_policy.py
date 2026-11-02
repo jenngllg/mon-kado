@@ -253,7 +253,8 @@ def transition_incident(key, previous, decision, now, options):
     incident = dict(previous or {"open": False, "badSamples": 0, "goodSamples": 0, "generation": 0})
     require(decision is None or type(decision) is bool)
     update_samples(incident, decision, options)
-    immediate = not (key.endswith(".stopped") or key in {"api.unavailable", "database.unavailable", "frontend.unavailable"})
+    immediate = not (key.endswith(".stopped") or key in {
+        "api.unavailable", "database.unavailable", "frontend.unavailable", "http.latency", "monitor.collection"})
     opening = decision is True and not incident["open"] and (immediate or incident["badSamples"] >= options["failureSamples"])
     closing = decision is False and incident["open"] and incident["goodSamples"] >= options["recoverySamples"]
     if opening or closing:

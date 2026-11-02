@@ -42,6 +42,11 @@ class CoordinatedIntegrityTests(unittest.TestCase):
         self.assertEqual(self.verify(), digest(self.manifest))
 
     def test_historical_inventory_remains_valid_and_new_configuration_modules_are_checked(self):
+        online = copy.deepcopy(self.manifest)
+        for name in CONFIG_UPGRADE_FILES:
+            if name.startswith("src/Operations.Monitoring/"):
+                online["files"].pop(name)
+        self.assertEqual(online, validate(online, online["configurationHash"]))
         historical = copy.deepcopy(self.manifest)
         for name in CONFIG_UPGRADE_FILES:
             historical["files"].pop(name)

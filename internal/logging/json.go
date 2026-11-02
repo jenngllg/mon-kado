@@ -205,7 +205,7 @@ func safeFrames(stack string) string {
 func (h *jsonHandler) property(attribute slog.Attr) any {
 	value := attribute.Value
 	switch attribute.Key {
-	case "Count", "DeletedAccountCount", "DeletedEmailCount", "DeletedRequestCount", "DeletedSessionCount", "TotalCount", "StatusCode", "AttemptCount":
+	case "Count", "DeletedAccountCount", "DeletedEmailCount", "DeletedRequestCount", "DeletedSessionCount", "TotalCount", "StatusCode", "AttemptCount", "DurationMilliseconds":
 		if value.Kind() == slog.KindInt64 && value.Int64() >= 0 {
 			return value.Int64()
 		}

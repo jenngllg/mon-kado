@@ -28,6 +28,9 @@ un doublon lors d’une nouvelle tentative explicite ; elle n’est jamais trait
 - Les services natifs transmettent leurs logs à journald. Configurer et vérifier ses
   plafonds de stockage sur l'hôte avant activation ; ils ne garantissent pas une durée
   de conservation en jours.
+- Chaque fin de requête HTTP ajoute `DurationMilliseconds` et `Abandoned` au nom
+  d'opération compilé déjà autorisé. La durée couvre la réponse entière, y compris
+  les images. Aucun chemin concret, URL, paramètre ou contenu utilisateur n'est ajouté.
 - Les mesures locales sont privées, sans identifiant de membre : sept jours au maximum,
   avec un plafond global de 32 Mio. La saturation raccourcit cette durée.
 - Le moniteur conserve aussi l’état technique courant des incidents, dédoublonnage et
@@ -79,12 +82,24 @@ observations et les tests d’e-mail simultanés.
 | Cycle Worker | trois échecs, attente dépassée de deux minutes, ou exécution de plus de quinze minutes |
 | Échec définitif d’élément | nouvelle augmentation du compteur |
 | HTTP 5xx | au moins cinq erreurs et au moins 20 % sur cinq minutes |
-| Latence HTTP | p95 supérieur à deux secondes sur dix minutes, au moins vingt mesures |
+| Latence HTTP | p95 supérieur à deux secondes sur dix minutes, au moins vingt mesures, trois observations dégradées consécutives |
+| Collecte hôte incomplète | trois observations dégradées consécutives |
 | Sauvegarde | capture distante de plus de trente heures, échec terminal ou nuit manquée |
 | Intégrité sauvegardes | dernier contrôle de plus de huit jours |
 | Certificat HTTPS | expiration dans moins de quatorze jours |
 
 Les décisions de latence utilisent les buckets du histogramme, pas les durées individuelles.
+Une observation inconnue interrompt la confirmation d'ouverture et de rétablissement,
+sans fermer un incident existant. Les OOM, échecs terminaux Worker, erreurs HTTP et
+échecs de sauvegarde conservent leurs déclenchements existants.
+
+Les publications coordonnées sont reconnues par le verrou `deploy.lock` réellement
+détenu dans `/proc/locks`, sans le créer ni l'acquérir. Les anciennes unités systemd
+restent reconnues pour leurs commandes historiques. Un verrou présent mais libre ne
+prouve aucune activité ; une preuve illisible reste inconnue. Un état actif sans
+exécuteur ou dépassant quinze minutes côté backend / dix minutes côté frontend
+reste un incident, même lorsque le site répond. Les états explicites d'échec et de
+retour arrière ne sont jamais masqués par un verrou détenu.
 La disponibilité frontend exige une réponse 200 de la page `/` et un marqueur
 `/release.json` valide ; le marqueur seul ne prouve pas que la page est accessible.
 Une lecture OOM indisponible reste inconnue, mais ne supprime pas le dernier compteur

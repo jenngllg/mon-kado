@@ -56,6 +56,7 @@ func TestJSONLogger_WhenPropertiesHaveUntrustedTypesOrValues_RejectsThem(t *test
 	}{
 		{"UserId", "private-email@example.test"}, {"UserId", security.NewID() + "-secret"}, {"UserId", errors.New("secret")},
 		{"StatusCode", -1}, {"StatusCode", "200"}, {"StatusCode", 200.5}, {"ErrorCode", "ACCOUNT_UNTRUSTED_SECRET"},
+		{"DurationMilliseconds", -1}, {"DurationMilliseconds", "private-duration"}, {"DurationMilliseconds", 2.5},
 		{"Operation", "GET /api/v1/wishlists/" + security.NewID()}, {"Operation", "GET /api/v1/wishlists?secret=value"},
 		{"Method", "SECRET"}, {"Job", "private-title"}, {"Category", "provider-response"}, {"FailureCategory", "private-recipient"},
 		{"Abandoned", "true"}, {"IsReferenced", 1}, {"Arbitrary", true},
@@ -80,6 +81,7 @@ func TestJSONLogger_WhenTechnicalClassificationsAreKnown_PreservesThem(t *testin
 		value any
 	}{
 		{"ErrorCode", domain.RequestValidationError}, {"Count", int64(0)}, {"AttemptCount", 3}, {"Abandoned", true}, {"IsReferenced", false},
+		{"DurationMilliseconds", int64(2345)},
 		{"Method", "OPTIONS"}, {"Job", "erasureExpiry"}, {"Category", "network"}, {"FailureCategory", "authorization"},
 	} {
 		t.Run(test.key, func(t *testing.T) {
