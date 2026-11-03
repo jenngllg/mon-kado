@@ -19,7 +19,8 @@ from coordinated_locks import locks
 from coordinated_runtime import CoordinatedRuntime, ForwardRuntime
 from coordinated_store import CoordinatedStore
 from deploy_cli import approved_release
-from deploy_policy import DeploymentError, ensure
+from deploy_policy import DeploymentError, ensure, decision
+from release_catalog import fingerprint, identifiers
 from deploy_process import command
 from deploy_runtime import Runtime, OnlineRuntime, online_compatible
 from deploy_storage import Store, private_read, atomic_write
@@ -36,6 +37,61 @@ TOOL_MANIFEST = Path("/etc/monkado/coordinated-manifest.json")
 UNIT = Path("/etc/systemd/system/monkado-transition-guard.service")
 REQUIRES = Path("/etc/systemd/system/caddy.service.requires/monkado-transition-guard.service")
 TOOL_POINTER = "https://api.github.com/repos/jenngllg/mon-kado/releases/tags/coordinator-production"
+
+# Reviewed, transactional expansion only. Every older SQL byte is retained;
+# arbitrary appended migrations still require a separate compatibility review.
+NOTIFICATION_PREVIOUS_CATALOG = "958e79ccf99e58e9a1a7c4818b8dc9e321e18d3ae1d51adc22789e0e0f862467"
+NOTIFICATION_EXPANDED_CATALOG = "0a924f9b48095ff150e2d7517fff9fb1980fb4cec34550097184f90d044a4905"
+
+
+def notification_expansion(previous, candidate):
+    """Recognize only the exact reviewed old and expanded notification catalogs."""
+    return previous is not None and fingerprint(previous["migrationCatalog"]) == NOTIFICATION_PREVIOUS_CATALOG and \
+        fingerprint(candidate["migrationCatalog"]) == NOTIFICATION_EXPANDED_CATALOG
+
+
+def online_catalog_compatible(previous, candidate):
+    """Retain the unchanged-schema default and its single reviewed additive exception."""
+    return previous["migrationCatalog"] == candidate["migrationCatalog"] or notification_expansion(previous, candidate)
+
+
+class NotificationOnlineRuntime(OnlineRuntime):
+    """Apply the reviewed expansion while the old API continues serving requests."""
+
+    def preflight(self, candidate, current):
+        if not notification_expansion(current, candidate):
+            return super().preflight(candidate, current)
+        ensure(candidate["rollbackAllowed"] is True, "ONLINE_SCHEMA_REVIEW_REQUIRED")
+        ensure(self.history() in (identifiers(current["migrationCatalog"]), identifiers(candidate["migrationCatalog"])),
+               "DATABASE_HISTORY_DIVERGED")
+        return Runtime.preflight(self, candidate, current)
+
+    def migrate(self, release):
+        # The immutable executable catalog is verified by Runtime.migrate. SQL
+        # uses transaction-local lock/statement deadlines and never deletes data.
+        ensure(fingerprint(release["migrationCatalog"]) == NOTIFICATION_EXPANDED_CATALOG and
+               release["rollbackAllowed"] is True, "ONLINE_SCHEMA_REVIEW_REQUIRED")
+        return Runtime.migrate(self, release)
+
+
+class NotificationOnlineEngine(Engine):
+    """Retain additive notification data during a verified binary-only rollback."""
+
+    def policy(self, current, candidate, history):
+        if not notification_expansion(current, candidate):
+            return super().policy(current, candidate, history)
+        old, expanded = identifiers(current["migrationCatalog"]), identifiers(candidate["migrationCatalog"])
+        ensure(history in (old, expanded), "DATABASE_HISTORY_DIVERGED")
+        policy = decision(current, candidate, old)
+        ensure(candidate["rollbackAllowed"] is True, "ONLINE_SCHEMA_REVIEW_REQUIRED")
+        return policy | {"migrate": history != expanded, "rollback": True}
+
+    def check_rollback_history(self, state):
+        previous, candidate = state["previous"], state["candidate"]
+        if not notification_expansion(previous, candidate):
+            return super().check_rollback_history(state)
+        ensure(self.runtime.history() in (identifiers(previous["migrationCatalog"]), identifiers(candidate["migrationCatalog"])),
+               "DATABASE_HISTORY_DIVERGED")
 
 
 class HistoricalSmoke(FunctionalSmoke):
@@ -230,7 +286,7 @@ def main_deploy(component, revision):
         ensure(candidate["proof"] == previous["proof"], "FRONTEND_APPROVAL_CHANGED")
     else:
         verify_candidate_schema(candidate)
-    ensure(candidate["backend"]["migrationCatalog"] == previous["backend"]["migrationCatalog"], "ONLINE_SCHEMA_REVIEW_REQUIRED")
+    ensure(online_catalog_compatible(previous["backend"], candidate["backend"]), "ONLINE_SCHEMA_REVIEW_REQUIRED")
     if candidate["backend"] == previous["backend"] and candidate["frontend"] == previous["frontend"]:
         return {"state": "alreadyInstalled"}
     return online_deploy(previous, candidate)
@@ -287,8 +343,10 @@ def complete_online(intent):
         ensure(len(references) == 1 and
                (intent["backendSnapshot"] is not None) == (candidate["backend"] != previous["backend"]) and
                (intent["frontendSnapshot"] is not None) == (candidate["frontend"] != previous["frontend"]), "BACKUP_REFERENCE_REQUIRED")
-    ensure(previous["backend"]["migrationCatalog"] == candidate["backend"]["migrationCatalog"], "ONLINE_SCHEMA_REVIEW_REQUIRED")
-    runtime = OnlineRuntime()
+    ensure(online_catalog_compatible(previous["backend"], candidate["backend"]), "ONLINE_SCHEMA_REVIEW_REQUIRED")
+    expansion = notification_expansion(previous["backend"], candidate["backend"])
+    runtime = (NotificationOnlineRuntime if expansion else OnlineRuntime)()
+    engine = NotificationOnlineEngine if expansion else Engine
     gate = OnlineGate()
     gate.verify()
     publisher = hosting.Deployment(FRONTEND, STATE, configuration_hash(ROOT))
@@ -298,7 +356,7 @@ def complete_online(intent):
     ensure(observed["current"] in (previous["backend"], candidate["backend"]), "BACKEND_CHANGED")
     if observed["phase"] not in {"succeeded", "acknowledged", "rolledBack", "rejected"}:
         ensure(observed["candidate"] == candidate["backend"] and observed["previous"] == previous["backend"], "ONLINE_RECOVERY_REQUIRED")
-        Engine(backend_store, runtime, lambda: now().isoformat()).rollback(observed)
+        engine(backend_store, runtime, lambda: now().isoformat()).rollback(observed)
         intent["phase"] = "rolledBack"
         atomic_write(STATE / ("online-failed-" + candidate["backend"]["publicationId"] + ".json"), json.dumps(intent).encode())
         path.unlink()
@@ -314,7 +372,7 @@ def complete_online(intent):
         state = backend_store.load()
         if state["current"] != candidate["backend"]:
             ensure(state["current"] == previous["backend"], "BACKEND_CHANGED")
-            result = Engine(backend_store, runtime, lambda: now().isoformat()).deploy(candidate["backend"])
+            result = engine(backend_store, runtime, lambda: now().isoformat()).deploy(candidate["backend"])
             ensure(result["phase"] == "succeeded", "BACKEND_VERIFICATION_FAILED")
         intent["phase"] = "backendInstalled"
         atomic_write(path, json.dumps(intent, sort_keys=True).encode())

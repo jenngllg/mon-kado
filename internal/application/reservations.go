@@ -142,6 +142,15 @@ func (s *Service) reservationInTransaction(ctx context.Context, tx pgx.Tx, share
 	if member != "" {
 		_, err = tx.Exec(ctx, `INSERT INTO gift_reservation_histories(id,member_id,wishlist_id,wishlist_name,wish_id,wish_name,quantity,status,created_at,last_activity_at,is_group_reservation,author_id,author_display_name) SELECT $1,$2,$3,$4,$5,$6,$7,'Active',$8,$9,$10,u.id,u.display_name FROM users u WHERE u.id=$11 ON CONFLICT(id) DO UPDATE SET quantity=EXCLUDED.quantity,last_activity_at=EXCLUDED.last_activity_at`, r.Id, member, share.Wishlist, share.Name, wishID, wishName, quantity, r.CreatedAt, now, share.Group != "", share.Owner)
 	}
+	if err == nil && !exists && member != share.Owner {
+		var surprise bool
+		if err = tx.QueryRow(ctx, `SELECT surprise_mode FROM wishlists WHERE id=$1`, share.Wishlist).Scan(&surprise); err != nil {
+			return err
+		}
+		if !surprise {
+			return s.notify(ctx, tx, share.Owner, notificationEvent{kind: "wishReserved", actor: member, participant: participantID, wishlist: share.Wishlist, subject: wishID, key: "reserved:" + r.Id})
+		}
+	}
 	return err
 }
 

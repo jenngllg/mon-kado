@@ -94,7 +94,10 @@ func (s *Service) CreateWish(ctx context.Context, owner, wishlist string, reques
 		}
 		var err error
 		r, v, err = s.scanWish(owner, tx.QueryRow(ctx, `INSERT INTO wishes(id,wishlist_id,name,note,url,price,quantity,position,created_at,is_favorite,color,size,is_surprise,accepts_second_hand) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,COALESCE($10,false),$11,$12,COALESCE($13,false),COALESCE($14,false)) RETURNING `+wishColumns, security.NewID(), wishlist, strings.TrimSpace(text(request.Name)), optional(request.Note), optional(request.Url), request.Price, quantity(request.Quantity), position+1, s.Now().UTC(), request.IsFavorite, optional(request.Color), optional(request.Size), request.IsSurprise, request.AcceptsSecondHand))
-		return err
+		if err != nil {
+			return err
+		}
+		return s.notifyWishAdded(ctx, tx, owner, wishlist)
 	})
 	return r, v, err
 }
@@ -154,6 +157,9 @@ func (s *Service) DeleteWish(ctx context.Context, owner, wishlist, id string, ve
 			if err = s.queueImageDeletion(ctx, tx, *image); err != nil {
 				return err
 			}
+		}
+		if err = s.notifyUnavailableWish(ctx, tx, wishlist, id); err != nil {
+			return err
 		}
 		_, err = tx.Exec(ctx, `DELETE FROM wishes WHERE id=$1 AND wishlist_id=$2`, id, wishlist)
 		return err

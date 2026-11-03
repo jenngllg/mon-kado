@@ -17,6 +17,14 @@ class Engine:
         state["phase"] = phase
         self.store.save(state)
 
+    def policy(self, current, candidate, history):
+        """Keep the default engine restricted to its existing migration policy."""
+        return decision(current, candidate, history)
+
+    def check_rollback_history(self, state):
+        """Require unchanged data history before restoring ordinary application binaries."""
+        ensure(self.runtime.history() == identifiers(state["previous"]["migrationCatalog"]), "DATABASE_HISTORY_DIVERGED")
+
     def deploy(self, candidate):
         """Preflight first, then make at most one rollout and one admissible rollback."""
         state = self.store.load()
@@ -29,7 +37,7 @@ class Engine:
                 return state
         try:
             baseline = self.runtime.preflight(candidate, state["current"])
-            policy = decision(state["current"], candidate, self.runtime.history())
+            policy = self.policy(state["current"], candidate, self.runtime.history())
         except (DeploymentError, OSError, ValueError, KeyError, TypeError, AttributeError) as error:
             code = error.code if isinstance(error, DeploymentError) else "PREFLIGHT_FAILED"
             state.update(candidate=candidate, previous=state["current"], phase="rejected", error=code,
@@ -80,12 +88,12 @@ class Engine:
 
     def rollback(self, state):
         """Restore application executables, verifying history before any replacement."""
-        ensure(self.runtime.history() == identifiers(state["previous"]["migrationCatalog"]), "DATABASE_HISTORY_DIVERGED")
+        self.check_rollback_history(state)
         self.transition(state, "rollingBack")
         self.runtime.stop()
         self.runtime.start(state["previous"])
         self.transition(state, "verifyingRollback")
         state["checks"] = self.runtime.smoke(state["previous"])
-        ensure(self.runtime.history() == identifiers(state["previous"]["migrationCatalog"]), "DATABASE_HISTORY_DIVERGED")
+        self.check_rollback_history(state)
         state.update(current=state["previous"], phase="rolledBack", finishedAt=self.clock())
         self.store.finish(state)

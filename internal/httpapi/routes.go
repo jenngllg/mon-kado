@@ -13,6 +13,7 @@ import (
 func (a *API) routes() {
 	a.registerCSRF()
 	a.accountRoutes()
+	a.notificationRoutes()
 	a.subscriptionRoutes()
 	a.copyRoutes()
 	a.previewRoutes()

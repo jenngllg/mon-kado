@@ -109,6 +109,7 @@ const (
 	GiftReservationVersionConflict         = "GIFT_RESERVATION_VERSION_CONFLICT"
 	TechnicalDependencyUnavailable         = "TECHNICAL_DEPENDENCY_UNAVAILABLE"
 	TechnicalServiceUnavailable            = "TECHNICAL_SERVICE_UNAVAILABLE"
+	NotificationNotFound                   = "NOTIFICATION_NOT_FOUND"
 )
 
 // KnownErrorCode reports whether a value belongs to the compiled business error vocabulary.
@@ -194,7 +195,8 @@ func KnownErrorCode(code string) bool {
 		GiftReservationQuantityUnavailable,
 		GiftReservationVersionConflict,
 		TechnicalDependencyUnavailable,
-		TechnicalServiceUnavailable:
+		TechnicalServiceUnavailable,
+		NotificationNotFound:
 		return true
 	default:
 		return false

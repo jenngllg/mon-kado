@@ -79,7 +79,10 @@ func (s *Service) ShareGroupWishlist(ctx context.Context, member, group, wishlis
 			return err
 		}
 		result, err = scanGroupWishlist(tx.QueryRow(ctx, groupWishlistSummary+` AND w.id=$2`, group, wishlist))
-		return err
+		if err != nil {
+			return err
+		}
+		return s.notifyGroupShared(ctx, tx, member, wishlist, group)
 	})
 	return result, err
 }

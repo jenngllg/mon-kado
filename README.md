@@ -1,5 +1,8 @@
 # MonKado backend
 
+In-app notifications use the authenticated header bell and live unread events. Apply the reviewed online expansion before updating the API and worker; see [notification behavior](docs/notifications.md) and [online migration, qualification and recovery](deployments/online-notifications.md).
+
+
 MonKado runs as native Go executables backed by PostgreSQL. The API, worker, migrations and Gmail OAuth bootstrap tool require neither .NET nor Docker. The migration is based on consolidated `develop` at `89ffcc0`.
 
 ## Migration compatibility status
@@ -145,4 +148,4 @@ Group-derived follows retain their original group authorization, without creatin
 
 The native API now includes private group suggestions, group member management with equal accepted-member rights, member activity, and session-bound administrator impersonation. Administrator account search and deletion require the live `isAdmin` boolean and current MFA verification; uncertain deletions are verified with a fresh target lookup before another request. Existing production import providers, operational telemetry, password upgrading and share/subscription contracts are preserved.
 
-Apply only the append-only production migrations `021_reservation_history_author.sql` through `026_impersonation_manual_stop.sql`, after the unchanged migrations 001–020. They add retained author context, private suggestions, bounded activity retention and audited manual-stop impersonations. No existing account or application data is reset. Use the protected publication workflows and `deployments/forward-transitions.md`, with fresh coherent verified offsite snapshots before each transition.
+Apply only the append-only production migrations `021_reservation_history_author.sql` through `026_impersonation_manual_stop.sql`, after the unchanged migrations 001ï¿½020. They add retained author context, private suggestions, bounded activity retention and audited manual-stop impersonations. No existing account or application data is reset. Use the protected publication workflows and `deployments/forward-transitions.md`, with fresh coherent verified offsite snapshots before each transition.

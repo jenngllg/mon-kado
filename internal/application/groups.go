@@ -318,7 +318,10 @@ func (s *Service) InviteGroupMember(ctx context.Context, member, group string, i
 			return err
 		}
 		result, err = scanGroupInvitation(tx.QueryRow(ctx, invitationSummary+` WHERE i.id=$1`, id))
-		return err
+		if err != nil {
+			return err
+		}
+		return s.notify(ctx, tx, target, notificationEvent{kind: "groupInvitation", actor: member, group: group, invitation: id})
 	})
 	return result, err
 }
@@ -357,6 +360,9 @@ func (s *Service) AnswerGroupInvitation(ctx context.Context, member, id string, 
 			return nil
 		}
 		if _, err = tx.Exec(ctx, `INSERT INTO group_members(group_id,member_id,joined_at)VALUES($1,$2,$3)`, group, member, s.Now().UTC()); err != nil {
+			return err
+		}
+		if err = s.notifyGroupJoined(ctx, tx, member, group); err != nil {
 			return err
 		}
 		result, _, err = s.scanGroup(member, tx.QueryRow(ctx, groupSummary+` WHERE g.id=$1`, group))
