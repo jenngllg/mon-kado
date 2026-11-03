@@ -12,6 +12,10 @@ import (
 
 func (a *API) routes() {
 	a.registerCSRF()
+	// This hint is never an authentication proof; refresh still validates the cookie.
+	a.route("GET /api/v1/auth/session-contexts/current", options{}, func(r *request) (response, error) {
+		return response{Body: domain.SessionContextResponse{HasSessionCookie: a.cookie(r.Request, "Refresh") != ""}}, nil
+	})
 	a.accountRoutes()
 	a.notificationRoutes()
 	a.subscriptionRoutes()

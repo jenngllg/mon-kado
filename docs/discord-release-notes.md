@@ -1,1 +1,1 @@
-- L’ouverture du site distingue une visite anonyme d’une session à restaurer, pour éviter une requête de renouvellement inutile et son erreur 401 dans la console.
+- L’ouverture du site évite le renouvellement inutile des visites anonymes et son erreur 401 en console, tout en conservant la restauration sécurisée des sessions existantes.

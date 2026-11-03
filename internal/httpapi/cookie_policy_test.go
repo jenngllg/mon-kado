@@ -38,6 +38,10 @@ func TestCSRFCookies_WhenTransportAndEnvironmentDiffer_PreservesProductionSecuri
 			if response.Code != 200 || json.Unmarshal(response.Body.Bytes(), &token) != nil || token.Token == "" || len(cookies) != 1 {
 				t.Fatal("CSRF response contract differs")
 			}
+			var fields map[string]json.RawMessage
+			if json.Unmarshal(response.Body.Bytes(), &fields) != nil || len(fields) != 1 || fields["token"] == nil {
+				t.Fatal("existing CSRF response changed")
+			}
 			cookie := cookies[0]
 			if cookie.Name != scenario.cookieName || cookie.Secure != scenario.secure || !cookie.HttpOnly || cookie.SameSite != http.SameSiteStrictMode || cookie.Path != "/" || cookie.Domain != "" {
 				t.Fatal("cookie policy differs for the public transport and environment")
@@ -46,7 +50,7 @@ func TestCSRFCookies_WhenTransportAndEnvironmentDiffer_PreservesProductionSecuri
 	}
 }
 
-func TestCSRFToken_WhenRefreshCookieDiffers_ReportsOnlyPresence(t *testing.T) {
+func TestSessionContext_WhenRefreshCookieDiffers_ReportsOnlyPresence(t *testing.T) {
 	for _, scenario := range []struct {
 		name, cookieName, cookieValue string
 		production, present           bool
@@ -62,7 +66,7 @@ func TestCSRFToken_WhenRefreshCookieDiffers_ReportsOnlyPresence(t *testing.T) {
 			// Arrange: no database or session authentication is needed to report cookie presence.
 			cfg := config.Config{Production: scenario.production, AllowedHosts: []string{"127.0.0.1"}, SigningKey: make([]byte, 32), EncryptionKey: make([]byte, 32)}
 			api := httpapi.New(application.New(nil, cfg, time.Now), slog.New(slog.NewJSONHandler(io.Discard, nil)))
-			request := httptest.NewRequest("GET", "https://127.0.0.1/security/csrf-token", nil).WithContext(t.Context())
+			request := httptest.NewRequest("GET", "https://127.0.0.1/api/v1/auth/session-contexts/current", nil).WithContext(t.Context())
 			if scenario.cookieName != "" {
 				request.AddCookie(&http.Cookie{Name: scenario.cookieName, Value: scenario.cookieValue})
 			}
@@ -70,13 +74,13 @@ func TestCSRFToken_WhenRefreshCookieDiffers_ReportsOnlyPresence(t *testing.T) {
 			// Act
 			api.ServeHTTP(response, request)
 			// Assert
-			var result domain.CsrfTokenResponse
-			if response.Code != 200 || json.Unmarshal(response.Body.Bytes(), &result) != nil || result.Token == "" || result.HasSessionCookie != scenario.present {
+			var result domain.SessionContextResponse
+			if response.Code != 200 || json.Unmarshal(response.Body.Bytes(), &result) != nil || result.HasSessionCookie != scenario.present || response.Header().Get("Cache-Control") != "no-store" || len(response.Result().Cookies()) != 0 {
 				t.Fatal("cookie presence differs")
 			}
 			var fields map[string]json.RawMessage
-			if json.Unmarshal(response.Body.Bytes(), &fields) != nil || len(fields) != 2 || fields["hasSessionCookie"] == nil {
-				t.Fatal("unexpected session data in CSRF response")
+			if json.Unmarshal(response.Body.Bytes(), &fields) != nil || len(fields) != 1 || fields["hasSessionCookie"] == nil {
+				t.Fatal("unexpected session data in context response")
 			}
 		})
 	}
