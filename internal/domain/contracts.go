@@ -247,8 +247,12 @@ type AdministrativeAuditEventResponse struct {
 
 // CsrfTokenResponse preserves the versioned JSON contract.
 type CsrfTokenResponse struct {
-	Token            string `json:"token"`
-	HasSessionCookie bool   `json:"hasSessionCookie"`
+	Token string `json:"token"`
+}
+
+// SessionContextResponse reports cookie presence without authenticating or exposing session data.
+type SessionContextResponse struct {
+	HasSessionCookie bool `json:"hasSessionCookie"`
 }
 
 // CurrentSessionResponse preserves the versioned JSON contract.

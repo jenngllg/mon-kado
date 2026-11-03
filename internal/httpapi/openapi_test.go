@@ -31,13 +31,23 @@ func TestOpenAPI_WhenReadingDocument_ContainsVersionedOperationsAndExactErrorEnv
 	}
 	err := json.Unmarshal(recorder.Body.Bytes(), &document)
 	// Assert
-	if err != nil || recorder.Code != 200 || document.OpenAPI != "3.1.0" || len(api.Patterns()) != 167 {
+	if err != nil || recorder.Code != 200 || document.OpenAPI != "3.1.0" || len(api.Patterns()) != 168 {
 		t.Fatalf("invalid specification: status %d patterns %d error %v", recorder.Code, len(api.Patterns()), err)
 	}
 	if _, exists := document.Paths["/api/v1/wishlists/{wishlistId}/wish-import-previews"]; !exists {
 		t.Fatal("existing import endpoint is missing from the contract")
 	}
 	fields := document.Components.Schemas["ErrorResponse"].Properties
+	var sessionContext struct {
+		Security []map[string]json.RawMessage `json:"security"`
+	}
+	if err := json.Unmarshal(document.Paths["/api/v1/auth/session-contexts/current"]["get"], &sessionContext); err != nil || len(sessionContext.Security) != 0 {
+		t.Fatal("optional session context must remain public")
+	}
+	contextFields := document.Components.Schemas["SessionContextResponse"].Properties
+	if len(contextFields) != 1 || contextFields["hasSessionCookie"] == nil || len(document.Components.Schemas["CsrfTokenResponse"].Properties) != 1 {
+		t.Fatal("session context must not change the existing CSRF envelope or expose session data")
+	}
 	for _, path := range []string{"/api/v1/admin/members", "/api/v1/admin/members/{memberId}"} {
 		var operation struct {
 			Security []map[string]json.RawMessage `json:"security"`

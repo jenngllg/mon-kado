@@ -21764,6 +21764,39 @@
           }
         }
       }
+    },
+    "/api/v1/auth/session-contexts/current": {
+      "get": {
+        "tags": [
+          "Auth"
+        ],
+        "operationId": "getSessionContext",
+        "summary": "Read optional browser session context",
+        "description": "Public, uncached presence hint for this browser only. Does not authenticate, create or renew a session. Include browser cookies.",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Refresh-cookie presence; no session or member data.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionContextResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid supplied bearer token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -25432,15 +25465,10 @@
         "properties": {
           "token": {
             "type": "string"
-          },
-          "hasSessionCookie": {
-            "type": "boolean",
-            "description": "Whether this request includes a non-empty refresh cookie. Presence only; never a proof of authentication."
           }
         },
         "required": [
-          "token",
-          "hasSessionCookie"
+          "token"
         ]
       },
       "SetWishlistArchivedRequest": {
@@ -26565,6 +26593,19 @@
             "description": "Normalized JPEG, PNG or legacy WebP bytes."
           }
         }
+      },
+      "SessionContextResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "hasSessionCookie": {
+            "type": "boolean",
+            "description": "Presence of a nonempty refresh cookie only; not proof of authentication."
+          }
+        },
+        "required": [
+          "hasSessionCookie"
+        ]
       }
     }
   }
