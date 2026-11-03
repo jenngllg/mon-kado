@@ -42,12 +42,19 @@ No SQL migration or rewriting of stored images is needed. Use two qualified
 publications, each with the normal fresh verified encrypted offsite backup:
 
 1. Publish compatible readers, exports and frontend with
-   `IMAGE_FAST_ENCODING_ENABLED=false` (the default). New uploads stay WebP.
+   `IMAGE_FAST_ENCODING_ENABLED=false`. New uploads stay WebP.
    Verify the exact running revisions and all access controls.
-2. Only after that compatible revision is running, activate
-   `IMAGE_FAST_ENCODING_ENABLED=true` in the private environment and publish the
-   activation revision through the normal online coordinator. Its previous
-   qualified binary already understands JPEG/PNG, so binary rollback remains safe.
+2. Only after that compatible revision is running, capture and verify a fresh
+   encrypted offsite backup before updating private configuration. Set
+   `IMAGE_FAST_ENCODING_ENABLED=true` in the private environment, then publish the
+   activation revision through the normal online coordinator. That coordinator
+   captures another fresh verified snapshot before replacing running processes.
+   Its previous qualified binary already understands JPEG/PNG, so rollback stays safe.
+
+The activation publication changes documentation only: its Go sources and OpenAPI
+remain identical to the compatible-reader release. The ordinary exact-revision
+CI/build and online deployment gates still run; a recent identical-source Go
+verification may be reused by the existing qualified-proof mechanism.
 
 The original group image JSON endpoint keeps its WebP contract for older tabs.
 The additive `/image/content` endpoint serves current JPEG/PNG/WebP content and
