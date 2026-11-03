@@ -8,8 +8,8 @@ import (
 	"encoding/binary"
 	"errors"
 	"image"
-	_ "image/jpeg"
-	_ "image/png"
+	"image/jpeg"
+	"image/png"
 	"math"
 
 	"github.com/HugoSmits86/nativewebp"
@@ -21,25 +21,33 @@ import (
 // MaximumInputBytes limits both upload and imported source image sizes.
 const MaximumInputBytes = 10 * 1024 * 1024
 
+const photographJPEGQuality = 90
+
 var processingSlots = make(chan struct{}, 2)
 
-// Result contains a stripped, normalized WebP and its integrity hash.
+// Result contains a stripped, normalized image and its integrity hash.
 type Result struct {
-	Content []byte
-	Hash    []byte
+	Content     []byte
+	Hash        []byte
+	ContentType string
 }
 
 // Process rejects animated or oversized images and honors cancellation before each expensive stage.
 func Process(ctx context.Context, source []byte, maximumEdge int, profile bool) (Result, error) {
-	return process(ctx, source, maximumEdge, profile, false)
+	return process(ctx, source, maximumEdge, profile, false, false)
 }
 
 // ProcessImported also accepts bounded static AVIF merchant images. Upload contracts remain unchanged.
 func ProcessImported(ctx context.Context, source []byte, maximumEdge int) (Result, error) {
-	return process(ctx, source, maximumEdge, false, true)
+	return process(ctx, source, maximumEdge, false, true, false)
 }
 
-func process(ctx context.Context, source []byte, maximumEdge int, profile, imported bool) (Result, error) {
+// ProcessForStorage selects efficient encoding only after the compatible reader is deployed.
+func ProcessForStorage(ctx context.Context, source []byte, maximumEdge int, profile, efficient bool) (Result, error) {
+	return process(ctx, source, maximumEdge, profile, false, efficient)
+}
+
+func process(ctx context.Context, source []byte, maximumEdge int, profile, imported, efficient bool) (Result, error) {
 	invalid, unsupported := domain.WishImageInvalid, domain.WishImageUnsupportedFormat
 	if profile {
 		invalid, unsupported = domain.ProfileImageInvalid, domain.ProfileImageUnsupportedFormat
@@ -96,7 +104,17 @@ func process(ctx context.Context, source []byte, maximumEdge int, profile, impor
 		return Result{}, err
 	}
 	var buffer bytes.Buffer
-	if err = nativewebp.Encode(&buffer, output, nil); err != nil {
+	contentType := "image/webp"
+	if !efficient {
+		err = nativewebp.Encode(&buffer, output, nil)
+	} else if output.Opaque() && format != "png" {
+		contentType = "image/jpeg"
+		err = jpeg.Encode(&buffer, output, &jpeg.Options{Quality: photographJPEGQuality})
+	} else {
+		contentType = "image/png"
+		err = (&png.Encoder{CompressionLevel: png.BestSpeed}).Encode(&buffer, output)
+	}
+	if err != nil {
 		return Result{}, err
 	}
 	if buffer.Len() > MaximumInputBytes {
@@ -107,7 +125,7 @@ func process(ctx context.Context, source []byte, maximumEdge int, profile, impor
 	}
 	content := buffer.Bytes()
 	hash := sha256.Sum256(content)
-	return Result{Content: content, Hash: hash[:]}, nil
+	return Result{Content: content, Hash: hash[:], ContentType: contentType}, nil
 }
 
 func animated(data []byte, format string) bool {

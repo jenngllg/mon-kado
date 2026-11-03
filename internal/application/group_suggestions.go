@@ -183,7 +183,7 @@ func (s *Service) ChangeGroupSuggestionImage(ctx context.Context, member, group,
 	var content []byte
 	var imageID *string
 	if !remove {
-		image, err := images.Process(ctx, source, 1600, false)
+		image, err := images.ProcessForStorage(ctx, source, 1600, false, s.Config.FastImageEncoding)
 		if err != nil {
 			return domain.GroupSuggestionResponse{}, 0, err
 		}

@@ -26,6 +26,7 @@ type Config struct {
 	AllowedOrigins           []string
 	AllowedHosts             []string
 	ImagePath                string
+	FastImageEncoding        bool
 	ExportPath               string
 	WorkerInterval           time.Duration
 	HTTPTimeout              time.Duration
@@ -79,6 +80,10 @@ func Load() (Config, error) {
 		PublicAPIOrigin: value("PUBLIC_API_ORIGIN", "http://localhost:7000"),
 	}
 	var err error
+	c.FastImageEncoding, err = strconv.ParseBool(value("IMAGE_FAST_ENCODING_ENABLED", "false"))
+	if err != nil {
+		return c, errors.New("IMAGE_FAST_ENCODING_ENABLED must be a boolean")
+	}
 	c.ProviderFailureThreshold, err = strconv.Atoi(value("PROVIDER_FAILURE_THRESHOLD", "5"))
 	if err != nil || c.ProviderFailureThreshold < 1 || c.ProviderFailureThreshold > 100 {
 		return c, errors.New("PROVIDER_FAILURE_THRESHOLD must be between 1 and 100")

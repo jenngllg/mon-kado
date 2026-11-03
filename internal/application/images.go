@@ -40,7 +40,7 @@ func (s *Service) imageURL(owner, link, wishlist, wish, image string) (string, e
 
 // UpsertWishImage stages normalized bytes and atomically replaces the referenced image.
 func (s *Service) UpsertWishImage(ctx context.Context, owner, wishlist, wish string, source []byte, expected uint32) (domain.WishResponse, uint32, error) {
-	result, err := images.Process(ctx, source, 1600, false)
+	result, err := images.ProcessForStorage(ctx, source, 1600, false, s.Config.FastImageEncoding)
 	if err != nil {
 		return domain.WishResponse{}, 0, err
 	}
@@ -148,7 +148,7 @@ func (s *Service) ProfileImage(ctx context.Context, user string, source []byte, 
 	var err error
 	var id *string
 	if !remove {
-		normalized, err = images.Process(ctx, source, 512, true)
+		normalized, err = images.ProcessForStorage(ctx, source, 512, true, s.Config.FastImageEncoding)
 		if err != nil {
 			return domain.MemberProfileResponse{}, 0, err
 		}

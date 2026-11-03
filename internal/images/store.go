@@ -66,7 +66,7 @@ func Remove(root, id string) error {
 	if _, err := uuid.Parse(id); err != nil {
 		return errors.New("invalid image identifier")
 	}
-	for _, extension := range []string{".webp", ".pending"} {
+	for _, extension := range []string{".webp", ".img", ".pending"} {
 		if err := os.Remove(filepath.Join(root, id+extension)); err != nil && !errors.Is(err, os.ErrNotExist) {
 			return err
 		}
@@ -90,6 +90,10 @@ func Read(ctx context.Context, root, id string) ([]byte, error) {
 	defer directory.Close()
 	name := identifier.String() + ".webp"
 	info, err := directory.Lstat(name)
+	if errors.Is(err, os.ErrNotExist) {
+		name = identifier.String() + ".img"
+		info, err = directory.Lstat(name)
+	}
 	if err != nil {
 		return nil, err
 	}

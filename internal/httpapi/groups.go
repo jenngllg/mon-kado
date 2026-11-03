@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"github.com/JennGllg/mon-kado/internal/domain"
+	"github.com/JennGllg/mon-kado/internal/images"
 	"github.com/JennGllg/mon-kado/internal/validation"
 )
 
@@ -276,5 +277,5 @@ func (a *API) groupProfileImage(r *request) (response, error) {
 
 func (a *API) readGroupProfileImage(r *request) (response, error) {
 	content, err := a.Service.ReadGroupProfileImage(r.Context(), r.PathValue("groupId"), r.URL.Query().Get("token"))
-	return response{Binary: content, MediaType: "image/webp"}, err
+	return response{Binary: content, MediaType: images.MediaType(content)}, err
 }

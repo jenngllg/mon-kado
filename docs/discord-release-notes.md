@@ -1,2 +1,2 @@
-- Les activités de tes listes et groupes arrivent dans les notifications, avec une pastille mise à jour automatiquement.
-- Des rappels signalent les occasions à venir et les listes encore à partager. Les réservations restent masquées en mode surprise.
+- Les connexions de notifications ne provoquent plus de fausses alertes de lenteur ; les vraies lenteurs restent surveillées.
+- La lecture des images et les exports sont prêts pour des fichiers plus légers, avec maintien des contrôles d’accès.
