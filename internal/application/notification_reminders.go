@@ -33,10 +33,11 @@ type occasionNotification struct {
 }
 
 func (s *Service) generateOccasionNotifications(ctx context.Context, tx pgx.Tx, now time.Time) error {
-	rows, err := tx.Query(ctx, `SELECT s.member_id::text,s.id::text,w.id::text,w.owner_id::text,w.event_date::text,(w.event_date-($1::timestamptz AT TIME ZONE 'UTC')::date)::int FROM wishlist_subscriptions s JOIN wishlists w ON w.id=s.wishlist_id
-WHERE NOT w.is_archived AND NOT w.is_suspended AND w.event_date IN(($1::timestamptz AT TIME ZONE 'UTC')::date+7,($1::timestamptz AT TIME ZONE 'UTC')::date+1)
+	rows, err := tx.Query(ctx, `SELECT s.member_id::text,s.id::text,w.id::text,w.owner_id::text,n.event_date::text,n.days_remaining FROM wishlist_subscriptions s JOIN wishlists w ON w.id=s.wishlist_id
+CROSS JOIN LATERAL (VALUES (($1::timestamptz AT TIME ZONE 'UTC')::date+7,7),(($1::timestamptz AT TIME ZONE 'UTC')::date+1,1)) n(event_date,days_remaining)
+WHERE NOT w.is_archived AND NOT w.is_suspended AND `+notificationOccasionDateMatches+`
 AND NOT EXISTS(SELECT 1 FROM member_notification_preferences p WHERE p.member_id=s.member_id AND 'occasionReminder'=ANY(p.disabled_kinds))
-AND NOT EXISTS(SELECT 1 FROM member_notifications n WHERE n.member_id=s.member_id AND n.deduplication_key='occasion:'||w.owner_id||':'||w.occasion||':'||w.event_date||':'||(w.event_date-($1::timestamptz AT TIME ZONE 'UTC')::date)) ORDER BY w.id,s.id LIMIT $2`, now, s.Config.Jobs().BatchSize)
+AND NOT EXISTS(SELECT 1 FROM member_notifications existing WHERE existing.member_id=s.member_id AND existing.deduplication_key='occasion:'||w.owner_id||':'||w.occasion||':'||n.event_date||':'||n.days_remaining) ORDER BY w.id,s.id,n.event_date LIMIT $2`, now, s.Config.Jobs().BatchSize)
 	if err != nil {
 		return err
 	}

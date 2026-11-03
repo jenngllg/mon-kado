@@ -11,6 +11,12 @@ import (
 
 const notificationGroupPrefix = "/groups/"
 
+// Birthdays recur by month/day; February 29 is observed on February 28 in non-leap years.
+const notificationOccasionDateMatches = `(CASE WHEN w.occasion='Birthday' THEN
+ EXTRACT(MONTH FROM w.event_date)=EXTRACT(MONTH FROM n.event_date)
+ AND LEAST(EXTRACT(DAY FROM w.event_date),EXTRACT(DAY FROM (date_trunc('month',n.event_date)+interval '1 month - 1 day')))=EXTRACT(DAY FROM n.event_date)
+ ELSE w.event_date=n.event_date END)`
+
 // All projections, including the badge and read commands, use the same live
 // authorization predicate. Historical notification identifiers grant no access.
 const notificationRelations = ` FROM member_notifications n
@@ -31,7 +37,7 @@ AND (n.subscription_id IS NULL OR (subscription.id IS NOT NULL AND (
 AND CASE n.kind
  WHEN 'wishReserved' THEN w.owner_id=n.member_id AND NOT w.surprise_mode AND wish.id IS NOT NULL AND EXISTS(SELECT 1 FROM gift_reservations r WHERE r.wishlist_id=w.id AND r.wish_id=wish.id AND r.wishlist_participant_id=n.participant_id AND n.deduplication_key='reserved:'||r.id)
  WHEN 'wishesAdded' THEN subscription.id IS NOT NULL
- WHEN 'occasionReminder' THEN subscription.id IS NOT NULL AND w.event_date=n.event_date AND w.event_date>=($2::timestamptz AT TIME ZONE 'UTC')::date
+ WHEN 'occasionReminder' THEN subscription.id IS NOT NULL AND ` + notificationOccasionDateMatches + ` AND n.event_date>=($2::timestamptz AT TIME ZONE 'UTC')::date
  WHEN 'sharingReminder' THEN w.owner_id=n.member_id AND NOT w.sharing_reminder_dismissed AND EXISTS(SELECT 1 FROM wishes x WHERE x.wishlist_id=w.id) AND NOT EXISTS(SELECT 1 FROM wishlist_share_links l WHERE l.wishlist_id=w.id) AND NOT EXISTS(SELECT 1 FROM visible_group_wishlists v WHERE v.wishlist_id=w.id)
  WHEN 'groupInvitation' THEN EXISTS(SELECT 1 FROM group_invitations i WHERE i.id=n.invitation_id AND i.member_id=n.member_id AND i.expires_at>$2)
  WHEN 'groupJoined' THEN EXISTS(SELECT 1 FROM group_members gm WHERE gm.group_id=g.id AND gm.member_id=n.actor_id)

@@ -21945,6 +21945,135 @@
           }
         }
       }
+    },
+    "/api/v1/members/current/wishlist-subscription-owners": {
+      "get": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "operationId": "GetCurrentMemberWishlistSubscriptionOwners",
+        "summary": "Read your followed lists",
+        "responses": {
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          },
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WishlistSubscriptionOwnerResponsePaginatedResponse"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid pagination or CSRF token."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Dependency unavailable."
+          },
+          "429": {
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The request quota was exceeded. Retry-After gives the remaining wait in seconds."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Resource absent, private to another member, or original share capability revoked."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Authentication required."
+          }
+        },
+        "parameters": [
+          {
+            "in": "query",
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "type": "integer",
+              "maximum": 2147483647
+            },
+            "name": "page",
+            "required": false
+          },
+          {
+            "in": "query",
+            "schema": {
+              "maximum": 100,
+              "default": 20,
+              "minimum": 1,
+              "type": "integer"
+            },
+            "name": "pageSize",
+            "required": false
+          }
+        ],
+        "tags": [
+          "WishlistSubscriptions"
+        ],
+        "description": "Authenticated member only. No participants or reservations are created. Share secrets remain in the frontend URL fragment and are presented only in X-MonKado-Share-Token. The original share capability must remain valid; revoke, rotate, archive, suspension and deletion permanently remove follows. Private responses are not cacheable."
+      }
     }
   },
   "components": {
@@ -26842,6 +26971,63 @@
           "wishReserved",
           "suggestionAdded"
         ]
+      },
+      "WishlistSubscriptionOwnerResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "wishlistId",
+          "ownerId"
+        ],
+        "properties": {
+          "wishlistId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "ownerId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "WishlistSubscriptionOwnerResponsePaginatedResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WishlistSubscriptionOwnerResponse"
+            }
+          },
+          "currentPage": {
+            "type": "integer"
+          },
+          "pageSize": {
+            "type": "integer"
+          },
+          "totalCount": {
+            "type": "integer"
+          },
+          "totalPages": {
+            "type": "integer"
+          },
+          "hasPreviousPage": {
+            "type": "boolean"
+          },
+          "hasNextPage": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "items",
+          "currentPage",
+          "pageSize",
+          "totalCount",
+          "totalPages",
+          "hasPreviousPage",
+          "hasNextPage"
+        ],
+        "additionalProperties": false
       }
     }
   }

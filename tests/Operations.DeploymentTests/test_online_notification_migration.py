@@ -71,11 +71,11 @@ class OnlineNotificationMigrationTests(unittest.TestCase):
         self.engine.deploy(self.new)
         self.runtime.migrate.assert_called_once_with(self.new)
 
-    def test_later_preference_migration_is_not_implicitly_approved(self):
-        directory = Path(__file__).resolve().parents[2] / "internal/persistence/migrations"
-        catalog = generate(directory)
+    def test_unknown_future_migration_is_not_implicitly_approved(self):
+        catalog = copy.deepcopy(self.new["migrationCatalog"])
+        catalog["migrations"].append({"id": "029_unreviewed_future_change.sql", "sha256": "f" * 64})
+        catalog["modelHash"] = "f" * 64
         candidate = release("c") | {"migrationCatalog": catalog, "migrationHash": fingerprint(catalog)}
-        self.assertIn("028_notification_preferences.sql", identifiers(catalog))
         self.assertFalse(cli.online_catalog_compatible(self.new, candidate))
         runtime = cli.NotificationOnlineRuntime(runner=Mock())
         with patch.object(Runtime, "migrate") as migrate:
@@ -115,11 +115,39 @@ class OnlineNotificationMigrationTests(unittest.TestCase):
     def test_runtime_only_executes_the_reviewed_catalog_and_keeps_the_proxy_running(self):
         runtime = cli.NotificationOnlineRuntime(runner=Mock())
         with patch.object(Runtime, "migrate") as migrate:
+            unreviewed = copy.deepcopy(self.old)
+            unreviewed["migrationCatalog"]["modelHash"] = "f" * 64
             with self.assertRaisesRegex(DeploymentError, "ONLINE_SCHEMA_REVIEW_REQUIRED"):
-                runtime.migrate(self.old)
+                runtime.migrate(unreviewed)
             migrate.assert_not_called()
             runtime.migrate(self.new)
             migrate.assert_called_once_with(runtime, self.new)
         runtime.container = Mock(return_value={"running": True})
         runtime.stop()
         runtime.run.assert_not_called()
+
+
+def preference_releases():
+    """Describe the separately reviewed exact 027 -> 028 transition."""
+    _, previous = notification_releases()
+    catalog = generate(Path(__file__).resolve().parents[2] / "internal/persistence/migrations")
+    expanded = release("c") | {"migrationCatalog": catalog, "migrationHash": fingerprint(catalog)}
+    return previous, expanded
+
+
+class OnlinePreferenceMigrationTests(OnlineNotificationMigrationTests):
+    def setUp(self):
+        super().setUp()
+        self.old, self.new = preference_releases()
+        self.state["current"] = self.old
+        self.history[:] = identifiers(self.old["migrationCatalog"])
+
+    def test_preference_table_is_additive_and_uses_bounded_locks(self):
+        self.assertTrue(cli.notification_expansion(self.old, self.new))
+        self.assertEqual(28, len(identifiers(self.new["migrationCatalog"])))
+        sql = (Path(__file__).resolve().parents[2] / "internal/persistence/migrations/028_notification_preferences.sql").read_text()
+        self.assertIn("SET LOCAL lock_timeout = '2s'", sql)
+        self.assertIn("SET LOCAL statement_timeout = '30s'", sql)
+        self.assertIn("CREATE TABLE member_notification_preferences", sql)
+        for forbidden in ("DROP ", "UPDATE ", "DELETE FROM", "TRUNCATE ", "INSERT INTO"):
+            self.assertNotIn(forbidden, sql)
