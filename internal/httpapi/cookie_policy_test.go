@@ -45,3 +45,39 @@ func TestCSRFCookies_WhenTransportAndEnvironmentDiffer_PreservesProductionSecuri
 		})
 	}
 }
+
+func TestCSRFToken_WhenRefreshCookieDiffers_ReportsOnlyPresence(t *testing.T) {
+	for _, scenario := range []struct {
+		name, cookieName, cookieValue string
+		production, present           bool
+	}{
+		{"anonymous", "", "", false, false},
+		{"empty local cookie", "MonKado.Refresh", "", false, false},
+		{"unvalidated local cookie", "MonKado.Refresh", "not-an-authentication-proof", false, true},
+		{"unrelated cookie", "Other.Refresh", "not-a-session", false, false},
+		{"production ignores local cookie", "MonKado.Refresh", "not-a-session", true, false},
+		{"production cookie", "__Host-MonKado.Refresh", "not-an-authentication-proof", true, true},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
+			// Arrange: no database or session authentication is needed to report cookie presence.
+			cfg := config.Config{Production: scenario.production, AllowedHosts: []string{"127.0.0.1"}, SigningKey: make([]byte, 32), EncryptionKey: make([]byte, 32)}
+			api := httpapi.New(application.New(nil, cfg, time.Now), slog.New(slog.NewJSONHandler(io.Discard, nil)))
+			request := httptest.NewRequest("GET", "https://127.0.0.1/security/csrf-token", nil).WithContext(t.Context())
+			if scenario.cookieName != "" {
+				request.AddCookie(&http.Cookie{Name: scenario.cookieName, Value: scenario.cookieValue})
+			}
+			response := httptest.NewRecorder()
+			// Act
+			api.ServeHTTP(response, request)
+			// Assert
+			var result domain.CsrfTokenResponse
+			if response.Code != 200 || json.Unmarshal(response.Body.Bytes(), &result) != nil || result.Token == "" || result.HasSessionCookie != scenario.present {
+				t.Fatal("cookie presence differs")
+			}
+			var fields map[string]json.RawMessage
+			if json.Unmarshal(response.Body.Bytes(), &fields) != nil || len(fields) != 2 || fields["hasSessionCookie"] == nil {
+				t.Fatal("unexpected session data in CSRF response")
+			}
+		})
+	}
+}

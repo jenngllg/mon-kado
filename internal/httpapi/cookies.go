@@ -61,6 +61,7 @@ func (a *API) registerCSRF() {
 		}
 		token := security.RandomToken()
 		a.setCookie(w, r, "Csrf", token, time.Time{}, 0)
-		writeJSON(w, 200, domain.CsrfTokenResponse{Token: token + "." + a.Service.Crypto.Sign("csrf|"+token+"|"+member)})
+		// Presence avoids an unnecessary anonymous refresh; the refresh endpoint still authenticates every cookie.
+		writeJSON(w, 200, domain.CsrfTokenResponse{Token: token + "." + a.Service.Crypto.Sign("csrf|"+token+"|"+member), HasSessionCookie: a.cookie(r, "Refresh") != ""})
 	})
 }

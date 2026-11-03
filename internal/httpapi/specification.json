@@ -25432,10 +25432,15 @@
         "properties": {
           "token": {
             "type": "string"
+          },
+          "hasSessionCookie": {
+            "type": "boolean",
+            "description": "Whether this request includes a non-empty refresh cookie. Presence only; never a proof of authentication."
           }
         },
         "required": [
-          "token"
+          "token",
+          "hasSessionCookie"
         ]
       },
       "SetWishlistArchivedRequest": {

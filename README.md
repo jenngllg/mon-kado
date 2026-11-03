@@ -2,6 +2,11 @@
 
 In-app notifications use the authenticated header bell and live unread events. Apply the reviewed online expansion before updating the API and worker; see [notification behavior](docs/notifications.md) and [online migration, qualification and recovery](deployments/online-notifications.md).
 
+The public CSRF response includes `hasSessionCookie`, a presence-only hint for
+optional browser session restoration. It does not authenticate a cookie or expose
+its value. Clients can avoid an anonymous refresh POST when it is false; the
+existing refresh, identity and protected-resource authentication checks are unchanged.
+
 
 MonKado runs as native Go executables backed by PostgreSQL. The API, worker, migrations and Gmail OAuth bootstrap tool require neither .NET nor Docker. The migration is based on consolidated `develop` at `89ffcc0`.
 
