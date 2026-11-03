@@ -66,32 +66,9 @@ func (s *Service) SetWishlistGroupVisibility(ctx context.Context, owner, wishlis
 		if currentVersion != expected {
 			return stale(domain.WishlistGroupVisibilityVersionConflict)
 		}
-		choices := append([]domain.WishlistGroupVisibilitySelection(nil), (*input.Groups)...)
-		for index := range choices {
-			normalized := strings.ToLower(*choices[index].GroupId)
-			choices[index].GroupId = &normalized
-		}
-		sort.Slice(choices, func(i, j int) bool { return *choices[i].GroupId < *choices[j].GroupId })
-		for _, choice := range choices {
-			if _, _, err = s.lockGroup(ctx, tx, owner, *choice.GroupId); err != nil {
+		for _, choice := range normalizedVisibilityChoices(input) {
+			if err = s.applyWishlistGroupChoice(ctx, tx, owner, wishlist, choice, current.IsPublic); err != nil {
 				return err
-			}
-			if *choice.IsVisible {
-				if _, err = tx.Exec(ctx, `DELETE FROM group_wishlist_exclusions WHERE group_id=$1 AND wishlist_id=$2`, *choice.GroupId, wishlist); err != nil {
-					return err
-				}
-				if !current.IsPublic {
-					if _, err = tx.Exec(ctx, `INSERT INTO group_wishlists(group_id,wishlist_id,owner_id,created_at) VALUES($1,$2,$3,$4) ON CONFLICT DO NOTHING`, *choice.GroupId, wishlist, owner, s.Now().UTC()); err != nil {
-						return err
-					}
-				}
-			} else {
-				if _, err = tx.Exec(ctx, `DELETE FROM group_wishlists WHERE group_id=$1 AND wishlist_id=$2`, *choice.GroupId, wishlist); err != nil {
-					return err
-				}
-				if _, err = tx.Exec(ctx, `INSERT INTO group_wishlist_exclusions(group_id,wishlist_id,owner_id,created_at) VALUES($1,$2,$3,$4) ON CONFLICT DO NOTHING`, *choice.GroupId, wishlist, owner, s.Now().UTC()); err != nil {
-					return err
-				}
 			}
 		}
 		if err = s.touchWishlistGroupVisibility(ctx, tx, wishlist); err != nil {
@@ -101,18 +78,53 @@ func (s *Service) SetWishlistGroupVisibility(ctx context.Context, owner, wishlis
 		if err != nil {
 			return err
 		}
-		previous := map[string]bool{}
-		for _, g := range current.Groups {
-			previous[g.GroupId] = g.IsVisible
-		}
-		for _, g := range result.Groups {
-			if g.IsVisible && !previous[g.GroupId] {
-				if err = s.notifyGroupShared(ctx, tx, owner, wishlist, g.GroupId); err != nil {
-					return err
-				}
-			}
-		}
-		return nil
+		return s.notifyNewGroupVisibility(ctx, tx, owner, wishlist, current, result)
 	})
 	return result, version, err
+}
+
+func normalizedVisibilityChoices(input domain.SetWishlistGroupVisibilityRequest) []domain.WishlistGroupVisibilitySelection {
+	choices := append([]domain.WishlistGroupVisibilitySelection(nil), (*input.Groups)...)
+	for index := range choices {
+		normalized := strings.ToLower(*choices[index].GroupId)
+		choices[index].GroupId = &normalized
+	}
+	sort.Slice(choices, func(i, j int) bool { return *choices[i].GroupId < *choices[j].GroupId })
+	return choices
+}
+
+func (s *Service) applyWishlistGroupChoice(ctx context.Context, tx pgx.Tx, owner, wishlist string, choice domain.WishlistGroupVisibilitySelection, public bool) error {
+	if _, _, err := s.lockGroup(ctx, tx, owner, *choice.GroupId); err != nil {
+		return err
+	}
+	if *choice.IsVisible {
+		if _, err := tx.Exec(ctx, `DELETE FROM group_wishlist_exclusions WHERE group_id=$1 AND wishlist_id=$2`, *choice.GroupId, wishlist); err != nil {
+			return err
+		}
+		if !public {
+			_, err := tx.Exec(ctx, `INSERT INTO group_wishlists(group_id,wishlist_id,owner_id,created_at) VALUES($1,$2,$3,$4) ON CONFLICT DO NOTHING`, *choice.GroupId, wishlist, owner, s.Now().UTC())
+			return err
+		}
+		return nil
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM group_wishlists WHERE group_id=$1 AND wishlist_id=$2`, *choice.GroupId, wishlist); err != nil {
+		return err
+	}
+	_, err := tx.Exec(ctx, `INSERT INTO group_wishlist_exclusions(group_id,wishlist_id,owner_id,created_at) VALUES($1,$2,$3,$4) ON CONFLICT DO NOTHING`, *choice.GroupId, wishlist, owner, s.Now().UTC())
+	return err
+}
+
+func (s *Service) notifyNewGroupVisibility(ctx context.Context, tx pgx.Tx, owner, wishlist string, current, result domain.WishlistGroupVisibilityResponse) error {
+	previous := map[string]bool{}
+	for _, group := range current.Groups {
+		previous[group.GroupId] = group.IsVisible
+	}
+	for _, group := range result.Groups {
+		if group.IsVisible && !previous[group.GroupId] {
+			if err := s.notifyGroupShared(ctx, tx, owner, wishlist, group.GroupId); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }

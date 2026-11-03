@@ -49,6 +49,11 @@ func TestNotifications_WhenGuestReservesOutsideSurprise_ExposesOnlyAuthorizedNam
 	if err != nil || download.StatusCode != 200 {
 		t.Fatal("notification export is unavailable")
 	}
+	assertPrivateNotificationExport(t, notificationExportData(t, content))
+}
+
+func notificationExportData(t *testing.T, content []byte) []byte {
+	t.Helper()
 	archive, err := zip.NewReader(bytes.NewReader(content), int64(len(content)))
 	if err != nil {
 		t.Fatal(err)
@@ -61,31 +66,36 @@ func TestNotifications_WhenGuestReservesOutsideSurprise_ExposesOnlyAuthorizedNam
 		if err != nil {
 			t.Fatal(err)
 		}
+		defer file.Close()
 		data, err := io.ReadAll(file)
-		file.Close()
 		if err != nil {
 			t.Fatal(err)
 		}
-		var document struct {
-			AccountActivity struct {
-				Notifications []domain.NotificationResponse `json:"inAppNotifications"`
-			} `json:"accountActivity"`
-		}
-		if err = json.Unmarshal(data, &document); err != nil {
-			t.Fatal(err)
-		}
-		if document.AccountActivity.Notifications == nil {
-			t.Fatal("in-app notification metadata is missing from the export")
-		}
-		for _, notification := range document.AccountActivity.Notifications {
-			if notification.Kind == "wishReserved" {
-				t.Fatal("surprise reservation leaked through export")
-			}
-		}
-		if bytes.Contains(data, []byte("Confirmed guest")) {
-			t.Fatal("guest identity leaked through export")
-		}
-		return
+		return data
 	}
 	t.Fatal("export manifest was not found")
+	return nil
+}
+
+func assertPrivateNotificationExport(t *testing.T, data []byte) {
+	t.Helper()
+	var document struct {
+		AccountActivity struct {
+			Notifications []domain.NotificationResponse `json:"inAppNotifications"`
+		} `json:"accountActivity"`
+	}
+	if err := json.Unmarshal(data, &document); err != nil {
+		t.Fatal(err)
+	}
+	if document.AccountActivity.Notifications == nil {
+		t.Fatal("in-app notification metadata is missing from the export")
+	}
+	for _, notification := range document.AccountActivity.Notifications {
+		if notification.Kind == "wishReserved" {
+			t.Fatal("surprise reservation leaked through export")
+		}
+	}
+	if bytes.Contains(data, []byte("Confirmed guest")) {
+		t.Fatal("guest identity leaked through export")
+	}
 }

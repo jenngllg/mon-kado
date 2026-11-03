@@ -23,7 +23,7 @@ func (h *notificationHub) subscribe(maximum int) (chan struct{}, func(), bool) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	if len(h.clients) >= maximum {
-		return nil, func() {}, false
+		return nil, func() { /* No subscription was acquired. */ }, false
 	}
 	if h.clients == nil {
 		h.clients = map[chan struct{}]struct{}{}
@@ -123,68 +123,80 @@ func (a *API) notificationEvents(r *request) (response, error) {
 	if !available {
 		return response{}, domain.Failure(503, domain.TechnicalServiceUnavailable, "Notification connection capacity has been reached.")
 	}
-	return response{Events: func(w http.ResponseWriter) {
-		defer unsubscribe()
-		controller := http.NewResponseController(w)
-		controller.SetWriteDeadline(time.Time{})
-		w.Header().Set("Content-Type", "text/event-stream")
-		w.Header().Set("X-Accel-Buffering", "no")
-		ticker := time.NewTicker(settings.HeartbeatInterval)
-		defer ticker.Stop()
-		// Bound each connection so a routed API can drain during an online release.
-		// The browser reconnects to the selected API and reads the current badge.
-		lifetime := time.NewTimer(90 * time.Second)
-		defer lifetime.Stop()
-		var previous *bool
-		send := func(force bool) bool {
-			// Revalidate the real session and any active simulation before each disclosure.
-			principal, err := a.Service.Authenticate(r.Context(), strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "))
-			if err != nil {
-				return false
-			}
-			current := &request{Request: r.Request, Principal: principal, Now: a.Service.Now()}
-			if a.applyImpersonation(current, r.Pattern) != nil || current.Principal.MemberID != r.Principal.MemberID {
-				return false
-			}
-			status, err := a.Service.NotificationStatus(r.Context(), r.Principal.MemberID)
-			if err != nil {
-				return false
-			}
-			controller.SetWriteDeadline(time.Now().Add(settings.WriteTimeout))
-			if !force && previous != nil && *previous == status.HasUnread {
-				if _, err = fmt.Fprint(w, ": keepalive\n\n"); err != nil {
-					return false
-				}
-				return controller.Flush() == nil
-			}
-			previous = &status.HasUnread
-			value, err := json.Marshal(status)
-			if err != nil {
-				return false
-			}
-			if _, err = fmt.Fprintf(w, "event: notifications\ndata: %s\n\n", value); err != nil {
-				return false
-			}
-			return controller.Flush() == nil
-		}
-		if !send(true) {
+	return response{Events: func(w http.ResponseWriter) { a.serveNotificationEvents(r, w, events, unsubscribe) }}, nil
+}
+
+type notificationStream struct {
+	api        *API
+	input      *request
+	writer     http.ResponseWriter
+	controller *http.ResponseController
+	previous   *bool
+}
+
+func (a *API) serveNotificationEvents(r *request, w http.ResponseWriter, events <-chan struct{}, unsubscribe func()) {
+	defer unsubscribe()
+	controller := http.NewResponseController(w)
+	controller.SetWriteDeadline(time.Time{})
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("X-Accel-Buffering", "no")
+	settings := a.Service.Config.Notifications()
+	ticker := time.NewTicker(settings.HeartbeatInterval)
+	defer ticker.Stop()
+	// A bounded stream lets an old API drain while new clients use its replacement.
+	lifetime := time.NewTimer(90 * time.Second)
+	defer lifetime.Stop()
+	stream := notificationStream{api: a, input: r, writer: w, controller: controller}
+	if !stream.send(true) {
+		return
+	}
+	for {
+		select {
+		case <-r.Context().Done():
 			return
-		}
-		for {
-			select {
-			case <-r.Context().Done():
+		case <-lifetime.C:
+			return
+		case <-events:
+			if !stream.send(true) {
 				return
-			case <-lifetime.C:
+			}
+		case <-ticker.C:
+			if !stream.send(false) {
 				return
-			case <-events:
-				if !send(true) {
-					return
-				}
-			case <-ticker.C:
-				if !send(false) {
-					return
-				}
 			}
 		}
-	}}, nil
+	}
+}
+
+func (s *notificationStream) send(force bool) bool {
+	// Revalidate the real session and any active simulation before each disclosure.
+	r := s.input
+	principal, err := s.api.Service.Authenticate(r.Context(), strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "))
+	if err != nil {
+		return false
+	}
+	current := &request{Request: r.Request, Principal: principal, Now: s.api.Service.Now()}
+	if s.api.applyImpersonation(current, r.Pattern) != nil || current.Principal.MemberID != r.Principal.MemberID {
+		return false
+	}
+	status, err := s.api.Service.NotificationStatus(r.Context(), r.Principal.MemberID)
+	if err != nil {
+		return false
+	}
+	s.controller.SetWriteDeadline(time.Now().Add(s.api.Service.Config.Notifications().WriteTimeout))
+	if !force && s.previous != nil && *s.previous == status.HasUnread {
+		if _, err = fmt.Fprint(s.writer, ": keepalive\n\n"); err != nil {
+			return false
+		}
+		return s.controller.Flush() == nil
+	}
+	s.previous = &status.HasUnread
+	value, err := json.Marshal(status)
+	if err != nil {
+		return false
+	}
+	if _, err = fmt.Fprintf(s.writer, "event: notifications\ndata: %s\n\n", value); err != nil {
+		return false
+	}
+	return s.controller.Flush() == nil
 }

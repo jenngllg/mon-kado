@@ -3,12 +3,13 @@ package application
 import (
 	"context"
 	"errors"
-	"fmt"
 
 	"github.com/JennGllg/mon-kado/internal/domain"
 	"github.com/JennGllg/mon-kado/internal/security"
 	"github.com/jackc/pgx/v5"
 )
+
+const notificationGroupPrefix = "/groups/"
 
 // All projections, including the badge and read commands, use the same live
 // authorization predicate. Historical notification identifiers grant no access.
@@ -69,11 +70,11 @@ func (s *Service) Notifications(ctx context.Context, member string, page, size i
 		case "groupInvitation":
 			n.Href = "/groups"
 		case "groupJoined":
-			n.Href = "/groups/" + *group
+			n.Href = notificationGroupPrefix + *group
 		case "groupWishlistShared":
-			n.Href = "/groups/" + *group + "/wishlists/" + *list
+			n.Href = notificationGroupPrefix + *group + "/wishlists/" + *list
 		case "suggestionAdded":
-			n.Href = "/groups/" + *group + "/wishlists/" + *list + "/suggestions/" + *subject
+			n.Href = notificationGroupPrefix + *group + "/wishlists/" + *list + "/suggestions/" + *subject
 		case "reservationUnavailable":
 			n.Href = "/reservations"
 		default:
@@ -161,17 +162,7 @@ func (s *Service) notifyRecipients(ctx context.Context, tx pgx.Tx, e notificatio
 	if err != nil {
 		return err
 	}
-	var members []string
-	for rows.Next() {
-		var member string
-		if err = rows.Scan(&member); err != nil {
-			rows.Close()
-			return err
-		}
-		members = append(members, member)
-	}
-	err = rows.Err()
-	rows.Close()
+	members, err := pgx.CollectRows(rows, pgx.RowTo[string])
 	if err != nil {
 		return err
 	}
@@ -189,17 +180,11 @@ func (s *Service) notifyWishAdded(ctx context.Context, tx pgx.Tx, owner, wishlis
 		return err
 	}
 	type follow struct{ id, member string }
-	var follows []follow
-	for rows.Next() {
+	follows, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (follow, error) {
 		var f follow
-		if err = rows.Scan(&f.id, &f.member); err != nil {
-			rows.Close()
-			return err
-		}
-		follows = append(follows, f)
-	}
-	err = rows.Err()
-	rows.Close()
+		err := row.Scan(&f.id, &f.member)
+		return f, err
+	})
 	if err != nil {
 		return err
 	}
@@ -224,17 +209,11 @@ func (s *Service) notifyUnavailableWish(ctx context.Context, tx pgx.Tx, wishlist
 	if err != nil {
 		return err
 	}
-	var pending [][2]string
-	for rows.Next() {
+	pending, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) ([2]string, error) {
 		var r [2]string
-		if err = rows.Scan(&r[0], &r[1]); err != nil {
-			rows.Close()
-			return err
-		}
-		pending = append(pending, r)
-	}
-	err = rows.Err()
-	rows.Close()
+		err := row.Scan(&r[0], &r[1])
+		return r, err
+	})
 	if err != nil {
 		return err
 	}
@@ -244,76 +223,4 @@ func (s *Service) notifyUnavailableWish(ctx context.Context, tx pgx.Tx, wishlist
 		}
 	}
 	return nil
-}
-
-// GenerateNotificationReminders creates bounded, idempotent UTC reminders using the injected clock.
-func (s *Service) GenerateNotificationReminders(ctx context.Context) error {
-	return s.Store.Transaction(ctx, func(tx pgx.Tx) error {
-		// A single scheduler at a time also groups occasions across followed lists.
-		var locked bool
-		if err := tx.QueryRow(ctx, `SELECT pg_try_advisory_xact_lock(771206490)`).Scan(&locked); err != nil {
-			return err
-		}
-		if !locked {
-			return nil
-		}
-		now := s.Now().UTC()
-		rows, err := tx.Query(ctx, `SELECT s.member_id::text,s.id::text,w.id::text,w.owner_id::text,w.event_date::text,(w.event_date-($1::timestamptz AT TIME ZONE 'UTC')::date)::int FROM wishlist_subscriptions s JOIN wishlists w ON w.id=s.wishlist_id
-WHERE NOT w.is_archived AND NOT w.is_suspended AND w.event_date IN(($1::timestamptz AT TIME ZONE 'UTC')::date+7,($1::timestamptz AT TIME ZONE 'UTC')::date+1)
-AND NOT EXISTS(SELECT 1 FROM member_notifications n WHERE n.member_id=s.member_id AND n.deduplication_key='occasion:'||w.owner_id||':'||w.occasion||':'||w.event_date||':'||(w.event_date-($1::timestamptz AT TIME ZONE 'UTC')::date)) ORDER BY w.id,s.id LIMIT $2`, now, s.Config.Jobs().BatchSize)
-		if err != nil {
-			return err
-		}
-		type reminder struct {
-			member, subscription, wishlist, owner, date string
-			days                                        int
-		}
-		var reminders []reminder
-		for rows.Next() {
-			var r reminder
-			if err = rows.Scan(&r.member, &r.subscription, &r.wishlist, &r.owner, &r.date, &r.days); err != nil {
-				rows.Close()
-				return err
-			}
-			reminders = append(reminders, r)
-		}
-		err = rows.Err()
-		rows.Close()
-		if err != nil {
-			return err
-		}
-		for _, r := range reminders {
-			var occasion string
-			if err = tx.QueryRow(ctx, `SELECT occasion FROM wishlists WHERE id=$1`, r.wishlist).Scan(&occasion); err != nil {
-				return err
-			}
-			if err = s.notify(ctx, tx, r.member, notificationEvent{kind: "occasionReminder", actor: r.owner, wishlist: r.wishlist, subscription: r.subscription, days: &r.days, date: &r.date, key: fmt.Sprintf("occasion:%s:%s:%s:%d", r.owner, occasion, r.date, r.days)}); err != nil {
-				return err
-			}
-		}
-		rows, err = tx.Query(ctx, `SELECT w.owner_id::text,w.id::text FROM wishlists w WHERE NOT w.is_archived AND NOT w.is_suspended AND NOT w.sharing_reminder_dismissed AND w.created_at<=$1 AND EXISTS(SELECT 1 FROM wishes x WHERE x.wishlist_id=w.id) AND NOT EXISTS(SELECT 1 FROM wishlist_share_links l WHERE l.wishlist_id=w.id) AND NOT EXISTS(SELECT 1 FROM visible_group_wishlists v WHERE v.wishlist_id=w.id) AND NOT EXISTS(SELECT 1 FROM member_notifications n WHERE n.member_id=w.owner_id AND n.deduplication_key='sharing:'||w.id) ORDER BY w.created_at,w.id LIMIT $2`, now.Add(-s.Config.Notifications().SharingReminderDelay), s.Config.Jobs().BatchSize)
-		if err != nil {
-			return err
-		}
-		var pending [][2]string
-		for rows.Next() {
-			var r [2]string
-			if err = rows.Scan(&r[0], &r[1]); err != nil {
-				rows.Close()
-				return err
-			}
-			pending = append(pending, r)
-		}
-		err = rows.Err()
-		rows.Close()
-		if err != nil {
-			return err
-		}
-		for _, r := range pending {
-			if err = s.notify(ctx, tx, r[0], notificationEvent{kind: "sharingReminder", wishlist: r[1], key: "sharing:" + r[1]}); err != nil {
-				return err
-			}
-		}
-		return nil
-	})
 }
