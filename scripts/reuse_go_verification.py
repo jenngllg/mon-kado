@@ -60,7 +60,9 @@ def main():
         repository = os.environ["GITHUB_REPOSITORY"]
         if repository != "jenngllg/mon-kado":
             raise ValueError("UNEXPECTED_REPOSITORY")
-        runs = json.loads(run(["gh", "api", f"repos/{repository}/actions/workflows/ci.yml/runs?status=success&per_page=20"]))["workflow_runs"]
+        # The server-side conclusion filter can omit a recently completed run.
+        # Read recent history and enforce each run's successful conclusion below.
+        runs = json.loads(run(["gh", "api", f"repos/{repository}/actions/workflows/ci.yml/runs?per_page=20"]))["workflow_runs"]
         current = Path(".github/workflows/ci.yml").read_text()
         for entry in runs:
             is_pr = entry["event"] == "pull_request"
