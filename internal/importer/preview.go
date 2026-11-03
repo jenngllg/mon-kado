@@ -93,6 +93,7 @@ func (c *Client) Preview(ctx context.Context, value string) (domain.WishImportPr
 		pageUnavailable = true
 	}
 	result.Name, result.Price = metadata.Name, metadata.Price
+	result.Note, result.Color, result.Size = metadata.Note, metadata.Color, metadata.Size
 	if result.Price != nil && !observedAt.IsZero() {
 		priceFreshUntil = observedAt.Add(maximumPriceFreshness - providerFreshnessSafety)
 	}
@@ -146,6 +147,7 @@ func (c *Client) Preview(ctx context.Context, value string) (domain.WishImportPr
 		rendered, err := c.RenderedSource.Get(renderContext, original)
 		renderCancel()
 		if err == nil && compatibleProductIdentity(metadata, rendered) {
+			mergePreviewDetails(&result, &metadata, rendered)
 			pageUnavailable = false
 			if metadata.productIdentity == "" {
 				metadata.productIdentity = rendered.productIdentity
@@ -212,6 +214,7 @@ func (c *Client) Preview(ctx context.Context, value string) (domain.WishImportPr
 		}
 		finalMetadata := metadata
 		if err == nil && compatibleProductIdentity(metadata, alternative) {
+			mergePreviewDetails(&result, &metadata, alternative)
 			finalMetadata = alternative
 			if len(finalMetadata.Images) == 0 && finalMetadata.Image == nil {
 				finalMetadata.Images, finalMetadata.Image = metadata.Images, metadata.Image
@@ -270,6 +273,22 @@ func (c *Client) Preview(ctx context.Context, value string) (domain.WishImportPr
 		c.cache.put(key, result, metadata.PriceAmbiguous, priceFreshUntil)
 	}
 	return result, nil
+}
+
+// Missing optional details do not cause additional provider requests or extend
+// the preview deadline. Compatible fallbacks can fill them during existing work.
+func mergePreviewDetails(result *domain.WishImportPreview, primary *Metadata, metadata Metadata) {
+	primary.colorAmbiguous = primary.colorAmbiguous || metadata.colorAmbiguous
+	primary.sizeAmbiguous = primary.sizeAmbiguous || metadata.sizeAmbiguous
+	if result.Note == nil {
+		result.Note = metadata.Note
+	}
+	if result.Color == nil && !primary.colorAmbiguous {
+		result.Color = metadata.Color
+	}
+	if result.Size == nil && !primary.sizeAmbiguous {
+		result.Size = metadata.Size
+	}
 }
 
 // A shared URL alone does not prove that two providers returned the same item.

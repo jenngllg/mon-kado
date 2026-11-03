@@ -19,6 +19,11 @@ func TestExtract_WhenDisplayedProductPriceConflicts_DoesNotGuess(t *testing.T) {
 	}{
 		{"different marked price", `<main><h1>Cleansing balm</h1>` + marked + `</main>`, true},
 		{"different microdata price", `<main><h1>Cleansing balm</h1><span itemprop="price">32,00 €</span></main>`, true},
+		{"css price with accessible duplicate", `<main><span>Brand</span><h1>Cleansing balm</h1><div class="Price_priceMain__hash"><span aria-hidden="true" class="Price_priceActive__hash">32,00€</span><span class="sr-only">The price is</span></div><p class="Price_priceExtra__hash">Valeur produit 45,00€</p></main>`, true},
+		{"css value is not the selling price", `<main><h1>Cleansing balm</h1><span class="price">10,00€</span><p class="price-value">Valeur produit 45,00€</p></main>`, false},
+		{"css old price is not current", `<main><h1>Cleansing balm</h1><span class="old-price">32,00€</span></main>`, false},
+		{"css hidden ancestor", `<main><h1>Cleansing balm</h1><div hidden><span aria-hidden="true" class="price">32,00€</span></div></main>`, false},
+		{"css recommendation", `<main><h1>Cleansing balm</h1><article><span class="price">32,00€</span></article></main>`, false},
 		{"equal amounts", `<main><h1>Cleansing balm</h1><span data-element="price">10,00 €</span></main>`, false},
 		{"unrelated recommendation", `<main><h1>Cleansing balm</h1><article><h2>Other</h2>` + marked + `</article></main>`, false},
 		{"linked recommendation", `<main><h1>Cleansing balm</h1><a href="/other">` + marked + `</a></main>`, false},
@@ -73,5 +78,18 @@ func TestPreview_WhenDisplayedProductPriceConflicts_DoesNotAskFallbackToGuess(t 
 	// Assert
 	if calls != 0 || page.calls.Load() != 1 {
 		t.Fatal("a known conflict caused unnecessary provider requests")
+	}
+}
+
+func TestExtract_WhenProductHeadingIsSplitAndAccessiblePriceDuplicated_RejectsConflictingOffer(t *testing.T) {
+	// Arrange: a standard Product plus CSS-module price markup, with a brand
+	// prefix outside h1 and an aria-hidden visual amount beside its spoken label.
+	base, _ := url.Parse("https://merchant.test/product")
+	document := `<script type="application/ld+json">{"@type":"Product","name":"The Ritual of Sakura Gift Set L","offers":{"@type":"Offer","priceCurrency":"EUR","price":39.92}}</script><main><div><span>The Ritual of Sakura</span><h1>Gift Set L</h1><div class="Price_priceMain__hash"><span aria-hidden="true" class="Price_priceActive__hash">49,90€</span><span class="sr-only">The price is</span></div><p class="Price_priceExtra__hash">Valeur produit 62,60€</p></div></main>`
+	// Act
+	result := importer.Extract([]byte(document), base)
+	// Assert
+	if result.Name == nil || result.Price != nil || !result.PriceAmbiguous {
+		t.Fatal("conflicting structured offer remained a suggested price")
 	}
 }

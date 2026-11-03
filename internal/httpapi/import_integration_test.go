@@ -24,7 +24,8 @@ func (f *previewFake) Preview(ctx context.Context, source string) (domain.WishIm
 	}
 	f.Calls++
 	name, price := "Editable suggestion", json.Number("12.34")
-	return domain.WishImportPreview{Name: &name, Url: &source, Price: &price, Quantity: 1, Warnings: []string{}}, nil
+	note, color, size := "Cotton and linen", "Blue", "M"
+	return domain.WishImportPreview{Name: &name, Note: &note, Color: &color, Size: &size, Url: &source, Price: &price, Quantity: 1, Warnings: []string{}}, nil
 }
 
 func TestImportPreview_WhenQuotaReached_RemainsPerMemberAndCreatesNoWish(t *testing.T) {
@@ -52,6 +53,9 @@ func TestImportPreview_WhenQuotaReached_RemainsPerMemberAndCreatesNoWish(t *test
 		var result domain.WishImportPreview
 		if response.Code != 200 || json.Unmarshal(response.Body.Bytes(), &result) != nil || result.Price == nil || *result.Price != "12.34" || result.Name == nil || *result.Name != "Editable suggestion" {
 			t.Fatal("preview contract or context propagation differs")
+		}
+		if result.Note == nil || *result.Note != "Cotton and linen" || result.Color == nil || *result.Color != "Blue" || result.Size == nil || *result.Size != "M" {
+			t.Fatal("editable product details were lost at the HTTP boundary")
 		}
 	}
 	if response := preview(first.Id, firstAccess); response.Code != 429 || response.Header().Get("Retry-After") != "60" {

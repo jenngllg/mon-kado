@@ -160,6 +160,11 @@ func (c *previewCache) put(key previewKey, value domain.WishImportPreview, ambig
 		imageSize = len(image)
 	}
 	size := len(*value.Name) + len(value.Image.ContentType) + imageSize + 128
+	for _, detail := range []*string{value.Note, value.Color, value.Size} {
+		if detail != nil {
+			size += len(*detail)
+		}
+	}
 	if value.Price != nil {
 		size += len(*value.Price)
 	}
@@ -218,6 +223,14 @@ func (c *previewCache) expire(now time.Time) {
 }
 
 func clonePreview(value domain.WishImportPreview) domain.WishImportPreview {
+	clone := func(source *string) *string {
+		if source == nil {
+			return nil
+		}
+		copy := *source
+		return &copy
+	}
+	value.Note, value.Color, value.Size = clone(value.Note), clone(value.Color), clone(value.Size)
 	if value.Name != nil {
 		name := *value.Name
 		value.Name = &name
