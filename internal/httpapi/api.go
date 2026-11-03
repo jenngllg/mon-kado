@@ -70,6 +70,7 @@ type response struct {
 }
 type endpoint func(*request) (response, error)
 type options struct {
+	ImageRead           bool
 	RatePolicy          string
 	RateWindow          time.Duration
 	RateByShare         bool
@@ -101,39 +102,46 @@ func New(service *application.Service, logger *slog.Logger) *API {
 func (a *API) route(pattern string, opt options, handler endpoint) {
 	a.operations[pattern] = opt
 	a.mux.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
+		input := &request{Request: r, Now: a.Service.Now()}
+		fail := func(err error) {
+			a.recordActionActivity(input, pattern, "error", w.Header().Get("X-Trace-ID"), err)
+			a.writeError(w, r, err)
+		}
 		var p application.Principal
 		if authorization := r.Header.Get("Authorization"); authorization != "" {
 			if !strings.HasPrefix(authorization, "Bearer ") {
-				a.writeError(w, r, domain.Failure(401, domain.SecurityUnauthorized, "Bearer authentication is required."))
+				fail(domain.Failure(401, domain.SecurityUnauthorized, "Bearer authentication is required."))
 				return
 			}
 			var err error
 			p, err = a.Service.Authenticate(r.Context(), strings.TrimPrefix(authorization, "Bearer "))
 			if err != nil {
-				a.writeError(w, r, err)
+				fail(err)
 				return
 			}
 		}
+		input.Principal = p
 		if opt.Auth && p.MemberID == "" {
-			a.writeError(w, r, domain.Failure(401, domain.SecurityUnauthorized, "Authentication is required."))
+			fail(domain.Failure(401, domain.SecurityUnauthorized, "Authentication is required."))
 			return
 		}
+
 		if opt.ImageAdmission {
 			release, accepted, err := a.ImageAdmission.Acquire(r.Context())
 			if err != nil {
-				a.writeError(w, r, err)
+				fail(err)
 				return
 			}
 			if !accepted {
 				w.Header().Set("Retry-After", "60")
-				a.writeError(w, r, domain.Failure(429, domain.RequestRateLimitExceeded, "The request rate limit has been exceeded."))
+				fail(domain.Failure(429, domain.RequestRateLimitExceeded, "The request rate limit has been exceeded."))
 				return
 			}
 			defer release()
 		}
 		if opt.Admin {
 			if err := application.AuthorizeAdministrator(p); err != nil {
-				a.writeError(w, r, err)
+				fail(err)
 				return
 			}
 		}
@@ -146,7 +154,7 @@ func (a *API) route(pattern string, opt options, handler endpoint) {
 					continue
 				}
 				if err != nil || id == uuid.Nil {
-					a.writeError(w, r, domain.Failure(404, domain.RequestNotFound, "The requested resource was not found."))
+					fail(domain.Failure(404, domain.RequestNotFound, "The requested resource was not found."))
 					return
 				}
 				r.SetPathValue(key, id.String())
@@ -170,33 +178,31 @@ func (a *API) route(pattern string, opt options, handler endpoint) {
 			}
 			if !a.limiter.allowWindow(policy+"|"+ip, opt.Rate, window, a.Service.Now()) {
 				w.Header().Set("Retry-After", strconv.FormatInt(int64(window/time.Second), 10))
-				a.writeError(w, r, domain.Failure(429, domain.RequestRateLimitExceeded, "The request rate limit has been exceeded."))
+				err := domain.Failure(429, domain.RequestRateLimitExceeded, "The request rate limit has been exceeded.")
+				fail(err)
 				return
 			}
 		}
 		if emptyIDPath != "" {
 			// Existing public-profile validation runs after its anonymous quota.
-			a.writeError(w, r, &domain.Error{Status: 400, Code: domain.RequestValidationError, Message: "The request is invalid.", Validation: []domain.ValidationError{{PropertyName: emptyIDPath, ErrorMessage: "The identifier must not be empty."}}})
+			fail(&domain.Error{Status: 400, Code: domain.RequestValidationError, Message: "The request is invalid.", Validation: []domain.ValidationError{{PropertyName: emptyIDPath, ErrorMessage: "The identifier must not be empty."}}})
 			return
 		}
 		if opt.CSRF && !a.validCSRF(r, p.MemberID) {
-			a.writeError(w, r, domain.Failure(400, domain.SecurityCSRFValidationFailed, "The CSRF token is invalid."))
+			fail(domain.Failure(400, domain.SecurityCSRFValidationFailed, "The CSRF token is invalid."))
 			return
 		}
-		input := &request{Request: r, Principal: p, Now: a.Service.Now()}
 		if err := a.applyImpersonation(input, pattern); err != nil {
-			a.recordActionActivity(input, pattern, "error", w.Header().Get("X-Trace-ID"))
-			a.writeError(w, r, err)
+			fail(err)
 			return
 		}
 		if err := a.recordImpersonatedWriteAttempt(input, pattern); err != nil {
-			a.writeError(w, r, err)
+			fail(err)
 			return
 		}
 		result, err := handler(input)
 		if err != nil {
-			a.recordActionActivity(input, pattern, "error", w.Header().Get("X-Trace-ID"))
-			a.writeError(w, r, err)
+			fail(err)
 			return
 		}
 		// Activity telemetry never changes the outcome of the completed operation.
@@ -323,20 +329,25 @@ func (a *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
+	// Resolve the safe route template before perimeter rejection, without exposing
+	// concrete paths, query credentials or consulting authentication storage.
+	_, pattern := a.mux.Handler(r)
+	r.Pattern = pattern
 	if r.URL.Path == "/api/v1" || strings.HasPrefix(r.URL.Path, "/api/v1/") || r.URL.Path == "/security/csrf-token" || strings.HasPrefix(r.URL.Path, "/security/csrf-token/") {
 		quota := a.Service.Config.Perimeter()
-		if !a.limiter.allowWindow("perimeter|"+a.clientAddress(r), quota.PermitLimit, quota.Window, a.Service.Now()) {
+		key, limit := "perimeter|", quota.PermitLimit
+		if a.operations[pattern].ImageRead {
+			key, limit = "image-read|", quota.ImageReadPermitLimit
+		}
+		if !a.limiter.allowWindow(key+a.clientAddress(r), limit, quota.Window, a.Service.Now()) {
 			w.Header().Set("Retry-After", strconv.FormatInt(int64(quota.Window/time.Second), 10))
 			a.writeError(w, r, domain.Failure(429, domain.RequestRateLimitExceeded, "The request rate limit has been exceeded."))
 			return
 		}
 	}
-	if strings.HasPrefix(r.URL.Path, "/api/v1/shared-wishlists/") && !a.limiter.allow("shared|"+a.clientAddress(r), 60, a.Service.Now()) {
-		w.Header().Set("Retry-After", "60")
-		a.writeError(w, r, domain.Failure(429, domain.RequestRateLimitExceeded, "The request rate limit has been exceeded."))
-		return
-	}
-	_, pattern := a.mux.Handler(r)
+	// Images use an independent perimeter budget. Existing endpoint quotas
+	// independently protect reads, participation, reports and reservation writes;
+	// a gallery must not consume the visitor's reservation budget through photos.
 	if pattern == "" {
 		a.writeError(w, r, domain.Failure(404, domain.RequestNotFound, "The requested resource was not found."))
 		return
@@ -350,10 +361,7 @@ func (a *API) writeError(w http.ResponseWriter, r *http.Request, err error) {
 		if errors.Is(err, context.Canceled) {
 			return
 		}
-		var connection *pgconn.ConnectError
-		var postgres *pgconn.PgError
-		var network net.Error
-		if errors.As(err, &connection) || errors.As(err, &network) || errors.As(err, &postgres) && (strings.HasPrefix(postgres.Code, "08") || strings.HasPrefix(postgres.Code, "53") || strings.HasPrefix(postgres.Code, "57P")) {
+		if isDependencyFailure(err) {
 			business = domain.Failure(503, domain.TechnicalDependencyUnavailable, "A required dependency is unavailable.")
 		} else {
 			a.Logger.ErrorContext(r.Context(), "Unhandled request failure", "EventId", logging.UnhandledRequestFailure, "ExceptionType", fmt.Sprintf("%T", err), "StackTrace", string(debug.Stack()), "CorrelationId", logging.Correlation(w.Header().Get("X-Correlation-ID")), "TraceId", logging.Trace(w.Header().Get("X-Trace-ID")))
@@ -365,6 +373,14 @@ func (a *API) writeError(w http.ResponseWriter, r *http.Request, err error) {
 		a.Logger.ErrorContext(r.Context(), "Business operation failed", "EventId", logging.BusinessOperationFailed, "StatusCode", business.Status, "ErrorCode", business.Code, "Operation", r.Pattern, "CorrelationId", logging.Correlation(w.Header().Get("X-Correlation-ID")), "TraceId", logging.Trace(w.Header().Get("X-Trace-ID")))
 	}
 	writeJSON(w, business.Status, domain.ErrorResponse{StatusCode: business.Status, Title: ptr(http.StatusText(business.Status)), Message: ptr(business.Message), ErrorCode: ptr(business.Code), ValidationErrors: business.Validation})
+}
+
+// Keep administrator failure metadata consistent with the HTTP error boundary.
+func isDependencyFailure(err error) bool {
+	var connection *pgconn.ConnectError
+	var postgres *pgconn.PgError
+	var network net.Error
+	return errors.As(err, &connection) || errors.As(err, &network) || errors.As(err, &postgres) && (strings.HasPrefix(postgres.Code, "08") || strings.HasPrefix(postgres.Code, "53") || strings.HasPrefix(postgres.Code, "57P"))
 }
 
 type statusWriter struct {

@@ -17,12 +17,12 @@ func (a *API) imageRoutes() {
 	for _, method := range []string{"PUT", "DELETE"} {
 		a.route(method+" /api/v1/wishlists/{wishlistId}/wishes/{wishId}/image", options{Auth: true, Rate: 10, ImageAdmission: method == "PUT", RateByMember: true, RatePolicy: "giftImageUpload"}, a.wishImage)
 	}
-	a.route("GET /api/v1/wishlists/{wishlistId}/wishes/{wishId}/image", options{}, a.readWishImage)
-	a.route("GET /api/v1/shared-wishlists/{shareLinkId}/wishes/{wishId}/image", options{}, a.readWishImage)
+	a.route("GET /api/v1/wishlists/{wishlistId}/wishes/{wishId}/image", options{ImageRead: true}, a.readWishImage)
+	a.route("GET /api/v1/shared-wishlists/{shareLinkId}/wishes/{wishId}/image", options{ImageRead: true}, a.readWishImage)
 	for _, method := range []string{"PUT", "DELETE"} {
 		a.route(method+" /api/v1/members/current/profile/image", options{Auth: true, Rate: 10, ImageAdmission: method == "PUT", RateByMember: true, RatePolicy: "profileImageUpload"}, a.profileImage)
 	}
-	a.route("GET /api/v1/members/{memberId}/profile/image", options{Rate: 120}, a.readProfileImage)
+	a.route("GET /api/v1/members/{memberId}/profile/image", options{ImageRead: true}, a.readProfileImage)
 }
 
 func imageUpload(r *request) ([]byte, error) {

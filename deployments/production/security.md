@@ -60,10 +60,17 @@ Bearer validation, database-backed identity checks and business quotas. It limit
 health checks and OpenAPI are excluded. IPv4-mapped IPv6 is normalized to IPv4;
 requests without an address share the `unknown` partition. No request is queued.
 
-`GeneralRateLimit:PermitLimit=300` and `GeneralRateLimit:WindowSeconds=60` are
-startup-validated defaults. Compose exposes `GENERAL_RATE_LIMIT_PERMIT_LIMIT`
-and `GENERAL_RATE_LIMIT_WINDOW_SECONDS`. Capacity must be positive; the window
-must be 1–3600 seconds. Change them only with a reviewed restart. Counters are
+API calls default to 300 requests per address per minute. Registered image-read
+routes use a separate allowance of 1200 per address in the same window, including
+wish, shared-list, profile, group and preview images. Image uploads remain API
+actions with their existing admission and mutation quotas. Unknown paths never
+qualify for the image allowance. Loading a gallery does not consume the API or
+reservation allowance; the former shared-prefix quota of 60 has been removed.
+
+`GENERAL_RATE_LIMIT_PERMIT_LIMIT`, `IMAGE_READ_RATE_LIMIT_PERMIT_LIMIT` and
+`GENERAL_RATE_LIMIT_WINDOW_SECONDS` expose these startup-validated defaults.
+Capacities must be positive; the window must be 1–86400 seconds. Change them
+only with a reviewed restart. Counters are
 singleton process memory, reset on restart and not shared between replicas.
 This is neither a distributed quota nor DDoS protection. Clients behind a shared
 address also share the perimeter allowance.
@@ -75,8 +82,14 @@ selecting their partition. Two valid members behind one IP retain independent
 business allowances. The perimeter allowance still bounds their combined traffic.
 
 Both layers return structured 429, Retry-After in seconds, no-store and the
-existing REQUEST_RATE_LIMIT_EXCEEDED code. No token, address or support reference
-is added to rejection logs. Global throttling may reject a request before its
+existing REQUEST_RATE_LIMIT_EXCEEDED code. Early rejection logs include the
+matched route template and correlation/trace identifiers, never concrete URLs,
+addresses or credentials. Authenticated request failures, including reads and
+rejections before body binding, also
+appear in the administrator activity journal with their support reference;
+expected absent optional participants/reservations do not create error entries.
+Pre-authentication perimeter rejections remain in the operational journal because
+their caller identity has not been verified. Global throttling may reject a request before its
 authentication error is evaluated; this is intentional to avoid database work.
 
 ## Secrets inventory and recovery

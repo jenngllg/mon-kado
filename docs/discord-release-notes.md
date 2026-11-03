@@ -1,1 +1,3 @@
 - L’ouverture du site évite le renouvellement inutile des visites anonymes et son erreur 401 en console, tout en conservant la restauration sécurisée des sessions existantes.
+- La consultation des listes partagées ne se bloque plus après quelques allers-retours : les photos ont un budget indépendant des actions, également pour les avatars et les groupes.
+- Les refus de quota sont identifiables dans les journaux serveur ; les erreurs des requêtes authentifiées, y compris les lectures et les refus avant traitement, remontent aussi dans le journal administrateur avec leur code et leur référence.

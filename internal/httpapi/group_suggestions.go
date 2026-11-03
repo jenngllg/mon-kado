@@ -7,7 +7,7 @@ import (
 
 func (a *API) groupSuggestionRoutes() {
 	base := "/api/v1/groups/{groupId}/wishlists/{wishlistId}/suggestions"
-	a.route("GET "+base+"/{suggestionId}/image/content", options{Auth: true, Rate: 1200, RateByMember: true}, a.groupSuggestionImageContent)
+	a.route("GET "+base+"/{suggestionId}/image/content", options{Auth: true, ImageRead: true, Rate: 1200, RateByMember: true}, a.groupSuggestionImageContent)
 	a.route("POST /api/v1/groups/{groupId}/wishlists/{wishlistId}/suggestion-images/resolve", options{Auth: true, CSRF: true, Rate: 10, RateByMember: true}, a.resolveGroupSuggestionImage)
 	for _, method := range []string{"GET", "POST"} {
 		a.route(method+" "+base, options{Auth: true, CSRF: method != "GET", Rate: 60, RateByMember: true}, a.groupSuggestions)
@@ -18,7 +18,7 @@ func (a *API) groupSuggestionRoutes() {
 		if method == "GET" {
 			rate = 1200 // A collection can contain 1000 distinct images.
 		}
-		a.route(method+" "+base+"/{suggestionId}/image", options{Auth: true, CSRF: method != "GET", Rate: rate, RateByMember: true}, a.groupSuggestionImage)
+		a.route(method+" "+base+"/{suggestionId}/image", options{Auth: true, CSRF: method != "GET", ImageRead: method == "GET", Rate: rate, RateByMember: true}, a.groupSuggestionImage)
 		a.route(method+" "+base+"/{suggestionId}/reservations/current", options{Auth: true, CSRF: method != "GET"}, a.groupSuggestionReservation)
 	}
 }
