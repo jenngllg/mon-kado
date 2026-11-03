@@ -267,7 +267,12 @@ func (a *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	r.Header.Set("X-Trace-ID", trace)
 	defer func() {
 		elapsed := time.Since(started)
-		a.Telemetry.RecordHTTP(recorded.Status, elapsed, r.Context().Err() != nil)
+		latency := elapsed
+		if !recorded.firstEventAt.IsZero() {
+			// An event stream's intentional lifetime is not response latency.
+			latency = recorded.firstEventAt.Sub(started)
+		}
+		a.Telemetry.RecordHTTP(recorded.Status, latency, r.Context().Err() != nil)
 		a.Logger.InfoContext(r.Context(), "HTTP request completed", "EventId", logging.HTTPRequestCompleted, "Method", logging.HTTPMethod(r.Method), "Operation", r.Pattern, "StatusCode", recorded.Status, "DurationMilliseconds", elapsed.Milliseconds(), "Abandoned", r.Context().Err() != nil, "CorrelationId", logCorrelation, "TraceId", trace)
 	}()
 	w.Header().Set("Cache-Control", "no-store")
@@ -364,8 +369,9 @@ func (a *API) writeError(w http.ResponseWriter, r *http.Request, err error) {
 
 type statusWriter struct {
 	http.ResponseWriter
-	Status  int
-	written bool
+	Status       int
+	written      bool
+	firstEventAt time.Time
 }
 
 func (w *statusWriter) WriteHeader(status int) {
@@ -382,6 +388,14 @@ func (w *statusWriter) Write(data []byte) (int, error) {
 	return w.ResponseWriter.Write(data)
 }
 func (w *statusWriter) Unwrap() http.ResponseWriter { return w.ResponseWriter }
+
+func (w *statusWriter) FlushError() error {
+	err := http.NewResponseController(w.ResponseWriter).Flush()
+	if err == nil && w.firstEventAt.IsZero() && w.Header().Get("Content-Type") == "text/event-stream" {
+		w.firstEventAt = time.Now()
+	}
+	return err
+}
 
 func writeJSON(w http.ResponseWriter, status int, body any) {
 	if body == nil || status == 204 {

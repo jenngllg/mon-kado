@@ -107,6 +107,8 @@ Images use a pure Go lossless WebP encoder, preserving normalization, dimensions
 
 Gallery thumbnails share a process-local LRU cache capped at 32 MiB and 1024 entries, keyed by source bytes. Authorization, grant expiry and live database access checks run before every lookup; HTTP responses remain `no-store`. Identical concurrent requests share one conversion. The first request after cache eviction or an API restart regenerates the thumbnail; no derived files or database changes are required.
 
+HTTP latency buckets measure the complete response duration, except for event streams: their latency ends after the first successful event flush, including authentication and initial badge loading. The intentional stream lifetime and later heartbeats do not inflate latency alerts. Request, error and abandonment counters still include event streams, and `HTTPRequestCompleted.DurationMilliseconds` retains their full lifetime. Failed stream setup and ordinary image/archive transfers retain their complete measured duration.
+
 API and worker share database and private image/export directories. Outbox leases and explicit backoff own every Gmail send attempt; there is no transparent POST retry. Exports stream a consistent snapshot into private ZIPs, exclude credentials/share secrets/other participants' private reservations, and expire automatically. Staged files are reconciled against live references before deletion.
 
 ## Tests and quality
