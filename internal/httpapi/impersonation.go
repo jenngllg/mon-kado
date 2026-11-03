@@ -44,7 +44,7 @@ func (a *API) applyImpersonation(r *request, pattern string) error {
 			return domain.Failure(403, domain.AccountImpersonationRestricted, "Account security and data exports are unavailable during impersonation.")
 		}
 	}
-	business := strings.HasPrefix(path, "/api/v1/wishlists") || strings.HasPrefix(path, "/api/v1/groups") || strings.HasPrefix(path, "/api/v1/shared-wishlists") || strings.HasPrefix(path, "/api/v1/wishlist-subscriptions") || strings.HasPrefix(path, "/api/v1/group-invitations") || path == "/api/v1/members/current/profile" || path == "/api/v1/members/current/profile/image"
+	business := strings.HasPrefix(path, "/api/v1/wishlists") || strings.HasPrefix(path, "/api/v1/groups") || strings.HasPrefix(path, "/api/v1/shared-wishlists") || strings.HasPrefix(path, "/api/v1/wishlist-subscriptions") || strings.HasPrefix(path, "/api/v1/group-invitations") || path == "/api/v1/members/current/profile" || path == "/api/v1/members/current/profile/image" || path == "/api/v1/members/current/notification-preferences" || path == "/api/v1/members/current/wishlist-subscription-owners"
 	allowedRead := r.Method == "GET" && (path == "/api/v1/auth/sessions/current" || path == "/api/v1/members/current/reservations" || (strings.HasPrefix(path, "/api/v1/members/") && !strings.HasPrefix(path, "/api/v1/members/current")))
 	if business || allowedRead || pattern == "POST /api/v1/member-activity/page-visits" {
 		return nil

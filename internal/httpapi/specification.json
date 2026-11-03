@@ -21797,6 +21797,283 @@
           }
         }
       }
+    },
+    "/api/v1/members/current/notification-preferences": {
+      "get": {
+        "tags": [
+          "Notifications"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Complete member-private preferences",
+            "headers": {
+              "ETag": {
+                "description": "Strong version of these settings only.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationPreferencesResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "operationId": "GetNotificationPreferences",
+        "summary": "Read current member notification preferences",
+        "description": "All nine in-app categories default to true. Reading defaults does not create a preference record. The strong ETag also represents the virtual default resource. Existing history and live authorization are unchanged."
+      },
+      "put": {
+        "tags": [
+          "Notifications"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Complete member-private preferences",
+            "headers": {
+              "ETag": {
+                "description": "Strong version of these settings only.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationPreferencesResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid body, CSRF token or entity tag",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Preferences were changed by another request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "If-Match is required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "operationId": "UpdateNotificationPreferences",
+        "summary": "Update all current member notification preferences",
+        "description": "Applies to future in-app notification creation and grouping, including worker reminders. Does not remove history, override surprise-mode privacy, or disable security emails. Conditional insertion protects concurrent first saves.",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "If-Match",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Current strong ETag returned by the preferences GET."
+          },
+          {
+            "in": "header",
+            "name": "X-CSRF-TOKEN",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Authenticated signed double-submit CSRF token."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateNotificationPreferencesRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/members/current/wishlist-subscription-owners": {
+      "get": {
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "operationId": "GetCurrentMemberWishlistSubscriptionOwners",
+        "summary": "Read your followed lists",
+        "responses": {
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          },
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WishlistSubscriptionOwnerResponsePaginatedResponse"
+                }
+              }
+            },
+            "description": "Success"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid pagination or CSRF token."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Dependency unavailable."
+          },
+          "429": {
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "The request quota was exceeded. Retry-After gives the remaining wait in seconds."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Resource absent, private to another member, or original share capability revoked."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Authentication required."
+          }
+        },
+        "parameters": [
+          {
+            "in": "query",
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "type": "integer",
+              "maximum": 2147483647
+            },
+            "name": "page",
+            "required": false
+          },
+          {
+            "in": "query",
+            "schema": {
+              "maximum": 100,
+              "default": 20,
+              "minimum": 1,
+              "type": "integer"
+            },
+            "name": "pageSize",
+            "required": false
+          }
+        ],
+        "tags": [
+          "WishlistSubscriptions"
+        ],
+        "description": "Authenticated member only. No participants or reservations are created. Share secrets remain in the frontend URL fragment and are presented only in X-MonKado-Share-Token. The original share capability must remain valid; revoke, rotate, archive, suspension and deletion permanently remove follows. Private responses are not cacheable."
+      }
     }
   },
   "components": {
@@ -26606,6 +26883,151 @@
         "required": [
           "hasSessionCookie"
         ]
+      },
+      "NotificationPreferencesResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "wishesAdded": {
+            "type": "boolean"
+          },
+          "groupJoined": {
+            "type": "boolean"
+          },
+          "groupInvitation": {
+            "type": "boolean"
+          },
+          "occasionReminder": {
+            "type": "boolean"
+          },
+          "sharingReminder": {
+            "type": "boolean"
+          },
+          "groupWishlistShared": {
+            "type": "boolean"
+          },
+          "reservationUnavailable": {
+            "type": "boolean"
+          },
+          "wishReserved": {
+            "type": "boolean"
+          },
+          "suggestionAdded": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "wishesAdded",
+          "groupJoined",
+          "groupInvitation",
+          "occasionReminder",
+          "sharingReminder",
+          "groupWishlistShared",
+          "reservationUnavailable",
+          "wishReserved",
+          "suggestionAdded"
+        ]
+      },
+      "UpdateNotificationPreferencesRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "wishesAdded": {
+            "type": "boolean"
+          },
+          "groupJoined": {
+            "type": "boolean"
+          },
+          "groupInvitation": {
+            "type": "boolean"
+          },
+          "occasionReminder": {
+            "type": "boolean"
+          },
+          "sharingReminder": {
+            "type": "boolean"
+          },
+          "groupWishlistShared": {
+            "type": "boolean"
+          },
+          "reservationUnavailable": {
+            "type": "boolean"
+          },
+          "wishReserved": {
+            "type": "boolean"
+          },
+          "suggestionAdded": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "wishesAdded",
+          "groupJoined",
+          "groupInvitation",
+          "occasionReminder",
+          "sharingReminder",
+          "groupWishlistShared",
+          "reservationUnavailable",
+          "wishReserved",
+          "suggestionAdded"
+        ]
+      },
+      "WishlistSubscriptionOwnerResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "wishlistId",
+          "ownerId"
+        ],
+        "properties": {
+          "wishlistId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "ownerId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "WishlistSubscriptionOwnerResponsePaginatedResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WishlistSubscriptionOwnerResponse"
+            }
+          },
+          "currentPage": {
+            "type": "integer"
+          },
+          "pageSize": {
+            "type": "integer"
+          },
+          "totalCount": {
+            "type": "integer"
+          },
+          "totalPages": {
+            "type": "integer"
+          },
+          "hasPreviousPage": {
+            "type": "boolean"
+          },
+          "hasNextPage": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "items",
+          "currentPage",
+          "pageSize",
+          "totalCount",
+          "totalPages",
+          "hasPreviousPage",
+          "hasNextPage"
+        ],
+        "additionalProperties": false
       }
     }
   }

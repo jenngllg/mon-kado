@@ -98,6 +98,11 @@ Set its OAuth desktop client credentials in the environment first. It prints a s
 
 ## Architecture and contracts
 
+Members can enable or disable each of the nine in-app notification kinds in
+**Compte → Notifications**. Choices persist privately and apply to future
+notifications, including scheduled reminders. See [the settings API, migration
+and publication requirements](docs/notification-preferences.md).
+
 `cmd/api`, `cmd/worker` and `cmd/migrate` are the composition roots. `internal` separates HTTP, application transactions, domain contracts, validation, persistence, security, images, merchant imports, providers and background jobs. The Gmail bootstrap tool is an independent standard-library Go module.
 
 Operations from the migration source branch are retained: authentication/refresh, Google linking, administrator two-factor enrollment/recovery, profiles, wishlists, wishes, sharing, guest participation, reservations/history, images, merchant previews, reports/moderation, audits, account erasure, session revocation and personal data exports. The newer develop operations are listed in the compatibility status above.

@@ -63,7 +63,7 @@ jobs:
         run: |
           set -euo pipefail
           legacy_source=$(mktemp -d "$RUNNER_TEMP/notification-legacy-api-XXXXXXXX")
-          git archive 78b034a4bfead8a8421709ae1e903b1fa638387d | tar -x -C "$legacy_source"
+          git archive c2d4092e46e03fcc8842f5549aac21df9e4059f8 | tar -x -C "$legacy_source"
           DATABASE_URL="$MONKADO_TEST_DATABASE_URL" go run ./cmd/migrate
           go -C "$legacy_source" test -count=1 -timeout=10m -tags=integration ./internal/httpapi
       - name: Check known reachable vulnerabilities

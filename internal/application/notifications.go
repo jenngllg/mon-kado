@@ -11,6 +11,12 @@ import (
 
 const notificationGroupPrefix = "/groups/"
 
+// Birthdays recur by month/day; February 29 is observed on February 28 in non-leap years.
+const notificationOccasionDateMatches = `(CASE WHEN w.occasion='Birthday' THEN
+ EXTRACT(MONTH FROM w.event_date)=EXTRACT(MONTH FROM n.event_date)
+ AND LEAST(EXTRACT(DAY FROM w.event_date),EXTRACT(DAY FROM (date_trunc('month',n.event_date)+interval '1 month - 1 day')))=EXTRACT(DAY FROM n.event_date)
+ ELSE w.event_date=n.event_date END)`
+
 // All projections, including the badge and read commands, use the same live
 // authorization predicate. Historical notification identifiers grant no access.
 const notificationRelations = ` FROM member_notifications n
@@ -31,7 +37,7 @@ AND (n.subscription_id IS NULL OR (subscription.id IS NOT NULL AND (
 AND CASE n.kind
  WHEN 'wishReserved' THEN w.owner_id=n.member_id AND NOT w.surprise_mode AND wish.id IS NOT NULL AND EXISTS(SELECT 1 FROM gift_reservations r WHERE r.wishlist_id=w.id AND r.wish_id=wish.id AND r.wishlist_participant_id=n.participant_id AND n.deduplication_key='reserved:'||r.id)
  WHEN 'wishesAdded' THEN subscription.id IS NOT NULL
- WHEN 'occasionReminder' THEN subscription.id IS NOT NULL AND w.event_date=n.event_date AND w.event_date>=($2::timestamptz AT TIME ZONE 'UTC')::date
+ WHEN 'occasionReminder' THEN subscription.id IS NOT NULL AND ` + notificationOccasionDateMatches + ` AND n.event_date>=($2::timestamptz AT TIME ZONE 'UTC')::date
  WHEN 'sharingReminder' THEN w.owner_id=n.member_id AND NOT w.sharing_reminder_dismissed AND EXISTS(SELECT 1 FROM wishes x WHERE x.wishlist_id=w.id) AND NOT EXISTS(SELECT 1 FROM wishlist_share_links l WHERE l.wishlist_id=w.id) AND NOT EXISTS(SELECT 1 FROM visible_group_wishlists v WHERE v.wishlist_id=w.id)
  WHEN 'groupInvitation' THEN EXISTS(SELECT 1 FROM group_invitations i WHERE i.id=n.invitation_id AND i.member_id=n.member_id AND i.expires_at>$2)
  WHEN 'groupJoined' THEN EXISTS(SELECT 1 FROM group_members gm WHERE gm.group_id=g.id AND gm.member_id=n.actor_id)
@@ -148,12 +154,12 @@ func (s *Service) notify(ctx context.Context, tx pgx.Tx, member string, e notifi
 	}
 	now := s.Now().UTC()
 	if e.kind == "wishesAdded" {
-		command, err := tx.Exec(ctx, `UPDATE member_notifications SET quantity=quantity+1 WHERE id=(SELECT id FROM member_notifications WHERE member_id=$1 AND subscription_id=$2 AND kind='wishesAdded' AND read_at IS NULL AND created_at>=$3 ORDER BY created_at DESC,id DESC LIMIT 1 FOR UPDATE)`, member, e.subscription, now.Add(-s.Config.Notifications().GroupingWindow))
+		command, err := tx.Exec(ctx, `UPDATE member_notifications SET quantity=quantity+1 WHERE id=(SELECT id FROM member_notifications WHERE member_id=$1 AND subscription_id=$2 AND kind='wishesAdded' AND read_at IS NULL AND created_at>=$3 AND NOT EXISTS(SELECT 1 FROM member_notification_preferences p WHERE p.member_id=$1 AND 'wishesAdded'=ANY(p.disabled_kinds)) ORDER BY created_at DESC,id DESC LIMIT 1 FOR UPDATE)`, member, e.subscription, now.Add(-s.Config.Notifications().GroupingWindow))
 		if err != nil || command.RowsAffected() > 0 {
 			return err
 		}
 	}
-	_, err := tx.Exec(ctx, `INSERT INTO member_notifications(id,member_id,kind,actor_id,participant_id,wishlist_id,group_id,subscription_id,invitation_id,subject_id,deduplication_key,created_at,days_remaining,event_date) VALUES($1,$2,$3,NULLIF($4,'')::uuid,NULLIF($5,'')::uuid,NULLIF($6,'')::uuid,NULLIF($7,'')::uuid,NULLIF($8,'')::uuid,NULLIF($9,'')::uuid,NULLIF($10,'')::uuid,NULLIF($11,''),$12,$13,$14::date) ON CONFLICT(member_id,deduplication_key) DO NOTHING`, security.NewID(), member, e.kind, e.actor, e.participant, e.wishlist, e.group, e.subscription, e.invitation, e.subject, e.key, now, e.days, e.date)
+	_, err := tx.Exec(ctx, `INSERT INTO member_notifications(id,member_id,kind,actor_id,participant_id,wishlist_id,group_id,subscription_id,invitation_id,subject_id,deduplication_key,created_at,days_remaining,event_date) SELECT $1,$2,$3,NULLIF($4,'')::uuid,NULLIF($5,'')::uuid,NULLIF($6,'')::uuid,NULLIF($7,'')::uuid,NULLIF($8,'')::uuid,NULLIF($9,'')::uuid,NULLIF($10,'')::uuid,NULLIF($11,''),$12,$13,$14::date WHERE NOT EXISTS(SELECT 1 FROM member_notification_preferences p WHERE p.member_id=$2 AND $3=ANY(p.disabled_kinds)) ON CONFLICT(member_id,deduplication_key) DO NOTHING`, security.NewID(), member, e.kind, e.actor, e.participant, e.wishlist, e.group, e.subscription, e.invitation, e.subject, e.key, now, e.days, e.date)
 	return err
 }
 

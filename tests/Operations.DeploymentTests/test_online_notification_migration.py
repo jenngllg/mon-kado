@@ -17,13 +17,18 @@ def notification_releases():
     root = Path(__file__).resolve().parents[2]
     directory = root / "internal/persistence/migrations"
     expanded = generate(directory)
+    # This fixture describes the reviewed 026 -> 027 transition forever, even
+    # when later unreviewed migrations are appended to the source directory.
+    expanded["migrations"] = [item for item in expanded["migrations"]
+                              if item["id"] <= "027_member_notifications.sql"]
     previous = copy.deepcopy(expanded)
     previous["migrations"] = previous["migrations"][:-1]
-    model = hashlib.sha256()
-    for item in previous["migrations"]:
-        body = (directory / item["id"]).read_bytes().replace(b"\r\n", b"\n")
-        model.update(item["id"].encode() + b"\0" + body + b"\0")
-    previous["modelHash"] = model.hexdigest()
+    for catalog in (previous, expanded):
+        model = hashlib.sha256()
+        for item in catalog["migrations"]:
+            body = (directory / item["id"]).read_bytes().replace(b"\r\n", b"\n")
+            model.update(item["id"].encode() + b"\0" + body + b"\0")
+        catalog["modelHash"] = model.hexdigest()
     old, new = release("a"), release("b")
     for value, catalog in ((old, previous), (new, expanded)):
         value.update(migrationCatalog=catalog, migrationHash=fingerprint(catalog))
@@ -66,6 +71,18 @@ class OnlineNotificationMigrationTests(unittest.TestCase):
         self.engine.deploy(self.new)
         self.runtime.migrate.assert_called_once_with(self.new)
 
+    def test_unknown_future_migration_is_not_implicitly_approved(self):
+        catalog = copy.deepcopy(self.new["migrationCatalog"])
+        catalog["migrations"].append({"id": "029_unreviewed_future_change.sql", "sha256": "f" * 64})
+        catalog["modelHash"] = "f" * 64
+        candidate = release("c") | {"migrationCatalog": catalog, "migrationHash": fingerprint(catalog)}
+        self.assertFalse(cli.online_catalog_compatible(self.new, candidate))
+        runtime = cli.NotificationOnlineRuntime(runner=Mock())
+        with patch.object(Runtime, "migrate") as migrate:
+            with self.assertRaisesRegex(DeploymentError, "ONLINE_SCHEMA_REVIEW_REQUIRED"):
+                runtime.migrate(candidate)
+            migrate.assert_not_called()
+
     def test_failed_candidate_restores_old_binaries_without_reversing_committed_sql(self):
         self.runtime.start.side_effect = [DeploymentError("ONLINE_API_NOT_READY"), None]
         with self.assertRaisesRegex(DeploymentError, "PUBLICATION_ROLLED_BACK"):
@@ -98,11 +115,39 @@ class OnlineNotificationMigrationTests(unittest.TestCase):
     def test_runtime_only_executes_the_reviewed_catalog_and_keeps_the_proxy_running(self):
         runtime = cli.NotificationOnlineRuntime(runner=Mock())
         with patch.object(Runtime, "migrate") as migrate:
+            unreviewed = copy.deepcopy(self.old)
+            unreviewed["migrationCatalog"]["modelHash"] = "f" * 64
             with self.assertRaisesRegex(DeploymentError, "ONLINE_SCHEMA_REVIEW_REQUIRED"):
-                runtime.migrate(self.old)
+                runtime.migrate(unreviewed)
             migrate.assert_not_called()
             runtime.migrate(self.new)
             migrate.assert_called_once_with(runtime, self.new)
         runtime.container = Mock(return_value={"running": True})
         runtime.stop()
         runtime.run.assert_not_called()
+
+
+def preference_releases():
+    """Describe the separately reviewed exact 027 -> 028 transition."""
+    _, previous = notification_releases()
+    catalog = generate(Path(__file__).resolve().parents[2] / "internal/persistence/migrations")
+    expanded = release("c") | {"migrationCatalog": catalog, "migrationHash": fingerprint(catalog)}
+    return previous, expanded
+
+
+class OnlinePreferenceMigrationTests(OnlineNotificationMigrationTests):
+    def setUp(self):
+        super().setUp()
+        self.old, self.new = preference_releases()
+        self.state["current"] = self.old
+        self.history[:] = identifiers(self.old["migrationCatalog"])
+
+    def test_preference_table_is_additive_and_uses_bounded_locks(self):
+        self.assertTrue(cli.notification_expansion(self.old, self.new))
+        self.assertEqual(28, len(identifiers(self.new["migrationCatalog"])))
+        sql = (Path(__file__).resolve().parents[2] / "internal/persistence/migrations/028_notification_preferences.sql").read_text()
+        self.assertIn("SET LOCAL lock_timeout = '2s'", sql)
+        self.assertIn("SET LOCAL statement_timeout = '30s'", sql)
+        self.assertIn("CREATE TABLE member_notification_preferences", sql)
+        for forbidden in ("DROP ", "UPDATE ", "DELETE FROM", "TRUNCATE ", "INSERT INTO"):
+            self.assertNotIn(forbidden, sql)

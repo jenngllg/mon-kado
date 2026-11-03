@@ -42,16 +42,19 @@ TOOL_POINTER = "https://api.github.com/repos/jenngllg/mon-kado/releases/tags/coo
 # arbitrary appended migrations still require a separate compatibility review.
 NOTIFICATION_PREVIOUS_CATALOG = "958e79ccf99e58e9a1a7c4818b8dc9e321e18d3ae1d51adc22789e0e0f862467"
 NOTIFICATION_EXPANDED_CATALOG = "0a924f9b48095ff150e2d7517fff9fb1980fb4cec34550097184f90d044a4905"
+PREFERENCE_EXPANDED_CATALOG = "be71e86a53f80adab945479aa01a3a205a846ca0b76c8da088c8b437a0f64081"
 
 
 def notification_expansion(previous, candidate):
     """Recognize only the exact reviewed old and expanded notification catalogs."""
-    return previous is not None and fingerprint(previous["migrationCatalog"]) == NOTIFICATION_PREVIOUS_CATALOG and \
-        fingerprint(candidate["migrationCatalog"]) == NOTIFICATION_EXPANDED_CATALOG
+    return previous is not None and (fingerprint(previous["migrationCatalog"]), fingerprint(candidate["migrationCatalog"])) in {
+        (NOTIFICATION_PREVIOUS_CATALOG, NOTIFICATION_EXPANDED_CATALOG),
+        (NOTIFICATION_EXPANDED_CATALOG, PREFERENCE_EXPANDED_CATALOG),
+    }
 
 
 def online_catalog_compatible(previous, candidate):
-    """Retain the unchanged-schema default and its single reviewed additive exception."""
+    """Retain the unchanged-schema default and its exact reviewed additive transitions."""
     return previous["migrationCatalog"] == candidate["migrationCatalog"] or notification_expansion(previous, candidate)
 
 
@@ -69,7 +72,7 @@ class NotificationOnlineRuntime(OnlineRuntime):
     def migrate(self, release):
         # The immutable executable catalog is verified by Runtime.migrate. SQL
         # uses transaction-local lock/statement deadlines and never deletes data.
-        ensure(fingerprint(release["migrationCatalog"]) == NOTIFICATION_EXPANDED_CATALOG and
+        ensure(fingerprint(release["migrationCatalog"]) in {NOTIFICATION_EXPANDED_CATALOG, PREFERENCE_EXPANDED_CATALOG} and
                release["rollbackAllowed"] is True, "ONLINE_SCHEMA_REVIEW_REQUIRED")
         return Runtime.migrate(self, release)
 

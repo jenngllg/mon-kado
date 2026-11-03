@@ -57,8 +57,9 @@ func ValidateAt(input any, now time.Time) error {
 	}
 	name := v.Type().Name()
 	required := map[string][]string{
-		"SetWishlistGroupVisibilityRequest": {"Groups"},
-		"SaveGroupRequest":                  {"Name"}, "InviteGroupMemberRequest": {"MemberId"},
+		"UpdateNotificationPreferencesRequest": {"WishesAdded", "GroupJoined", "GroupInvitation", "OccasionReminder", "SharingReminder", "GroupWishlistShared", "ReservationUnavailable", "WishReserved", "SuggestionAdded"},
+		"SetWishlistGroupVisibilityRequest":    {"Groups"},
+		"SaveGroupRequest":                     {"Name"}, "InviteGroupMemberRequest": {"MemberId"},
 		"RegisterAccountRequest": {"Email", "Password", "DisplayName"}, "LoginRequest": {"Email", "Password"},
 		"JoinSharedWishlistRequest": {"DisplayName"},
 		"CreateWishlistRequest":     {"Name", "Occasion"}, "UpdateWishlistRequest": {"Name", "Occasion"},
