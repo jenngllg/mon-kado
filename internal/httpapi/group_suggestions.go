@@ -1,9 +1,13 @@
 package httpapi
 
-import "github.com/JennGllg/mon-kado/internal/domain"
+import (
+	"github.com/JennGllg/mon-kado/internal/domain"
+	"github.com/JennGllg/mon-kado/internal/images"
+)
 
 func (a *API) groupSuggestionRoutes() {
 	base := "/api/v1/groups/{groupId}/wishlists/{wishlistId}/suggestions"
+	a.route("GET "+base+"/{suggestionId}/image/content", options{Auth: true, Rate: 1200, RateByMember: true}, a.groupSuggestionImageContent)
 	a.route("POST /api/v1/groups/{groupId}/wishlists/{wishlistId}/suggestion-images/resolve", options{Auth: true, CSRF: true, Rate: 10, RateByMember: true}, a.resolveGroupSuggestionImage)
 	for _, method := range []string{"GET", "POST"} {
 		a.route(method+" "+base, options{Auth: true, CSRF: method != "GET", Rate: 60, RateByMember: true}, a.groupSuggestions)
@@ -61,6 +65,10 @@ func (a *API) groupSuggestionImage(r *request) (response, error) {
 	member, group, wishlist, id := r.Principal.MemberID, r.PathValue("groupId"), r.PathValue("wishlistId"), r.PathValue("suggestionId")
 	if r.Method == "GET" {
 		content, err := a.Service.GroupSuggestionImage(r.Context(), member, group, wishlist, id)
+		if err == nil && images.MediaType(content) != "image/webp" {
+			normalized, normalizeErr := images.Process(r.Context(), content, 1600, false)
+			content, err = normalized.Content, normalizeErr
+		}
 		return response{Body: struct {
 			Content []byte `json:"content"`
 		}{Content: content}}, err
@@ -109,4 +117,14 @@ func (a *API) groupSuggestionReservation(r *request) (response, error) {
 		status, location = 201, r.URL.Path
 	}
 	return response{Status: status, Body: result.Reservation, Version: &result.Version, Location: location}, err
+}
+
+func (a *API) groupSuggestionImageContent(r *request) (response, error) {
+	content, err := a.Service.GroupSuggestionImage(r.Context(), r.Principal.MemberID, r.PathValue("groupId"), r.PathValue("wishlistId"), r.PathValue("suggestionId"))
+	if err == nil && r.URL.Query().Get("size") == "thumbnail" {
+		content, _, err = a.thumbnails.Thumbnail(r.Context(), content)
+	}
+	return response{Body: struct {
+		Content []byte `json:"content"`
+	}{Content: content}}, err
 }

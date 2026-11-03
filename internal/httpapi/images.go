@@ -88,7 +88,7 @@ func (a *API) wishImageResponse(r *request, content []byte, err error) (response
 		content, mediaType, thumbnailErr := a.thumbnails.Thumbnail(r.Context(), content)
 		return response{Binary: content, MediaType: mediaType}, thumbnailErr
 	}
-	return response{Binary: content, MediaType: "image/webp"}, nil
+	return response{Binary: content, MediaType: images.MediaType(content)}, nil
 }
 
 func (a *API) profileImage(r *request) (response, error) {
@@ -116,7 +116,7 @@ func (a *API) readProfileImage(r *request) (response, error) {
 		return response{}, domain.Failure(404, domain.ProfileImageNotFound, "The profile image was not found.")
 	}
 	content, _, err := a.Service.ReadProfileImage(r.Context(), r.PathValue("memberId"), id.String())
-	return response{Binary: content, MediaType: "image/webp"}, err
+	return response{Binary: content, MediaType: images.MediaType(content)}, err
 }
 
 func absoluteImageURL(r *http.Request, value *string, scheme string) {

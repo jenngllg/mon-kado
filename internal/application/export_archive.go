@@ -42,6 +42,39 @@ type exportImage struct {
 	Hash     []byte
 }
 
+func (s *Service) exportImage(ctx context.Context, id, path string, hash []byte) (exportImage, error) {
+	content, err := images.Read(ctx, s.Config.ImagePath, id)
+	if err != nil {
+		return exportImage{}, err
+	}
+	extension := images.Extension(content)
+	if extension == "" {
+		return exportImage{}, errors.New("export image format is invalid")
+	}
+	return exportImage{ID: id, Path: path + extension, Hash: hash}, nil
+}
+
+func exportImagePath(document []byte, path string, profile bool) ([]byte, error) {
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(document, &fields); err != nil {
+		return nil, err
+	}
+	if profile {
+		value, err := exportImagePath(fields["profile"], path, false)
+		if err != nil {
+			return nil, err
+		}
+		fields["profile"] = value
+	} else {
+		value, err := json.Marshal(path)
+		if err != nil {
+			return nil, err
+		}
+		fields["imagePath"] = value
+	}
+	return json.Marshal(fields)
+}
+
 // GenerateExport streams one consistent snapshot and verified immutable images to a private staged ZIP.
 func (s *Service) GenerateExport(ctx context.Context, user, archiveID string) (time.Time, int64, error) {
 	var snapshot time.Time
@@ -101,14 +134,22 @@ func (s *Service) GenerateExport(ctx context.Context, user, archiveID string) (t
 	if err != nil {
 		return snapshot, 0, err
 	}
-	if _, err = destination.Write(account); err != nil {
-		return snapshot, 0, err
-	}
 	imageEncoder := json.NewEncoder(manifest)
 	if imageID != nil {
-		if err = imageEncoder.Encode(exportImage{ID: *imageID, Path: "images/profile.webp", Hash: hash}); err != nil {
+		entry, imageErr := s.exportImage(ctx, *imageID, "images/profile", hash)
+		if imageErr != nil {
+			return snapshot, 0, imageErr
+		}
+		account, err = exportImagePath(account, entry.Path, true)
+		if err != nil {
 			return snapshot, 0, err
 		}
+		if err = imageEncoder.Encode(entry); err != nil {
+			return snapshot, 0, err
+		}
+	}
+	if _, err = destination.Write(account); err != nil {
+		return snapshot, 0, err
 	}
 	arraySeparator := ","
 	writeArray := func(name, query string, includeImages bool, arguments ...any) error {
@@ -142,13 +183,21 @@ func (s *Service) GenerateExport(ctx context.Context, user, archiveID string) (t
 				}
 			}
 			first = false
-			if _, err = destination.Write(row); err != nil {
-				return err
-			}
 			if imageID != nil {
-				if err = imageEncoder.Encode(exportImage{ID: *imageID, Path: "images/" + name + "/" + wishID + ".webp", Hash: hash}); err != nil {
+				entry, imageErr := s.exportImage(ctx, *imageID, "images/"+name+"/"+wishID, hash)
+				if imageErr != nil {
+					return imageErr
+				}
+				row, err = exportImagePath(row, entry.Path, false)
+				if err != nil {
 					return err
 				}
+				if err = imageEncoder.Encode(entry); err != nil {
+					return err
+				}
+			}
+			if _, err = destination.Write(row); err != nil {
+				return err
 			}
 		}
 		if err = rows.Err(); err != nil {
@@ -235,7 +284,7 @@ func (s *Service) GenerateExport(ctx context.Context, user, archiveID string) (t
 	if err != nil {
 		return snapshot, 0, err
 	}
-	if _, err = io.WriteString(readme, "MonKado personal data export - schema version 1\n\ndata.json contains retained account data at snapshotAt. Dates are UTC. Images are normalized WebP files. No password, credential, token, security stamp or sharing secret is included. Other people's reservations and internal moderation records are excluded. Deleted records cannot be reconstructed. This archive cannot be reimported. Keep it private. For additional access requests, use the support contact in MonKado's privacy notice.\n"); err != nil {
+	if _, err = io.WriteString(readme, "MonKado personal data export - schema version 1\n\ndata.json contains retained account data at snapshotAt. Dates are UTC. Images use JPEG or PNG; older images can remain WebP. No password, credential, token, security stamp or sharing secret is included. Other people's reservations and internal moderation records are excluded. Deleted records cannot be reconstructed. This archive cannot be reimported. Keep it private. For additional access requests, use the support contact in MonKado's privacy notice.\n"); err != nil {
 		return snapshot, 0, err
 	}
 	if err = archive.Close(); err != nil {

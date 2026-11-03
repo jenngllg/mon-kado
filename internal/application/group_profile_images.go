@@ -31,7 +31,7 @@ func (s *Service) GroupProfileImage(ctx context.Context, member, group string, s
 	var version uint32
 	var err error
 	if !remove {
-		normalized, err = images.Process(ctx, source, 512, true)
+		normalized, err = images.ProcessForStorage(ctx, source, 512, true, s.Config.FastImageEncoding)
 		if err != nil {
 			return result, version, err
 		}

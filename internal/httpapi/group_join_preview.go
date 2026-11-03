@@ -6,6 +6,7 @@ import (
 	"html/template"
 	"strings"
 
+	"github.com/JennGllg/mon-kado/internal/images"
 	"github.com/JennGllg/mon-kado/internal/validation"
 )
 
@@ -58,5 +59,5 @@ func (a *API) previewGroupInvitationImage(r *request) (response, error) {
 	if content == nil {
 		return response{Binary: groupInvitationLogo, MediaType: "image/png"}, nil
 	}
-	return response{Binary: content, MediaType: "image/webp"}, nil
+	return response{Binary: content, MediaType: images.MediaType(content)}, nil
 }
