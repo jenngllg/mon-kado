@@ -247,7 +247,8 @@ type AdministrativeAuditEventResponse struct {
 
 // CsrfTokenResponse preserves the versioned JSON contract.
 type CsrfTokenResponse struct {
-	Token string `json:"token"`
+	Token            string `json:"token"`
+	HasSessionCookie bool   `json:"hasSessionCookie"`
 }
 
 // CurrentSessionResponse preserves the versioned JSON contract.
