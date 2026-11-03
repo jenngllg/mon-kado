@@ -42,6 +42,7 @@ type Config struct {
 	PublicAPIOrigin          string
 	TrustedProxies           []netip.Prefix
 	JobOptions               JobOptions
+	NotificationOptions      NotificationOptions
 	ImportOptions            ImportOptions
 	PerimeterOptions         PerimeterOptions
 	ObservabilityOptions     ObservabilityOptions
@@ -91,6 +92,10 @@ func Load() (Config, error) {
 		return c, err
 	}
 	c.ImportOptions, err = loadImports()
+	if err != nil {
+		return c, err
+	}
+	c.NotificationOptions, err = loadNotifications()
 	if err != nil {
 		return c, err
 	}

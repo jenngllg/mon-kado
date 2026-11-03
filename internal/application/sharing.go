@@ -73,6 +73,29 @@ func (s *Service) ShareLink(ctx context.Context, owner, wishlist, method string,
 			if err = s.touchWishlistGroupVisibility(ctx, tx, wishlist); err != nil {
 				return err
 			}
+			rows, queryErr := tx.Query(ctx, `SELECT v.group_id::text FROM visible_group_wishlists v WHERE v.wishlist_id=$1 AND NOT EXISTS(SELECT 1 FROM group_wishlists explicit WHERE explicit.group_id=v.group_id AND explicit.wishlist_id=v.wishlist_id) ORDER BY v.group_id`, wishlist)
+			if queryErr != nil {
+				return queryErr
+			}
+			var groups []string
+			for rows.Next() {
+				var group string
+				if queryErr = rows.Scan(&group); queryErr != nil {
+					rows.Close()
+					return queryErr
+				}
+				groups = append(groups, group)
+			}
+			queryErr = rows.Err()
+			rows.Close()
+			if queryErr != nil {
+				return queryErr
+			}
+			for _, group := range groups {
+				if err = s.notifyGroupShared(ctx, tx, owner, wishlist, group); err != nil {
+					return err
+				}
+			}
 		}
 		result.ShareUrl = s.Config.FrontendOrigin + "/shared-wishlists/" + result.Id + "#" + secret
 		return nil

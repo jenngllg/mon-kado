@@ -64,7 +64,7 @@ func TestMigrate_WhenDatabaseEmpty_AppliesAllMigrationsExactlyOnce(t *testing.T)
 	}
 	// Assert
 	var count int
-	if err := store.Pool.QueryRow(t.Context(), `SELECT count(*) FROM mon_kado_migrations`).Scan(&count); err != nil || count != 26 {
+	if err := store.Pool.QueryRow(t.Context(), `SELECT count(*) FROM mon_kado_migrations`).Scan(&count); err != nil || count != 27 {
 		t.Fatal("native migration ledger differs")
 	}
 	var leaseColumn bool

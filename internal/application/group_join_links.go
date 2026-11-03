@@ -108,6 +108,9 @@ func (s *Service) JoinGroup(ctx context.Context, member, code string) (domain.Gr
 		if _, err = tx.Exec(ctx, `INSERT INTO group_members(group_id,member_id,joined_at) VALUES($1,$2,$3)`, group, member, now); err != nil {
 			return err
 		}
+		if err = s.notifyGroupJoined(ctx, tx, member, group); err != nil {
+			return err
+		}
 		if _, err = tx.Exec(ctx, `DELETE FROM group_invitations WHERE group_id=$1 AND member_id=$2`, group, member); err != nil {
 			return err
 		}

@@ -43,6 +43,7 @@ type API struct {
 	Telemetry      *telemetry.Collector
 	operations     map[string]options
 	thumbnails     *images.ThumbnailCache
+	notifications  notificationHub
 }
 
 type request struct {
@@ -65,6 +66,7 @@ type response struct {
 	ContentLength int64
 	DownloadName  string
 	Cookies       []*http.Cookie
+	Events        func(http.ResponseWriter)
 }
 type endpoint func(*request) (response, error)
 type options struct {
@@ -136,7 +138,7 @@ func (a *API) route(pattern string, opt options, handler endpoint) {
 			}
 		}
 		emptyIDPath := ""
-		for _, key := range []string{"impersonationId", "wishlistId", "wishId", "suggestionId", "shareLinkId", "memberId", "reportId", "exportId", "subscriptionId", "groupId", "invitationId", "id"} {
+		for _, key := range []string{"impersonationId", "wishlistId", "wishId", "suggestionId", "shareLinkId", "memberId", "reportId", "exportId", "subscriptionId", "groupId", "invitationId", "notificationId", "id"} {
 			if value := r.PathValue(key); value != "" {
 				id, err := uuid.Parse(value)
 				if err == nil && id == uuid.Nil && opt.EmptyIDIsBadRequest {
@@ -219,7 +221,9 @@ func (a *API) route(pattern string, opt options, handler endpoint) {
 		if result.Status == 0 {
 			result.Status = http.StatusOK
 		}
-		if result.Stream != nil {
+		if result.Events != nil {
+			result.Events(w)
+		} else if result.Stream != nil {
 			defer result.Stream.Close()
 			w.Header().Set("Content-Type", result.MediaType)
 			w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": result.DownloadName}))

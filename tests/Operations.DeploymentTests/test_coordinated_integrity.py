@@ -44,7 +44,7 @@ class CoordinatedIntegrityTests(unittest.TestCase):
     def test_historical_inventory_remains_valid_and_new_configuration_modules_are_checked(self):
         online = copy.deepcopy(self.manifest)
         for name in CONFIG_UPGRADE_FILES:
-            if name.startswith("src/Operations.Monitoring/"):
+            if name.startswith("src/Operations.Monitoring/") or name == "src/Operations.Deployment/deploy_engine.py":
                 online["files"].pop(name)
         self.assertEqual(online, validate(online, online["configurationHash"]))
         historical = copy.deepcopy(self.manifest)

@@ -1,2 +1,2 @@
-- Les photos des souhaits et de l’historique des réservations se chargent plus rapidement.
-- Les contrôles d’accès aux listes et aux images restent appliqués à chaque consultation.
+- Les activités de tes listes et groupes arrivent dans les notifications, avec une pastille mise à jour automatiquement.
+- Des rappels signalent les occasions à venir et les listes encore à partager. Les réservations restent masquées en mode surprise.

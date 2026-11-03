@@ -29,6 +29,7 @@ func (w *Worker) initializeTelemetry() {
 func (w *Worker) jobs() []job {
 	w.initializeTelemetry()
 	jobs := []job{{"exports", []telemetry.Operation{telemetry.PersonalDataExport}, w.generateExports}}
+	jobs = append(jobs, job{"memberNotifications", nil, w.Service.GenerateNotificationReminders})
 	if w.Sender != nil {
 		jobs = append(jobs,
 			job{"authenticationEmail", []telemetry.Operation{telemetry.AuthenticationEmailDelivery}, w.deliverAuthentication},

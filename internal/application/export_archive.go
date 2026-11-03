@@ -111,12 +111,13 @@ func (s *Service) GenerateExport(ctx context.Context, user, archiveID string) (t
 		}
 	}
 	arraySeparator := ","
-	writeArray := func(name, query string, includeImages bool) error {
+	writeArray := func(name, query string, includeImages bool, arguments ...any) error {
 		if _, err := io.WriteString(destination, arraySeparator+`"`+name+`":[`); err != nil {
 			return err
 		}
 		arraySeparator = ","
-		rows, err := tx.Query(ctx, query, user)
+		args := append([]any{user}, arguments...)
+		rows, err := tx.Query(ctx, query, args...)
 		if err != nil {
 			return err
 		}
@@ -192,6 +193,9 @@ func (s *Service) GenerateExport(ctx context.Context, user, archiveID string) (t
 		if err = writeArray(projection.Name, projection.Query, false); err != nil {
 			return snapshot, 0, err
 		}
+	}
+	if err = writeArray("inAppNotifications", `SELECT jsonb_build_object('id',n.id,'kind',n.kind,'createdAt',n.created_at,'readAt',n.read_at,'quantity',n.quantity,'daysRemaining',n.days_remaining)`+notificationRelations+` ORDER BY n.created_at,n.id`, false, snapshot); err != nil {
+		return snapshot, 0, err
 	}
 	if _, err = io.WriteString(destination, "}}"); err != nil {
 		return snapshot, 0, err

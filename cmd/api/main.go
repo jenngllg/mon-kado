@@ -47,11 +47,14 @@ func run() error {
 	api := httpapi.New(application.New(store, cfg, time.Now), logger)
 	logger = logging.NewJSONLogger(os.Stdout, "api", cfg.Observability().Version, api.Patterns()...)
 	api.Logger = logger
+	listenerDone := make(chan struct{})
+	go func() { defer close(listenerDone); api.RunNotificationEvents(ctx) }()
+	defer func() { stop(); <-listenerDone }()
 	if options := cfg.Observability(); options.Enabled {
 		publisher := telemetry.Publisher{Collector: api.Telemetry, Store: telemetry.FileStore{Directory: filepath.Join(options.Directory, "api")}, Logger: logger}
 		defer publisher.Start(ctx, options.Interval)()
 	}
-	server := &http.Server{Addr: cfg.Address, Handler: api, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 30 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 16 * 1024}
+	server := &http.Server{Addr: cfg.Address, Handler: api, BaseContext: func(net.Listener) context.Context { return ctx }, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 30 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 16 * 1024}
 	listener, err := net.Listen("tcp", cfg.Address)
 	if err != nil {
 		return err

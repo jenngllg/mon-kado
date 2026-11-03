@@ -62,6 +62,17 @@ class OnlineCoordinatorTests(unittest.TestCase):
         self.assertFalse((self.root / "online-transition.json").exists())
         self.assertEqual(1, len(list(self.root.glob("online-receipt-*.json"))))
 
+    def test_notification_expansion_still_requires_backup_before_any_migration_or_switch(self):
+        from test_online_notification_migration import notification_releases
+        self.previous["backend"], self.candidate["backend"] = notification_releases()
+        self.state["current"] = self.previous["backend"]
+        with patch.object(cli, "NotificationOnlineRuntime", return_value=self.runtime), \
+             patch.object(cli, "NotificationOnlineEngine", return_value=self.engine):
+            result = cli.online_deploy(self.previous, self.candidate)
+        self.assertEqual(["backup", "prepareFrontend", "deployBackend", "activateFrontend"], self.events)
+        self.assertEqual(result["backendSnapshot"], result["frontendSnapshot"])
+        self.capture.assert_called_once()
+
     def test_failed_frontend_activation_resumes_the_pinned_pair_without_another_capture(self):
         self.frontend.activate_forward.side_effect = [DeploymentError("FRONTEND_ACTIVATION_FAILED"), None]
         with self.assertRaises(DeploymentError):

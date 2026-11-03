@@ -98,7 +98,21 @@ func (s *Service) SetWishlistGroupVisibility(ctx context.Context, owner, wishlis
 			return err
 		}
 		result, version, err = s.readWishlistGroupVisibility(ctx, tx, owner, wishlist)
-		return err
+		if err != nil {
+			return err
+		}
+		previous := map[string]bool{}
+		for _, g := range current.Groups {
+			previous[g.GroupId] = g.IsVisible
+		}
+		for _, g := range result.Groups {
+			if g.IsVisible && !previous[g.GroupId] {
+				if err = s.notifyGroupShared(ctx, tx, owner, wishlist, g.GroupId); err != nil {
+					return err
+				}
+			}
+		}
+		return nil
 	})
 	return result, version, err
 }
