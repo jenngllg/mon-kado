@@ -1,2 +1,3 @@
-- Les connexions de notifications ne provoquent plus de fausses alertes de lenteur ; les vraies lenteurs restent surveillées.
-- La lecture des images et les exports sont prêts pour des fichiers plus légers, avec maintien des contrôles d’accès.
+- Les images des souhaits, des idées et des profils sont enregistrées avec un encodage plus rapide et des fichiers plus légers.
+- Les anciennes images restent lisibles, les miniatures et les exports conservent leurs contrôles d’accès.
+- Le délai d’envoi reste de 15 secondes ; les fausses alertes liées aux notifications sont corrigées.

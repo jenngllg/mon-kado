@@ -103,7 +103,7 @@ Creation returns 201, Location and a complete DTO; updates return 200 with the D
 
 Obtain `X-CSRF-TOKEN` from `GET /security/csrf-token` using the same cookie jar and authentication state. Retrieve a fresh anonymous CSRF token before refreshing after access-token expiry. Share secrets stay in frontend URL fragments and use `X-MonKado-Share-Token` for API requests.
 
-Images use a pure Go lossless WebP encoder, preserving normalization, dimensions, orientation, metadata stripping and grant-based access. Encoded bytes differ from the previous lossy encoder. No native image library or CGO dependency is needed.
+Images support fast native Go JPEG/PNG storage after activation with `IMAGE_FAST_ENCODING_ENABLED=true`, preserving dimensions, orientation, metadata stripping, transparency and grant-based access. Compatible readers and legacy WebP contracts are deployed before activation. Private filenames stay compatible with the installed backup inventory; HTTP media types and exported suffixes match the bytes. See [image processing, staged deployment and rollback](docs/image-pipeline.md). No native image library or CGO dependency is needed.
 
 Gallery thumbnails share a process-local LRU cache capped at 32 MiB and 1024 entries, keyed by source bytes. Authorization, grant expiry and live database access checks run before every lookup; HTTP responses remain `no-store`. Identical concurrent requests share one conversion. The first request after cache eviction or an API restart regenerates the thumbnail; no derived files or database changes are required.
 
