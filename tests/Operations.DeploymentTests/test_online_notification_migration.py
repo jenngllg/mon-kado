@@ -106,4 +106,3 @@ class OnlineNotificationMigrationTests(unittest.TestCase):
         runtime.container = Mock(return_value={"running": True})
         runtime.stop()
         runtime.run.assert_not_called()
-
