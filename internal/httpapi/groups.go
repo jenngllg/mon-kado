@@ -12,7 +12,7 @@ func (a *API) groupRoutes() {
 	a.route("PUT /api/v1/wishlists/{wishlistId}/group-visibility", options{Auth: true, CSRF: true}, a.wishlistGroupVisibility)
 	a.route("GET /api/v1/groups/join", options{Rate: 30}, a.previewGroupCode)
 	a.route("GET /api/v1/groups/{groupId}/preview", options{Rate: 60}, a.previewGroupInvitation)
-	a.route("GET /api/v1/groups/{groupId}/preview/image", options{Rate: 120}, a.previewGroupInvitationImage)
+	a.route("GET /api/v1/groups/{groupId}/preview/image", options{ImageRead: true}, a.previewGroupInvitationImage)
 	a.route("POST /api/v1/groups/join", options{Auth: true, CSRF: true, Rate: 10, RateByMember: true}, a.joinGroup)
 	for _, method := range []string{"GET", "POST", "DELETE"} {
 		a.route(method+" /api/v1/groups/{groupId}/join-link", options{Auth: true, CSRF: method != "GET", Rate: 20, RateByMember: true}, a.groupJoinLink)
@@ -24,7 +24,7 @@ func (a *API) groupRoutes() {
 		a.route(method+" /api/v1/groups/{groupId}", options{Auth: true, CSRF: method != "GET"}, a.group)
 	}
 	a.route("GET /api/v1/groups/{groupId}/members", options{Auth: true}, a.groupMembers)
-	a.route("GET /api/v1/groups/{groupId}/image", options{Rate: 120}, a.readGroupProfileImage)
+	a.route("GET /api/v1/groups/{groupId}/image", options{ImageRead: true}, a.readGroupProfileImage)
 	for _, method := range []string{"PUT", "DELETE"} {
 		a.route(method+" /api/v1/groups/{groupId}/image", options{Auth: true, CSRF: true, Rate: 10, RateByMember: true}, a.groupProfileImage)
 	}
@@ -47,7 +47,7 @@ func (a *API) groupRoutes() {
 	for _, method := range []string{"GET", "PUT", "DELETE"} {
 		a.route(method+" /api/v1/groups/{groupId}/wishlists/{wishlistId}/wishes/{wishId}/reservations/current", options{Auth: true, CSRF: method != "GET"}, a.groupReservation)
 	}
-	a.route("GET /api/v1/groups/{groupId}/wishlists/{wishlistId}/wishes/{wishId}/image", options{}, a.groupWishImage)
+	a.route("GET /api/v1/groups/{groupId}/wishlists/{wishlistId}/wishes/{wishId}/image", options{ImageRead: true}, a.groupWishImage)
 }
 
 func (a *API) wishlistGroupVisibility(r *request) (response, error) {

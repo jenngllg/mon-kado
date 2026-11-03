@@ -93,7 +93,7 @@ func TestServeHTTP_WhenValidW3CTraceIsProvided_PropagatesTraceOnPublicResponse(t
 	}
 }
 
-func TestServeHTTP_WhenSharedAggregateQuotaIsReached_RejectsBeforeResolvingResource(t *testing.T) {
+func TestServeHTTP_WhenUnknownSharedPathsExhaustPerimeter_RejectsBeforeResolvingResource(t *testing.T) {
 	// Arrange
 	cfg := config.Config{AllowedHosts: []string{"example.test"}, SigningKey: make([]byte, 32), EncryptionKey: make([]byte, 32)}
 	now := time.Date(2026, 10, 12, 0, 0, 0, 0, time.UTC)
@@ -104,7 +104,7 @@ func TestServeHTTP_WhenSharedAggregateQuotaIsReached_RejectsBeforeResolvingResou
 		api.ServeHTTP(w, r)
 		return w
 	}
-	for i := 0; i < 60; i++ {
+	for i := 0; i < cfg.Perimeter().PermitLimit; i++ {
 		if request().Code != 404 {
 			t.Fatal("quota refused request prematurely")
 		}

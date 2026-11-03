@@ -9,7 +9,7 @@ import (
 func (a *API) previewRoutes() {
 	for _, method := range []string{"GET", "HEAD"} {
 		a.route(method+" /api/v1/shared-wishlists/{shareLinkId}/preview", options{Rate: 60}, a.sharePreview)
-		a.route(method+" /api/v1/shared-wishlists/{shareLinkId}/preview/image", options{Rate: 60}, a.sharePreview)
+		a.route(method+" /api/v1/shared-wishlists/{shareLinkId}/preview/image", options{ImageRead: true, Rate: 60}, a.sharePreview)
 	}
 }
 

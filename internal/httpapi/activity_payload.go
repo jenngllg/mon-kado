@@ -2,10 +2,13 @@ package httpapi
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"net/url"
 	"strings"
 
+	"github.com/JennGllg/mon-kado/internal/domain"
 	"github.com/JennGllg/mon-kado/internal/logging"
 )
 
@@ -70,11 +73,29 @@ func filterActivityValue(value any, depth int) any {
 	return value
 }
 
-func (a *API) recordActionActivity(r *request, pattern, level, trace string) {
-	if r.Principal.MemberID == "" || (r.Method == "GET" && r.Principal.ActorMemberID == "") || strings.Contains(pattern, "/auth/") || (strings.Contains(pattern, "/admin/impersonations") || strings.HasSuffix(pattern, "/impersonations")) || strings.HasPrefix(pattern, "POST /api/v1/member-activity/") {
+func (a *API) recordActionActivity(r *request, pattern, level, trace string, failures ...error) {
+	if r.Principal.MemberID == "" || strings.Contains(pattern, "/auth/") || (strings.Contains(pattern, "/admin/impersonations") || strings.HasSuffix(pattern, "/impersonations")) || strings.HasPrefix(pattern, "POST /api/v1/member-activity/") {
 		return
 	}
 	payload := r.activityPayload
+	if r.Method == "GET" && r.Principal.ActorMemberID == "" {
+		if level != "error" || len(failures) == 0 || errors.Is(failures[0], context.Canceled) {
+			return
+		}
+		status, code := 500, ""
+		var business *domain.Error
+		if errors.As(failures[0], &business) {
+			status, code = business.Status, business.Code
+		} else if isDependencyFailure(failures[0]) {
+			status, code = 503, domain.TechnicalDependencyUnavailable
+		}
+		// Optional missing participants/reservations are ordinary read states.
+		// Keep only throttling and server failures in the administrator history.
+		if status < 429 {
+			return
+		}
+		payload, _ = json.Marshal(map[string]any{"statusCode": status, "errorCode": code, "correlationId": r.Header.Get("X-Correlation-ID")})
+	}
 	if strings.Contains(pattern, "/suggestions") {
 		// Beneficiaries must not discover private group ideas through administrator history.
 		payload = json.RawMessage(`{"_omitted":"privateGroupSuggestion"}`)
