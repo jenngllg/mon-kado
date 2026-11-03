@@ -17,13 +17,18 @@ def notification_releases():
     root = Path(__file__).resolve().parents[2]
     directory = root / "internal/persistence/migrations"
     expanded = generate(directory)
+    # This fixture describes the reviewed 026 -> 027 transition forever, even
+    # when later unreviewed migrations are appended to the source directory.
+    expanded["migrations"] = [item for item in expanded["migrations"]
+                              if item["id"] <= "027_member_notifications.sql"]
     previous = copy.deepcopy(expanded)
     previous["migrations"] = previous["migrations"][:-1]
-    model = hashlib.sha256()
-    for item in previous["migrations"]:
-        body = (directory / item["id"]).read_bytes().replace(b"\r\n", b"\n")
-        model.update(item["id"].encode() + b"\0" + body + b"\0")
-    previous["modelHash"] = model.hexdigest()
+    for catalog in (previous, expanded):
+        model = hashlib.sha256()
+        for item in catalog["migrations"]:
+            body = (directory / item["id"]).read_bytes().replace(b"\r\n", b"\n")
+            model.update(item["id"].encode() + b"\0" + body + b"\0")
+        catalog["modelHash"] = model.hexdigest()
     old, new = release("a"), release("b")
     for value, catalog in ((old, previous), (new, expanded)):
         value.update(migrationCatalog=catalog, migrationHash=fingerprint(catalog))
@@ -65,6 +70,18 @@ class OnlineNotificationMigrationTests(unittest.TestCase):
         self.assertEqual(identifiers(self.new["migrationCatalog"]), self.history)
         self.engine.deploy(self.new)
         self.runtime.migrate.assert_called_once_with(self.new)
+
+    def test_later_preference_migration_is_not_implicitly_approved(self):
+        directory = Path(__file__).resolve().parents[2] / "internal/persistence/migrations"
+        catalog = generate(directory)
+        candidate = release("c") | {"migrationCatalog": catalog, "migrationHash": fingerprint(catalog)}
+        self.assertIn("028_notification_preferences.sql", identifiers(catalog))
+        self.assertFalse(cli.online_catalog_compatible(self.new, candidate))
+        runtime = cli.NotificationOnlineRuntime(runner=Mock())
+        with patch.object(Runtime, "migrate") as migrate:
+            with self.assertRaisesRegex(DeploymentError, "ONLINE_SCHEMA_REVIEW_REQUIRED"):
+                runtime.migrate(candidate)
+            migrate.assert_not_called()
 
     def test_failed_candidate_restores_old_binaries_without_reversing_committed_sql(self):
         self.runtime.start.side_effect = [DeploymentError("ONLINE_API_NOT_READY"), None]
