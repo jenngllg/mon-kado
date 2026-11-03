@@ -15,6 +15,8 @@ import (
 const activityPayloadLimit = 16 * 1024
 const activityRedacted = "[REDACTED]"
 
+type activityRequestContextKey struct{}
+
 // activityPayload accepts decoded request DTOs only. New fields are masked by
 // default so adding a credential to a DTO cannot silently expose it in history.
 func activityPayload(input any) json.RawMessage {
@@ -77,11 +79,35 @@ func (a *API) recordActionActivity(r *request, pattern, level, trace string, fai
 	if r.Principal.MemberID == "" || strings.Contains(pattern, "/auth/") || (strings.Contains(pattern, "/admin/impersonations") || strings.HasSuffix(pattern, "/impersonations")) || strings.HasPrefix(pattern, "POST /api/v1/member-activity/") {
 		return
 	}
+	if len(failures) > 0 && errors.Is(failures[0], context.Canceled) {
+		return
+	}
 	payload := r.activityPayload
 	if r.Method == "GET" && r.Principal.ActorMemberID == "" {
-		if level != "error" || len(failures) == 0 || errors.Is(failures[0], context.Canceled) {
+		if level != "error" || len(failures) == 0 {
 			return
 		}
+		var business *domain.Error
+		if errors.As(failures[0], &business) {
+			switch business.Code {
+			case domain.GiftReservationNotFound, domain.WishlistParticipantNotFound, domain.WishlistSubscriptionNotFound:
+				return
+			case domain.MemberDataExportNotFound:
+				if strings.HasSuffix(pattern, "/data-exports/latest") {
+					return
+				}
+			case domain.GroupJoinLinkNotFound:
+				if strings.HasSuffix(pattern, "/join-link") {
+					return
+				}
+			}
+		}
+	}
+	if strings.Contains(pattern, "/suggestions") {
+		// Beneficiaries must not discover private group ideas through administrator history.
+		payload = json.RawMessage(`{"_omitted":"privateGroupSuggestion"}`)
+	}
+	if level == "error" && len(failures) > 0 {
 		status, code := 500, ""
 		var business *domain.Error
 		if errors.As(failures[0], &business) {
@@ -89,16 +115,16 @@ func (a *API) recordActionActivity(r *request, pattern, level, trace string, fai
 		} else if isDependencyFailure(failures[0]) {
 			status, code = 503, domain.TechnicalDependencyUnavailable
 		}
-		// Optional missing participants/reservations are ordinary read states.
-		// Keep only throttling and server failures in the administrator history.
-		if status < 429 {
-			return
+		fields := map[string]any{}
+		_ = json.Unmarshal(payload, &fields)
+		if fields == nil {
+			fields = map[string]any{}
 		}
-		payload, _ = json.Marshal(map[string]any{"statusCode": status, "errorCode": code, "correlationId": r.Header.Get("X-Correlation-ID")})
-	}
-	if strings.Contains(pattern, "/suggestions") {
-		// Beneficiaries must not discover private group ideas through administrator history.
-		payload = json.RawMessage(`{"_omitted":"privateGroupSuggestion"}`)
+		fields["statusCode"], fields["errorCode"], fields["correlationId"] = status, code, r.Header.Get("X-Correlation-ID")
+		payload, _ = json.Marshal(fields)
+		if len(payload) > activityPayloadLimit {
+			payload, _ = json.Marshal(map[string]any{"_omitted": "payloadTooLarge", "statusCode": status, "errorCode": code, "correlationId": r.Header.Get("X-Correlation-ID")})
+		}
 	}
 	if err := a.Service.RecordActivity(r.Context(), r.Principal.MemberID, "action", activityLabel(pattern), level, payload, r.Principal.ActorMemberID); err != nil {
 		a.Logger.ErrorContext(r.Context(), "Activity recording failed", "EventId", logging.ActivityRecordingFailed, "CorrelationId", logging.Correlation(r.Header.Get("X-Correlation-ID")), "TraceId", logging.Trace(trace))

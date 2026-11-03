@@ -46,13 +46,14 @@ func TestMemberActivity_WhenJSONActionsSucceedOrFail_StoresSanitizedPayloadAndSe
 	if page.TotalCount != 2 {
 		t.Fatalf("failed actions omitted: %+v", page)
 	}
-	var nullPayload bool
+	var omittedBody bool
 	for _, item := range page.Items {
-		if len(item.Payload) == 0 || string(item.Payload) == "null" {
-			nullPayload = true
+		var fields map[string]any
+		if json.Unmarshal(item.Payload, &fields) == nil && fields["name"] == nil && fields["statusCode"] == float64(400) {
+			omittedBody = true
 		}
 	}
-	if !nullPayload {
+	if !omittedBody {
 		t.Fatal("malformed raw body must not be stored")
 	}
 	requireStatus(t, f.send(t, "GET", "/api/v1/admin/member-activity-events?logLevel=debug", "", nil), 400, nil)
@@ -128,7 +129,7 @@ func TestMemberActivity_WhenPagesAndActionsRecorded_AdminCanFilter(t *testing.T)
 	var page domain.PaginatedResponse[application.ActivityEvent]
 	requireStatus(t, f.send(t, "GET", "/api/v1/admin/member-activity-events?q="+url.QueryEscape("eLODIE"), "", nil), 200, &page)
 	// Assert
-	if page.TotalCount != 2 || len(page.Items) != 2 {
+	if page.TotalCount != 3 || len(page.Items) != 3 {
 		t.Fatalf("unexpected page: %+v", page)
 	}
 	kinds := map[string]bool{}
@@ -165,7 +166,7 @@ func TestMemberActivity_WhenPagesAndActionsRecorded_AdminCanFilter(t *testing.T)
 		t.Fatal(err)
 	}
 	requireStatus(t, f.send(t, "GET", "/api/v1/admin/member-activity-events?q=elodie", "", nil), 200, &page)
-	if page.TotalCount != 1 {
+	if page.TotalCount != 2 {
 		t.Fatalf("expired activity not removed: %+v", page)
 	}
 	if _, err := f.store.Pool.Exec(t.Context(), `DELETE FROM users WHERE id=$1`, member); err != nil {

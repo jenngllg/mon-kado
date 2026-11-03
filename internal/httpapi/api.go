@@ -119,6 +119,9 @@ func (a *API) route(pattern string, opt options, handler endpoint) {
 			a.writeError(w, r, domain.Failure(401, domain.SecurityUnauthorized, "Authentication is required."))
 			return
 		}
+		input := &request{Request: r, Principal: p, Now: a.Service.Now()}
+		r = r.WithContext(context.WithValue(r.Context(), activityRequestContextKey{}, input))
+		input.Request = r
 		if opt.ImageAdmission {
 			release, accepted, err := a.ImageAdmission.Acquire(r.Context())
 			if err != nil {
@@ -172,7 +175,6 @@ func (a *API) route(pattern string, opt options, handler endpoint) {
 			if !a.limiter.allowWindow(policy+"|"+ip, opt.Rate, window, a.Service.Now()) {
 				w.Header().Set("Retry-After", strconv.FormatInt(int64(window/time.Second), 10))
 				err := domain.Failure(429, domain.RequestRateLimitExceeded, "The request rate limit has been exceeded.")
-				a.recordActionActivity(&request{Request: r, Principal: p, Now: a.Service.Now()}, pattern, "error", w.Header().Get("X-Trace-ID"), err)
 				a.writeError(w, r, err)
 				return
 			}
@@ -186,9 +188,7 @@ func (a *API) route(pattern string, opt options, handler endpoint) {
 			a.writeError(w, r, domain.Failure(400, domain.SecurityCSRFValidationFailed, "The CSRF token is invalid."))
 			return
 		}
-		input := &request{Request: r, Principal: p, Now: a.Service.Now()}
 		if err := a.applyImpersonation(input, pattern); err != nil {
-			a.recordActionActivity(input, pattern, "error", w.Header().Get("X-Trace-ID"))
 			a.writeError(w, r, err)
 			return
 		}
@@ -198,7 +198,6 @@ func (a *API) route(pattern string, opt options, handler endpoint) {
 		}
 		result, err := handler(input)
 		if err != nil {
-			a.recordActionActivity(input, pattern, "error", w.Header().Get("X-Trace-ID"), err)
 			a.writeError(w, r, err)
 			return
 		}
@@ -353,6 +352,9 @@ func (a *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) writeError(w http.ResponseWriter, r *http.Request, err error) {
+	if input, ok := r.Context().Value(activityRequestContextKey{}).(*request); ok {
+		a.recordActionActivity(input, r.Pattern, "error", w.Header().Get("X-Trace-ID"), err)
+	}
 	var business *domain.Error
 	if !errors.As(err, &business) {
 		if errors.Is(err, context.Canceled) {

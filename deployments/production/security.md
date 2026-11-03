@@ -84,7 +84,8 @@ business allowances. The perimeter allowance still bounds their combined traffic
 Both layers return structured 429, Retry-After in seconds, no-store and the
 existing REQUEST_RATE_LIMIT_EXCEEDED code. Early rejection logs include the
 matched route template and correlation/trace identifiers, never concrete URLs,
-addresses or credentials. Authenticated read throttles and server failures also
+addresses or credentials. Authenticated request failures, including reads and
+rejections before body binding, also
 appear in the administrator activity journal with their support reference;
 expected absent optional participants/reservations do not create error entries.
 Pre-authentication perimeter rejections remain in the operational journal because

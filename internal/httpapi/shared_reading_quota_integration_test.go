@@ -78,7 +78,7 @@ func TestSharedReading_WhenEndpointQuotaIsReached_PreservesWriteQuotaAndRecordsM
 	f.administrator(t, "read-quota-admin@example.test")
 	var page domain.PaginatedResponse[application.ActivityEvent]
 	requireStatus(t, f.send(t, "GET", "/api/v1/admin/member-activity-events?logLevel=error", "", nil), 200, &page)
-	// Assert: optional 404 reads stay quiet; the technical read failure is visible.
+	// Assert: the rejected authenticated read includes its exact support reference.
 	found := false
 	for _, event := range page.Items {
 		if event.MemberID != member {
@@ -91,5 +91,47 @@ func TestSharedReading_WhenEndpointQuotaIsReached_PreservesWriteQuotaAndRecordsM
 	}
 	if !found {
 		t.Fatal("member throttling failure is absent from administrator history")
+	}
+}
+
+func TestRequestFailures_WhenReadOrPreBindingChecksFail_RecordSafeMetadataOnce(t *testing.T) {
+	// Arrange
+	f := newFixture(t)
+	member := f.member(t, "request-failure@example.test")
+	// Act
+	missing := f.send(t, "GET", "/api/v1/wishlists/01950000-0000-7000-8000-000000000001", "", nil)
+	readCorrelation := missing.Header.Get("X-Correlation-ID")
+	requireStatus(t, missing, 404, nil)
+	rejected := f.send(t, "POST", "/api/v1/groups", `{"name":"Unbound private body"}`, map[string]string{"X-CSRF-TOKEN": "invalid"})
+	csrfCorrelation := rejected.Header.Get("X-Correlation-ID")
+	requireStatus(t, rejected, 400, nil)
+	f.administrator(t, "request-failure-admin@example.test")
+	var page domain.PaginatedResponse[application.ActivityEvent]
+	requireStatus(t, f.send(t, "GET", "/api/v1/admin/member-activity-events?logLevel=error", "", nil), 200, &page)
+	// Assert
+	if page.TotalCount != 2 {
+		t.Fatal("failed requests are missing or duplicated")
+	}
+	seen := map[string]bool{}
+	for _, event := range page.Items {
+		if event.MemberID != member {
+			t.Fatal("failure was attributed to another member")
+		}
+		var payload map[string]any
+		if err := json.Unmarshal(event.Payload, &payload); err != nil {
+			t.Fatal(err)
+		}
+		if payload["name"] != nil {
+			t.Fatal("pre-binding failure retained an unvalidated body")
+		}
+		switch payload["correlationId"] {
+		case readCorrelation:
+			seen["read"] = payload["statusCode"] == float64(404)
+		case csrfCorrelation:
+			seen["csrf"] = payload["errorCode"] == domain.SecurityCSRFValidationFailed && payload["statusCode"] == float64(400)
+		}
+	}
+	if !seen["read"] || !seen["csrf"] {
+		t.Fatal("failure metadata does not match its HTTP response")
 	}
 }
