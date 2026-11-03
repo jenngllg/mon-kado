@@ -18,6 +18,7 @@ func (a *API) routes() {
 	})
 	a.accountRoutes()
 	a.notificationRoutes()
+	a.notificationPreferenceRoutes()
 	a.subscriptionRoutes()
 	a.copyRoutes()
 	a.previewRoutes()

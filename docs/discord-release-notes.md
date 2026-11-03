@@ -1,1 +1,1 @@
-- L’ouverture du site évite le renouvellement inutile des visites anonymes et son erreur 401 en console, tout en conservant la restauration sécurisée des sessions existantes.
+- Dans Compte → Notifications, tu peux activer ou désactiver chacun des neuf types de notifications de la cloche. Tes choix sont enregistrés pour les prochaines notifications, y compris les rappels ; ton historique reste disponible.

@@ -110,6 +110,7 @@ const (
 	TechnicalDependencyUnavailable         = "TECHNICAL_DEPENDENCY_UNAVAILABLE"
 	TechnicalServiceUnavailable            = "TECHNICAL_SERVICE_UNAVAILABLE"
 	NotificationNotFound                   = "NOTIFICATION_NOT_FOUND"
+	NotificationPreferencesVersionConflict = "NOTIFICATION_PREFERENCES_VERSION_CONFLICT"
 )
 
 // KnownErrorCode reports whether a value belongs to the compiled business error vocabulary.
@@ -159,6 +160,7 @@ func KnownErrorCode(code string) bool {
 		MemberDisplayNameTagUnavailable,
 		MemberHandleAlreadyUsed,
 		MemberProfileVersionConflict,
+		NotificationPreferencesVersionConflict,
 		MemberCurrentPasswordInvalid,
 		MemberEmailAlreadyUsed,
 		MemberEmailChangeInvalid,

@@ -148,12 +148,12 @@ func (s *Service) notify(ctx context.Context, tx pgx.Tx, member string, e notifi
 	}
 	now := s.Now().UTC()
 	if e.kind == "wishesAdded" {
-		command, err := tx.Exec(ctx, `UPDATE member_notifications SET quantity=quantity+1 WHERE id=(SELECT id FROM member_notifications WHERE member_id=$1 AND subscription_id=$2 AND kind='wishesAdded' AND read_at IS NULL AND created_at>=$3 ORDER BY created_at DESC,id DESC LIMIT 1 FOR UPDATE)`, member, e.subscription, now.Add(-s.Config.Notifications().GroupingWindow))
+		command, err := tx.Exec(ctx, `UPDATE member_notifications SET quantity=quantity+1 WHERE id=(SELECT id FROM member_notifications WHERE member_id=$1 AND subscription_id=$2 AND kind='wishesAdded' AND read_at IS NULL AND created_at>=$3 AND NOT EXISTS(SELECT 1 FROM member_notification_preferences p WHERE p.member_id=$1 AND 'wishesAdded'=ANY(p.disabled_kinds)) ORDER BY created_at DESC,id DESC LIMIT 1 FOR UPDATE)`, member, e.subscription, now.Add(-s.Config.Notifications().GroupingWindow))
 		if err != nil || command.RowsAffected() > 0 {
 			return err
 		}
 	}
-	_, err := tx.Exec(ctx, `INSERT INTO member_notifications(id,member_id,kind,actor_id,participant_id,wishlist_id,group_id,subscription_id,invitation_id,subject_id,deduplication_key,created_at,days_remaining,event_date) VALUES($1,$2,$3,NULLIF($4,'')::uuid,NULLIF($5,'')::uuid,NULLIF($6,'')::uuid,NULLIF($7,'')::uuid,NULLIF($8,'')::uuid,NULLIF($9,'')::uuid,NULLIF($10,'')::uuid,NULLIF($11,''),$12,$13,$14::date) ON CONFLICT(member_id,deduplication_key) DO NOTHING`, security.NewID(), member, e.kind, e.actor, e.participant, e.wishlist, e.group, e.subscription, e.invitation, e.subject, e.key, now, e.days, e.date)
+	_, err := tx.Exec(ctx, `INSERT INTO member_notifications(id,member_id,kind,actor_id,participant_id,wishlist_id,group_id,subscription_id,invitation_id,subject_id,deduplication_key,created_at,days_remaining,event_date) SELECT $1,$2,$3,NULLIF($4,'')::uuid,NULLIF($5,'')::uuid,NULLIF($6,'')::uuid,NULLIF($7,'')::uuid,NULLIF($8,'')::uuid,NULLIF($9,'')::uuid,NULLIF($10,'')::uuid,NULLIF($11,''),$12,$13,$14::date WHERE NOT EXISTS(SELECT 1 FROM member_notification_preferences p WHERE p.member_id=$2 AND $3=ANY(p.disabled_kinds)) ON CONFLICT(member_id,deduplication_key) DO NOTHING`, security.NewID(), member, e.kind, e.actor, e.participant, e.wishlist, e.group, e.subscription, e.invitation, e.subject, e.key, now, e.days, e.date)
 	return err
 }
 
