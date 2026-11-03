@@ -15,8 +15,6 @@ import (
 const activityPayloadLimit = 16 * 1024
 const activityRedacted = "[REDACTED]"
 
-type activityRequestContextKey struct{}
-
 // activityPayload accepts decoded request DTOs only. New fields are masked by
 // default so adding a credential to a DTO cannot silently expose it in history.
 func activityPayload(input any) json.RawMessage {

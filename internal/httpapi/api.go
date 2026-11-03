@@ -102,42 +102,46 @@ func New(service *application.Service, logger *slog.Logger) *API {
 func (a *API) route(pattern string, opt options, handler endpoint) {
 	a.operations[pattern] = opt
 	a.mux.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
+		input := &request{Request: r, Now: a.Service.Now()}
+		fail := func(err error) {
+			a.recordActionActivity(input, pattern, "error", w.Header().Get("X-Trace-ID"), err)
+			a.writeError(w, r, err)
+		}
 		var p application.Principal
 		if authorization := r.Header.Get("Authorization"); authorization != "" {
 			if !strings.HasPrefix(authorization, "Bearer ") {
-				a.writeError(w, r, domain.Failure(401, domain.SecurityUnauthorized, "Bearer authentication is required."))
+				fail(domain.Failure(401, domain.SecurityUnauthorized, "Bearer authentication is required."))
 				return
 			}
 			var err error
 			p, err = a.Service.Authenticate(r.Context(), strings.TrimPrefix(authorization, "Bearer "))
 			if err != nil {
-				a.writeError(w, r, err)
+				fail(err)
 				return
 			}
 		}
+		input.Principal = p
 		if opt.Auth && p.MemberID == "" {
-			a.writeError(w, r, domain.Failure(401, domain.SecurityUnauthorized, "Authentication is required."))
+			fail(domain.Failure(401, domain.SecurityUnauthorized, "Authentication is required."))
 			return
 		}
-		input := &request{Request: r, Principal: p, Now: a.Service.Now()}
-		r = r.WithContext(context.WithValue(r.Context(), activityRequestContextKey{}, input))
-		input.Request = r
+
 		if opt.ImageAdmission {
 			release, accepted, err := a.ImageAdmission.Acquire(r.Context())
 			if err != nil {
-				a.writeError(w, r, err)
+				fail(err)
 				return
 			}
 			if !accepted {
 				w.Header().Set("Retry-After", "60")
-				a.writeError(w, r, domain.Failure(429, domain.RequestRateLimitExceeded, "The request rate limit has been exceeded."))
+				fail(domain.Failure(429, domain.RequestRateLimitExceeded, "The request rate limit has been exceeded."))
 				return
 			}
 			defer release()
 		}
 		if opt.Admin {
 			if err := application.AuthorizeAdministrator(p); err != nil {
-				a.writeError(w, r, err)
+				fail(err)
 				return
 			}
 		}
@@ -150,7 +154,7 @@ func (a *API) route(pattern string, opt options, handler endpoint) {
 					continue
 				}
 				if err != nil || id == uuid.Nil {
-					a.writeError(w, r, domain.Failure(404, domain.RequestNotFound, "The requested resource was not found."))
+					fail(domain.Failure(404, domain.RequestNotFound, "The requested resource was not found."))
 					return
 				}
 				r.SetPathValue(key, id.String())
@@ -175,30 +179,30 @@ func (a *API) route(pattern string, opt options, handler endpoint) {
 			if !a.limiter.allowWindow(policy+"|"+ip, opt.Rate, window, a.Service.Now()) {
 				w.Header().Set("Retry-After", strconv.FormatInt(int64(window/time.Second), 10))
 				err := domain.Failure(429, domain.RequestRateLimitExceeded, "The request rate limit has been exceeded.")
-				a.writeError(w, r, err)
+				fail(err)
 				return
 			}
 		}
 		if emptyIDPath != "" {
 			// Existing public-profile validation runs after its anonymous quota.
-			a.writeError(w, r, &domain.Error{Status: 400, Code: domain.RequestValidationError, Message: "The request is invalid.", Validation: []domain.ValidationError{{PropertyName: emptyIDPath, ErrorMessage: "The identifier must not be empty."}}})
+			fail(&domain.Error{Status: 400, Code: domain.RequestValidationError, Message: "The request is invalid.", Validation: []domain.ValidationError{{PropertyName: emptyIDPath, ErrorMessage: "The identifier must not be empty."}}})
 			return
 		}
 		if opt.CSRF && !a.validCSRF(r, p.MemberID) {
-			a.writeError(w, r, domain.Failure(400, domain.SecurityCSRFValidationFailed, "The CSRF token is invalid."))
+			fail(domain.Failure(400, domain.SecurityCSRFValidationFailed, "The CSRF token is invalid."))
 			return
 		}
 		if err := a.applyImpersonation(input, pattern); err != nil {
-			a.writeError(w, r, err)
+			fail(err)
 			return
 		}
 		if err := a.recordImpersonatedWriteAttempt(input, pattern); err != nil {
-			a.writeError(w, r, err)
+			fail(err)
 			return
 		}
 		result, err := handler(input)
 		if err != nil {
-			a.writeError(w, r, err)
+			fail(err)
 			return
 		}
 		// Activity telemetry never changes the outcome of the completed operation.
@@ -352,9 +356,6 @@ func (a *API) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) writeError(w http.ResponseWriter, r *http.Request, err error) {
-	if input, ok := r.Context().Value(activityRequestContextKey{}).(*request); ok {
-		a.recordActionActivity(input, r.Pattern, "error", w.Header().Get("X-Trace-ID"), err)
-	}
 	var business *domain.Error
 	if !errors.As(err, &business) {
 		if errors.Is(err, context.Canceled) {
