@@ -74,57 +74,72 @@ func filterActivityValue(value any, depth int) any {
 }
 
 func (a *API) recordActionActivity(r *request, pattern, level, trace string, failures ...error) {
-	if r.Principal.MemberID == "" || strings.Contains(pattern, "/auth/") || (strings.Contains(pattern, "/admin/impersonations") || strings.HasSuffix(pattern, "/impersonations")) || strings.HasPrefix(pattern, "POST /api/v1/member-activity/") {
-		return
+	var failure error
+	if len(failures) > 0 {
+		failure = failures[0]
 	}
-	if len(failures) > 0 && errors.Is(failures[0], context.Canceled) {
+	if !recordableActionActivity(r, pattern, level, failure) {
 		return
 	}
 	payload := r.activityPayload
-	if r.Method == "GET" && r.Principal.ActorMemberID == "" {
-		if level != "error" || len(failures) == 0 {
-			return
-		}
-		var business *domain.Error
-		if errors.As(failures[0], &business) {
-			switch business.Code {
-			case domain.GiftReservationNotFound, domain.WishlistParticipantNotFound, domain.WishlistSubscriptionNotFound:
-				return
-			case domain.MemberDataExportNotFound:
-				if strings.HasSuffix(pattern, "/data-exports/latest") {
-					return
-				}
-			case domain.GroupJoinLinkNotFound:
-				if strings.HasSuffix(pattern, "/join-link") {
-					return
-				}
-			}
-		}
-	}
 	if strings.Contains(pattern, "/suggestions") {
 		// Beneficiaries must not discover private group ideas through administrator history.
 		payload = json.RawMessage(`{"_omitted":"privateGroupSuggestion"}`)
 	}
-	if level == "error" && len(failures) > 0 {
-		status, code := 500, ""
-		var business *domain.Error
-		if errors.As(failures[0], &business) {
-			status, code = business.Status, business.Code
-		} else if isDependencyFailure(failures[0]) {
-			status, code = 503, domain.TechnicalDependencyUnavailable
-		}
-		fields := map[string]any{}
-		_ = json.Unmarshal(payload, &fields)
-		if fields == nil {
-			fields = map[string]any{}
-		}
-		fields["statusCode"], fields["errorCode"], fields["correlationId"] = status, code, r.Header.Get("X-Correlation-ID")
-		payload, _ = json.Marshal(fields)
-		if len(payload) > activityPayloadLimit {
-			payload, _ = json.Marshal(map[string]any{"_omitted": "payloadTooLarge", "statusCode": status, "errorCode": code, "correlationId": r.Header.Get("X-Correlation-ID")})
-		}
+	if level == "error" && failure != nil {
+		payload = activityFailurePayload(payload, failure, r.Header.Get("X-Correlation-ID"))
 	}
 	if err := a.Service.RecordActivity(r.Context(), r.Principal.MemberID, "action", activityLabel(pattern), level, payload, r.Principal.ActorMemberID); err != nil {
 		a.Logger.ErrorContext(r.Context(), "Activity recording failed", "EventId", logging.ActivityRecordingFailed, "CorrelationId", logging.Correlation(r.Header.Get("X-Correlation-ID")), "TraceId", logging.Trace(trace))
 	}
+}
+
+func recordableActionActivity(r *request, pattern, level string, failure error) bool {
+	if r.Principal.MemberID == "" || strings.Contains(pattern, "/auth/") || (strings.Contains(pattern, "/admin/impersonations") || strings.HasSuffix(pattern, "/impersonations")) || strings.HasPrefix(pattern, "POST /api/v1/member-activity/") {
+		return false
+	}
+	if errors.Is(failure, context.Canceled) {
+		return false
+	}
+	if r.Method != "GET" || r.Principal.ActorMemberID != "" {
+		return true
+	}
+	return level == "error" && failure != nil && !optionalActivityAbsence(pattern, failure)
+}
+
+func optionalActivityAbsence(pattern string, failure error) bool {
+	var business *domain.Error
+	if !errors.As(failure, &business) {
+		return false
+	}
+	switch business.Code {
+	case domain.GiftReservationNotFound, domain.WishlistParticipantNotFound, domain.WishlistSubscriptionNotFound:
+		return true
+	case domain.MemberDataExportNotFound:
+		return strings.HasSuffix(pattern, "/data-exports/latest")
+	case domain.GroupJoinLinkNotFound:
+		return strings.HasSuffix(pattern, "/join-link")
+	}
+	return false
+}
+
+func activityFailurePayload(payload json.RawMessage, failure error, correlation string) json.RawMessage {
+	status, code := 500, ""
+	var business *domain.Error
+	if errors.As(failure, &business) {
+		status, code = business.Status, business.Code
+	} else if isDependencyFailure(failure) {
+		status, code = 503, domain.TechnicalDependencyUnavailable
+	}
+	fields := map[string]any{}
+	_ = json.Unmarshal(payload, &fields)
+	if fields == nil {
+		fields = map[string]any{}
+	}
+	fields["statusCode"], fields["errorCode"], fields["correlationId"] = status, code, correlation
+	encoded, _ := json.Marshal(fields)
+	if len(encoded) > activityPayloadLimit {
+		encoded, _ = json.Marshal(map[string]any{"_omitted": "payloadTooLarge", "statusCode": status, "errorCode": code, "correlationId": correlation})
+	}
+	return encoded
 }

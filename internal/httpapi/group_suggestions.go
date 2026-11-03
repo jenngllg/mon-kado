@@ -18,7 +18,7 @@ func (a *API) groupSuggestionRoutes() {
 		if method == "GET" {
 			rate = 1200 // A collection can contain 1000 distinct images.
 		}
-		a.route(method+" "+base+"/{suggestionId}/image", options{Auth: true, CSRF: method != "GET", Rate: rate, RateByMember: true}, a.groupSuggestionImage)
+		a.route(method+" "+base+"/{suggestionId}/image", options{Auth: true, CSRF: method != "GET", ImageRead: method == "GET", Rate: rate, RateByMember: true}, a.groupSuggestionImage)
 		a.route(method+" "+base+"/{suggestionId}/reservations/current", options{Auth: true, CSRF: method != "GET"}, a.groupSuggestionReservation)
 	}
 }

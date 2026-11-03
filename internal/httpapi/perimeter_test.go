@@ -92,6 +92,7 @@ func TestPerimeter_WhenImageReadsReachTheirBudget_PreservesAPIAccessAcrossMediaR
 		"/api/v1/groups/invalid/preview/image",
 		"/api/v1/groups/invalid/wishlists/invalid/wishes/invalid/image",
 		"/api/v1/groups/invalid/wishlists/invalid/suggestions/invalid/image/content",
+		"/api/v1/groups/invalid/wishlists/invalid/suggestions/invalid/image",
 		"/api/v1/shared-wishlists/invalid/preview/image",
 	} {
 		t.Run(path, func(t *testing.T) {
