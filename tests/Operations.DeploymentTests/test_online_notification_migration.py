@@ -130,7 +130,16 @@ class OnlineNotificationMigrationTests(unittest.TestCase):
 def preference_releases():
     """Describe the separately reviewed exact 027 -> 028 transition."""
     _, previous = notification_releases()
-    catalog = generate(Path(__file__).resolve().parents[2] / "internal/persistence/migrations")
+    directory = Path(__file__).resolve().parents[2] / "internal/persistence/migrations"
+    catalog = generate(directory)
+    # Pin the reviewed 027 -> 028 transition, never a later source migration.
+    catalog["migrations"] = [item for item in catalog["migrations"]
+                             if item["id"] <= "028_notification_preferences.sql"]
+    model = hashlib.sha256()
+    for item in catalog["migrations"]:
+        body = (directory / item["id"]).read_bytes().replace(b"\r\n", b"\n")
+        model.update(item["id"].encode() + b"\0" + body + b"\0")
+    catalog["modelHash"] = model.hexdigest()
     expanded = release("c") | {"migrationCatalog": catalog, "migrationHash": fingerprint(catalog)}
     return previous, expanded
 
@@ -151,3 +160,18 @@ class OnlinePreferenceMigrationTests(OnlineNotificationMigrationTests):
         self.assertIn("CREATE TABLE member_notification_preferences", sql)
         for forbidden in ("DROP ", "UPDATE ", "DELETE FROM", "TRUNCATE ", "INSERT INTO"):
             self.assertNotIn(forbidden, sql)
+
+
+class UnreviewedExtensionMigrationTests(unittest.TestCase):
+    def test_current_extension_catalog_does_not_inherit_the_notification_approval(self):
+        _, previous = preference_releases()
+        catalog = generate(Path(__file__).resolve().parents[2] / "internal/persistence/migrations")
+        candidate = release("d") | {"migrationCatalog": catalog, "migrationHash": fingerprint(catalog)}
+        self.assertEqual(28, len(previous["migrationCatalog"]["migrations"]))
+        self.assertIn("029_member_extension_usage.sql", identifiers(catalog))
+        self.assertFalse(cli.online_catalog_compatible(previous, candidate))
+        runtime = cli.NotificationOnlineRuntime(runner=Mock())
+        with patch.object(Runtime, "migrate") as migrate:
+            with self.assertRaisesRegex(DeploymentError, "ONLINE_SCHEMA_REVIEW_REQUIRED"):
+                runtime.migrate(candidate)
+            migrate.assert_not_called()
