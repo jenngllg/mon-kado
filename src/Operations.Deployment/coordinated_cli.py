@@ -62,6 +62,14 @@ def online_catalog_compatible(previous, candidate):
     return previous["migrationCatalog"] == candidate["migrationCatalog"] or notification_expansion(previous, candidate)
 
 
+def reviewed_histories(previous, candidate):
+    """Accept only committed prefixes of the exact reviewed additive expansion."""
+    old, expanded = identifiers(previous["migrationCatalog"]), identifiers(candidate["migrationCatalog"])
+    if notification_expansion(previous, candidate) and fingerprint(candidate["migrationCatalog"]) == PUSH_EXPANDED_CATALOG:
+        return [expanded[:size] for size in range(len(old), len(expanded) + 1)]
+    return [old, expanded]
+
+
 class NotificationOnlineRuntime(OnlineRuntime):
     """Apply the reviewed expansion while the old API continues serving requests."""
 
@@ -69,7 +77,7 @@ class NotificationOnlineRuntime(OnlineRuntime):
         if not notification_expansion(current, candidate):
             return super().preflight(candidate, current)
         ensure(candidate["rollbackAllowed"] is True, "ONLINE_SCHEMA_REVIEW_REQUIRED")
-        ensure(self.history() in (identifiers(current["migrationCatalog"]), identifiers(candidate["migrationCatalog"])),
+        ensure(self.history() in reviewed_histories(current, candidate),
                "DATABASE_HISTORY_DIVERGED")
         return Runtime.preflight(self, candidate, current)
 
@@ -88,7 +96,7 @@ class NotificationOnlineEngine(Engine):
         if not notification_expansion(current, candidate):
             return super().policy(current, candidate, history)
         old, expanded = identifiers(current["migrationCatalog"]), identifiers(candidate["migrationCatalog"])
-        ensure(history in (old, expanded), "DATABASE_HISTORY_DIVERGED")
+        ensure(history in reviewed_histories(current, candidate), "DATABASE_HISTORY_DIVERGED")
         policy = decision(current, candidate, old)
         ensure(candidate["rollbackAllowed"] is True, "ONLINE_SCHEMA_REVIEW_REQUIRED")
         return policy | {"migrate": history != expanded, "rollback": True}
@@ -97,7 +105,7 @@ class NotificationOnlineEngine(Engine):
         previous, candidate = state["previous"], state["candidate"]
         if not notification_expansion(previous, candidate):
             return super().check_rollback_history(state)
-        ensure(self.runtime.history() in (identifiers(previous["migrationCatalog"]), identifiers(candidate["migrationCatalog"])),
+        ensure(self.runtime.history() in reviewed_histories(previous, candidate),
                "DATABASE_HISTORY_DIVERGED")
 
 
