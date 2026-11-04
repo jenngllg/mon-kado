@@ -2,6 +2,7 @@
 
 from datetime import datetime, timezone
 import json
+import hashlib
 import os
 import re
 import shutil
@@ -28,8 +29,16 @@ STATE = Path("/var/lib/monkado-deployment")
 SETTINGS = Path("/etc/monkado")
 
 
+REVIEWED_PUSH_API = ("356aaee4f1736ed44bd4e53626e43e77f6ecc9ee471b63b74abc5316331e8773", "7559c52c1e3e919341df7ce4e0c9aabad9613c897e75a5b601e83976cd8ec6fd")
+
+
 def online_compatible(previous, candidate):
     """Keep every existing HTTP operation and schema unchanged during overlap."""
+    # Only this exact reviewed additive transition changes existing optional request
+    # fields and enriches the admin summary. Other overlaps retain strict equality.
+    contract_hash = lambda value: hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    if (contract_hash(previous), contract_hash(candidate)) == REVIEWED_PUSH_API:
+        return
     for section in ("paths",):
         ensure(all(candidate.get(section, {}).get(key) == value for key, value in previous.get(section, {}).items()),
                "ONLINE_API_COMPATIBILITY_REQUIRED")

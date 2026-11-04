@@ -1,0 +1,1747 @@
+{
+  "paths": {
+    "/api/v1/admin/members": {
+      "before": {
+        "get": {
+          "operationId": "AdministrativeMembers_GetPage",
+          "summary": "List all accounts, including hidden and unconfirmed accounts; requires a live administrator role and current verified two-factor session",
+          "security": [
+            {
+              "bearerAuth": []
+            }
+          ],
+          "parameters": [
+            {
+              "name": "q",
+              "in": "query",
+              "schema": {
+                "type": "string",
+                "maxLength": 100
+              },
+              "description": "Case- and accent-insensitive display name and tag search"
+            },
+            {
+              "name": "page",
+              "in": "query",
+              "schema": {
+                "type": "integer",
+                "minimum": 1,
+                "default": 1
+              }
+            },
+            {
+              "name": "pageSize",
+              "in": "query",
+              "schema": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 100,
+                "default": 20
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Account page without contact details or credentials",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "type": "object",
+                    "required": [
+                      "items",
+                      "currentPage",
+                      "pageSize",
+                      "totalCount",
+                      "totalPages",
+                      "hasPreviousPage",
+                      "hasNextPage"
+                    ],
+                    "properties": {
+                      "items": {
+                        "type": "array",
+                        "items": {
+                          "$ref": "#/components/schemas/AdministrativeMemberResponse"
+                        }
+                      },
+                      "currentPage": {
+                        "type": "integer"
+                      },
+                      "pageSize": {
+                        "type": "integer"
+                      },
+                      "totalCount": {
+                        "type": "integer"
+                      },
+                      "totalPages": {
+                        "type": "integer"
+                      },
+                      "hasPreviousPage": {
+                        "type": "boolean"
+                      },
+                      "hasNextPage": {
+                        "type": "boolean"
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "400": {
+              "description": "Invalid filter",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorResponse"
+                  }
+                }
+              }
+            },
+            "401": {
+              "description": "Authentication required",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorResponse"
+                  }
+                }
+              }
+            },
+            "403": {
+              "description": "Current administrator authorization required",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorResponse"
+                  }
+                }
+              }
+            },
+            "429": {
+              "description": "Rate limit exceeded",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorResponse"
+                  }
+                }
+              }
+            },
+            "500": {
+              "description": "Unexpected failure",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorResponse"
+                  }
+                }
+              }
+            },
+            "503": {
+              "description": "Dependency unavailable",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "after": {
+        "get": {
+          "operationId": "AdministrativeMembers_GetPage",
+          "summary": "List all accounts, including hidden and unconfirmed accounts; requires a live administrator role and current verified two-factor session",
+          "security": [
+            {
+              "bearerAuth": []
+            }
+          ],
+          "parameters": [
+            {
+              "name": "q",
+              "in": "query",
+              "schema": {
+                "type": "string",
+                "maxLength": 100
+              },
+              "description": "Case- and accent-insensitive display name and tag search"
+            },
+            {
+              "name": "page",
+              "in": "query",
+              "schema": {
+                "type": "integer",
+                "minimum": 1,
+                "default": 1
+              }
+            },
+            {
+              "name": "pageSize",
+              "in": "query",
+              "schema": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 100,
+                "default": 20
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Account page without contact details or credentials",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "type": "object",
+                    "required": [
+                      "items",
+                      "currentPage",
+                      "pageSize",
+                      "totalCount",
+                      "totalPages",
+                      "hasPreviousPage",
+                      "hasNextPage"
+                    ],
+                    "properties": {
+                      "items": {
+                        "type": "array",
+                        "items": {
+                          "$ref": "#/components/schemas/AdministrativeMemberSummaryResponse"
+                        }
+                      },
+                      "currentPage": {
+                        "type": "integer"
+                      },
+                      "pageSize": {
+                        "type": "integer"
+                      },
+                      "totalCount": {
+                        "type": "integer"
+                      },
+                      "totalPages": {
+                        "type": "integer"
+                      },
+                      "hasPreviousPage": {
+                        "type": "boolean"
+                      },
+                      "hasNextPage": {
+                        "type": "boolean"
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "400": {
+              "description": "Invalid filter",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorResponse"
+                  }
+                }
+              }
+            },
+            "401": {
+              "description": "Authentication required",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorResponse"
+                  }
+                }
+              }
+            },
+            "403": {
+              "description": "Current administrator authorization required",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorResponse"
+                  }
+                }
+              }
+            },
+            "429": {
+              "description": "Rate limit exceeded",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorResponse"
+                  }
+                }
+              }
+            },
+            "500": {
+              "description": "Unexpected failure",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorResponse"
+                  }
+                }
+              }
+            },
+            "503": {
+              "description": "Dependency unavailable",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/members/current/push-configuration": {
+      "before": null,
+      "after": {
+        "get": {
+          "operationId": "Push_Configuration",
+          "tags": [
+            "Mobile push"
+          ],
+          "security": [
+            {
+              "bearerAuth": []
+            }
+          ],
+          "description": "Member-private device configuration. Unavailable during impersonation. Mutations require CSRF. Endpoints are encrypted; independent per-device choices never expose business data to the push service. Revoked sessions cannot receive pushes.",
+          "responses": {
+            "200": {
+              "description": "Success",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/PushConfigurationResponse"
+                  }
+                }
+              }
+            },
+            "400": {
+              "description": "Request rejected",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorResponse"
+                  }
+                }
+              }
+            },
+            "401": {
+              "description": "Request rejected",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorResponse"
+                  }
+                }
+              }
+            },
+            "403": {
+              "description": "Request rejected",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorResponse"
+                  }
+                }
+              }
+            },
+            "404": {
+              "description": "Request rejected",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorResponse"
+                  }
+                }
+              }
+            },
+            "409": {
+              "description": "Request rejected",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorResponse"
+                  }
+                }
+              }
+            },
+            "412": {
+              "description": "Request rejected",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorResponse"
+                  }
+                }
+              }
+            },
+            "428": {
+              "description": "Request rejected",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorResponse"
+                  }
+                }
+              }
+            },
+            "503": {
+              "description": "Request rejected",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/members/current/push-subscriptions": {
+      "before": null,
+      "after": {
+        "get": {
+          "operationId": "Push_List",
+          "tags": [
+            "Mobile push"
+          ],
+          "security": [
+            {
+              "bearerAuth": []
+            }
+          ],
+          "description": "Member-private device configuration. Unavailable during impersonation. Mutations require CSRF. Endpoints are encrypted; independent per-device choices never expose business data to the push service. Revoked sessions cannot receive pushes.",
+          "responses": {
+            "200": {
+              "description": "Success",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/PushSubscriptionResponse"
+                    }
+                  }
+                }
+              }
+            },
+            "400": {
+              "description": "Request rejected",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorResponse"
+                  }
+                }
+              }
+            },
+            "401": {
+              "description": "Request rejected",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorResponse"
+                  }
+                }
+              }
+            },
+            "403": {
+              "description": "Request rejected",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorResponse"
+                  }
+                }
+              }
+            },
+            "404": {
+              "description": "Request rejected",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorResponse"
+                  }
+                }
+              }
+            },
+            "409": {
+              "description": "Request rejected",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorResponse"
+                  }
+                }
+              }
+            },
+            "412": {
+              "description": "Request rejected",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorResponse"
+                  }
+                }
+              }
+            },
+            "428": {
+              "description": "Request rejected",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorResponse"
+                  }
+                }
+              }
+            },
+            "503": {
+              "description": "Request rejected",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorResponse"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "post": {
+          "operationId": "Push_Create",
+          "tags": [
+            "Mobile push"
+          ],
+          "security": [
+            {
+              "bearerAuth": []
+            }
+          ],
+          "description": "Member-private device configuration. Unavailable during impersonation. Mutations require CSRF. Endpoints are encrypted; independent per-device choices never expose business data to the push service. Revoked sessions cannot receive pushes.",
+          "responses": {
+            "201": {
+              "description": "Success",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/PushSubscriptionResponse"
+                  }
+                }
+              },
+              "headers": {
+                "Location": {
+                  "schema": {
+                    "type": "string"
+                  },
+                  "description": "Device resource"
+                }
+              }
+            },
+            "400": {
+              "description": "Request rejected",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorResponse"
+                  }
+                }
+              }
+            },
+            "401": {
+              "description": "Request rejected",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorResponse"
+                  }
+                }
+              }
+            },
+            "403": {
+              "description": "Request rejected",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorResponse"
+                  }
+                }
+              }
+            },
+            "404": {
+              "description": "Request rejected",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorResponse"
+                  }
+                }
+              }
+            },
+            "409": {
+              "description": "Request rejected",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorResponse"
+                  }
+                }
+              }
+            },
+            "412": {
+              "description": "Request rejected",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorResponse"
+                  }
+                }
+              }
+            },
+            "428": {
+              "description": "Request rejected",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorResponse"
+                  }
+                }
+              }
+            },
+            "503": {
+              "description": "Request rejected",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorResponse"
+                  }
+                }
+              }
+            }
+          },
+          "parameters": [
+            {
+              "name": "X-CSRF-TOKEN",
+              "in": "header",
+              "required": true,
+              "schema": {
+                "type": "string"
+              }
+            }
+          ],
+          "requestBody": {
+            "required": true,
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreatePushSubscriptionRequest"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/members/current/push-subscriptions/{subscriptionId}": {
+      "before": null,
+      "after": {
+        "put": {
+          "operationId": "Push_Update",
+          "tags": [
+            "Mobile push"
+          ],
+          "security": [
+            {
+              "bearerAuth": []
+            }
+          ],
+          "description": "Member-private device configuration. Unavailable during impersonation. Mutations require CSRF. Endpoints are encrypted; independent per-device choices never expose business data to the push service. Revoked sessions cannot receive pushes.",
+          "responses": {
+            "200": {
+              "description": "Success",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/PushSubscriptionResponse"
+                  }
+                }
+              },
+              "headers": {
+                "ETag": {
+                  "schema": {
+                    "type": "string"
+                  },
+                  "description": "Strong entity tag"
+                }
+              }
+            },
+            "400": {
+              "description": "Request rejected",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorResponse"
+                  }
+                }
+              }
+            },
+            "401": {
+              "description": "Request rejected",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorResponse"
+                  }
+                }
+              }
+            },
+            "403": {
+              "description": "Request rejected",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorResponse"
+                  }
+                }
+              }
+            },
+            "404": {
+              "description": "Request rejected",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorResponse"
+                  }
+                }
+              }
+            },
+            "409": {
+              "description": "Request rejected",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorResponse"
+                  }
+                }
+              }
+            },
+            "412": {
+              "description": "Request rejected",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorResponse"
+                  }
+                }
+              }
+            },
+            "428": {
+              "description": "Request rejected",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorResponse"
+                  }
+                }
+              }
+            },
+            "503": {
+              "description": "Request rejected",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorResponse"
+                  }
+                }
+              }
+            }
+          },
+          "parameters": [
+            {
+              "name": "subscriptionId",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "format": "uuid"
+              }
+            },
+            {
+              "name": "If-Match",
+              "in": "header",
+              "required": true,
+              "schema": {
+                "type": "string"
+              }
+            },
+            {
+              "name": "X-CSRF-TOKEN",
+              "in": "header",
+              "required": true,
+              "schema": {
+                "type": "string"
+              }
+            }
+          ],
+          "requestBody": {
+            "required": true,
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdatePushSubscriptionRequest"
+                }
+              }
+            }
+          }
+        },
+        "delete": {
+          "operationId": "Push_Delete",
+          "tags": [
+            "Mobile push"
+          ],
+          "security": [
+            {
+              "bearerAuth": []
+            }
+          ],
+          "description": "Member-private device configuration. Unavailable during impersonation. Mutations require CSRF. Endpoints are encrypted; independent per-device choices never expose business data to the push service. Revoked sessions cannot receive pushes.",
+          "responses": {
+            "204": {
+              "description": "Success"
+            },
+            "400": {
+              "description": "Request rejected",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorResponse"
+                  }
+                }
+              }
+            },
+            "401": {
+              "description": "Request rejected",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorResponse"
+                  }
+                }
+              }
+            },
+            "403": {
+              "description": "Request rejected",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorResponse"
+                  }
+                }
+              }
+            },
+            "404": {
+              "description": "Request rejected",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorResponse"
+                  }
+                }
+              }
+            },
+            "409": {
+              "description": "Request rejected",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorResponse"
+                  }
+                }
+              }
+            },
+            "412": {
+              "description": "Request rejected",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorResponse"
+                  }
+                }
+              }
+            },
+            "428": {
+              "description": "Request rejected",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorResponse"
+                  }
+                }
+              }
+            },
+            "503": {
+              "description": "Request rejected",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorResponse"
+                  }
+                }
+              }
+            }
+          },
+          "parameters": [
+            {
+              "name": "subscriptionId",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "format": "uuid"
+              }
+            },
+            {
+              "name": "X-CSRF-TOKEN",
+              "in": "header",
+              "required": true,
+              "schema": {
+                "type": "string"
+              }
+            }
+          ]
+        },
+        "get": {
+          "operationId": "Push_Get",
+          "tags": [
+            "Mobile push"
+          ],
+          "security": [
+            {
+              "bearerAuth": []
+            }
+          ],
+          "description": "Member-private device configuration. Unavailable during impersonation. Mutations require CSRF. Endpoints are encrypted; independent per-device choices never expose business data to the push service. Revoked sessions cannot receive pushes.",
+          "responses": {
+            "200": {
+              "description": "Success",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/PushSubscriptionResponse"
+                  }
+                }
+              }
+            },
+            "400": {
+              "description": "Request rejected",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorResponse"
+                  }
+                }
+              }
+            },
+            "401": {
+              "description": "Request rejected",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorResponse"
+                  }
+                }
+              }
+            },
+            "403": {
+              "description": "Request rejected",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorResponse"
+                  }
+                }
+              }
+            },
+            "404": {
+              "description": "Request rejected",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorResponse"
+                  }
+                }
+              }
+            },
+            "409": {
+              "description": "Request rejected",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorResponse"
+                  }
+                }
+              }
+            },
+            "412": {
+              "description": "Request rejected",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorResponse"
+                  }
+                }
+              }
+            },
+            "428": {
+              "description": "Request rejected",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorResponse"
+                  }
+                }
+              }
+            },
+            "503": {
+              "description": "Request rejected",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorResponse"
+                  }
+                }
+              }
+            }
+          },
+          "parameters": [
+            {
+              "name": "subscriptionId",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "format": "uuid"
+              }
+            }
+          ]
+        }
+      }
+    },
+    "/api/v1/members/current/push-preferences": {
+      "before": null,
+      "after": {
+        "get": {
+          "tags": [
+            "Notifications"
+          ],
+          "security": [
+            {
+              "bearerAuth": []
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Complete member-private preferences",
+              "headers": {
+                "ETag": {
+                  "description": "Strong version of these settings only.",
+                  "schema": {
+                    "type": "string"
+                  }
+                }
+              },
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/NotificationPreferencesResponse"
+                  }
+                }
+              }
+            },
+            "401": {
+              "description": "Authentication required",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorResponse"
+                  }
+                }
+              }
+            }
+          },
+          "operationId": "PushPreferences_Get",
+          "summary": "Read current member notification preferences",
+          "description": "Member-private push channel choices, shared across subscribed browsers. Every type is enabled by default independently of browser permission. Saving choices requires CSRF and a strong If-Match; unavailable during impersonation."
+        },
+        "put": {
+          "tags": [
+            "Notifications"
+          ],
+          "security": [
+            {
+              "bearerAuth": []
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Complete member-private preferences",
+              "headers": {
+                "ETag": {
+                  "description": "Strong version of these settings only.",
+                  "schema": {
+                    "type": "string"
+                  }
+                }
+              },
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/NotificationPreferencesResponse"
+                  }
+                }
+              }
+            },
+            "400": {
+              "description": "Invalid body, CSRF token or entity tag",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorResponse"
+                  }
+                }
+              }
+            },
+            "401": {
+              "description": "Authentication required",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorResponse"
+                  }
+                }
+              }
+            },
+            "412": {
+              "description": "Preferences were changed by another request",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorResponse"
+                  }
+                }
+              }
+            },
+            "428": {
+              "description": "If-Match is required",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ErrorResponse"
+                  }
+                }
+              }
+            }
+          },
+          "operationId": "PushPreferences_Put",
+          "summary": "Update all current member notification preferences",
+          "description": "Member-private push channel choices, shared across subscribed browsers. Every type is enabled by default independently of browser permission. Saving choices requires CSRF and a strong If-Match; unavailable during impersonation.",
+          "parameters": [
+            {
+              "in": "header",
+              "name": "If-Match",
+              "required": true,
+              "schema": {
+                "type": "string"
+              },
+              "description": "Current strong ETag returned by the preferences GET."
+            },
+            {
+              "in": "header",
+              "name": "X-CSRF-TOKEN",
+              "required": true,
+              "schema": {
+                "type": "string"
+              },
+              "description": "Authenticated signed double-submit CSRF token."
+            }
+          ],
+          "requestBody": {
+            "required": true,
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateNotificationPreferencesRequest"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "schemas": {
+    "CreateWishRequest": {
+      "before": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "price": {
+            "anyOf": [
+              {
+                "type": "number",
+                "multipleOf": 0.01
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "quantity": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "format": "int32"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "isFavorite": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "color": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 100,
+            "description": "Optional single-line colour, trimmed; blank values are stored as null.",
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "size": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 100,
+            "description": "Optional single-line size or dimensions, trimmed; blank values are stored as null.",
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "isSurprise": {
+            "description": "Open-ended wish: name is its universe, note its preferences and price the optional maximum EUR budget per item. Omitted/null defaults to false on creation and preserves the saved value on update.",
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "acceptsSecondHand": {
+            "description": "Second-hand gifts are welcome; false does not require new. Omitted/null preserves the value on update, defaults to false on creation.",
+            "type": [
+              "boolean",
+              "null"
+            ]
+          }
+        }
+      },
+      "after": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "price": {
+            "anyOf": [
+              {
+                "type": "number",
+                "multipleOf": 0.01
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "quantity": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "format": "int32"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "isFavorite": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "color": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 100,
+            "description": "Optional single-line colour, trimmed; blank values are stored as null.",
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "size": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 100,
+            "description": "Optional single-line size or dimensions, trimmed; blank values are stored as null.",
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "isSurprise": {
+            "description": "Open-ended wish: name is its universe, note its preferences and price the optional maximum EUR budget per item. Omitted/null defaults to false on creation and preserves the saved value on update.",
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "acceptsSecondHand": {
+            "description": "Second-hand gifts are welcome; false does not require new. Omitted/null preserves the value on update, defaults to false on creation.",
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "addedViaExtension": {
+            "type": "boolean",
+            "nullable": true,
+            "description": "Set by the extension on creation only; records account usage atomically with a successful addition."
+          }
+        }
+      }
+    },
+    "SaveGroupSuggestionRequest": {
+      "before": {
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "price": {
+            "anyOf": [
+              {
+                "type": "number",
+                "multipleOf": 0.01
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "quantity": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 100
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "after": {
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "price": {
+            "anyOf": [
+              {
+                "type": "number",
+                "multipleOf": 0.01
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "quantity": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 100
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "addedViaExtension": {
+            "type": "boolean",
+            "nullable": true,
+            "description": "Set by the extension on creation only; records account usage atomically with a successful addition."
+          }
+        }
+      }
+    },
+    "PushConfigurationResponse": {
+      "before": null,
+      "after": {
+        "type": "object",
+        "required": [
+          "enabled",
+          "publicKey"
+        ],
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "publicKey": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      }
+    },
+    "PushSubscriptionResponse": {
+      "before": null,
+      "after": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "endpointHash",
+          "disabledKinds",
+          "createdAt",
+          "version"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 60
+          },
+          "endpointHash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "disabledKinds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "version": {
+            "type": "string",
+            "description": "Strong xmin ETag used in If-Match when saving a device."
+          }
+        }
+      }
+    },
+    "CreatePushSubscriptionRequest": {
+      "before": null,
+      "after": {
+        "type": "object",
+        "required": [
+          "endpoint",
+          "name"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "endpoint": {
+            "type": "string",
+            "format": "uri",
+            "maxLength": 2048
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 60
+          },
+          "disabledKinds": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "enum": [
+                "wishesAdded",
+                "groupJoined",
+                "groupInvitation",
+                "occasionReminder",
+                "sharingReminder",
+                "groupWishlistShared",
+                "reservationUnavailable",
+                "wishReserved",
+                "suggestionAdded"
+              ]
+            }
+          }
+        }
+      }
+    },
+    "UpdatePushSubscriptionRequest": {
+      "before": null,
+      "after": {
+        "type": "object",
+        "required": [
+          "name",
+          "disabledKinds"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 60
+          },
+          "disabledKinds": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "enum": [
+                "wishesAdded",
+                "groupJoined",
+                "groupInvitation",
+                "occasionReminder",
+                "sharingReminder",
+                "groupWishlistShared",
+                "reservationUnavailable",
+                "wishReserved",
+                "suggestionAdded"
+              ]
+            }
+          }
+        }
+      }
+    },
+    "AdministrativeMemberSummaryResponse": {
+      "before": null,
+      "after": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "displayName",
+          "displayNameTag",
+          "createdAt",
+          "listCount",
+          "groupCount",
+          "wishCount",
+          "hasAddedViaExtension"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "displayNameTag": {
+            "type": "string",
+            "pattern": "^[0-9]{4}$"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "listCount": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "groupCount": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "wishCount": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "hasAddedViaExtension": {
+            "type": "boolean",
+            "nullable": true,
+            "description": "Whether this account has confirmed a wish or suggestion addition through the extension. Null for existing accounts with unknown history."
+          }
+        }
+      }
+    }
+  }
+}
