@@ -4,7 +4,7 @@
 (frontend_security) {
 	header {
 		-Server
-		Content-Security-Policy "default-src 'none'; script-src 'self'; style-src 'self'; style-src-attr 'unsafe-inline'; font-src 'self'; img-src 'self' blob: data: {$FRONTEND_API_ORIGIN}; connect-src 'self' {$FRONTEND_API_ORIGIN}; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; form-action 'self'"
+		Content-Security-Policy "default-src 'none'; script-src 'self'; worker-src 'self'; manifest-src 'self'; style-src 'self'; style-src-attr 'unsafe-inline'; font-src 'self'; img-src 'self' blob: data: {$FRONTEND_API_ORIGIN}; connect-src 'self' {$FRONTEND_API_ORIGIN}; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; form-action 'self'"
 		X-Content-Type-Options nosniff
 		X-Frame-Options DENY
 		Referrer-Policy no-referrer
