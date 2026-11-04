@@ -45,17 +45,29 @@ NOTIFICATION_EXPANDED_CATALOG = "0a924f9b48095ff150e2d7517fff9fb1980fb4cec345500
 PREFERENCE_EXPANDED_CATALOG = "be71e86a53f80adab945479aa01a3a205a846ca0b76c8da088c8b437a0f64081"
 
 
+PUSH_EXPANDED_CATALOG = "f463b696a46be5a76ed90259562f105ae5346d4ee6d094cb051a81abae99d0b6"
+
+
 def notification_expansion(previous, candidate):
     """Recognize only the exact reviewed old and expanded notification catalogs."""
     return previous is not None and (fingerprint(previous["migrationCatalog"]), fingerprint(candidate["migrationCatalog"])) in {
         (NOTIFICATION_PREVIOUS_CATALOG, NOTIFICATION_EXPANDED_CATALOG),
         (NOTIFICATION_EXPANDED_CATALOG, PREFERENCE_EXPANDED_CATALOG),
+        (PREFERENCE_EXPANDED_CATALOG, PUSH_EXPANDED_CATALOG),
     }
 
 
 def online_catalog_compatible(previous, candidate):
     """Retain the unchanged-schema default and its exact reviewed additive transitions."""
     return previous["migrationCatalog"] == candidate["migrationCatalog"] or notification_expansion(previous, candidate)
+
+
+def reviewed_histories(previous, candidate):
+    """Accept only committed prefixes of the exact reviewed additive expansion."""
+    old, expanded = identifiers(previous["migrationCatalog"]), identifiers(candidate["migrationCatalog"])
+    if notification_expansion(previous, candidate) and fingerprint(candidate["migrationCatalog"]) == PUSH_EXPANDED_CATALOG:
+        return [expanded[:size] for size in range(len(old), len(expanded) + 1)]
+    return [old, expanded]
 
 
 class NotificationOnlineRuntime(OnlineRuntime):
@@ -65,14 +77,14 @@ class NotificationOnlineRuntime(OnlineRuntime):
         if not notification_expansion(current, candidate):
             return super().preflight(candidate, current)
         ensure(candidate["rollbackAllowed"] is True, "ONLINE_SCHEMA_REVIEW_REQUIRED")
-        ensure(self.history() in (identifiers(current["migrationCatalog"]), identifiers(candidate["migrationCatalog"])),
+        ensure(self.history() in reviewed_histories(current, candidate),
                "DATABASE_HISTORY_DIVERGED")
         return Runtime.preflight(self, candidate, current)
 
     def migrate(self, release):
         # The immutable executable catalog is verified by Runtime.migrate. SQL
         # uses transaction-local lock/statement deadlines and never deletes data.
-        ensure(fingerprint(release["migrationCatalog"]) in {NOTIFICATION_EXPANDED_CATALOG, PREFERENCE_EXPANDED_CATALOG} and
+        ensure(fingerprint(release["migrationCatalog"]) in {NOTIFICATION_EXPANDED_CATALOG, PREFERENCE_EXPANDED_CATALOG, PUSH_EXPANDED_CATALOG} and
                release["rollbackAllowed"] is True, "ONLINE_SCHEMA_REVIEW_REQUIRED")
         return Runtime.migrate(self, release)
 
@@ -84,7 +96,7 @@ class NotificationOnlineEngine(Engine):
         if not notification_expansion(current, candidate):
             return super().policy(current, candidate, history)
         old, expanded = identifiers(current["migrationCatalog"]), identifiers(candidate["migrationCatalog"])
-        ensure(history in (old, expanded), "DATABASE_HISTORY_DIVERGED")
+        ensure(history in reviewed_histories(current, candidate), "DATABASE_HISTORY_DIVERGED")
         policy = decision(current, candidate, old)
         ensure(candidate["rollbackAllowed"] is True, "ONLINE_SCHEMA_REVIEW_REQUIRED")
         return policy | {"migrate": history != expanded, "rollback": True}
@@ -93,7 +105,7 @@ class NotificationOnlineEngine(Engine):
         previous, candidate = state["previous"], state["candidate"]
         if not notification_expansion(previous, candidate):
             return super().check_rollback_history(state)
-        ensure(self.runtime.history() in (identifiers(previous["migrationCatalog"]), identifiers(candidate["migrationCatalog"])),
+        ensure(self.runtime.history() in reviewed_histories(previous, candidate),
                "DATABASE_HISTORY_DIVERGED")
 
 

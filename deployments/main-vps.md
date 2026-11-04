@@ -186,3 +186,22 @@ read-only monitor status, then restart the timer. The procedure takes and verifi
 fresh encrypted offsite captures before and after the operational update. A proxy
 reload occurs only when the reviewed Caddyfile changes. Publish the matching
 backend binaries through the normal main CI/CD path after this tool transition.
+
+
+## Reviewed mobile push expansion (4 November 2026)
+
+Publish the preparation binary before the 028 → 031 expansion. Its notification
+reader tolerates an absent `in_app` column and hides push-only rows after the
+expansion, so binary rollback does not resurrect muted in-app notifications.
+The exact additive SQL is reviewed in `tests/fixtures/reviewed-push-sql`; hashes
+are pinned by `PUSH_EXPANDED_CATALOG`, and shipped sources must match. Locks and
+statements are bounded; unknown catalogs remain blocked. No data down-migration.
+
+The mobile tool upgrade additionally inventories the static contract, HTTPS probe
+and frontend Caddy include. Only the four named mobile files are added to the
+archive boundary. The CSP permits same-origin manifests and workers. Install this
+protected package using `upgrade-online` with fresh verified encrypted offsite
+backups before and after; the Caddy reload is graceful and happens once for this
+reviewed configuration change. Ordinary application rollouts do not reload it.
+
+The optional extension-attribution fields and enriched administrator summary are also bound to the exact reviewed OpenAPI pair (`REVIEWED_PUSH_API`). Existing request fields, mandatory fields and identity properties are preserved; altered permissions, types or removed operations remain blocked. The reviewed field-level additions are in `tests/fixtures/push-api-additions.json`.

@@ -131,6 +131,12 @@ def preference_releases():
     """Describe the separately reviewed exact 027 -> 028 transition."""
     _, previous = notification_releases()
     catalog = generate(Path(__file__).resolve().parents[2] / "internal/persistence/migrations")
+    catalog["migrations"] = [item for item in catalog["migrations"] if item["id"] <= "028_notification_preferences.sql"]
+    model = hashlib.sha256()
+    for item in catalog["migrations"]:
+        body = (Path(__file__).resolve().parents[2] / "internal/persistence/migrations" / item["id"]).read_bytes().replace(b"\r\n", b"\n")
+        model.update(item["id"].encode() + b"\0" + body + b"\0")
+    catalog["modelHash"] = model.hexdigest()
     expanded = release("c") | {"migrationCatalog": catalog, "migrationHash": fingerprint(catalog)}
     return previous, expanded
 

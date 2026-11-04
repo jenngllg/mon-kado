@@ -13,7 +13,7 @@ class OnlineToolUpdateTests(unittest.TestCase):
         runtime = object.__new__(OnlineUpgradeRuntime)
         runtime.native = Mock()
         proxy = "deployments/caddy/Caddyfile"
-        intent = {"previousFiles": {proxy: "a" * 64}, "manifest": {"files": {proxy: "a" * 64}}}
+        intent = {"previousFiles": {proxy: "a" * 64, "deployments/frontend/frontend.caddy": "c"*64}, "manifest": {"files": {proxy: "a" * 64, "deployments/frontend/frontend.caddy":"c"*64}}}
         # Act
         with patch.object(UpgradeRuntime, "install_backup_code") as install, patch("deploy_runtime.OnlineRuntime") as router:
             runtime.install_backup_code(intent)
@@ -23,21 +23,36 @@ class OnlineToolUpdateTests(unittest.TestCase):
         runtime.native.run.assert_not_called()
 
     def test_install_when_proxy_configuration_changes_routes_before_install_and_reloads_after(self):
+        self.check_proxy_reload("deployments/caddy/Caddyfile")
+
+    def test_install_when_only_frontend_manifest_policy_changes_gracefully_reloads(self):
+        self.check_proxy_reload("deployments/frontend/frontend.caddy")
+
+    def check_proxy_reload(self, changed):
         # Arrange
         runtime = object.__new__(OnlineUpgradeRuntime)
         runtime.native = Mock()
         runtime.root, runtime.state, runtime.settings = map(Path, ("/installed", "/state", "/settings"))
+        runtime.source = Path("/reviewed")
         proxy = "deployments/caddy/Caddyfile"
-        intent = {"previousFiles": {proxy: "a" * 64}, "manifest": {"files": {proxy: "b" * 64}}}
+        files = {proxy: "a"*64, "deployments/frontend/frontend.caddy":"c"*64}
+        intent = {"previousFiles": files, "manifest": {"files": files | {changed:"b"*64}}}
         events = []
         runtime.native.run.side_effect = lambda *args, **kwargs: events.append("reload")
         # Act
         with patch.object(UpgradeRuntime, "install_backup_code", side_effect=lambda value: events.append("install")), \
-             patch("deploy_runtime.OnlineRuntime") as router:
+             patch("deploy_runtime.OnlineRuntime") as router, \
+             patch("coordinated_install_runtime.replace_reviewed") as replace, \
+             patch.object(Path, "read_bytes", return_value=b"reviewed frontend"):
             router.return_value.route.side_effect = lambda port: events.append(("route", port))
             runtime.install_backup_code(intent)
         # Assert
         self.assertEqual([("route", 7000), "install", "reload"], events)
+        if changed == "deployments/frontend/frontend.caddy":
+            replace.assert_called_once_with(Path("/installed/deployments/caddy/frontend/site.caddy"),
+                                            b"reviewed frontend", "c"*64, "b"*64, 0o644)
+        else:
+            replace.assert_not_called()
         args = runtime.native.run.call_args.args[0]
         self.assertIn("reload", args)
         self.assertEqual("/installed/deployments/caddy/Caddyfile", args[args.index("--config") + 1])
