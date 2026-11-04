@@ -205,3 +205,23 @@ backups before and after; the Caddy reload is graceful and happens once for this
 reviewed configuration change. Ordinary application rollouts do not reload it.
 
 The optional extension-attribution fields and enriched administrator summary are also bound to the exact reviewed OpenAPI pair (`REVIEWED_PUSH_API`). Existing request fields, mandatory fields and identity properties are preserved; altered permissions, types or removed operations remain blocked. The reviewed field-level additions are in `tests/fixtures/push-api-additions.json`.
+
+## Recovering a manifest MIME failure in a pending rollout
+
+Keep the original pending candidate pair and its fresh verified offsite snapshot.
+Do not rewrite the journal, substitute a backup, or weaken the served-byte probe.
+Qualify the explicit manifest Content-Type correction through main CI and publish
+its protected coordinator package. Authenticate and stage that exact package.
+Before the repair, validate the pending candidate, phase, original snapshot and
+installed tools. Require the serving Caddy include to equal the installed canonical
+include, and the approved replacement to differ only by the explicit manifest MIME
+header. Record both hashes, the approved revision and original snapshot privately.
+Use the existing reviewed atomic file replacement on the serving copy only, validate
+Caddy and reload gracefully without stopping services. Leave the canonical inventory
+unchanged so the original installed coordinator can run its standard online-recover
+against the original immutable candidates and snapshot. If that snapshot is no longer
+fresh or verified, stop and use the documented recovery procedure; never extend its
+age allowance. After the original rollout commits, install the new protected tools
+using the normal upgrade-online procedure with fresh verified offsite captures before
+and after. This aligns canonical configuration and inventory. Publish the matching
+main revisions through ordinary CI/CD and verify the new receipt and snapshot.

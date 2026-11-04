@@ -16,3 +16,4 @@ class MobilePublicationTests(unittest.TestCase):
   policy=(Path(__file__).resolve().parents[2]/"deployments/frontend/frontend.caddy").read_text()
   self.assertIn("manifest-src 'self'",policy)
   self.assertIn("worker-src 'self'",policy)
+  self.assertIn("header /manifest.webmanifest >Content-Type application/manifest+json",policy)
