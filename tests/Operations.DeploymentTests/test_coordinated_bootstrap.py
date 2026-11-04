@@ -18,7 +18,7 @@ class BootstrapTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory)
             archive = base / "bundle.tar.gz"
-            names, content = ["src/Operations.Deployment/example.py", "deployments/caddy/Caddyfile"], b"reviewed"
+            names, content = ["src/Operations.Deployment/example.py", "deployments/caddy/Caddyfile", "deployments/frontend/frontend.caddy"], b"reviewed"
             with tarfile.open(archive, "w:gz") as bundle:
                 for name in names:
                     entry = tarfile.TarInfo(name)

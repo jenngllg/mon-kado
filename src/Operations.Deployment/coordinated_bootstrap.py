@@ -24,7 +24,7 @@ def stage(archive, manifest_file, manifest_sha256, destination):
         path = PurePosixPath(name)
         if (not isinstance(name, str) or path.is_absolute() or str(path) != name or
                 any(part in (".", "..") for part in path.parts) or
-                not (name.startswith("src/Operations.") or name.startswith("deployments/production/") or name == "deployments/caddy/Caddyfile") or
+                not (name.startswith("src/Operations.") or name.startswith("deployments/production/") or name in {"deployments/caddy/Caddyfile", "deployments/frontend/frontend.caddy"}) or
                 not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest)):
             raise ValueError("invalid inventory")
     if archive.is_symlink() or not archive.is_file() or archive.stat().st_size > 32 * 1024 * 1024:
