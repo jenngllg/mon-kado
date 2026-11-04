@@ -281,11 +281,18 @@ class OnlineUpgradeRuntime(UpgradeRuntime):
     def install_backup_code(self, intent):
         """Reload the serving proxy only when its reviewed configuration actually changes."""
         proxy = "deployments/caddy/Caddyfile"
-        proxy_changed = intent["previousFiles"][proxy] != intent["manifest"]["files"][proxy]
+        proxy_changed = any(intent["previousFiles"][name] != intent["manifest"]["files"][name]
+                            for name in (proxy, "deployments/frontend/frontend.caddy"))
         if proxy_changed:
             from deploy_runtime import OnlineRuntime
             OnlineRuntime(root=self.root, state=self.state, settings=self.settings).route(7000)
         super().install_backup_code(intent)
+        frontend = "deployments/frontend/frontend.caddy"
+        if intent["previousFiles"][frontend] != intent["manifest"]["files"][frontend]:
+            # The serving include is an installed copy; update only the exact known old/new bytes.
+            replace_reviewed(self.root / "deployments/caddy/frontend/site.caddy",
+                             (self.source / frontend).read_bytes(), intent["previousFiles"][frontend],
+                             intent["manifest"]["files"][frontend], 0o644)
         if proxy_changed:
             self.native.run(["systemd-run", "--quiet", "--wait", "--pipe", "--collect",
                              "--unit=mon-kado-online-proxy-setup", "--property=EnvironmentFile=" + str(self.settings / "caddy.env"),

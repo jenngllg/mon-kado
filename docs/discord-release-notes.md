@@ -1,3 +1,4 @@
-- Dans Compte → Notifications, tu peux activer ou désactiver chacun des neuf types de notifications de la cloche. Tes choix sont enregistrés pour les prochaines notifications, y compris les rappels ; ton historique reste disponible.
-- Les rappels d’anniversaire reviennent chaque année à J-7 et J-1. Le 29 février est observé le 28 février les années non bissextiles.
-- Les prochaines occasions regroupent les listes d’un même anniversaire à partir de leur propriétaire vérifié, dans les limites de tes accès.
+- Compte → Notifications affiche un tableau unique avec les colonnes Dans MonKado et Notifications push, activées par type. Les push sont activés par défaut et les choix désactivés restent enregistrés.
+- Les push sont envoyés par le serveur, même lorsque tous les onglets MonKado sont fermés, après autorisation du navigateur. Sur iPhone et iPad, ajoute MonKado à l’écran d’accueil puis ouvre l’application installée pour les activer.
+- L’administration des comptes affiche les dates de création, les compteurs de listes, groupes et souhaits, ainsi que les ajouts confirmés via l’extension. L’historique inconnu reste indiqué comme tel.
+- Ajustements du journal d’activité et des cartes de listes suivies, avec conservation des parcours de partage déjà publiés.

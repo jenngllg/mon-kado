@@ -2,6 +2,11 @@ package domain
 
 // Stable error codes shared with API consumers.
 const (
+	PushDeviceLimit                        = "PUSH_DEVICE_LIMIT"
+	PushUnavailable                        = "PUSH_UNAVAILABLE"
+	PushSubscriptionVersionConflict        = "PUSH_SUBSCRIPTION_VERSION_CONFLICT"
+	PushSubscriptionNotFound               = "PUSH_SUBSCRIPTION_NOT_FOUND"
+	PushPreferencesVersionConflict         = "PUSH_PREFERENCES_VERSION_CONFLICT"
 	AccountImpersonationRestricted         = "ACCOUNT_IMPERSONATION_RESTRICTED"
 	AccountImpersonationDenied             = "ACCOUNT_IMPERSONATION_DENIED"
 	AccountImpersonationExpired            = "ACCOUNT_IMPERSONATION_EXPIRED"
@@ -116,7 +121,7 @@ const (
 // KnownErrorCode reports whether a value belongs to the compiled business error vocabulary.
 func KnownErrorCode(code string) bool {
 	switch code {
-	case MemberDataExportNotFound,
+	case PushPreferencesVersionConflict, PushSubscriptionNotFound, PushSubscriptionVersionConflict, PushUnavailable, PushDeviceLimit, MemberDataExportNotFound,
 		MemberDataExportNotReady,
 		MemberDataExportRateLimited,
 		MemberDataExportGenerationFailed,

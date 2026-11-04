@@ -44,3 +44,5 @@ Ces règles s'appliquent à `mon-kado` et `mon-kado-front`, en complément des p
 - Commits, titres et descriptions de PR en anglais.
 - Pour une règle de formatage, vérifier d'abord une option standard `.editorconfig` ; sinon documenter la règle dans le fichier AGENTS.md pertinent, sans conflit avec une règle existante.
 - Si une préférence récurrente nécessite le choix de Jenn, poser une question courte avec deux exemples.
+
+- Notifications mobiles, précision de Jenn le 4 novembre 2026 : Compte → Notifications présente un seul tableau des types avec exactement une colonne Dans MonKado et une colonne Notifications push, avec un interrupteur pour chaque ligne. Tous les types push sont activés par défaut ; conserver les choix désactivés en base indépendamment de la permission navigateur. Ne pas demander de nom d’appareil ni ajouter de colonnes ou de gestion d’appareils. L’autorisation navigateur est demandée lors du premier enregistrement d’un choix push sur l’appareil courant. Préciser l’ajout à l’écran d’accueil pour les push, obligatoire sur iPhone/iPad.

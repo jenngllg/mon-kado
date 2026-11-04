@@ -8,7 +8,7 @@ import tempfile
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src/Operations.Deployment"))
-from coordinated_integrity import BACKUP_FILES, COORDINATOR_FILES, CONFIG_UPGRADE_FILES, FILES, create, digest, validate, verify_installed
+from coordinated_integrity import BACKUP_FILES, COORDINATOR_FILES, CONFIG_UPGRADE_FILES, PRE_PUSH_CONFIG_UPGRADE_FILES, FILES, create, digest, validate, verify_installed
 from deploy_policy import DeploymentError
 
 
@@ -44,9 +44,13 @@ class CoordinatedIntegrityTests(unittest.TestCase):
     def test_historical_inventory_remains_valid_and_new_configuration_modules_are_checked(self):
         online = copy.deepcopy(self.manifest)
         for name in CONFIG_UPGRADE_FILES:
-            if name.startswith("src/Operations.Monitoring/") or name == "src/Operations.Deployment/deploy_engine.py":
+            if name not in PRE_PUSH_CONFIG_UPGRADE_FILES or name.startswith("src/Operations.Monitoring/") or name == "src/Operations.Deployment/deploy_engine.py":
                 online["files"].pop(name)
         self.assertEqual(online, validate(online, online["configurationHash"]))
+        previous = copy.deepcopy(self.manifest)
+        for name in set(CONFIG_UPGRADE_FILES) - set(PRE_PUSH_CONFIG_UPGRADE_FILES):
+            previous["files"].pop(name)
+        self.assertEqual(previous, validate(previous, previous["configurationHash"]))
         historical = copy.deepcopy(self.manifest)
         for name in CONFIG_UPGRADE_FILES:
             historical["files"].pop(name)

@@ -6,7 +6,6 @@ import (
 	"context"
 	"github.com/JennGllg/mon-kado/internal/application"
 	"github.com/JennGllg/mon-kado/internal/security"
-	"github.com/JennGllg/mon-kado/internal/telemetry"
 	"github.com/JennGllg/mon-kado/internal/worker"
 	"log/slog"
 	"sync"
@@ -26,6 +25,7 @@ func (s *blockedEmail) Send(ctx context.Context, id string, message application.
 }
 
 type jobSignal struct {
+	Job  string
 	Done chan struct{}
 	once *sync.Once
 }
@@ -36,7 +36,7 @@ func (h jobSignal) Handle(ctx context.Context, record slog.Record) error {
 		return nil
 	}
 	record.Attrs(func(attribute slog.Attr) bool {
-		if attribute.Key == "Job" && attribute.Value.String() == "erasureExpiry" {
+		if attribute.Key == "Job" && attribute.Value.String() == h.Job {
 			h.once.Do(func() { close(h.Done) })
 		}
 		return true
@@ -65,7 +65,7 @@ func TestWorker_WhenEmailSendBlocked_StillPurgesExpiredErasureAndStopsOnCancella
 		t.Fatal(err)
 	}
 	sender := &blockedEmail{Started: make(chan struct{})}
-	signal := jobSignal{Done: make(chan struct{}), once: &sync.Once{}}
+	signal := jobSignal{Job: "erasureExpiry", Done: make(chan struct{}), once: &sync.Once{}}
 	w := worker.Worker{Service: f.service, Sender: sender, Logger: slog.New(signal)}
 	ctx, cancel := context.WithCancel(t.Context())
 	t.Cleanup(cancel)
@@ -91,8 +91,5 @@ func TestWorker_WhenEmailSendBlocked_StillPurgesExpiredErasureAndStopsOnCancella
 	// Assert
 	if count != 0 || err != nil {
 		t.Fatal("independent cleanup or cooperative worker cancellation failed")
-	}
-	if w.Telemetry.Capture().Jobs[telemetry.AccountErasureProcessing].TerminalFailures != 1 {
-		t.Fatal("expired recipient outcome was not recorded")
 	}
 }

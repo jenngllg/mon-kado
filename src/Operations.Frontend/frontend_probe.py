@@ -14,7 +14,7 @@ FRONTEND = "https://www.monkado.fr"
 MAX_BODY = 20 * 1024 * 1024
 TOTAL_SECONDS = 120
 CONTENT_TYPES = {".html": {"text/html"}, ".js": {"text/javascript", "application/javascript"},
-                 ".css": {"text/css"}, ".json": {"application/json"}}
+                 ".css": {"text/css"}, ".json": {"application/json"}, ".webmanifest": {"application/manifest+json", "application/json"}, ".png": {"image/png"}}
 
 
 class Entrypoint(HTMLParser):
@@ -99,6 +99,7 @@ def probe(revision, directory, google_enabled=False, runner=subprocess.run, cloc
     files = ["release.json", "index.html"]
     files.extend(sorted(path.relative_to(directory).as_posix() for path in (directory / "assets").glob("*")
                         if path.suffix in {".js", ".css"}))
+    files.extend(sorted(name for name in contract.MOBILE_FILES if (directory / name).is_file()))
     files.extend(sorted(name for name in contract.LEGAL_PAGES if (directory / name).is_file()))
     contract.require(any(name.endswith(".js") for name in files))
     contract.require((directory / "index.html").stat().st_size <= MAX_BODY)

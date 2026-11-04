@@ -104,6 +104,10 @@ func (s *Service) CreateGroupSuggestion(ctx context.Context, member, group, wish
 		if _, err := s.suggestionAccess(ctx, tx, member, group, wishlist); err != nil {
 			return err
 		}
+
+		if err := recordExtensionAddition(ctx, tx, member, input.AddedViaExtension); err != nil {
+			return err
+		}
 		var count int
 		if err := tx.QueryRow(ctx, `SELECT count(*) FROM group_suggestions WHERE group_id=$1 AND wishlist_id=$2`, group, wishlist).Scan(&count); err != nil {
 			return err

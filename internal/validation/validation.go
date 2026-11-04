@@ -57,6 +57,8 @@ func ValidateAt(input any, now time.Time) error {
 	}
 	name := v.Type().Name()
 	required := map[string][]string{
+		"CreatePushSubscriptionRequest":        {"Endpoint", "Name"},
+		"UpdatePushSubscriptionRequest":        {"Name", "DisabledKinds"},
 		"UpdateNotificationPreferencesRequest": {"WishesAdded", "GroupJoined", "GroupInvitation", "OccasionReminder", "SharingReminder", "GroupWishlistShared", "ReservationUnavailable", "WishReserved", "SuggestionAdded"},
 		"SetWishlistGroupVisibilityRequest":    {"Groups"},
 		"SaveGroupRequest":                     {"Name"}, "InviteGroupMemberRequest": {"MemberId"},
@@ -87,6 +89,22 @@ func ValidateAt(input any, now time.Time) error {
 	if profile, ok := v.Interface().(domain.UpdateMemberProfileRequest); ok && profile.HasVisibilityPreference && profile.IsVisibleInMemberSearch == nil {
 		add("isVisibleInMemberSearch", fmt.Sprintf(mandatory, "isVisibleInMemberSearch"))
 	}
+	switch value := input.(type) {
+	case domain.CreatePushSubscriptionRequest:
+		if value.Endpoint != "" && !domain.ValidPushEndpoint(value.Endpoint) {
+			add("endpoint", "The push endpoint is invalid or unsupported.")
+		}
+		if !Text(value.Name, 60, false) {
+			add("name", "The device name must contain at most 60 characters.")
+		}
+		validatePushKinds(value.DisabledKinds, add)
+	case domain.UpdatePushSubscriptionRequest:
+		if !Text(value.Name, 60, false) {
+			add("name", "The device name must contain at most 60 characters.")
+		}
+		validatePushKinds(value.DisabledKinds, add)
+	}
+
 	for i := 0; i < v.NumField(); i++ {
 		field := v.Type().Field(i)
 		path := field.Tag.Get("json")
@@ -305,4 +323,19 @@ func Decode(decoder *json.Decoder, target any) error {
 		}
 	}
 	return nil
+}
+
+// validatePushKinds shares initial and subsequent channel validation.
+func validatePushKinds(kinds []string, add func(string, string)) {
+	seen := map[string]bool{}
+	for i, kind := range kinds {
+		switch kind {
+		case "wishesAdded", "groupJoined", "groupInvitation", "occasionReminder", "sharingReminder", "groupWishlistShared", "reservationUnavailable", "wishReserved", "suggestionAdded":
+			if !seen[kind] {
+				seen[kind] = true
+				continue
+			}
+		}
+		add(fmt.Sprintf("disabledKinds[%d]", i), "The notification type is invalid or duplicated.")
+	}
 }

@@ -43,6 +43,7 @@ type Config struct {
 	PublicAPIOrigin          string
 	TrustedProxies           []netip.Prefix
 	JobOptions               JobOptions
+	PushOptions              PushOptions
 	NotificationOptions      NotificationOptions
 	ImportOptions            ImportOptions
 	PerimeterOptions         PerimeterOptions
@@ -93,6 +94,10 @@ func Load() (Config, error) {
 		return c, errors.New("PROVIDER_BREAK_DURATION must be positive")
 	}
 	c.JobOptions, err = loadJobs()
+	if err != nil {
+		return c, err
+	}
+	c.PushOptions, err = loadPush()
 	if err != nil {
 		return c, err
 	}

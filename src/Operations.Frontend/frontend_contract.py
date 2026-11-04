@@ -17,6 +17,7 @@ SHA = r"[0-9a-f]{40}"
 DIGEST = r"[0-9a-f]{64}"
 FIELDS = {"schemaVersion", "revision", "backendRevision", "configurationHash", "apiOrigin", "archiveSha256"}
 LEGAL_PAGES = {"legal-notice.html", "privacy-policy.html", "terms-of-use.html"}
+MOBILE_FILES = {"manifest.webmanifest", "push-sw.js", "icons/monkado-192.png", "icons/monkado-512.png"}
 ASSET = re.compile(r"assets/[A-Za-z0-9_-][A-Za-z0-9._-]*\.(?:js|css|woff2?|ttf|png|webp|jpe?g|svg|ico|avif)")
 
 
@@ -70,7 +71,7 @@ def file_digest(path):
 
 def allowed_file(name):
     """Allow exactly the public documents, revision marker and flat static assets."""
-    return name in {ENTRYPOINT, MARKER} | LEGAL_PAGES or ASSET.fullmatch(name) is not None
+    return name in {ENTRYPOINT, MARKER} | LEGAL_PAGES | MOBILE_FILES or ASSET.fullmatch(name) is not None
 
 
 def release_marker(revision, google_enabled=False):

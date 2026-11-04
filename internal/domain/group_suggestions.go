@@ -7,11 +7,12 @@ import (
 
 // SaveGroupSuggestionRequest contains the editable fields of a private suggestion.
 type SaveGroupSuggestionRequest struct {
-	Name     *string      `json:"name"`
-	Note     *string      `json:"note"`
-	Url      *string      `json:"url"`
-	Price    *json.Number `json:"price"`
-	Quantity *int         `json:"quantity"`
+	AddedViaExtension *bool        `json:"addedViaExtension"`
+	Name              *string      `json:"name"`
+	Note              *string      `json:"note"`
+	Url               *string      `json:"url"`
+	Price             *json.Number `json:"price"`
+	Quantity          *int         `json:"quantity"`
 }
 
 // GroupSuggestionResponse is visible only to eligible members of its group.
