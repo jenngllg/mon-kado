@@ -10,6 +10,7 @@ import (
 	"github.com/JennGllg/mon-kado/internal/config"
 	"github.com/golang-jwt/jwt/v5"
 	"io"
+	"net"
 	"net/http"
 	"strings"
 	"testing"
@@ -67,5 +68,38 @@ func TestPush_WhenConstructed_DisablesProxiesRedirectsAndTransparentRetries(t *t
 	p := NewPush(config.Config{HTTPTimeout: 3 * time.Second}, time.Now)
 	if p.Client.Timeout != 3*time.Second || p.Client.Transport.(*http.Transport).Proxy != nil || p.Client.CheckRedirect(nil, nil) != http.ErrUseLastResponse {
 		t.Fatal("unsafe push transport")
+	}
+}
+
+func TestPushTransport_WhenAddressOrDNSIsUnsafe_RejectsBeforeAnyNetworkConnection(t *testing.T) {
+	// Arrange: replace DNS only; no request reaches a real provider in this test.
+	original := net.DefaultResolver
+	net.DefaultResolver = &net.Resolver{PreferGo: true, Dial: func(context.Context, string, string) (net.Conn, error) {
+		return nil, errors.New("simulated DNS outage")
+	}}
+	t.Cleanup(func() { net.DefaultResolver = original })
+	transport := NewPush(config.Config{HTTPTimeout: time.Second}, time.Now).Client.Transport.(*http.Transport)
+	for _, scenario := range []struct{ address, message string }{
+		{"bad-address", "invalid push address"},
+		{"fcm.googleapis.com:443", "push DNS failed"},
+		{"127.0.0.1:443", "push DNS is not public"},
+		{"[::1]:443", "push DNS is not public"},
+		{"169.254.169.254:443", "push DNS is not public"},
+	} {
+		t.Run(scenario.address, func(t *testing.T) {
+			// Act
+			connection, err := transport.DialContext(t.Context(), "tcp", scenario.address)
+			// Assert
+			if connection != nil || err == nil || err.Error() != scenario.message {
+				t.Fatal("unsafe dial was not rejected with a fixed diagnostic")
+			}
+		})
+	}
+	// A cancelled caller cannot establish a connection even to a checked public IP.
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	connection, err := transport.DialContext(ctx, "tcp", "1.1.1.1:443")
+	if connection != nil || err == nil {
+		t.Fatal("cancelled public dial established a connection")
 	}
 }

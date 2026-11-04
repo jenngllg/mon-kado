@@ -35,3 +35,15 @@ func TestPushOptions_WhenEnabled_RequiresMatchingKeysAndContact(t *testing.T) {
 		t.Fatal("disabled configuration requires keys")
 	}
 }
+
+func TestLoad_WhenPushConfigurationIsInvalid_RejectsBeforeApplicationStartup(t *testing.T) {
+	// Arrange
+	validEnvironment(t)
+	t.Setenv("PUSH_ENABLED", "invalid")
+	// Act
+	_, err := Load()
+	// Assert
+	if err == nil || err.Error() != "PUSH_ENABLED must be a boolean" {
+		t.Fatal("invalid push setting was not rejected by application configuration")
+	}
+}
