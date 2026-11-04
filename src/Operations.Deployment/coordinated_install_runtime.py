@@ -281,7 +281,8 @@ class OnlineUpgradeRuntime(UpgradeRuntime):
     def install_backup_code(self, intent):
         """Reload the serving proxy only when its reviewed configuration actually changes."""
         proxy = "deployments/caddy/Caddyfile"
-        proxy_changed = intent["previousFiles"][proxy] != intent["manifest"]["files"][proxy]
+        proxy_changed = any(intent["previousFiles"][name] != intent["manifest"]["files"][name]
+                            for name in (proxy, "deployments/frontend/frontend.caddy"))
         if proxy_changed:
             from deploy_runtime import OnlineRuntime
             OnlineRuntime(root=self.root, state=self.state, settings=self.settings).route(7000)

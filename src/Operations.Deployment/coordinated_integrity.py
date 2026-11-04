@@ -41,6 +41,8 @@ ONLINE_UPGRADE_FILES = PREVIOUS_UPGRADE_FILES + ("deployments/caddy/Caddyfile",)
 PRE_MIGRATION_UPGRADE_FILES = ONLINE_UPGRADE_FILES + (
     "src/Operations.Monitoring/monitor_deployment.py", "src/Operations.Monitoring/monitor_policy.py")
 CONFIG_UPGRADE_FILES = PRE_MIGRATION_UPGRADE_FILES + ("src/Operations.Deployment/deploy_engine.py",)
+PRE_PUSH_CONFIG_UPGRADE_FILES = CONFIG_UPGRADE_FILES
+CONFIG_UPGRADE_FILES = CONFIG_UPGRADE_FILES + ("src/Operations.Frontend/frontend_contract.py", "src/Operations.Frontend/frontend_probe.py", "deployments/frontend/frontend.caddy")
 FILES = COORDINATOR_FILES + CONFIG_UPGRADE_FILES + BACKUP_FILES
 MAXIMUM_FILE_BYTES = 2 * 1024 * 1024
 
@@ -76,6 +78,7 @@ def validate(value, configuration):
     files = value["files"]
     ensure(isinstance(files, dict) and set(files) in (set(FILES), set(LEGACY_FILES),
            set(COORDINATOR_FILES + PRE_MIGRATION_UPGRADE_FILES + BACKUP_FILES),
+           set(COORDINATOR_FILES + PRE_PUSH_CONFIG_UPGRADE_FILES + BACKUP_FILES),
            set(COORDINATOR_FILES + PREVIOUS_UPGRADE_FILES + BACKUP_FILES),
            set(COORDINATOR_FILES + ONLINE_UPGRADE_FILES + BACKUP_FILES)) and
            all(isinstance(digest, str) and re.fullmatch(r"[0-9a-f]{64}", digest) is not None for digest in files.values()),

@@ -1,3 +1,3 @@
-- Dans Compte → Notifications, tu peux activer ou désactiver chacun des neuf types de notifications de la cloche. Tes choix sont enregistrés pour les prochaines notifications, y compris les rappels ; ton historique reste disponible.
-- Les rappels d’anniversaire reviennent chaque année à J-7 et J-1. Le 29 février est observé le 28 février les années non bissextiles.
-- Les prochaines occasions regroupent les listes d’un même anniversaire à partir de leur propriétaire vérifié, dans les limites de tes accès.
+# Préparation des notifications mobiles
+
+Préparation technique de la réception des notifications lorsque MonKado est fermé, avec retour arrière compatible et publication sécurisée des fichiers mobiles. Le tableau push sera livré dans la mise à jour suivante.

@@ -45,11 +45,15 @@ NOTIFICATION_EXPANDED_CATALOG = "0a924f9b48095ff150e2d7517fff9fb1980fb4cec345500
 PREFERENCE_EXPANDED_CATALOG = "be71e86a53f80adab945479aa01a3a205a846ca0b76c8da088c8b437a0f64081"
 
 
+PUSH_EXPANDED_CATALOG = "f463b696a46be5a76ed90259562f105ae5346d4ee6d094cb051a81abae99d0b6"
+
+
 def notification_expansion(previous, candidate):
     """Recognize only the exact reviewed old and expanded notification catalogs."""
     return previous is not None and (fingerprint(previous["migrationCatalog"]), fingerprint(candidate["migrationCatalog"])) in {
         (NOTIFICATION_PREVIOUS_CATALOG, NOTIFICATION_EXPANDED_CATALOG),
         (NOTIFICATION_EXPANDED_CATALOG, PREFERENCE_EXPANDED_CATALOG),
+        (PREFERENCE_EXPANDED_CATALOG, PUSH_EXPANDED_CATALOG),
     }
 
 
@@ -72,7 +76,7 @@ class NotificationOnlineRuntime(OnlineRuntime):
     def migrate(self, release):
         # The immutable executable catalog is verified by Runtime.migrate. SQL
         # uses transaction-local lock/statement deadlines and never deletes data.
-        ensure(fingerprint(release["migrationCatalog"]) in {NOTIFICATION_EXPANDED_CATALOG, PREFERENCE_EXPANDED_CATALOG} and
+        ensure(fingerprint(release["migrationCatalog"]) in {NOTIFICATION_EXPANDED_CATALOG, PREFERENCE_EXPANDED_CATALOG, PUSH_EXPANDED_CATALOG} and
                release["rollbackAllowed"] is True, "ONLINE_SCHEMA_REVIEW_REQUIRED")
         return Runtime.migrate(self, release)
 

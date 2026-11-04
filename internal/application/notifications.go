@@ -28,7 +28,7 @@ LEFT JOIN wishes wish ON wish.id=n.subject_id AND wish.wishlist_id=w.id
 LEFT JOIN group_suggestions suggestion ON suggestion.id=n.subject_id AND suggestion.wishlist_id=w.id AND suggestion.group_id=g.id
 LEFT JOIN gift_reservation_histories history ON history.id=n.subject_id AND history.member_id=n.member_id
 LEFT JOIN wishlist_subscriptions subscription ON subscription.id=n.subscription_id AND subscription.member_id=n.member_id
-WHERE n.member_id=$1
+WHERE COALESCE((to_jsonb(n)->>'in_app')::boolean,true) AND n.member_id=$1
 AND (n.wishlist_id IS NULL OR (w.id IS NOT NULL AND NOT w.is_archived AND NOT w.is_suspended))
 AND (n.group_id IS NULL OR n.kind='groupInvitation' OR EXISTS(SELECT 1 FROM group_members gm WHERE gm.group_id=n.group_id AND gm.member_id=n.member_id))
 AND (n.subscription_id IS NULL OR (subscription.id IS NOT NULL AND (
