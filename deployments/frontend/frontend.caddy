@@ -21,6 +21,7 @@
 
 	route {
 		header Cache-Control no-store
+		header /manifest.webmanifest >Content-Type application/manifest+json
 		@unsupported not method GET HEAD
 		respond @unsupported 405
 
