@@ -50,9 +50,13 @@ func run() error {
 			return err
 		}
 	}
+	var pushSender application.PushSender
+	if cfg.PushOptions.Enabled {
+		pushSender = providers.NewPush(cfg, time.Now)
+	}
 	logger := logging.NewJSONLogger(os.Stdout, "worker", cfg.Observability().Version)
 	collector := telemetry.New("worker", time.Now, time.Now)
-	w := &worker.Worker{Service: application.New(store, cfg, time.Now), Sender: sender, Logger: logger, Telemetry: collector}
+	w := &worker.Worker{Service: application.New(store, cfg, time.Now), Sender: sender, PushSender: pushSender, Logger: logger, Telemetry: collector}
 	if options := cfg.Observability(); options.Enabled {
 		publisher := telemetry.Publisher{Collector: collector, Store: telemetry.FileStore{Directory: filepath.Join(options.Directory, "worker")}, Logger: logger}
 		defer publisher.Start(ctx, options.Interval)()

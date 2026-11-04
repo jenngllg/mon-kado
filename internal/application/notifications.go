@@ -19,7 +19,7 @@ const notificationOccasionDateMatches = `(CASE WHEN w.occasion='Birthday' THEN
 
 // All projections, including the badge and read commands, use the same live
 // authorization predicate. Historical notification identifiers grant no access.
-const notificationRelations = ` FROM member_notifications n
+const notificationAuthorizationRelations = ` FROM member_notifications n
 LEFT JOIN users actor ON actor.id=n.actor_id
 LEFT JOIN wishlist_participants participant ON participant.id=n.participant_id
 LEFT JOIN wishlists w ON w.id=n.wishlist_id
@@ -28,7 +28,7 @@ LEFT JOIN wishes wish ON wish.id=n.subject_id AND wish.wishlist_id=w.id
 LEFT JOIN group_suggestions suggestion ON suggestion.id=n.subject_id AND suggestion.wishlist_id=w.id AND suggestion.group_id=g.id
 LEFT JOIN gift_reservation_histories history ON history.id=n.subject_id AND history.member_id=n.member_id
 LEFT JOIN wishlist_subscriptions subscription ON subscription.id=n.subscription_id AND subscription.member_id=n.member_id
-WHERE COALESCE((to_jsonb(n)->>'in_app')::boolean,true) AND n.member_id=$1
+WHERE n.member_id=$1
 AND (n.wishlist_id IS NULL OR (w.id IS NOT NULL AND NOT w.is_archived AND NOT w.is_suspended))
 AND (n.group_id IS NULL OR n.kind='groupInvitation' OR EXISTS(SELECT 1 FROM group_members gm WHERE gm.group_id=n.group_id AND gm.member_id=n.member_id))
 AND (n.subscription_id IS NULL OR (subscription.id IS NOT NULL AND (
@@ -45,6 +45,8 @@ AND CASE n.kind
  WHEN 'suggestionAdded' THEN w.owner_id<>n.member_id AND suggestion.id IS NOT NULL AND EXISTS(SELECT 1 FROM visible_group_wishlists v WHERE v.group_id=g.id AND v.wishlist_id=w.id)
  WHEN 'reservationUnavailable' THEN history.id IS NOT NULL AND history.status='Unavailable'
  ELSE false END`
+
+const notificationRelations = notificationAuthorizationRelations + ` AND n.in_app`
 
 // Notifications returns a consistent, member-private page of currently visible notifications.
 func (s *Service) Notifications(ctx context.Context, member string, page, size int) (domain.PaginatedResponse[domain.NotificationResponse], error) {
@@ -154,12 +156,12 @@ func (s *Service) notify(ctx context.Context, tx pgx.Tx, member string, e notifi
 	}
 	now := s.Now().UTC()
 	if e.kind == "wishesAdded" {
-		command, err := tx.Exec(ctx, `UPDATE member_notifications SET quantity=quantity+1 WHERE id=(SELECT id FROM member_notifications WHERE member_id=$1 AND subscription_id=$2 AND kind='wishesAdded' AND read_at IS NULL AND created_at>=$3 AND NOT EXISTS(SELECT 1 FROM member_notification_preferences p WHERE p.member_id=$1 AND 'wishesAdded'=ANY(p.disabled_kinds)) ORDER BY created_at DESC,id DESC LIMIT 1 FOR UPDATE)`, member, e.subscription, now.Add(-s.Config.Notifications().GroupingWindow))
+		command, err := tx.Exec(ctx, `UPDATE member_notifications SET quantity=quantity+1 WHERE id=(SELECT id FROM member_notifications WHERE member_id=$1 AND subscription_id=$2 AND kind='wishesAdded' AND read_at IS NULL AND created_at>=$3 AND in_app=NOT EXISTS(SELECT 1 FROM member_notification_preferences p WHERE p.member_id=$1 AND 'wishesAdded'=ANY(p.disabled_kinds)) ORDER BY created_at DESC,id DESC LIMIT 1 FOR UPDATE)`, member, e.subscription, now.Add(-s.Config.Notifications().GroupingWindow))
 		if err != nil || command.RowsAffected() > 0 {
 			return err
 		}
 	}
-	_, err := tx.Exec(ctx, `INSERT INTO member_notifications(id,member_id,kind,actor_id,participant_id,wishlist_id,group_id,subscription_id,invitation_id,subject_id,deduplication_key,created_at,days_remaining,event_date) SELECT $1,$2,$3,NULLIF($4,'')::uuid,NULLIF($5,'')::uuid,NULLIF($6,'')::uuid,NULLIF($7,'')::uuid,NULLIF($8,'')::uuid,NULLIF($9,'')::uuid,NULLIF($10,'')::uuid,NULLIF($11,''),$12,$13,$14::date WHERE NOT EXISTS(SELECT 1 FROM member_notification_preferences p WHERE p.member_id=$2 AND $3=ANY(p.disabled_kinds)) ON CONFLICT(member_id,deduplication_key) DO NOTHING`, security.NewID(), member, e.kind, e.actor, e.participant, e.wishlist, e.group, e.subscription, e.invitation, e.subject, e.key, now, e.days, e.date)
+	_, err := tx.Exec(ctx, `INSERT INTO member_notifications(id,member_id,kind,actor_id,participant_id,wishlist_id,group_id,subscription_id,invitation_id,subject_id,deduplication_key,created_at,days_remaining,event_date,in_app) SELECT $1,$2,$3,NULLIF($4,'')::uuid,NULLIF($5,'')::uuid,NULLIF($6,'')::uuid,NULLIF($7,'')::uuid,NULLIF($8,'')::uuid,NULLIF($9,'')::uuid,NULLIF($10,'')::uuid,NULLIF($11,''),$12,$13,$14::date,NOT EXISTS(SELECT 1 FROM member_notification_preferences p WHERE p.member_id=$2 AND $3=ANY(p.disabled_kinds)) WHERE NOT EXISTS(SELECT 1 FROM member_notification_preferences p WHERE p.member_id=$2 AND $3=ANY(p.disabled_kinds)) OR EXISTS(SELECT 1 FROM member_push_subscriptions device JOIN authentication_sessions sess ON sess.id=device.session_id WHERE device.member_id=$2 AND member_push_kind_enabled(device.member_id,$3,device.disabled_kinds) AND sess.user_id=$2 AND sess.revoked_at IS NULL AND sess.expires_at>$12) ON CONFLICT(member_id,deduplication_key) DO UPDATE SET in_app=true WHERE NOT member_notifications.in_app AND excluded.in_app`, security.NewID(), member, e.kind, e.actor, e.participant, e.wishlist, e.group, e.subscription, e.invitation, e.subject, e.key, now, e.days, e.date)
 	return err
 }
 

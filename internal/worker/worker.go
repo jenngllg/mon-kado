@@ -22,6 +22,7 @@ import (
 type Worker struct {
 	Telemetry     *telemetry.Collector
 	telemetryOnce sync.Once
+	PushSender    application.PushSender
 	Service       *application.Service
 	Sender        application.EmailSender
 	Logger        *slog.Logger

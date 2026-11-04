@@ -36,8 +36,8 @@ func (s *Service) generateOccasionNotifications(ctx context.Context, tx pgx.Tx, 
 	rows, err := tx.Query(ctx, `SELECT s.member_id::text,s.id::text,w.id::text,w.owner_id::text,n.event_date::text,n.days_remaining FROM wishlist_subscriptions s JOIN wishlists w ON w.id=s.wishlist_id
 CROSS JOIN LATERAL (VALUES (($1::timestamptz AT TIME ZONE 'UTC')::date+7,7),(($1::timestamptz AT TIME ZONE 'UTC')::date+1,1)) n(event_date,days_remaining)
 WHERE NOT w.is_archived AND NOT w.is_suspended AND `+notificationOccasionDateMatches+`
-AND NOT EXISTS(SELECT 1 FROM member_notification_preferences p WHERE p.member_id=s.member_id AND 'occasionReminder'=ANY(p.disabled_kinds))
-AND NOT EXISTS(SELECT 1 FROM member_notifications existing WHERE existing.member_id=s.member_id AND existing.deduplication_key='occasion:'||w.owner_id||':'||w.occasion||':'||n.event_date||':'||n.days_remaining) ORDER BY w.id,s.id,n.event_date LIMIT $2`, now, s.Config.Jobs().BatchSize)
+AND (NOT EXISTS(SELECT 1 FROM member_notification_preferences p WHERE p.member_id=s.member_id AND 'occasionReminder'=ANY(p.disabled_kinds)) OR EXISTS(SELECT 1 FROM member_push_subscriptions device WHERE device.member_id=s.member_id AND member_push_kind_enabled(device.member_id,'occasionReminder',device.disabled_kinds)))
+AND NOT EXISTS(SELECT 1 FROM member_notifications existing WHERE existing.member_id=s.member_id AND existing.deduplication_key='occasion:'||w.owner_id||':'||w.occasion||':'||n.event_date||':'||n.days_remaining AND (existing.in_app OR EXISTS(SELECT 1 FROM member_notification_preferences p WHERE p.member_id=s.member_id AND 'occasionReminder'=ANY(p.disabled_kinds)))) ORDER BY w.id,s.id,n.event_date LIMIT $2`, now, s.Config.Jobs().BatchSize)
 	if err != nil {
 		return err
 	}
@@ -66,7 +66,7 @@ func (s *Service) notifyOccasion(ctx context.Context, tx pgx.Tx, r occasionNotif
 }
 
 func (s *Service) generateSharingNotifications(ctx context.Context, tx pgx.Tx, now time.Time) error {
-	rows, err := tx.Query(ctx, `SELECT w.owner_id::text,w.id::text FROM wishlists w WHERE NOT w.is_archived AND NOT w.is_suspended AND NOT w.sharing_reminder_dismissed AND w.created_at<=$1 AND EXISTS(SELECT 1 FROM wishes x WHERE x.wishlist_id=w.id) AND NOT EXISTS(SELECT 1 FROM wishlist_share_links l WHERE l.wishlist_id=w.id) AND NOT EXISTS(SELECT 1 FROM visible_group_wishlists v WHERE v.wishlist_id=w.id) AND NOT EXISTS(SELECT 1 FROM member_notification_preferences p WHERE p.member_id=w.owner_id AND 'sharingReminder'=ANY(p.disabled_kinds)) AND NOT EXISTS(SELECT 1 FROM member_notifications n WHERE n.member_id=w.owner_id AND n.deduplication_key='sharing:'||w.id) ORDER BY w.created_at,w.id LIMIT $2`, now.Add(-s.Config.Notifications().SharingReminderDelay), s.Config.Jobs().BatchSize)
+	rows, err := tx.Query(ctx, `SELECT w.owner_id::text,w.id::text FROM wishlists w WHERE NOT w.is_archived AND NOT w.is_suspended AND NOT w.sharing_reminder_dismissed AND w.created_at<=$1 AND EXISTS(SELECT 1 FROM wishes x WHERE x.wishlist_id=w.id) AND NOT EXISTS(SELECT 1 FROM wishlist_share_links l WHERE l.wishlist_id=w.id) AND NOT EXISTS(SELECT 1 FROM visible_group_wishlists v WHERE v.wishlist_id=w.id) AND (NOT EXISTS(SELECT 1 FROM member_notification_preferences p WHERE p.member_id=w.owner_id AND 'sharingReminder'=ANY(p.disabled_kinds)) OR EXISTS(SELECT 1 FROM member_push_subscriptions device WHERE device.member_id=w.owner_id AND member_push_kind_enabled(device.member_id,'sharingReminder',device.disabled_kinds))) AND NOT EXISTS(SELECT 1 FROM member_notifications n WHERE n.member_id=w.owner_id AND n.deduplication_key='sharing:'||w.id AND (n.in_app OR EXISTS(SELECT 1 FROM member_notification_preferences p WHERE p.member_id=w.owner_id AND 'sharingReminder'=ANY(p.disabled_kinds)))) ORDER BY w.created_at,w.id LIMIT $2`, now.Add(-s.Config.Notifications().SharingReminderDelay), s.Config.Jobs().BatchSize)
 	if err != nil {
 		return err
 	}

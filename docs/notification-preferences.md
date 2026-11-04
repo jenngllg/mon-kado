@@ -45,14 +45,22 @@ Run the normal native quality gate (`scripts/Test-Native.ps1 -Coverage`), then
 check the real local frontend/API together: keyboard toggling, explicit save,
 reload persistence, and the nine visible controls on mobile and desktop.
 
-Production publication follows the [reviewed exact 027 → 028 expansion](../deployments/online-notification-preferences.md).
-It requires the protected CI-qualified coordinator upgrade and a new coherent,
-verified, encrypted off-VPS backup before any migration or component switch.
-Unreviewed catalog changes remain refused. CI runs the previously published API
-against the expanded schema; both API and worker are upgraded so all producers
-enforce preferences.
+Production publication still requires the reviewed compatible schema-expansion
+procedure and a new coherent, verified, encrypted off-VPS backup. The existing
+online coordinator's new-migration rejection must not be bypassed. This feature
+alone does not qualify or execute that production transition. Test the previously
+published API against the expanded schema before rollout, and upgrade both API
+and worker so all producers enforce preferences.
 
 Rollback retains the additive settings table and all member choices. Previous
 binaries remain structurally compatible with it, but do not enforce these new
 opt-outs; that behavior change must be considered before reverting. Do not drop
 the table or reset member data as part of application rollback.
+
+## Existing local prototype
+
+The canonical local checkout has a separate historical migration sequence. Its
+matching additive migration is `030_notification_preferences.sql`; migration 028
+above identifies the isolated main-based feature branch. Existing local migration
+files are preserved. The local API and worker are rebuilt from the canonical
+backend, and the frontend is served from `../mon-kado-front`.
