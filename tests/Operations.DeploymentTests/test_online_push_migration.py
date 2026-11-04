@@ -75,8 +75,15 @@ class OnlinePushMigrationTests(OnlineNotificationMigrationTests):
         self.assertEqual(self.old,self.state["current"])
         self.assertEqual(expanded[:30],self.history)
         self.runtime.start.assert_called_with(self.old)
+        with self.assertRaisesRegex(DeploymentError,"PUBLICATION_REJECTED"):
+            self.engine.deploy(self.new)
+        # Recovery requires a separately approved publication, preserving the existing rejection guard.
+        replacement = copy.deepcopy(self.new)
+        replacement["publicationId"] = "789-1"
+        for binary in replacement["binaries"].values():
+            binary["url"] = binary["url"].replace("456-1", "789-1")
         self.runtime.migrate.side_effect = lambda _: self.history.__setitem__(slice(None),expanded)
-        self.engine.deploy(self.new)
+        self.engine.deploy(replacement)
         self.assertEqual(expanded,self.history)
 
     def test_foreign_or_reordered_partial_histories_are_not_accepted(self):
