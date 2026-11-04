@@ -33,6 +33,7 @@ class OnlineToolUpdateTests(unittest.TestCase):
         runtime = object.__new__(OnlineUpgradeRuntime)
         runtime.native = Mock()
         runtime.root, runtime.state, runtime.settings = map(Path, ("/installed", "/state", "/settings"))
+        runtime.source = Path("/reviewed")
         proxy = "deployments/caddy/Caddyfile"
         files = {proxy: "a"*64, "deployments/frontend/frontend.caddy":"c"*64}
         intent = {"previousFiles": files, "manifest": {"files": files | {changed:"b"*64}}}
@@ -40,11 +41,18 @@ class OnlineToolUpdateTests(unittest.TestCase):
         runtime.native.run.side_effect = lambda *args, **kwargs: events.append("reload")
         # Act
         with patch.object(UpgradeRuntime, "install_backup_code", side_effect=lambda value: events.append("install")), \
-             patch("deploy_runtime.OnlineRuntime") as router:
+             patch("deploy_runtime.OnlineRuntime") as router, \
+             patch("coordinated_install_runtime.replace_reviewed") as replace, \
+             patch.object(Path, "read_bytes", return_value=b"reviewed frontend"):
             router.return_value.route.side_effect = lambda port: events.append(("route", port))
             runtime.install_backup_code(intent)
         # Assert
         self.assertEqual([("route", 7000), "install", "reload"], events)
+        if changed == "deployments/frontend/frontend.caddy":
+            replace.assert_called_once_with(Path("/installed/deployments/caddy/frontend/site.caddy"),
+                                            b"reviewed frontend", "c"*64, "b"*64, 0o644)
+        else:
+            replace.assert_not_called()
         args = runtime.native.run.call_args.args[0]
         self.assertIn("reload", args)
         self.assertEqual("/installed/deployments/caddy/Caddyfile", args[args.index("--config") + 1])
