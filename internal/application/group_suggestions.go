@@ -120,6 +120,9 @@ func (s *Service) CreateGroupSuggestion(ctx context.Context, member, group, wish
 		if err != nil {
 			return err
 		}
+		if err := recordExtensionAddition(ctx, tx, member, input.AddedViaExtension); err != nil {
+			return err
+		}
 		return s.notifyRecipients(ctx, tx, notificationEvent{kind: "suggestionAdded", actor: member, wishlist: wishlist, group: group, subject: id}, `SELECT gm.member_id::text FROM group_members gm JOIN wishlists w ON w.id=$2 WHERE gm.group_id=$1 AND gm.member_id<>w.owner_id ORDER BY gm.member_id`, group, wishlist)
 	})
 	return result, version, err

@@ -97,6 +97,9 @@ func (s *Service) CreateWish(ctx context.Context, owner, wishlist string, reques
 		if err != nil {
 			return err
 		}
+		if err := recordExtensionAddition(ctx, tx, owner, request.AddedViaExtension); err != nil {
+			return err
+		}
 		return s.notifyWishAdded(ctx, tx, owner, wishlist)
 	})
 	return r, v, err
