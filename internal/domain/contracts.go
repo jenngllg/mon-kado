@@ -48,6 +48,7 @@ type CreateWishlistRequest struct {
 
 // CreateWishRequest preserves the versioned JSON contract.
 type CreateWishRequest struct {
+	AddedViaExtension *bool        `json:"addedViaExtension"`
 	IsSurprise        *bool        `json:"isSurprise"`
 	AcceptsSecondHand *bool        `json:"acceptsSecondHand"`
 	Color             *string      `json:"color"`

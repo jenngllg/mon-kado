@@ -1,3 +1,1 @@
-- Dans Compte → Notifications, tu peux activer ou désactiver chacun des neuf types de notifications de la cloche. Tes choix sont enregistrés pour les prochaines notifications, y compris les rappels ; ton historique reste disponible.
-- Les rappels d’anniversaire reviennent chaque année à J-7 et J-1. Le 29 février est observé le 28 février les années non bissextiles.
-- Les prochaines occasions regroupent les listes d’un même anniversaire à partir de leur propriétaire vérifié, dans les limites de tes accès.
+La page Comptes affiche désormais un tableau avec la date d’inscription, les nombres de listes, de groupes et de souhaits, ainsi qu’un indicateur pour les nouveaux ajouts effectués depuis l’extension. Les historiques inconnus restent indiqués comme tels. Les actions de simulation et de suppression sont regroupées dans ce tableau.

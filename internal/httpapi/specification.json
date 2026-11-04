@@ -20141,7 +20141,7 @@
                     "items": {
                       "type": "array",
                       "items": {
-                        "$ref": "#/components/schemas/AdministrativeMemberResponse"
+                        "$ref": "#/components/schemas/AdministrativeMemberSummaryResponse"
                       }
                     },
                     "currentPage": {
@@ -24991,6 +24991,11 @@
               "boolean",
               "null"
             ]
+          },
+          "addedViaExtension": {
+            "type": "boolean",
+            "nullable": true,
+            "description": "Set by the extension on creation only; records account usage atomically with a successful addition."
           }
         }
       },
@@ -26537,6 +26542,11 @@
                 "type": "null"
               }
             ]
+          },
+          "addedViaExtension": {
+            "type": "boolean",
+            "nullable": true,
+            "description": "Set by the extension on creation only; records account usage atomically with a successful addition."
           }
         }
       },
@@ -27028,6 +27038,57 @@
           "hasNextPage"
         ],
         "additionalProperties": false
+      },
+      "AdministrativeMemberSummaryResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "displayName",
+          "displayNameTag",
+          "createdAt",
+          "listCount",
+          "groupCount",
+          "wishCount",
+          "hasAddedViaExtension"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "displayNameTag": {
+            "type": "string",
+            "pattern": "^[0-9]{4}$"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "listCount": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "groupCount": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "wishCount": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "hasAddedViaExtension": {
+            "type": "boolean",
+            "nullable": true,
+            "description": "Whether this account has confirmed a wish or suggestion addition through the extension. Null for existing accounts with unknown history."
+          }
+        }
       }
     }
   }
