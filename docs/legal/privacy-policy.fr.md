@@ -2,10 +2,10 @@
 
 **Brouillon — non destiné à la publication**
 
-Dernière mise à jour du brouillon : 8 septembre 2026.
+Dernière mise à jour du brouillon : 6 novembre 2026.
 
-Ce document prépare la future page `/privacy-policy`. Il décrit le backend à la
-date de rédaction, pas un environnement de production vérifié. Les réglages
+Ce document accompagne le brouillon de la page `/privacy-policy`. Il décrit le
+fonctionnement examiné dans le code, pas un environnement de production vérifié. Les réglages
 définitifs et les éléments `LEGAL-*` doivent être validés avec la
 [checklist de publication](publication-checklist.md).
 
@@ -42,12 +42,12 @@ le compte ; les jetons d'accès Google ne sont pas conservés comme identifiants
 session MonKado. Google intervient dans le parcours de connexion choisi et traite
 également des données selon ses propres conditions, à vérifier avant publication.
 
-Votre photo de profil est facultative. **Les comptes dont l'adresse e-mail est
-confirmée peuvent être recherchés sans connexion par leur pseudo.** Les résultats
-exposent l'identifiant public, le pseudo et la photo actuelle lorsqu'elle existe,
-mais pas l'adresse e-mail. La photo est donc publique, et non réservée aux membres
-de vos listes. Ne choisissez pas de pseudo ou de photo que vous souhaitez garder
-confidentiels.
+Votre photo de profil est facultative. Les comptes confirmés dont la visibilité
+dans la recherche est activée peuvent être recherchés par leur pseudo ou leur
+pseudo et tag. Les résultats exposent l'identifiant public, le pseudo, son tag et
+la photo actuelle, mais pas l'adresse e-mail. Désactiver cette visibilité ne rend
+pas privé un profil dont une personne connaît déjà l'adresse. Ne choisissez pas
+de pseudo ou de photo que vous souhaitez garder confidentiels.
 
 Le compte confirmé n'a pas de purge automatique d'inactivité identifiée dans ce
 backend. Il reste conservé jusqu'à sa suppression ; la justification de ce
@@ -61,15 +61,29 @@ bas.
 Les noms, notes, liens marchands, prix, quantités, ordre des cadeaux et images
 proviennent du propriétaire ou d'un import qu'il confirme. Ils servent à préparer
 et consulter les listes. Une liste est accessible à son propriétaire et, après
-partage, aux personnes disposant du lien et de son secret. Le lien peut être
-transmis à d'autres personnes : il ne faut pas le considérer comme une invitation
-limitée à un destinataire nominatif.
+partage, par un lien public, dans des groupes, ou par les deux moyens. Les listes
+avec un lien public actif sont aussi accessibles depuis le profil public, sans
+compte. Le lien peut être retransmis : il ne constitue pas une invitation limitée
+à un destinataire nominatif.
 
 Les consultations partagées donnent accès au contenu prévu pour les visiteurs,
 images comprises. Elles ne donnent pas accès aux identités des réservants. La
 recherche publique des profils ne rend pas les listes privées publiques. Les
 administrateurs habilités peuvent consulter le contenu actuel d'une liste
 signalée pour les besoins de la modération.
+
+Une liste avec un lien public actif est visible par défaut dans les groupes de
+son propriétaire, sauf ceux qu'il exclut. Une liste sans lien public nécessite
+un partage de groupe distinct. La révocation du lien public n'annule pas un
+partage de groupe explicite. La sortie d'un groupe ou la perte d'accès retire
+les droits liés à ce groupe sans désactiver un lien public indépendant.
+
+Les idées surprises sont réservées aux membres autorisés du groupe concerné et
+restent cachées au bénéficiaire. Le mode surprise d'une liste masque au
+propriétaire les réservations des autres participants et leur identité, y compris
+dans ses notifications. Hors mode surprise, le propriétaire peut connaître le
+souhait réservé et le nom affiché de la personne qui le réserve ; ces informations
+ne deviennent pas publiques.
 
 Les images sont normalisées en WebP avec suppression des métadonnées ; le service
 ne conserve pas l'image originale ni son nom comme fichier métier. Les images
@@ -89,8 +103,8 @@ Un invité fournit un pseudo et reçoit un identifiant technique de session dans
 son navigateur. Les participations relient un invité ou un membre à une liste.
 Les quantités réservées et les dates servent à gérer les disponibilités et à
 éviter la surréservation. Les parcours personnels donnent au participant accès à
-ses propres réservations ; le propriétaire ne reçoit pas les identités des
-réservants par les réponses de gestion de ses cadeaux.
+ses propres réservations. L'information du propriétaire dépend du mode surprise
+courant de la liste, comme décrit ci-dessus.
 
 La session invitée expire après 180 jours par défaut. **L'expiration ou la
 suppression du cookie ne supprime pas la participation ni les réservations.** Une
@@ -110,8 +124,57 @@ du cookie comme leur durée de conservation.
 Vous pouvez enregistrer un lien de produit avec un souhait. MonKado ne consulte
 pas automatiquement ce lien pour remplir les informations du souhait. Si vous
 ouvrez le lien, vous quittez le service et les pratiques du site destination
-s'appliquent. L'extension facultative peut lire la page consultée dans votre
-navigateur ; ses fonctionnalités sont distinctes du formulaire MonKado.
+s'appliquent.
+
+### Extension de navigateur
+
+L'extension est facultative. À son ouverture sur une page produit, elle lit le
+lien, le nom, le prix et les adresses des images pour préparer un souhait ou une
+idée surprise. Elle dispose d'un accès temporaire à l'onglet actif et dialogue
+avec votre onglet MonKado connecté pour consulter les destinations autorisées
+et transmettre vos ajouts. Elle ne consulte pas votre historique général de
+navigation et ne conserve ni mot de passe ni jetons de connexion.
+
+L'affichage et la préparation des images peuvent contacter leur marchand ou
+hébergeur. Si la lecture depuis le navigateur échoue, l'adresse de l'image
+sélectionnée peut être transmise au serveur MonKado pour la préparer, avant la
+confirmation de l'ajout. Le souhait ou l'idée est enregistré dans les destinations
+choisies après confirmation, avec les mêmes droits d'accès et règles de
+suppression que les contenus créés sur le site. Désinstaller l'extension ne
+supprime pas les contenus déjà enregistrés.
+
+Un indicateur associé au compte permet de savoir si un ajout a déjà été effectué
+avec l'extension, pour le suivi de son utilisation. Il est accessible aux
+administrateurs habilités et supprimé avec le compte.
+
+### Notifications dans MonKado et notifications push
+
+Les notifications portent sur les activités et rappels du service. Le membre
+choisit leurs types dans les paramètres du compte, séparément pour l'affichage
+dans MonKado et les push. Les push nécessitent aussi l'autorisation du navigateur
+ou du système, révocable dans ses réglages, et peuvent arriver lorsque les onglets
+MonKado sont fermés.
+
+Le serveur conserve une adresse technique d'abonnement chiffrée, liée au compte
+et à sa session, et les préférences du membre. Selon le navigateur, les services
+d'Apple, de Google ou de Mozilla acheminent un signal sans nom de personne,
+contenu de souhait ni lien privé. L'appareil affiche un message générique invitant
+à ouvrir MonKado. Les traitements de nettoyage retirent les abonnements invalides
+ou liés à une session expirée ou révoquée ; les abonnements sont supprimés avec
+le compte. Les conditions et éventuels transferts de ces prestataires restent
+à examiner dans LEGAL-06 ; les durées de la file de livraison et des notifications
+doivent être documentées dans LEGAL-07.
+
+### Traces d'utilisation et accès administratifs
+
+Des traces d'utilisation associées au compte servent au suivi du fonctionnement,
+au diagnostic et à l'administration du service. Elles comprennent les types de
+pages consultées, les actions et certaines informations saisies, notamment les
+textes des listes et des souhaits, en excluant les mots de passe, les jetons et le
+contenu des idées surprises privées. Elles deviennent éligibles au nettoyage
+après 90 jours et sont supprimées avec le compte. Les administrateurs habilités
+peuvent consulter et modifier les données nécessaires à l'assistance et à
+l'administration ; leurs interventions sont enregistrées.
 
 ### Signalements et modération
 
@@ -167,6 +230,12 @@ Une fin de session de navigateur dépend aussi de ses fonctions de restauration.
 La validité d'un jeton n'est pas une garantie de purge physique immédiate des
 enregistrements serveur. Les cookies de Google sur ses propres domaines relèvent
 également de ses pratiques.
+
+Un lien de partage ou d'invitation peut rester temporairement dans le stockage
+de l'onglet pour poursuivre le parcours. Le navigateur conserve aussi des
+préférences locales liées à l'application installée et à l'invitation à activer
+les notifications. L'abonnement push et les préférences conservées côté serveur
+sont décrits dans la section sur les notifications.
 
 Ces mécanismes ont des fonctions techniques. Leur qualification finale et
 l'inventaire complet du frontend restent à valider dans LEGAL-08. Aucun bandeau

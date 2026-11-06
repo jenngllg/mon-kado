@@ -3,9 +3,13 @@
 package httpapi_test
 
 import (
+	"io"
+	"log/slog"
+	"strings"
 	"testing"
 
 	"github.com/JennGllg/mon-kado/internal/domain"
+	"github.com/JennGllg/mon-kado/internal/httpapi"
 	"github.com/JennGllg/mon-kado/internal/security"
 )
 
@@ -60,6 +64,19 @@ func TestAdministration_WhenCallerLacksCurrentAdministratorMFA_RejectsWithoutEff
 			requireStatus(t, f.send(t, "GET", "/api/v1/admin/audit-events", "", nil), scenario.status, nil)
 			requireStatus(t, f.send(t, "GET", "/api/v1/admin/members", "", nil), scenario.status, nil)
 			requireStatus(t, f.send(t, "GET", "/api/v1/admin/members/"+target, "", nil), scenario.status, nil)
+			// Exercise every registered administrator operation, including future routes,
+			// before input validation, so malformed payloads cannot mask missing guards.
+			api := httpapi.New(f.service, slog.New(slog.NewJSONHandler(io.Discard, nil)))
+			replace := strings.NewReplacer("{memberId}", target, "{wishlistId}", list.Id, "{wishId}", wish.Id, "{reportId}", security.NewID(), "{exportId}", security.NewID(), "{impersonationId}", security.NewID())
+			for _, pattern := range api.Patterns() {
+				method, path, _ := strings.Cut(pattern, " ")
+				if !strings.HasPrefix(path, "/api/v1/admin/") {
+					continue
+				}
+				t.Run(pattern, func(t *testing.T) {
+					requireStatus(t, f.send(t, method, replace.Replace(path), input, nil), scenario.status, nil)
+				})
+			}
 
 			// Assert: the target session and owned data remain usable through public contracts.
 			f.access = targetAccess

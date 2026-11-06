@@ -30,7 +30,7 @@ class ProbeTests(unittest.TestCase):
     def test_verify_reports_only_boolean_evidence(self):
         # Arrange
         responses = [(308, {"location": probe.API + "/readiness"}), (200, {
-            "strict-transport-security": "max-age=31536000", "content-security-policy": "default-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+            "strict-transport-security": "max-age=31536000; includeSubDomains", "content-security-policy": "default-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
             "x-content-type-options": "nosniff", "x-frame-options": "DENY", "referrer-policy": "no-referrer"}),
             (204, {"access-control-allow-origin": probe.FRONTEND, "access-control-allow-credentials": "true"}), (204, {})]
         send = Mock(side_effect=responses)

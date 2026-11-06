@@ -125,12 +125,12 @@ class CoordinatedBackend:
         ensure(checks == {"technical": True, "functional": True, "frontend": True}, "BACKEND_VERIFICATION_FAILED")
 
     def verify_contract(self, candidate):
-        """Match the actual local HTTPS API schema to the protected frontend proof."""
+        """Match the verified executable source contract to the protected frontend proof."""
         self.gate.verify()
         self.verify_schema(candidate)
 
     def verify_schema(self, pair):
-        """Compare the actual local API to the retained immutable schema proof."""
-        status, _, body = self.runtime.clients().request("GET", "/openapi/v1.json")
-        ensure(status == 200 and hashlib.sha256(body).hexdigest() == pair["proof"]["openapiSha256"],
+        """Compare verified executable source to the retained immutable schema proof."""
+        body = self.runtime.schema(pair["backend"])
+        ensure(hashlib.sha256(body).hexdigest() == pair["proof"]["openapiSha256"],
                "BACKEND_CONTRACT_CHANGED")

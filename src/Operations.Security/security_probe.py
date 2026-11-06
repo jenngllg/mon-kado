@@ -38,7 +38,7 @@ def verify(send=fetch):
     return {
         "httpsHealthy": status == 200,
         "canonicalHttpsRedirect": http_status == 308 and http_headers.get("location") == API + "/readiness",
-        "hsts": headers.get("strict-transport-security") == "max-age=31536000",
+        "hsts": headers.get("strict-transport-security") == "max-age=31536000; includeSubDomains",
         "apiCsp": headers.get("content-security-policy") == "default-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
         "nosniff": headers.get("x-content-type-options") == "nosniff",
         "noFraming": headers.get("x-frame-options") == "DENY",

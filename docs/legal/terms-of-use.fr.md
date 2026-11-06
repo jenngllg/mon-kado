@@ -2,7 +2,7 @@
 
 **Brouillon — non destiné à la publication**
 
-Dernière mise à jour du brouillon : 8 septembre 2026.
+Dernière mise à jour du brouillon : 6 novembre 2026.
 
 Ce document prépare la future page `/terms-of-use`. Les règles proposées doivent
 être approuvées avant publication et ne sont pas réputées acceptées par les
@@ -35,7 +35,8 @@ un compte membre ou le parcours invité disponible.
 Protégez vos identifiants et les moyens d'accès conservés par votre navigateur.
 N'utilisez pas le compte d'une autre personne sans autorisation. Un pseudo peut
 être partagé par plusieurs utilisateurs : il ne garantit pas une identité civile.
-La recherche publique expose le pseudo et la photo actuelle des comptes confirmés.
+La recherche publique expose le pseudo, son tag et la photo actuelle des comptes
+confirmés dont la visibilité dans la recherche est activée.
 
 Une session invitée permet de retrouver une participation depuis le navigateur
 concerné. Effacer ses cookies peut faire perdre cet accès sans supprimer les
@@ -58,6 +59,18 @@ transmettez un lien de partage. Un destinataire peut retransmettre ce lien ou
 conserver une copie d'un contenu consulté. Évitez donc de partager des informations
 que vous souhaitez garder confidentielles.
 
+Un lien public actif rend la liste accessible sans compte et visible sur le
+profil public. Elle devient aussi visible par défaut dans les groupes de son
+propriétaire, sauf ceux qu'il exclut. Une liste sans lien public n'est accessible
+aux autres membres que dans les groupes auxquels elle est partagée. Révoquer le
+lien public et retirer un partage de groupe sont deux actions distinctes.
+
+Les idées surprises restent réservées au groupe concerné et cachées au
+bénéficiaire. Le mode surprise d'une liste masque au propriétaire les réservations
+des autres participants et leur identité. Hors mode surprise, le propriétaire
+peut connaître le souhait réservé et le nom affiché de la personne qui le réserve,
+sans rendre ces informations publiques.
+
 Vérifiez les informations de vos cadeaux avant de les publier. Les images sont
 normalisées pour leur affichage ; le service n'est pas un outil de conservation
 des originaux. Un remplacement, une suppression ou une révocation du partage
@@ -76,11 +89,17 @@ concernent les quantités souhaitées et réservées dans la liste, pas le stock
 vendeur. Une modification, suppression ou suspension de la ressource peut limiter
 les opérations disponibles.
 
-## 5. Liens marchands et import assisté
+## 5. Liens marchands et extension facultative
 
 Les prix, descriptions et liens sont saisis par les utilisateurs ou proposés à
-partir de pages marchandes. L'import fournit un aperçu modifiable, pas une garantie
+partir de pages marchandes par l'extension facultative. Elle fournit un aperçu modifiable, pas une garantie
 d'exactitude, d'actualisation du prix, de stock ou de livraison.
+
+L'extension permet de préparer des souhaits et des idées surprises puis de les
+ajouter aux destinations autorisées que vous confirmez. Elle ne réserve aucun
+stock chez le marchand et ne déclenche ni achat ni paiement. Désinstaller
+l'extension laisse les contenus déjà enregistrés dans MonKado. Ses accès au
+navigateur et échanges de données sont décrits dans la politique de confidentialité.
 
 Vérifiez le produit, le prix total et les conditions auprès du marchand avant tout
 achat. L'achat éventuel se déroule sur son site, selon les conditions de ce vendeur,
@@ -143,6 +162,12 @@ Le service peut subir des interruptions de maintenance ou des incidents. Les
 fonctions d'import, d'envoi d'e-mails et de connexion externe dépendent également
 de prestataires tiers. Ce brouillon ne promet ni disponibilité permanente, ni
 absence de perte de données, ni réception garantie d'un e-mail.
+
+Les types de notifications dans MonKado et en push se règlent séparément dans le
+compte. Les push nécessitent aussi l'autorisation du navigateur ou du système.
+Leur réception dépend de ces réglages et des services d'acheminement : un rappel
+peut être retardé ou ne pas arriver ; sa réception à une date précise n'est pas
+garantie.
 
 **À compléter — LEGAL-15 :** engagements réellement assurés par l'éditeur et
 répartition des responsabilités adaptée à son statut et au service. Il ne s'agit

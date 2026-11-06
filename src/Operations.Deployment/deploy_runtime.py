@@ -126,6 +126,22 @@ class Runtime:
             current = self.container(service)
             ensure(current["running"] is True and current["image"] == release["binaries"][service]["sha256"], "ACTIVE_RELEASE_MISMATCH")
 
+    def schema(self, release):
+        """Read the immutable source contract after verifying its exact published executables."""
+        self.catalog(release)
+        revision = release["revision"]
+        ensure(isinstance(revision, str) and re.fullmatch(r"[0-9a-f]{40}", revision), "INVALID_REVISION")
+        maximum = 2 * 1024 * 1024
+        body = self.run(["curl", "--disable", "--fail", "--silent", "--show-error", "--max-redirs", "0",
+                         "--proto", "=https", "--noproxy", "*", "--connect-timeout", "10", "--max-time", "30",
+                         "--max-filesize", str(maximum),
+                         f"https://raw.githubusercontent.com/jenngllg/mon-kado/{revision}/internal/httpapi/specification.json"], maximum=maximum)
+        ensure(isinstance(body, bytes) and len(body) <= maximum, "BACKEND_CONTRACT_CHANGED")
+        schema = json.loads(body)
+        ensure(isinstance(schema, dict) and schema.get("openapi", "").startswith("3.") and
+               "/api/v1/auth/sessions" in schema.get("paths", {}), "BACKEND_CONTRACT_CHANGED")
+        return body
+
     def catalog(self, release):
         """Verify the embedded SQL catalog only after checking the approved binary digests."""
         native_artifacts.inspect(self.directory(release), release, self.run)

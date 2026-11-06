@@ -23,6 +23,9 @@ func (a *API) Patterns() []string {
 }
 
 func (a *API) registerOpenAPI() {
+	if a.Service.Config.Production {
+		return
+	}
 	a.mux.HandleFunc("GET /openapi/v1.json", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.Write(specification)

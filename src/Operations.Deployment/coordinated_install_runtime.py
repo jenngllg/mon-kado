@@ -192,8 +192,8 @@ class UpgradeRuntime(InstallationRuntime):
         CoordinatedFrontend(self.publisher, self.gate).verify_original(pair)
         self.publisher.health(pair["frontend"]["revision"], self.publisher.releases / pair["frontend"]["revision"],
                               pair["frontend"].get("googleEnabled", False))
-        status, _, body = self.native.clients().request("GET", "/openapi/v1.json")
-        ensure(status == 200 and hashlib.sha256(body).hexdigest() == pair["proof"]["openapiSha256"], "BACKEND_CONTRACT_CHANGED")
+        body = self.native.schema(expected)
+        ensure(hashlib.sha256(body).hexdigest() == pair["proof"]["openapiSha256"], "BACKEND_CONTRACT_CHANGED")
         return actual
 
     def preflight(self, manifest, backup):

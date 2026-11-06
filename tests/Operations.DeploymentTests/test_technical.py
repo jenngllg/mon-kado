@@ -20,6 +20,24 @@ class TechnicalTests(unittest.TestCase):
         check(client)
         self.assertEqual(6, client.request.call_count)
 
+    def test_production_hides_documentation_while_health_csrf_and_security_remain_verified(self):
+        headers = SECURITY | {"strict-transport-security": "max-age=31536000; includeSubDomains", "access-control-allow-origin": ORIGIN,
+                              "access-control-allow-credentials": "true", "cache-control": "no-store"}
+        for status, body, accepted in [(404, {"statusCode":404,"errorCode":"REQUEST_NOT_FOUND"}, True),
+                                       (404, {"statusCode":404,"errorCode":"WRONG"}, False),
+                                       (404, {"statusCode":404,"errorCode":"REQUEST_NOT_FOUND","paths":{}}, False),
+                                       (503, {}, False)]:
+            with self.subTest(status=status, body=body):
+                client = Mock(spec=["request"])
+                client.request.side_effect = [(200, headers, b"Healthy"), (200, headers, b"Healthy"),
+                    (status, headers, json.dumps(body).encode()), (200, headers, json.dumps({"token":"a"*32}).encode()),
+                    (204, headers, b""), (204, {}, b"")]
+                if accepted:
+                    check(client)
+                    self.assertEqual(6, client.request.call_count)
+                else:
+                    with self.assertRaises(DeploymentError): check(client)
+
     def test_rejects_200_with_missing_security(self):
         client = Mock()
         client.request.return_value = (200, {}, b"Healthy")

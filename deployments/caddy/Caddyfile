@@ -16,7 +16,7 @@ import /opt/monkado/deployments/caddy/frontend/*.caddy
 (api-security-headers) {
 	header {
 		-Server
-		>Strict-Transport-Security "max-age=31536000"
+		>Strict-Transport-Security "max-age=31536000; includeSubDomains"
 		>Content-Security-Policy "default-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
 		>X-Content-Type-Options "nosniff"
 		>X-Frame-Options "DENY"
