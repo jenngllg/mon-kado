@@ -400,6 +400,12 @@ func TestAccountDeletion_WhenConfirmed_RemovesIdentityAndPublicResources(t *test
 		t.Fatal(err)
 	}
 	link, _ := url.Parse(message.ActionURL)
+	if link.Path != "/confirm-account-deletion" {
+		t.Fatalf("account deletion confirmation path = %q", link.Path)
+	}
+	if proof := actionCredentials(t, link); len(proof) != 1 || proof.Get("token") == "" {
+		t.Fatal("account deletion link must contain only its opaque token")
+	}
 	confirmation, _ := json.Marshal(map[string]string{"token": actionCredentials(t, link).Get("token")})
 	requireStatus(t, f.send(t, "POST", "/api/v1/members/current/deletion-requests/confirm", string(confirmation), nil), 204, nil)
 	// Assert

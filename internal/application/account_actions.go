@@ -117,7 +117,7 @@ func (s *Service) PrepareAuthenticationEmail(ctx context.Context, outboxID strin
 				err = tx.QueryRow(ctx, `SELECT member_email_change_request_id::text FROM authentication_email_outbox WHERE id=$1`, outboxID).Scan(&requestID)
 			}
 			if kind == "ACCOUNT_DELETION_CONFIRMATION" {
-				purpose, path, lifetime = "accountDeletion", "/account/delete/confirm", 30*time.Minute
+				purpose, path, lifetime = "accountDeletion", "/confirm-account-deletion", 30*time.Minute
 				err = tx.QueryRow(ctx, `SELECT member_account_deletion_request_id::text FROM authentication_email_outbox WHERE id=$1`, outboxID).Scan(&requestID)
 			}
 			if err != nil {
@@ -128,6 +128,10 @@ func (s *Service) PrepareAuthenticationEmail(ctx context.Context, outboxID strin
 				return err
 			}
 			query := url.Values{"requestId": {requestID}, "token": {token}}
+			if kind == "ACCOUNT_DELETION_CONFIRMATION" {
+				// The opaque action already binds the request to its authenticated owner.
+				query.Del("requestId")
+			}
 			message.Subject = "Confirm your MonKado account operation"
 			message.Text = s.Config.FrontendOrigin + path + "#" + query.Encode()
 		}

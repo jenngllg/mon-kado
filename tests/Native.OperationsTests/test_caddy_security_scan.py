@@ -26,6 +26,7 @@ class CaddyScanTests(unittest.TestCase):
     def test_verify_whenFindingCanAffectExecutable_rejects(self):
         for name, advisory, frame, graph in (
             ("http2", "GO-2026-6617", {"package": "net/http", "function": "Serve"}, {"net/http"}),
+            ("compression", "GO-2026-6865", {"package": "github.com/klauspost/compress/fse", "function": "Decompress"}, {"github.com/klauspost/compress/fse"}),
             ("openpgpImported", "GO-2026-5932", {"package": "golang.org/x/crypto/openpgp", "function": "*"}, {"golang.org/x/crypto/openpgp/armor"}),
             ("concreteSymbol", "GO-2026-5932", {"package": "golang.org/x/crypto/openpgp", "function": "ReadMessage"}, {"net/http"}),
             ("unexpectedPackage", "GO-2026-5932", {"package": "golang.org/x/crypto/ocsp", "function": "*"}, {"net/http"}),

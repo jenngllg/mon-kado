@@ -88,6 +88,9 @@ func (s *Service) copyWish(ctx context.Context, member, destination, source, wis
 			}
 			missingWish = domain.SharedWishNotFound
 		}
+		if source == destination {
+			return domain.Failure(409, domain.WishCopySameWishlist, "The source and destination wishlists must be different.")
+		}
 		var name string
 		var note, color, size, address, price, image *string
 		var quantity int
@@ -131,7 +134,10 @@ func (s *Service) copyWish(ctx context.Context, member, destination, source, wis
 			return err
 		}
 		result, version, err = s.scanWish(member, tx.QueryRow(ctx, `INSERT INTO wishes(id,wishlist_id,name,note,url,price,quantity,position,created_at,image_id,image_content_hash,color,size,is_surprise,accepts_second_hand) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING `+wishColumns, security.NewID(), destination, name, note, address, price, quantity, position+1, s.Now().UTC(), copiedImage, hash, color, size, surprise, secondHand))
-		return err
+		if err != nil {
+			return err
+		}
+		return s.notifyWishAdded(ctx, tx, member, destination)
 	})
 	if staged != "" {
 		if err != nil {

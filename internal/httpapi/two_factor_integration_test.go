@@ -54,7 +54,7 @@ func TestTwoFactor_WhenAdministratorEnrollsAndRecovers_RequiresReplacementBefore
 	requireStatus(t, f.send(t, "GET", "/api/v1/members/current/two-factor", "", nil), 200, &status)
 	f.access = ""
 	requireStatus(t, f.send(t, "POST", "/api/v1/auth/sessions", login, nil), 202, &challenge)
-	requireStatus(t, f.send(t, "POST", "/api/v1/auth/two-factor/completions", jsonInput(t, map[string]string{"flow": challenge.Flow, "code": code}), nil), 401, nil)
+	requireStatus(t, f.send(t, "POST", "/api/v1/auth/two-factor/completions", jsonInput(t, map[string]string{"flow": challenge.Flow, "code": code}), nil), 400, nil)
 	requireStatus(t, f.send(t, "POST", "/api/v1/auth/two-factor/completions", jsonInput(t, map[string]string{"flow": challenge.Flow, "recoveryCode": codes.RecoveryCodes[0]}), nil), 202, &challenge)
 	requireStatus(t, f.send(t, "POST", "/api/v1/auth/two-factor/completions", jsonInput(t, map[string]string{"flow": challenge.Flow}), nil), 409, nil)
 	requireStatus(t, f.send(t, "POST", "/api/v1/auth/two-factor/setup", jsonInput(t, map[string]string{"flow": challenge.Flow}), nil), 200, &setup)

@@ -152,7 +152,7 @@ func (s *Service) factorFailed(ctx context.Context, tx pgx.Tx, f *factorState) e
 	if _, err := tx.Exec(ctx, `UPDATE member_two_factors SET failed_attempts=$2,locked_until=$3 WHERE member_id=$1`, f.User, f.Failed, until); err != nil {
 		return err
 	}
-	return factorFailure()
+	return domain.Failure(400, domain.AccountTwoFactorCodeInvalid, "The second-factor code is invalid.")
 }
 
 func (s *Service) verifyCurrentFactor(ctx context.Context, tx pgx.Tx, f *factorState, code string) error {
