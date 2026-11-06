@@ -60,7 +60,8 @@ def validate_headers(values, suffix, immutable=False):
     contract.require(values.get("content-type", "").split(";", 1)[0].lower() in CONTENT_TYPES[suffix])
     expected = {"x-content-type-options": "nosniff", "x-frame-options": "DENY", "referrer-policy": "no-referrer",
                 "strict-transport-security": "max-age=31536000"}
-    contract.require(all(values.get(key) == value for key, value in expected.items()))
+    contract.require(all(values.get(key) == value for key, value in expected.items() if key != "strict-transport-security") and
+                     values.get("strict-transport-security") in (expected["strict-transport-security"], "max-age=31536000; includeSubDomains"))
     contract.require("server" not in values and "location" not in values and "set-cookie" not in values)
     contract.require(values.get("cache-control") == ("public, max-age=31536000, immutable" if immutable else "no-store"))
     directives = {}

@@ -93,7 +93,7 @@ server.serve_forever()
     def assert_headers(self, response):
         expected = {
             "Content-Security-Policy": "default-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
-            "Strict-Transport-Security": "max-age=31536000",
+            "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
             "X-Content-Type-Options": "nosniff", "X-Frame-Options": "DENY", "Referrer-Policy": "no-referrer",
         }
         for header, value in expected.items():

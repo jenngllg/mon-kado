@@ -32,7 +32,7 @@ class CoordinatedBackendTests(unittest.TestCase):
                                        "baseline": {"infrastructure": {}, "frontend": {"revision": "e" * 40}}}
         self.store = Mock(spec=["load", "save", "begin", "finish", "reconcile"])
         self.store.load.return_value = self.state
-        self.runtime = Mock(spec=["verify_active", "preflight", "prepare", "history", "stop", "start", "migrate", "smoke", "restore_baseline", "clients"])
+        self.runtime = Mock(spec=["verify_active", "preflight", "prepare", "history", "stop", "start", "migrate", "smoke", "restore_baseline", "clients", "schema"])
         self.runtime.history.return_value = identifiers(self.previous["backend"]["migrationCatalog"])
         self.runtime.preflight.return_value = {"infrastructure": {}, "frontend": {"revision": "e" * 40}}
         self.runtime.smoke.return_value = {"technical": True, "functional": True, "frontend": True}
@@ -79,9 +79,9 @@ class CoordinatedBackendTests(unittest.TestCase):
     def test_verify_contract_when_actual_api_schema_differs_refuses(self):
         schema = b'{"openapi":"3.1.0"}'
         candidate = self.candidate | {"proof": {"openapiSha256": hashlib.sha256(schema).hexdigest()}}
-        self.runtime.clients.return_value.request.return_value = (200, {}, schema)
+        self.runtime.schema.return_value = schema
         self.coordinator.verify_contract(candidate)
-        self.runtime.clients.return_value.request.return_value = (200, {}, b"changed")
+        self.runtime.schema.return_value = b"changed"
         with self.assertRaisesRegex(DeploymentError, "BACKEND_CONTRACT_CHANGED"):
             self.coordinator.verify_contract(candidate)
 

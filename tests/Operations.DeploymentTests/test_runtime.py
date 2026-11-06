@@ -51,6 +51,30 @@ class RuntimeTests(unittest.TestCase):
                                observer=self.observer, service_uid=os.getuid())
         self.release = release()
 
+    def test_schema_requires_verified_published_executables_and_reads_only_the_exact_immutable_source(self):
+        body = b'{"openapi":"3.1.0","paths":{"/api/v1/auth/sessions":{}}}'
+        self.runner.return_value = body
+        with patch.object(self.runtime, "catalog") as verify:
+            self.assertEqual(body, self.runtime.schema(self.release))
+        verify.assert_called_once_with(self.release)
+        argv = self.runner.call_args.args[0]
+        self.assertEqual(f"https://raw.githubusercontent.com/jenngllg/mon-kado/{self.release['revision']}/internal/httpapi/specification.json", argv[-1])
+        self.assertIn("--noproxy", argv)
+        self.clients.assert_not_called()
+        self.runner.reset_mock()
+        with patch.object(self.runtime, "catalog", side_effect=DeploymentError("ACTIVE_RELEASE_MISMATCH")):
+            with self.assertRaisesRegex(DeploymentError, "ACTIVE_RELEASE_MISMATCH"):
+                self.runtime.schema(self.release)
+        self.runner.assert_not_called()
+
+    def test_schema_rejects_an_invalid_bounded_contract(self):
+        with patch.object(self.runtime, "catalog"):
+            for body in [b'{}', b'[]', b'{"openapi":"2.0"}', b'x' * (2 * 1024 * 1024 + 1)]:
+                with self.subTest(body=body[:30]):
+                    self.runner.return_value = body
+                    with self.assertRaisesRegex(DeploymentError, "BACKEND_CONTRACT_CHANGED"):
+                        self.runtime.schema(self.release)
+
     def test_native_application_lifecycle_preserves_postgresql_and_verified_previous_releases(self):
         with patch("deploy_runtime.native_artifacts.verify_directory") as verify:
             self.runtime.migrate(self.release)

@@ -77,6 +77,13 @@ class ProbeTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             probe.probe(self.revision, self.root, False, runner=self.runner)
 
+    def test_subdomain_hsts_is_verified_during_the_security_transition(self):
+        self.transform = lambda url, values, body: (values | {"strict-transport-security": "max-age=31536000; includeSubDomains"}, body)
+        probe.probe(self.revision, self.root, True, runner=self.runner)
+        self.transform = lambda url, values, body: (values | {"strict-transport-security": "max-age=0"}, body)
+        with self.assertRaises(ValueError):
+            probe.probe(self.revision, self.root, True, runner=self.runner)
+
     def test_wrong_content_readiness_and_timeout_fail(self):
         # Arrange / Act / Assert
         for fragment in ("main-abcdefgh.js", "privacy-policy", "readiness"):

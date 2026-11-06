@@ -3,6 +3,7 @@
 from contextlib import nullcontext
 from datetime import timedelta
 import copy
+import hashlib
 import json
 from pathlib import Path
 import tempfile
@@ -182,9 +183,11 @@ class OnlineCoordinatorTests(unittest.TestCase):
 
     def test_repeated_ci_request_for_installed_pair_does_not_take_another_backup(self):
         heads = {"mon-kado": self.candidate["backend"]["revision"], "mon-kado-front": self.candidate["frontend"]["revision"]}
+        self.previous["proof"] = {"openapiSha256": hashlib.sha256(b'{}').hexdigest()}
+        self.candidate["proof"]["openapiSha256"] = hashlib.sha256(b'{}').hexdigest()
         request = self.candidate["frontend"]["revision"]
         runtime = Mock()
-        runtime.clients.return_value.request.return_value = (200, {}, b'{}')
+        runtime.schema.return_value = b'{}'
         with patch.object(cli, "installed_tool", return_value=({}, "digest")), \
              patch.object(cli, "require_protected_tool"), patch.object(cli, "CoordinatedStore"), \
              patch.object(cli, "Gate") as gate, patch.object(cli, "Runtime", return_value=runtime), \

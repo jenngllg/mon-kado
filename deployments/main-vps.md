@@ -190,7 +190,7 @@ backend binaries through the normal main CI/CD path after this tool transition.
 
 ## Reviewed mobile push expansion (4 November 2026)
 
-Publish the preparation binary before the 028 → 031 expansion. Its notification
+Publish the preparation binary before the 028 â†’ 031 expansion. Its notification
 reader tolerates an absent `in_app` column and hides push-only rows after the
 expansion, so binary rollback does not resurrect muted in-app notifications.
 The exact additive SQL is reviewed in `tests/fixtures/reviewed-push-sql`; hashes
@@ -225,3 +225,21 @@ age allowance. After the original rollout commits, install the new protected too
 using the normal upgrade-online procedure with fresh verified offsite captures before
 and after. This aligns canonical configuration and inventory. Publish the matching
 main revisions through ordinary CI/CD and verify the new receipt and snapshot.
+
+## Private production API contract verification (6 November 2026)
+
+Production returns 404 for OpenAPI, including authenticated administrators. Local
+and non-production environments retain it. Deployment checks verify all immutable
+executables against their protected publication before reading the exact revision's
+embedded source specification from GitHub; the frontend proof must match its SHA-256.
+The serving API is independently verified for executable identity, health, security,
+CSRF, authenticated functional behavior and persistence. Contract mismatch still
+blocks rollout. No documentation endpoint or credential is introduced for operations.
+
+Install the protected tool package with the existing `upgrade-online` procedure
+before activating these application versions. The tool inventory now includes the
+technical smoke probe. During this transition, the probes explicitly support the
+previous API's public specification and HSTS header as well as the new hidden
+documentation and HSTS `includeSubDomains`; invalid schemas, errors and missing
+security headers remain failures. The static proxy header change is installed only
+through that verified tool upgrade, with fresh encrypted offsite captures.

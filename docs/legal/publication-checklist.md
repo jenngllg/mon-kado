@@ -3,6 +3,12 @@
 État au 8 septembre 2026 : **brouillons préparatoires uniquement, publication bloquée**.
 
 Référence technique examinée : `develop`, commit `c774109` (incluant MK-806).
+
+Complément du 6 novembre 2026 : les brouillons et pages HTML ont été actualisés
+pour l'extension facultative, les notifications push, les groupes et le mode
+surprise. Les traces d'utilisation et accès administratifs sont décrits brièvement,
+sans détailler les outils internes. Les constats historiques ci-dessous restent
+datés ; leurs anciennes références .NET ne prouvent pas la configuration déployée.
 Cette checklist accompagne les [mentions légales](legal-notice.fr.md), la
 [politique de confidentialité](privacy-policy.fr.md) et les
 [CGU](terms-of-use.fr.md). C'est un document de suivi
@@ -91,12 +97,40 @@ politique ; compléter ci-dessous la décision de l'exploitant avant publication
 | Listes, cadeaux, images et partage | Gestion des souhaits et consultation partagée | À compléter — LEGAL-05 |
 | Participation invitée et réservations | Coordination des réservations et historique personnel | À compléter — LEGAL-05 |
 | Import de page marchande | Suggestion de contenu à la demande du propriétaire | À compléter — LEGAL-05 |
+| Extension facultative | Lecture de la page produit à l'ouverture, préparation d'images et ajouts confirmés | À compléter — LEGAL-05 et LEGAL-08 ; distinguer préparation et enregistrement |
+| Indicateur d'ajout par extension | Suivi de l'utilisation de l'extension associé au compte | À compléter — LEGAL-05 ; suppression avec le compte |
+| Groupes et idées surprises | Partage selon l'audience choisie, propositions privées et confidentialité du bénéficiaire | À compléter — LEGAL-05 ; distinguer lien public et partage de groupe |
+| Notifications dans MonKado et push | Information sur les activités et rappels selon les préférences | À compléter — LEGAL-05, LEGAL-06 et LEGAL-07 ; permission système, abonnements et services d'acheminement |
+| Traces d'utilisation et accès administratifs | Suivi du fonctionnement, diagnostic et administration | À compléter — LEGAL-05 ; accès habilités, traces éligibles au nettoyage après 90 jours |
 | Signalements et modération | Examen des abus et décisions de modération | À compléter — LEGAL-05 |
 | E-mails transactionnels | Notifications liées aux opérations du service | À compléter — LEGAL-05 |
 | Sessions, cookies et logs | Continuité, sécurité et diagnostic | À compléter — LEGAL-05 et LEGAL-08 |
 | Export, effacement et audit administratif | Réponse aux demandes et traçabilité des actions | À compléter — LEGAL-05 ; distinguer chaque finalité |
 
 ## Durées vérifiées dans le backend
+
+### Compléments examinés le 6 novembre 2026
+
+- L'extension lit les métadonnées produit à l'ouverture et peut solliciter la
+  préparation serveur d'une image avant confirmation ; aucun souhait n'est créé
+  à la simple lecture. Voir le dépôt frontend, `extension/extract.js`,
+  `extension/imageSelection.js` et `extension/popup.js`.
+- L'indicateur d'ajout par extension suit le compte sans purge temporelle
+  distincte : [enregistrement](../../internal/application/extension_usage.go).
+- Les traces d'utilisation sont éligibles au nettoyage après 90 jours :
+  [worker](../../internal/worker/worker.go). Les corps métier sont filtrés et les
+  idées surprises privées omises : [filtrage](../../internal/httpapi/activity_payload.go).
+- Les abonnements push sont rattachés à une session ; les adresses sont chiffrées
+  et supprimées avec le compte. Les services Apple, Google ou Mozilla reçoivent
+  un signal vide ; le message affiché est générique :
+  [fonctionnement et nettoyage](../mobile-push.md),
+  [transport](../../internal/providers/push.go).
+- Confirmer les durées des notifications et de la file de livraison, la rétention
+  des prestataires push et les limites des journaux techniques selon la
+  configuration réellement déployée. Les anciennes limites par conteneur ne
+  doivent pas être reprises comme une garantie actuelle sans vérification.
+
+### Constats historiques du 8 septembre 2026
 
 Ces constats ne certifient pas la configuration de production. Une échéance
 d'accès ou d'éligibilité à purge n'est pas une garantie de suppression physique

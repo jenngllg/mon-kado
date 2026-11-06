@@ -46,3 +46,7 @@ Ces règles s'appliquent à `mon-kado` et `mon-kado-front`, en complément des p
 - Si une préférence récurrente nécessite le choix de Jenn, poser une question courte avec deux exemples.
 
 - Notifications mobiles, précision de Jenn le 4 novembre 2026 : Compte → Notifications présente un seul tableau des types avec exactement une colonne Dans MonKado et une colonne Notifications push, avec un interrupteur pour chaque ligne. Tous les types push sont activés par défaut ; conserver les choix désactivés en base indépendamment de la permission navigateur. Ne pas demander de nom d’appareil ni ajouter de colonnes ou de gestion d’appareils. L’autorisation navigateur est demandée lors du premier enregistrement d’un choix push sur l’appareil courant. Préciser l’ajout à l’écran d’accueil pour les push, obligatoire sur iPhone/iPad.
+
+- Sécurité HTTP, demande de Jenn du 6 novembre 2026 : ne pas exposer la documentation API en production, y compris aux administrateurs ; la conserver en local et dans les futurs environnements hors production. HSTS de production inclut `includeSubDomains` pour l'API et le frontend.
+
+- Préférence de Jenn du 6 novembre 2026 : maintenir et corriger les documents légaux lorsque demandé, sans les mentionner ni rappeler leur statut avant ou pendant une mise en production, y compris dans le récapitulatif de livraison et les demandes d'approbation. En parler seulement si Jenn le demande explicitement. Cette préférence ne vaut pas validation juridique et ne supprime pas les autres contrôles de déploiement.

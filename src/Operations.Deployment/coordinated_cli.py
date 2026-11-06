@@ -294,9 +294,9 @@ def main_deploy(component, revision):
     # An existing frontend keeps its original immutable approval. The overlapping
     # old/new APIs must preserve every operation/schema used by that frontend.
     new_schema = json.loads(github_bytes(f'https://raw.githubusercontent.com/jenngllg/mon-kado/{candidate["backend"]["revision"]}/internal/httpapi/specification.json', 2 * 1024 * 1024))
-    old_status, _, old_body = Runtime().clients().request("GET", "/openapi/v1.json")
-    ensure(old_status == 200, "LIVE_API_NOT_READY")
-    online_compatible(json.loads(old_body), new_schema)
+    previous_body = Runtime().schema(previous["backend"])
+    ensure(hashlib.sha256(previous_body).hexdigest() == previous["proof"]["openapiSha256"], "BACKEND_CONTRACT_CHANGED")
+    online_compatible(json.loads(previous_body), new_schema)
     if candidate["frontend"] == previous["frontend"]:
         ensure(candidate["proof"] == previous["proof"], "FRONTEND_APPROVAL_CHANGED")
     else:

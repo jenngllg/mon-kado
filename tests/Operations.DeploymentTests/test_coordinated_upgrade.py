@@ -74,7 +74,7 @@ class UpgradeTests(unittest.TestCase):
         self.native = Mock()
         self.native.run.side_effect = lambda argv, **kwargs: b"inactive\n" if "ActiveState" in argv else b"disabled\n" if "UnitFileState" in argv else b""
         self.native.history.return_value = identifiers(self.previous["backend"]["migrationCatalog"])
-        self.native.clients.return_value.request.return_value = (200, {}, self.schema)
+        self.native.schema.return_value = self.schema
         self.native.smoke.return_value = {"technical": True, "functional": True, "frontend": True}
         self.publisher = Mock()
         self.publisher.root = base / "frontend"; self.publisher.root.mkdir()
