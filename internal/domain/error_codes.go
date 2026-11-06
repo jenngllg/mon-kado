@@ -2,6 +2,8 @@ package domain
 
 // Stable error codes shared with API consumers.
 const (
+	WishCopySameWishlist                   = "WISH_COPY_SAME_WISHLIST"
+	AccountTwoFactorCodeInvalid            = "ACCOUNT_TWO_FACTOR_CODE_INVALID"
 	PushDeviceLimit                        = "PUSH_DEVICE_LIMIT"
 	PushUnavailable                        = "PUSH_UNAVAILABLE"
 	PushSubscriptionVersionConflict        = "PUSH_SUBSCRIPTION_VERSION_CONFLICT"
@@ -121,7 +123,7 @@ const (
 // KnownErrorCode reports whether a value belongs to the compiled business error vocabulary.
 func KnownErrorCode(code string) bool {
 	switch code {
-	case PushPreferencesVersionConflict, PushSubscriptionNotFound, PushSubscriptionVersionConflict, PushUnavailable, PushDeviceLimit, MemberDataExportNotFound,
+	case WishCopySameWishlist, AccountTwoFactorCodeInvalid, PushPreferencesVersionConflict, PushSubscriptionNotFound, PushSubscriptionVersionConflict, PushUnavailable, PushDeviceLimit, MemberDataExportNotFound,
 		MemberDataExportNotReady,
 		MemberDataExportRateLimited,
 		MemberDataExportGenerationFailed,

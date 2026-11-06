@@ -149,7 +149,11 @@ func TestTwoFactor_WhenRepeatedProofsFail_LocksFactorAndRejectsExpiredFlows(t *t
 	}
 	// Act
 	for attempt := 0; attempt < 5; attempt++ {
-		requireStatus(t, f.send(t, "POST", "/api/v1/auth/two-factor/completions", jsonInput(t, map[string]string{"flow": grant.Flow, "code": wrong}), nil), 401, nil)
+		var failure domain.ErrorResponse
+		requireStatus(t, f.send(t, "POST", "/api/v1/auth/two-factor/completions", jsonInput(t, map[string]string{"flow": grant.Flow, "code": wrong}), nil), 400, &failure)
+		if failure.ErrorCode == nil || *failure.ErrorCode != domain.AccountTwoFactorCodeInvalid {
+			t.Fatal("wrong authenticator code did not preserve its recoverable business error")
+		}
 	}
 	// Assert
 	requireStatus(t, f.send(t, "POST", "/api/v1/auth/two-factor/completions", jsonInput(t, map[string]string{"flow": grant.Flow, "code": valid}), nil), 429, nil)
